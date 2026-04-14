@@ -35,8 +35,10 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(ExiaIgnis 
+add_executable(ExiaIgnis
     src/ExiaIgnis.cpp
+    src/sensing_task.cpp
+    src/ui.cpp
 )
 
 pico_set_program_name(ExiaIgnis "ExiaIgnis")
@@ -68,6 +70,13 @@ target_link_libraries(ExiaIgnis
         hardware_dma
         hardware_pio
         hardware_interp
+        hardware_pwm
+        hardware_clocks
+        hardware_adc
+        hardware_irq
+        hardware_timer
+        pico_multicore
+        pico_flash
         )
 
 pico_add_extra_outputs(ExiaIgnis)

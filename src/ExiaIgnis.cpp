@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "hardware/spi.h"
 #include "hardware/i2c.h"
 #include "hardware/dma.h"
 #include "hardware/pio.h"
 #include "hardware/interp.h"
 #include "hardware/uart.h"
+#include "hardware/pwm.h"
+#include "hardware/clocks.h"
+#include "sensing_task.hpp"
+#include "ui.hpp"
 
 #include "define.hpp"
 
@@ -31,11 +36,34 @@ void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
 int main()
 {
     stdio_init_all();
+    set_sys_clock_khz(150000, true);
 
     // Tactile switch input with pull-up (active low)
     gpio_init(BTN_PIN);
     gpio_set_dir(BTN_PIN, GPIO_IN);
     gpio_pull_up(BTN_PIN);
+
+    // PWM setup: GPIO16 = PWM0 A, 500Hz 50% duty
+    gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
+    uint pwm_slice   = pwm_gpio_to_slice_num(BUZZER_PIN);
+    uint pwm_channel = pwm_gpio_to_channel(BUZZER_PIN);
+
+    const uint32_t wrap = 999;
+    float clk_div = (float)clock_get_hz(clk_sys) / ((float)BUZZER_FREQ_HZ * (wrap + 1));
+    pwm_set_clkdiv(pwm_slice, clk_div);
+    pwm_set_wrap(pwm_slice, wrap);
+    pwm_set_chan_level(pwm_slice, pwm_channel, (wrap + 1) / 2); // 50% duty
+    pwm_set_enabled(pwm_slice, false); // 初期状態はOFF
+
+    // UserInterface: I2C1 (LED driver) + PWM buzzer を初期化
+    UserInterface ui;
+    ui.init(pwm_slice, pwm_channel);
+    ui.hello_exia();  // 起動音
+
+    // SensingTask 初期化 → コア1で割り込み駆動
+    // auto sensing = SensingTask::create();
+    // sensing->init();
+    // multicore_launch_core1(SensingTask::core1_entry);
 
     // SPI initialisation. This example will use SPI at 1MHz.
     // spi_init(SPI_PORT, 1000*1000);
@@ -124,9 +152,24 @@ int main()
     
     // // For more examples of UART use see https://github.com/raspberrypi/pico-examples/tree/master/uart
 
+    // 起動時: 前照灯で待機
+    ui.LED_headlight();
+
+    bool prev_btn = false;
     while (true) {
         bool btn_pressed = !gpio_get(BTN_PIN); // active low: LOW=pressed
-        printf("BTN(GPIO4): %s\n", btn_pressed ? "PRESSED" : "RELEASED");
-        sleep_ms(100);
+
+        if (btn_pressed != prev_btn) {
+            if (btn_pressed) {
+                ui.LED_on_all();
+                printf("BTN: PRESSED  -> LED all on\n");
+            } else {
+                ui.LED_headlight();
+                printf("BTN: RELEASED -> LED headlight\n");
+            }
+            prev_btn = btn_pressed;
+        }
+
+        sleep_ms(10);
     }
 }
