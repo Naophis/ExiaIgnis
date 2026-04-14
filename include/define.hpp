@@ -42,6 +42,6 @@
 // PWM / Buzzer
 // ============================================================
 // Piezo buzzer on GPIO16 (PWM0 A)
-#define BUZZER_PIN      16
+#define BUZZER_PIN      17
 #define BUZZER_FREQ_HZ  500
 #define BUZZER_WRAP     999u  // PWM counter top (1000 steps)

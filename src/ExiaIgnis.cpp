@@ -43,22 +43,16 @@ int main()
     gpio_set_dir(BTN_PIN, GPIO_IN);
     gpio_pull_up(BTN_PIN);
 
-    // PWM setup: GPIO16 = PWM0 A, 500Hz 50% duty
+    // PWM setup: GPIO16 = PWM0 A (周波数はui.play_tone/set_pwm_freqで設定)
     gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
     uint pwm_slice   = pwm_gpio_to_slice_num(BUZZER_PIN);
     uint pwm_channel = pwm_gpio_to_channel(BUZZER_PIN);
-
-    const uint32_t wrap = 999;
-    float clk_div = (float)clock_get_hz(clk_sys) / ((float)BUZZER_FREQ_HZ * (wrap + 1));
-    pwm_set_clkdiv(pwm_slice, clk_div);
-    pwm_set_wrap(pwm_slice, wrap);
-    pwm_set_chan_level(pwm_slice, pwm_channel, (wrap + 1) / 2); // 50% duty
     pwm_set_enabled(pwm_slice, false); // 初期状態はOFF
 
     // UserInterface: I2C1 (LED driver) + PWM buzzer を初期化
     UserInterface ui;
     ui.init(pwm_slice, pwm_channel);
-    ui.hello_exia();  // 起動音
+    // ui.play_tone(440);  // 440Hz 出力し続ける
 
     // SensingTask 初期化 → コア1で割り込み駆動
     // auto sensing = SensingTask::create();
@@ -161,11 +155,13 @@ int main()
 
         if (btn_pressed != prev_btn) {
             if (btn_pressed) {
+                ui.play_tone(BUZZER_FREQ_HZ);  // ブザー優先
                 ui.LED_on_all();
-                printf("BTN: PRESSED  -> LED all on\n");
+                printf("BTN: PRESSED  -> buzzer on, LED all on\n");
             } else {
+                ui.stop_tone();               // ブザー優先
                 ui.LED_headlight();
-                printf("BTN: RELEASED -> LED headlight\n");
+                printf("BTN: RELEASED -> buzzer off, LED headlight\n");
             }
             prev_btn = btn_pressed;
         }

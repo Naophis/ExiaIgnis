@@ -27,8 +27,9 @@ void UserInterface::init(uint pwm_slice, uint pwm_channel) {
 // フォーマット: (channel[2:0] << 5) | brightness[4:0]
 // ============================================================
 void UserInterface::i2c_write_byte(uint8_t data) {
-    printf("I2C Write: 0x%02X\n", data);
-    i2c_write_blocking(I2C1_PORT, LED_I2C_ADDR, &data, 1, false);
+    // タイムアウト 5ms: デバイス未接続時の永久ブロックを防ぐ
+    absolute_time_t timeout = make_timeout_time_ms(5);
+    i2c_write_blocking_until(I2C1_PORT, LED_I2C_ADDR, &data, 1, false, timeout);
 }
 
 void UserInterface::led_write(uint8_t idx, bool state) {
@@ -89,18 +90,29 @@ bool UserInterface::button_state_hold() {
 // PWM ブザー
 // ============================================================
 void UserInterface::set_pwm_freq(int hz) {
-    float div = (float)clock_get_hz(clk_sys) / ((float)hz * (BUZZER_WRAP + 1));
-    pwm_set_clkdiv(pwm_slice_, div);
-    pwm_set_chan_level(pwm_slice_, pwm_channel_, (BUZZER_WRAP + 1) / 2);  // 50% duty
+    // 整数分周器固定(16) + wrap可変方式
+    // 150MHz / (16 * 65536) ≈ 143Hz まで対応。音楽ノート全域をカバー。
+    const uint8_t  div_int  = 16;
+    const uint32_t sys_clk  = clock_get_hz(clk_sys);
+    uint32_t       wrap     = sys_clk / (div_int * (uint32_t)hz) - 1;
+
+    pwm_set_clkdiv_int_frac(pwm_slice_, div_int, 0);
+    pwm_set_wrap(pwm_slice_, (uint16_t)wrap);
+    pwm_set_chan_level(pwm_slice_, pwm_channel_, (wrap + 1) / 2);  // 50% duty
 }
 
 void UserInterface::play_tone(int hz) {
+    gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);  // PWM出力に切り替え
     set_pwm_freq(hz);
     pwm_set_enabled(pwm_slice_, true);
 }
 
 void UserInterface::stop_tone() {
     pwm_set_enabled(pwm_slice_, false);
+    // ピンをGPIO出力LOWに固定して電流を遮断
+    gpio_set_function(BUZZER_PIN, GPIO_FUNC_SIO);
+    gpio_set_dir(BUZZER_PIN, GPIO_OUT);
+    gpio_put(BUZZER_PIN, 0);
 }
 
 void UserInterface::music_sync(MUSIC m, int time_ms) {
