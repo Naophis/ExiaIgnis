@@ -3,7 +3,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-UF2_FILE="$SCRIPT_DIR/build/test.uf2"
+# find uf2 file in build directory
+UF2_FILE=$(find "$SCRIPT_DIR/build" -maxdepth 1 -type f -name "*.uf2" | head -1)
 PICOTOOL="/home/naoto/.local/bin/picotool"
 
 if [ ! -f "$UF2_FILE" ]; then
