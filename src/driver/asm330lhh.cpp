@@ -2,6 +2,7 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 #include "driver/asm330lhh.hpp"
+#include "driver/spi_util.hpp"
 
 void ASM330LHH::init(spi_inst_t *spi, uint miso_pin, uint cs_pin, uint clk_pin, uint mosi_pin,
                      uint baud_rate) {
@@ -41,7 +42,7 @@ void ASM330LHH::setup() {
 }
 
 int16_t ASM330LHH::read_gyro_z() {
-    spi_set_format(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_set_format_safe(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     uint8_t cmd = ASM330_OUTZ_L_G | 0x80;
     uint8_t buf[2];
     gpio_put(cs_, 0);
@@ -52,7 +53,7 @@ int16_t ASM330LHH::read_gyro_z() {
 }
 
 void ASM330LHH::write_reg(uint8_t reg, uint8_t val) {
-    spi_set_format(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_set_format_safe(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     uint8_t buf[2] = {static_cast<uint8_t>(reg & 0x7F), val};
     gpio_put(cs_, 0);
     spi_write_blocking(spi_, buf, 2);
@@ -60,7 +61,7 @@ void ASM330LHH::write_reg(uint8_t reg, uint8_t val) {
 }
 
 uint8_t ASM330LHH::read_reg(uint8_t reg) {
-    spi_set_format(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_set_format_safe(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     uint8_t cmd = reg | 0x80;
     uint8_t val = 0;
     gpio_put(cs_, 0);
