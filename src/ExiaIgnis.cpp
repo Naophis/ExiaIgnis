@@ -55,21 +55,38 @@ int main()
     ui.LED_headlight();
     ui.hello_exia();
 
+    auto sensing = SensingTask::create();
+    sensing->init();
+    multicore_launch_core1(SensingTask::core1_entry);
+
     bool prev_btn = false;
     while (true) {
         bool btn_pressed = !gpio_get(BTN_PIN); // active low: LOW=pressed
 
         if (btn_pressed != prev_btn) {
             if (btn_pressed) {
-                ui.play_tone(BUZZER_FREQ_HZ);  // ブザー優先
+                ui.play_tone(BUZZER_FREQ_HZ);
                 ui.LED_on_all();
-                printf("BTN: PRESSED  -> buzzer on, LED all on\n");
             } else {
-                ui.stop_tone();               // ブザー優先
+                ui.stop_tone();
                 ui.LED_headlight();
-                printf("BTN: RELEASED -> buzzer off, LED headlight\n");
             }
             prev_btn = btn_pressed;
+        }
+
+        if (sensing->data_ready) {
+            SensingTask::Data d = sensing->data;  // volatile からコピー
+            sensing->data_ready = false;
+            printf("dt=%4luus"
+                   " | dark R90=%4u R45=%4u L45=%4u L90=%4u"
+                   " | lit  R90=%4u R45=%4u L45=%4u L90=%4u"
+                   " | gz=%6d | encR=%5u encL=%5u | bat=%4u\n",
+                   d.dt_us,
+                   d.dark.r90, d.dark.r45, d.dark.l45, d.dark.l90,
+                   d.lit.r90,  d.lit.r45,  d.lit.l45,  d.lit.l90,
+                   d.gz,
+                   d.enc_r, d.enc_l,
+                   d.battery);
         }
 
         sleep_ms(10);

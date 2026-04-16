@@ -39,6 +39,9 @@ add_executable(ExiaIgnis
     src/ExiaIgnis.cpp
     src/sensing_task.cpp
     src/ui.cpp
+    src/driver/asm330lhh.cpp
+    src/driver/as5147p.cpp
+    src/driver/ads7042.cpp
 )
 
 pico_set_program_name(ExiaIgnis "ExiaIgnis")
