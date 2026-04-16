@@ -34,17 +34,31 @@ public:
     };
 
     struct Data {
-        uint32_t   dt_us;   // 前回割り込みからの経過時間 [us]
+        uint32_t   dt_us;           // 前回割り込みからの経過時間 [us]
+        uint32_t   sense_duration_us; // sensing シーケンス全体の処理時間 [us]
         SensorDark dark;
         SensorLit  lit;
         SensorDiff diff;
-        int16_t    gz;      // ジャイロZ軸角速度
-        uint16_t   enc_r, enc_l;
+        int16_t    gz;         // ジャイロZ軸角速度
+        uint64_t   gz_ts;      // gz 取得時刻 [us]
+        uint64_t   gz_ts_z;      // gz 取得時刻_z [us]
+        uint64_t   gz_dt;      // gz diff [us]
+        
+        uint16_t   enc_r;
+        uint64_t   enc_r_ts;   // enc_r 取得時刻 [us]
+        uint64_t   enc_r_ts_z;   // enc_r 取得時刻_z [us]
+        uint64_t   enc_r_dt;   // enc_r diff [us]
+        
+        uint16_t   enc_l;
+        uint64_t   enc_l_ts;   // enc_l 取得時刻 [us]
+        uint64_t   enc_l_ts_z;   // enc_l 取得時刻_z [us]
+        uint64_t   enc_l_dt;   // enc_l diff [us]
         uint16_t   battery;
 
         Data() = default;
         Data(const volatile Data &o)
             : dt_us(o.dt_us)
+            , sense_duration_us(o.sense_duration_us)
             , dark{o.dark.r90, o.dark.r45, o.dark.l45, o.dark.l90}
             , lit {o.lit.r90,
                    o.lit.r45_1, o.lit.r45_both, o.lit.r45_2,
@@ -55,7 +69,11 @@ public:
                    o.diff.l45_1, o.diff.l45_both, o.diff.l45_2,
                    o.diff.l90}
             , gz(o.gz)
-            , enc_r(o.enc_r), enc_l(o.enc_l)
+            , gz_ts(o.gz_ts), gz_ts_z(o.gz_ts_z), gz_dt(o.gz_dt)
+            , enc_r(o.enc_r)
+            , enc_r_ts(o.enc_r_ts), enc_r_ts_z(o.enc_r_ts_z), enc_r_dt(o.enc_r_dt)
+            , enc_l(o.enc_l)
+            , enc_l_ts(o.enc_l_ts), enc_l_ts_z(o.enc_l_ts_z), enc_l_dt(o.enc_l_dt)
             , battery(o.battery) {}
     };
 

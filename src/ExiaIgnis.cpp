@@ -77,20 +77,37 @@ int main()
         if (sensing->data_ready) {
             SensingTask::Data d = sensing->data;  // volatile からコピー
             sensing->data_ready = false;
-            printf("dt=%4luus"
-                   " | L90=%4u"
-                   " | L45 2=%4u both=%4u 1=%4u"
-                   " | R45 1=%4u both=%4u 2=%4u"
-                   " | R90=%4u"
-                   " | gz=%6d | encL=%5u encR=%5u | bat=%4u\n",
-                   d.dt_us,
+
+            const char ESC = '\033';
+            printf("%c[2J",   ESC);   // 画面消去
+            printf("%c[0;0H", ESC);   // カーソルを先頭に戻す
+
+            printf("=== ExiaIgnis sensor monitor ===\n");
+
+            printf("[timing]  dt=%4lu us  |  sense=%4lu us"
+                   "  |  gz->encR: %4llu us"
+                   "  |  encR->encL: %4llu us\n",
+                   d.dt_us, d.sense_duration_us,
+                   d.enc_r_ts - d.gz_ts,
+                   d.enc_l_ts - d.enc_r_ts);
+
+            printf("[sensor]  L90=%4u"
+                   "  |  L45  2=%4u both=%4u 1=%4u"
+                   "  |  R45  1=%4u both=%4u 2=%4u"
+                   "  |  R90=%4u\n",
                    d.diff.l90,
                    d.diff.l45_2, d.diff.l45_both, d.diff.l45_1,
                    d.diff.r45_1, d.diff.r45_both, d.diff.r45_2,
-                   d.diff.r90,
-                   d.gz,
-                   d.enc_l, d.enc_r,
-                   d.battery);
+                   d.diff.r90);
+
+            printf("[motion]  gz=%6d (dt=%4llu us)"
+                   "  |  encL=%5u (dt=%4llu us)"
+                   "  |  encR=%5u (dt=%4llu us)\n",
+                   d.gz, d.gz_dt,
+                   d.enc_l,  d.enc_l_dt,
+                   d.enc_r, d.enc_r_dt);
+
+            printf("[power]   bat=%4u\n", d.battery);
         }
 
         sleep_ms(10);

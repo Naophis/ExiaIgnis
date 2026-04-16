@@ -67,6 +67,7 @@ void SensingTask::timer_b_irq_handler() {
     timer_hw->intr = 1u << 1;
 
     auto *self = s_instance.get();
+    const uint64_t sense_start = time_us_64();
 
     // 1. 全LED消灯状態で ambient 読み取り
     adc_select_input(0); self->data.dark.r90 = adc_read();
@@ -129,12 +130,25 @@ void SensingTask::timer_b_irq_handler() {
     self->data.diff.l45_2    = dc(self->data.lit.l45_2,    self->data.dark.l45);
     self->data.diff.l90      = dc(self->data.lit.l90,      self->data.dark.l90);
 
-    // 4. ジャイロ・エンコーダ・バッテリ
-    self->data.gz      = self->gyro_.read_gyro_z();
-    self->data.enc_r   = self->enc_r_.read_angle();
-    self->data.enc_l   = self->enc_l_.read_angle();
-    self->data.battery = self->battery_.read();
+    // 4. ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
+    self->data.gz_ts_z  = self->data.gz_ts;
+    self->data.gz_ts    = time_us_64();
+    self->data.gz       = self->gyro_.read_gyro_z();
+    self->data.gz_dt    = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z) : 0;
 
+    self->data.enc_r_ts_z = self->data.enc_r_ts;
+    self->data.enc_r_ts   = time_us_64();
+    self->data.enc_r      = self->enc_r_.read_angle();
+    self->data.enc_r_dt   = self->data.enc_r_ts_z ? (self->data.enc_r_ts - self->data.enc_r_ts_z) : 0;
+
+    self->data.enc_l_ts_z = self->data.enc_l_ts;
+    self->data.enc_l_ts   = time_us_64();
+    self->data.enc_l      = self->enc_l_.read_angle();
+    self->data.enc_l_dt   = self->data.enc_l_ts_z ? (self->data.enc_l_ts - self->data.enc_l_ts_z) : 0;
+
+    self->data.battery  = self->battery_.read();
+
+    self->data.sense_duration_us = (uint32_t)(time_us_64() - sense_start);
     self->data_ready = true;
 }
 
