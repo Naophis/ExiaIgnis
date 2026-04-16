@@ -10,7 +10,7 @@ void ASM330LHH::init(spi_inst_t *spi, uint miso_pin, uint cs_pin, uint clk_pin, 
     cs_  = cs_pin;
 
     spi_init(spi_, baud_rate);
-    spi_set_format(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);  // mode 3
+    spi_set_format_safe(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);  // mode 3
     gpio_set_function(clk_pin,  GPIO_FUNC_SPI);
     gpio_set_function(mosi_pin, GPIO_FUNC_SPI);
     gpio_set_function(miso_pin, GPIO_FUNC_SPI);
