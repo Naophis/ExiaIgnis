@@ -78,14 +78,18 @@ int main()
             SensingTask::Data d = sensing->data;  // volatile からコピー
             sensing->data_ready = false;
             printf("dt=%4luus"
-                   " | dark R90=%4u R45=%4u L45=%4u L90=%4u"
-                   " | lit  R90=%4u R45=%4u L45=%4u L90=%4u"
-                   " | gz=%6d | encR=%5u encL=%5u | bat=%4u\n",
+                   " | L90=%4u"
+                   " | L45 2=%4u both=%4u 1=%4u"
+                   " | R45 1=%4u both=%4u 2=%4u"
+                   " | R90=%4u"
+                   " | gz=%6d | encL=%5u encR=%5u | bat=%4u\n",
                    d.dt_us,
-                   d.dark.r90, d.dark.r45, d.dark.l45, d.dark.l90,
-                   d.lit.r90,  d.lit.r45,  d.lit.l45,  d.lit.l90,
+                   d.diff.l90,
+                   d.diff.l45_2, d.diff.l45_both, d.diff.l45_1,
+                   d.diff.r45_1, d.diff.r45_both, d.diff.r45_2,
+                   d.diff.r90,
                    d.gz,
-                   d.enc_r, d.enc_l,
+                   d.enc_l, d.enc_r,
                    d.battery);
         }
 

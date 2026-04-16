@@ -10,8 +10,10 @@
 
 // --- センサー LED ---
 #define R90_LED_PIN     18
+#define R45_LED_PIN2    20
 #define R45_LED_PIN     21
 #define L45_LED_PIN     23
+#define L45_LED_PIN2    24
 #define L90_LED_PIN     25
 #define LED_SETTLE_US   13   // LED 点灯後の安定待ち時間 [us]
 
@@ -72,28 +74,62 @@ void SensingTask::timer_b_irq_handler() {
     adc_select_input(2); self->data.dark.l45 = adc_read();
     adc_select_input(3); self->data.dark.l90 = adc_read();
 
-    // 2. 各LEDを順次点灯して対応チャンネルを読み取り
-    static const struct { uint pin; uint ch; } leds[4] = {
-        { R90_LED_PIN, 0 },
-        { R45_LED_PIN, 1 },
-        { L45_LED_PIN, 2 },
-        { L90_LED_PIN, 3 },
-    };
-    volatile uint16_t *lit_vals[4] = {
-        &self->data.lit.r90,
-        &self->data.lit.r45,
-        &self->data.lit.l45,
-        &self->data.lit.l90,
-    };
-    for (int i = 0; i < 4; i++) {
-        gpio_put(leds[i].pin, 1);
-        busy_wait_us_32(LED_SETTLE_US);
-        adc_select_input(leds[i].ch);
-        *lit_vals[i] = adc_read();
-        gpio_put(leds[i].pin, 0);
-    }
+    // 2. 各LEDパターンを順次点灯して対応チャンネルを読み取り
 
-    // 3. ジャイロ・エンコーダ・バッテリ
+    // R90 (single)
+    gpio_put(R90_LED_PIN, 1);
+    busy_wait_us_32(LED_SETTLE_US);
+    adc_select_input(0);
+    self->data.lit.r90 = adc_read();
+    gpio_put(R90_LED_PIN, 0);
+
+    // R45 シーケンス: LED1 点灯中に LED2 を追加し、LED1 を消してから LED2 単独を読む
+    adc_select_input(1);
+    gpio_put(R45_LED_PIN, 1);                          // LED1 ON
+    busy_wait_us_32(LED_SETTLE_US);
+    self->data.lit.r45_1 = adc_read();                 // LED1 single
+    gpio_put(R45_LED_PIN2, 1);                         // LED2 ON (LED1 still on)
+    busy_wait_us_32(LED_SETTLE_US);
+    self->data.lit.r45_both = adc_read();              // LED1 + LED2
+    gpio_put(R45_LED_PIN, 0);                          // LED1 OFF (LED2 still on)
+    busy_wait_us_32(LED_SETTLE_US);
+    self->data.lit.r45_2 = adc_read();                 // LED2 single
+    gpio_put(R45_LED_PIN2, 0);                         // LED2 OFF
+
+    // L45 シーケンス: 同様
+    adc_select_input(2);
+    gpio_put(L45_LED_PIN, 1);                          // LED1 ON
+    busy_wait_us_32(LED_SETTLE_US);
+    self->data.lit.l45_1 = adc_read();                 // LED1 single
+    gpio_put(L45_LED_PIN2, 1);                         // LED2 ON (LED1 still on)
+    busy_wait_us_32(LED_SETTLE_US);
+    self->data.lit.l45_both = adc_read();              // LED1 + LED2
+    gpio_put(L45_LED_PIN, 0);                          // LED1 OFF (LED2 still on)
+    busy_wait_us_32(LED_SETTLE_US);
+    self->data.lit.l45_2 = adc_read();                 // LED2 single
+    gpio_put(L45_LED_PIN2, 0);                         // LED2 OFF
+
+    // L90 (single)
+    gpio_put(L90_LED_PIN, 1);
+    busy_wait_us_32(LED_SETTLE_US);
+    adc_select_input(3);
+    self->data.lit.l90 = adc_read();
+    gpio_put(L90_LED_PIN, 0);
+
+    // 3. diff 計算 (負になる場合は 0 にクランプ)
+    auto dc = [](uint16_t l, uint16_t d) -> uint16_t {
+        return l > d ? static_cast<uint16_t>(l - d) : 0u;
+    };
+    self->data.diff.r90      = dc(self->data.lit.r90,      self->data.dark.r90);
+    self->data.diff.r45_1    = dc(self->data.lit.r45_1,    self->data.dark.r45);
+    self->data.diff.r45_both = dc(self->data.lit.r45_both, self->data.dark.r45);
+    self->data.diff.r45_2    = dc(self->data.lit.r45_2,    self->data.dark.r45);
+    self->data.diff.l45_1    = dc(self->data.lit.l45_1,    self->data.dark.l45);
+    self->data.diff.l45_both = dc(self->data.lit.l45_both, self->data.dark.l45);
+    self->data.diff.l45_2    = dc(self->data.lit.l45_2,    self->data.dark.l45);
+    self->data.diff.l90      = dc(self->data.lit.l90,      self->data.dark.l90);
+
+    // 4. ジャイロ・エンコーダ・バッテリ
     self->data.gz      = self->gyro_.read_gyro_z();
     self->data.enc_r   = self->enc_r_.read_angle();
     self->data.enc_l   = self->enc_l_.read_angle();
@@ -156,7 +192,7 @@ void SensingTask::core1_entry() {
 // ============================================================
 void SensingTask::init() {
     // センサー LED
-    const uint led_pins[] = { R90_LED_PIN, R45_LED_PIN, L45_LED_PIN, L90_LED_PIN };
+    const uint led_pins[] = { R90_LED_PIN, R45_LED_PIN, R45_LED_PIN2, L45_LED_PIN, L45_LED_PIN2, L90_LED_PIN };
     for (uint pin : led_pins) {
         gpio_init(pin);
         gpio_set_dir(pin, GPIO_OUT);
