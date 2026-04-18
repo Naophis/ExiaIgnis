@@ -15,7 +15,6 @@
 #define L45_LED_PIN     23
 #define L45_LED_PIN2    24
 #define L90_LED_PIN     25
-#define LED_SETTLE_US   13   // LED 点灯後の安定待ち時間 [us]
 
 // --- ADC (フォトトランジスタ) ---
 #define R90_SEN_PIN     26   // ADC0
@@ -56,6 +55,11 @@ std::shared_ptr<SensingTask> SensingTask::create() {
     return s_instance;
 }
 
+void SensingTask::configure(uint32_t led_settle_us, uint32_t interval_us) {
+    led_settle_us_ = led_settle_us;
+    interval_us_   = interval_us;
+}
+
 
 // ============================================================
 // 直接ハードウェアアラーム IRQ ハンドラ
@@ -79,7 +83,7 @@ void SensingTask::timer_b_irq_handler() {
 
     // R90 (single)
     gpio_put(R90_LED_PIN, 1);
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     adc_select_input(0);
     self->data.lit.r90 = adc_read();
     gpio_put(R90_LED_PIN, 0);
@@ -87,32 +91,32 @@ void SensingTask::timer_b_irq_handler() {
     // R45 シーケンス: LED1 点灯中に LED2 を追加し、LED1 を消してから LED2 単独を読む
     adc_select_input(1);
     gpio_put(R45_LED_PIN, 1);                          // LED1 ON
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     self->data.lit.r45_1 = adc_read();                 // LED1 single
     gpio_put(R45_LED_PIN2, 1);                         // LED2 ON (LED1 still on)
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     self->data.lit.r45_both = adc_read();              // LED1 + LED2
     gpio_put(R45_LED_PIN, 0);                          // LED1 OFF (LED2 still on)
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     self->data.lit.r45_2 = adc_read();                 // LED2 single
     gpio_put(R45_LED_PIN2, 0);                         // LED2 OFF
 
     // L45 シーケンス: 同様
     adc_select_input(2);
     gpio_put(L45_LED_PIN, 1);                          // LED1 ON
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     self->data.lit.l45_1 = adc_read();                 // LED1 single
     gpio_put(L45_LED_PIN2, 1);                         // LED2 ON (LED1 still on)
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     self->data.lit.l45_both = adc_read();              // LED1 + LED2
     gpio_put(L45_LED_PIN, 0);                          // LED1 OFF (LED2 still on)
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     self->data.lit.l45_2 = adc_read();                 // LED2 single
     gpio_put(L45_LED_PIN2, 0);                         // LED2 OFF
 
     // L90 (single)
     gpio_put(L90_LED_PIN, 1);
-    busy_wait_us_32(LED_SETTLE_US);
+    busy_wait_us_32(self->led_settle_us_);
     adc_select_input(3);
     self->data.lit.l90 = adc_read();
     gpio_put(L90_LED_PIN, 0);
@@ -159,7 +163,7 @@ void SensingTask::timer_a_irq_handler() {
     auto *self = s_instance.get();
 
     // 次回アラームをすぐに設定 (絶対時刻 → ドリフトなし)
-    self->next_alarm_a_ += 1000;
+    self->next_alarm_a_ += self->interval_us_;
     timer_hw->alarm[2] = self->next_alarm_a_;
 
     // アラーム鳴動直後の時刻を記録
@@ -187,7 +191,7 @@ void SensingTask::run() {
 
     hw_set_bits(&timer_hw->inte, (1u << 1) | (1u << 2));
 
-    next_alarm_a_ = (uint32_t)time_us_64() + 1000;
+    next_alarm_a_ = (uint32_t)time_us_64() + interval_us_;
     timer_hw->alarm[2] = next_alarm_a_;
 
     while (true) {

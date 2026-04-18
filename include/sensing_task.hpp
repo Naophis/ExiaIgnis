@@ -83,6 +83,9 @@ public:
 
     static void core1_entry();
 
+    // multicore_launch_core1 より前に呼ぶこと
+    void configure(uint32_t led_settle_us, uint32_t interval_us);
+
     volatile Data data{};
     volatile bool data_ready = false;
 
@@ -96,8 +99,11 @@ private:
     AS5147P   enc_l_;   // 左エンコーダ (SPI0, CS=GPIO1)
     ADS7042   battery_; // バッテリADC  (SPI0, CS=GPIO5)
 
-    static void timer_a_irq_handler();  // alarm 2: 1000us 周期 (1kHz)
-    static void timer_b_irq_handler();  // alarm 1: LED settle 後のセンサー読み取り
+    static void timer_a_irq_handler();  // alarm 2: 周期タイマー
+    static void timer_b_irq_handler();  // alarm 1: センサー読み取りシーケンス
+
+    uint32_t led_settle_us_ = 13;    // LED 点灯後の安定待ち時間
+    uint32_t interval_us_   = 1000;  // サンプリング周期
 
     uint32_t next_alarm_a_ = 0;
     uint64_t prev_timestamp_ = 0;

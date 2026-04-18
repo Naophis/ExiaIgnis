@@ -33,6 +33,32 @@ project(ExiaIgnis C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# ---- cJSON ----
+include(FetchContent)
+FetchContent_Declare(cjson
+    GIT_REPOSITORY https://github.com/DaveGamble/cJSON.git
+    GIT_TAG        v1.7.18
+)
+set(ENABLE_CJSON_TEST   OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(cjson)
+
+# ---- LittleFS ----
+FetchContent_Declare(littlefs
+    GIT_REPOSITORY https://github.com/littlefs-project/littlefs.git
+    GIT_TAG        v2.5.0
+)
+FetchContent_GetProperties(littlefs)
+if(NOT littlefs_POPULATED)
+    FetchContent_Populate(littlefs)
+    add_library(littlefs STATIC
+        ${littlefs_SOURCE_DIR}/lfs.c
+        ${littlefs_SOURCE_DIR}/lfs_util.c
+    )
+    target_include_directories(littlefs PUBLIC ${littlefs_SOURCE_DIR})
+    # LFS_NO_MALLOC must NOT be defined so lfs_file_open() is available
+endif()
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(ExiaIgnis
@@ -42,6 +68,7 @@ add_executable(ExiaIgnis
     src/driver/asm330lhh.cpp
     src/driver/as5147p.cpp
     src/driver/ads7042.cpp
+    src/config_loader.cpp
 )
 
 pico_set_program_name(ExiaIgnis "ExiaIgnis")
@@ -64,10 +91,11 @@ target_link_libraries(ExiaIgnis
 target_include_directories(ExiaIgnis PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/include
+        ${cjson_SOURCE_DIR}
 )
 
 # Add any user requested libraries
-target_link_libraries(ExiaIgnis 
+target_link_libraries(ExiaIgnis
         hardware_spi
         hardware_i2c
         hardware_dma
@@ -78,8 +106,12 @@ target_link_libraries(ExiaIgnis
         hardware_adc
         hardware_irq
         hardware_timer
+        hardware_flash
+        hardware_sync
         pico_multicore
         pico_flash
+        cjson
+        littlefs
         )
 
 pico_add_extra_outputs(ExiaIgnis)

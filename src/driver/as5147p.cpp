@@ -20,16 +20,16 @@ uint16_t AS5147P::read_angle() {
     uint16_t cmd, response;
 
     // 1回目: READ_ANGLE コマンド送信
-    cmd = 0xFFFF;
+    cmd = 0x03FF;
     gpio_put(cs_, 0);
     spi_write16_read16_blocking(spi_, &cmd, &response, 1);
     gpio_put(cs_, 1);
 
-    // 2回目: NOP で前回のデータを取得
-    cmd = 0xC000;
-    gpio_put(cs_, 0);
-    spi_write16_read16_blocking(spi_, &cmd, &response, 1);
-    gpio_put(cs_, 1);
+    // // 2回目: NOP で前回のデータを取得
+    // cmd = 0xC000;
+    // gpio_put(cs_, 0);
+    // spi_write16_read16_blocking(spi_, &cmd, &response, 1);
+    // gpio_put(cs_, 1);
 
     return response & 0x3FFF;
 }

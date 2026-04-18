@@ -11,6 +11,7 @@
 #include "hardware/clocks.h"
 #include "sensing_task.hpp"
 #include "ui.hpp"
+#include "config_loader.hpp"
 
 #include "define.hpp"
 
@@ -55,8 +56,15 @@ int main()
     ui.LED_headlight();
     ui.hello_exia();
 
+    // 設定ファイル読み込み (multicore 起動前に実施)
+    ConfigLoader::init();
+
     auto sensing = SensingTask::create();
     sensing->init();
+    sensing->configure(
+        (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 13),
+        (uint32_t)ConfigLoader::get_int("sensing.interval_us",   1000)
+    );
     multicore_launch_core1(SensingTask::core1_entry);
 
     bool prev_btn = false;
