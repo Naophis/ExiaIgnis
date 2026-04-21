@@ -7,6 +7,7 @@
 #include "hardware/irq.h"
 #include "hardware/timer.h"
 #include "sensing_task.hpp"
+#include "driver/spi_util.hpp"
 
 // --- センサー LED ---
 #define R90_LED_PIN     18
@@ -135,22 +136,23 @@ void SensingTask::timer_b_irq_handler() {
     self->data.diff.l90      = dc(self->data.lit.l90,      self->data.dark.l90);
 
     // 4. ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
-    self->data.gz_ts_z  = self->data.gz_ts;
-    self->data.gz_ts    = time_us_64();
-    self->data.gz       = self->gyro_.read_gyro_z();
-    self->data.gz_dt    = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z) : 0;
+    // self->data.gz_ts_z  = self->data.gz_ts;
+    // self->data.gz_ts    = time_us_64();
+    // self->data.gz       = self->gyro_.read_gyro_z();
+    // self->data.gz_dt    = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z) : 0;
 
     self->data.enc_r_ts_z = self->data.enc_r_ts;
     self->data.enc_r_ts   = time_us_64();
     self->data.enc_r      = self->enc_r_.read_angle();
     self->data.enc_r_dt   = self->data.enc_r_ts_z ? (self->data.enc_r_ts - self->data.enc_r_ts_z) : 0;
+    // enc_r は mode3(CPOL=1) でジャイロと同一設定のため SCK 状態変化なし。restore 不要。
 
     self->data.enc_l_ts_z = self->data.enc_l_ts;
     self->data.enc_l_ts   = time_us_64();
     self->data.enc_l      = self->enc_l_.read_angle();
     self->data.enc_l_dt   = self->data.enc_l_ts_z ? (self->data.enc_l_ts - self->data.enc_l_ts_z) : 0;
 
-    self->data.battery  = self->battery_.read();
+    // self->data.battery  = self->battery_.read();
 
     self->data.sense_duration_us = (uint32_t)(time_us_64() - sense_start);
     self->data_ready = true;
@@ -230,16 +232,25 @@ void SensingTask::init() {
 
     // 右エンコーダ (AS5147P) — SPI1 はジャイロ init 済み、CS のみ設定
     enc_r_.init(GYRO_SPI, ENC_R_CS_PIN);
+    enc_r_.setup();
 
     // SPI0 バス初期化 (左エンコーダ + バッテリADC 共有)
-    spi_init(ENC_L_SPI, 8000000);
+    spi_init(ENC_L_SPI, 1000000);
     gpio_set_function(ENC_L_CLK_PIN,  GPIO_FUNC_SPI);
     gpio_set_function(ENC_L_MOSI_PIN, GPIO_FUNC_SPI);
     gpio_set_function(ENC_L_MISO_PIN, GPIO_FUNC_SPI);
 
+    // バッテリADC (ADS7042I) — enc_l_.setup() より前に CS HIGH に設定して bus contention を防ぐ
+    battery_.init(ENC_L_SPI, BATTERY_CS_PIN);
+
     // 左エンコーダ (AS5147P) — CS のみ設定
     enc_l_.init(ENC_L_SPI, ENC_L_CS_PIN);
+    enc_l_.setup();
 
-    // バッテリADC (ADS7042I) — CS のみ設定
-    battery_.init(ENC_L_SPI, BATTERY_CS_PIN);
+    // SPI0 MISO 疎通確認: bat≠0 なら GPIO0(MISO) は生きている
+    uint16_t bat0 = battery_.read();
+    uint16_t bat1 = battery_.read();
+    printf("[bat] raw0=%u raw1=%u  (SPI0 MISO %s)\n",
+           bat0, bat1,
+           (bat0 || bat1) ? "OK" : "STUCK LOW");
 }

@@ -65,6 +65,7 @@ int main()
         (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 13),
         (uint32_t)ConfigLoader::get_int("sensing.interval_us",   1000)
     );
+    sleep_ms(3000);  // enc setup ログを画面クリア前に確認するための待機（デバッグ用）
     multicore_launch_core1(SensingTask::core1_entry);
 
     bool prev_btn = false;

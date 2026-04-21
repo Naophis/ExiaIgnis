@@ -8,10 +8,15 @@ public:
     // init() は CS ピンのみ設定する
     void init(spi_inst_t *spi, uint cs_pin);
 
+    // ERRFL / DIAAGC を読んで SPI 疎通・磁石状態を printf 表示
+    void setup();
+
     // 14bit 角度値を取得 [0–16383]
     uint16_t read_angle();
 
 private:
     spi_inst_t *spi_ = nullptr;
     uint        cs_  = 0;
+
+    uint16_t read_reg(uint16_t addr);
 };
