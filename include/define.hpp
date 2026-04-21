@@ -45,3 +45,15 @@
 #define BUZZER_PIN      17
 #define BUZZER_FREQ_HZ  500
 #define BUZZER_WRAP     999u  // PWM counter top (1000 steps)
+
+// ============================================================
+// PWM / Motor & Suction (50 kHz)
+// ============================================================
+#define M_PWM_L1      6   // PWM3 A
+#define M_PWM_L2      7   // PWM3 B
+#define M_PWM_R1      10  // PWM5 A
+#define M_PWM_R2      11  // PWM5 B
+#define SUCTION_PWM   8   // PWM4 A
+
+#define MOTOR_PWM_FREQ_HZ  50000u
+#define MOTOR_DUTY_PCT     5u     // duty (%) applied to active channel

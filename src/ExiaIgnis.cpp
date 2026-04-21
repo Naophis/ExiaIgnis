@@ -44,6 +44,38 @@ int main()
     gpio_set_dir(BTN_PIN, GPIO_IN);
     gpio_pull_up(BTN_PIN);
 
+    // Motor / Suction PWM setup (50 kHz)
+    // wrap = sys_clk / freq - 1  (integer divider = 1)
+    const uint32_t sys_khz   = 150000u;
+    const uint32_t motor_wrap = (sys_khz * 1000u / MOTOR_PWM_FREQ_HZ) - 1u; // 2999
+
+    const uint motor_pins[] = { M_PWM_L1, M_PWM_L2, M_PWM_R1, M_PWM_R2, SUCTION_PWM };
+    for (uint pin : motor_pins) {
+        gpio_set_function(pin, GPIO_FUNC_PWM);
+    }
+
+    uint slice_L  = pwm_gpio_to_slice_num(M_PWM_L1);   // PWM3 (L1/L2)
+    uint slice_R  = pwm_gpio_to_slice_num(M_PWM_R1);   // PWM5 (R1/R2)
+    uint slice_S  = pwm_gpio_to_slice_num(SUCTION_PWM);// PWM4
+
+    for (uint slice : { slice_L, slice_R, slice_S }) {
+        pwm_set_clkdiv_int_frac4(slice, 1, 0);  // divider = 1.0
+        pwm_set_wrap(slice, motor_wrap);
+        pwm_set_enabled(slice, true);
+    }
+
+    auto set_motor_duty = [&](bool btn) {
+        uint16_t level = (uint16_t)(motor_wrap * MOTOR_DUTY_PCT / 100u);
+        uint16_t a = btn ? level : 0u;
+        uint16_t b = btn ? 0u : level;
+        pwm_set_chan_level(slice_L, PWM_CHAN_A, a); // M_PWM_L1
+        pwm_set_chan_level(slice_L, PWM_CHAN_B, b); // M_PWM_L2
+        pwm_set_chan_level(slice_R, PWM_CHAN_A, a); // M_PWM_R1
+        pwm_set_chan_level(slice_R, PWM_CHAN_B, b); // M_PWM_R2
+        pwm_set_chan_level(slice_S, PWM_CHAN_A, level); // SUCTION_PWM 常時5%
+    };
+    set_motor_duty(false);
+
     // PWM setup: GPIO16 = PWM0 A (周波数はui.play_tone/set_pwm_freqで設定)
     gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
     uint pwm_slice   = pwm_gpio_to_slice_num(BUZZER_PIN);
@@ -65,7 +97,7 @@ int main()
         (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 13),
         (uint32_t)ConfigLoader::get_int("sensing.interval_us",   1000)
     );
-    sleep_ms(3000);  // enc setup ログを画面クリア前に確認するための待機（デバッグ用）
+    sleep_ms(300);  // enc setup ログを画面クリア前に確認するための待機（デバッグ用）
     multicore_launch_core1(SensingTask::core1_entry);
 
     bool prev_btn = false;
@@ -76,9 +108,11 @@ int main()
             if (btn_pressed) {
                 ui.play_tone(BUZZER_FREQ_HZ);
                 ui.LED_on_all();
+                set_motor_duty(true);
             } else {
                 ui.stop_tone();
                 ui.LED_headlight();
+                set_motor_duty(false);
             }
             prev_btn = btn_pressed;
         }
