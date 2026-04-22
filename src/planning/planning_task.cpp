@@ -65,8 +65,12 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
 
     // 初期デューティ: 全チャンネル 0
     apply_motor();
+}
 
-    // --- TIMER1 alarm 0 で 1kHz IRQ を設定 (Core0 コンテキスト → Core0 IRQ) ---
+// ============================================================
+// TIMER1 IRQ 登録 (Core1 エントリから呼ぶ)
+// ============================================================
+void PlanningTask::start_irq() {
     irq_set_exclusive_handler(TIMER1_IRQ_0, timer_irq_handler);
     irq_set_priority(TIMER1_IRQ_0, PICO_HIGHEST_IRQ_PRIORITY);
     irq_set_enabled(TIMER1_IRQ_0, true);

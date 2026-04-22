@@ -65,11 +65,13 @@ public:
 
     static std::shared_ptr<PlanningTask> create();
 
-    // Core0 の main() から呼ぶ。
-    // モーター/吸引 PWM の GPIO・スライス設定と TIMER1 IRQ 登録を行う。
+    // Core0 の main() から呼ぶ。モーター/吸引 PWM の GPIO・スライス設定のみ。
     void init(std::shared_ptr<SensingTask> sensing);
 
-    // Core0 の main ループから呼ぶ。IRQ-safe (内部で割り込み禁止区間)。
+    // Core1 エントリから呼ぶ。TIMER1 IRQ を Core1 に登録して計測ループを開始する。
+    void start_irq();
+
+    // Core0 の MainTask から呼ぶ (IRQ は Core1 側)。__dmb() で cross-core 安全。
     void send_command(const Command &cmd);
 
     volatile State state{};

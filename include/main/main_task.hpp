@@ -4,21 +4,17 @@
 #include "planning/planning_task.hpp"
 #include "ui.hpp"
 
-// Core1 で動作するメインタスク。
+// Core0 で動作するメインタスク。
 // シリアル出力・ボタン処理・planning への指示を担う。
+// TinyUSB が Core0 固定のため printf を直接呼べる。
 class MainTask {
 public:
     static std::shared_ptr<MainTask> create(
         std::shared_ptr<SensingTask>  sensing,
         std::shared_ptr<PlanningTask> planning);
 
-    // Core1 エントリポイント。multicore_launch_core1() に渡す。
-    static void core1_entry();
-
-    // Core1 が snprintf で組み立てた文字列。Core0 のメインループが fputs する。
-    // TinyUSB はシングルコア前提のため Core1 から直接 printf/USB 関数を呼ばない。
-    static char          s_print_buf[1024];
-    static volatile bool s_print_ready;
+    // Core0 のメインループとして呼ぶ (ブロッキング)。
+    static void start();
 
 private:
     MainTask() = default;
