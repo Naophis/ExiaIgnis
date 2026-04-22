@@ -29,6 +29,14 @@ public:
         float ang          = 0.0f;   // 目標角度   [rad] (PIVOT 時)
         float duty_suction = 0.0f;   // 吸引モーター duty [%]
         uint32_t timestamp = 0;
+
+        Command() = default;
+        // volatile Command からのコピー (クロスコア受け取り用)
+        Command(const volatile Command &o)
+            : mode(o.mode), v_max(o.v_max), v_end(o.v_end)
+            , accl(o.accl), decel(o.decel), dist(o.dist)
+            , w_max(o.w_max), alpha(o.alpha), ang(o.ang)
+            , duty_suction(o.duty_suction), timestamp(o.timestamp) {}
     };
 
     // IRQ が毎 tick 更新する状態。Core0 main ループから読み取り可能。
@@ -84,9 +92,10 @@ private:
     uint32_t next_alarm_  = 0;
     uint64_t prev_ts_     = 0;
 
-    // Core0 main → Core0 IRQ コマンドバッファ
-    Command       pending_cmd_{};
-    volatile bool cmd_pending_ = false;
+    // Core1 main_task → Core0 IRQ コマンドバッファ
+    // __dmb() + volatile でクロスコア可視性を保証
+    volatile Command pending_cmd_{};
+    volatile bool    cmd_pending_ = false;
 
     Command active_cmd_{};
 

@@ -5,7 +5,7 @@
 #include "hardware/timer.h"       // timer1_hw, TIMER1_IRQ_0
 #include "hardware/irq.h"
 #include "hardware/pwm.h"
-#include "hardware/sync.h"        // save_and_disable_interrupts / restore_interrupts
+#include "hardware/sync.h"        // __dmb
 #include <cmath>
 #include <algorithm>
 
@@ -79,10 +79,9 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
 // ============================================================
 // コマンド投入 (Core0 main ループから呼ぶ, IRQ-safe)
 // ============================================================
+// Core1 (MainTask) から Core0 (Planning IRQ) へ cross-core 安全に投入する。
+// __dmb() で全フィールドの書き込みが cmd_pending_ より前に完了することを保証する。
 void PlanningTask::send_command(const Command &cmd) {
-    // IRQ は同じ Core0 で動くため、割り込み禁止区間で排他
-    uint32_t save = save_and_disable_interrupts();
-
     pending_cmd_.mode          = cmd.mode;
     pending_cmd_.v_max         = cmd.v_max;
     pending_cmd_.v_end         = cmd.v_end;
@@ -94,11 +93,8 @@ void PlanningTask::send_command(const Command &cmd) {
     pending_cmd_.ang           = cmd.ang;
     pending_cmd_.duty_suction  = cmd.duty_suction;
     pending_cmd_.timestamp     = cmd.timestamp;
-
-    __dmb();  // 全フィールド書き込み完了後に cmd_pending_ を true へ
+    __dmb();           // store barrier: 全フィールドをメモリに書き出してから flag を立てる
     cmd_pending_ = true;
-
-    restore_interrupts(save);
 }
 
 // ============================================================
@@ -126,9 +122,10 @@ void PlanningTask::timer_irq_handler() {
 void PlanningTask::tick(uint32_t dt_us) {
     if (dt_us == 0) return;
 
-    // --- コマンド受け取り ---
+    // --- コマンド受け取り (Core1 からの cross-core 書き込みを安全に読む) ---
     if (cmd_pending_) {
-        active_cmd_  = pending_cmd_;
+        __dmb();  // load barrier: cmd_pending_ を読んだ後、pending_cmd_ フィールドを確実に読む
+        active_cmd_  = Command(pending_cmd_);
         cmd_pending_ = false;
         // 新コマンド受信: 積分項・軌道をリセット
         vel_err_i_  = 0.0f;

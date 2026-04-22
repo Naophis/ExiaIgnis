@@ -81,6 +81,10 @@ public:
 
     void init();
 
+    // Core0 から呼ぶ: TIMER0 IRQ を登録してタイマー起動 (ブロックしない)
+    void start_irq();
+
+    // 旧 Core1 エントリ (後方互換)
     static void core1_entry();
 
     // multicore_launch_core1 より前に呼ぶこと

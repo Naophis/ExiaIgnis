@@ -179,9 +179,10 @@ void SensingTask::timer_a_irq_handler() {
 
 
 // ============================================================
-// コア1: 直接 IRQ 登録 → タイマー起動
+// TIMER0 IRQ 登録 + タイマー起動 (ブロックしない)
+// 呼び出したコアで IRQ が動作する。Core0 から呼ぶこと。
 // ============================================================
-void SensingTask::run() {
+void SensingTask::start_irq() {
     irq_set_exclusive_handler(TIMER0_IRQ_1, timer_b_irq_handler);
     irq_set_exclusive_handler(TIMER0_IRQ_2, timer_a_irq_handler);
 
@@ -195,7 +196,13 @@ void SensingTask::run() {
 
     next_alarm_a_ = (uint32_t)time_us_64() + interval_us_;
     timer_hw->alarm[2] = next_alarm_a_;
+}
 
+// ============================================================
+// 旧 Core1 エントリ (後方互換のため残す)
+// ============================================================
+void SensingTask::run() {
+    start_irq();
     while (true) {
         __wfi();
     }
