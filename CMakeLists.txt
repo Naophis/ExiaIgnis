@@ -64,6 +64,7 @@ endif()
 add_executable(ExiaIgnis
     src/ExiaIgnis.cpp
     src/sensing_task.cpp
+    src/planning/planning_task.cpp
     src/ui.cpp
     src/driver/asm330lhh.cpp
     src/driver/as5147p.cpp

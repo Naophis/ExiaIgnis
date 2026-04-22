@@ -10,6 +10,7 @@
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 #include "sensing_task.hpp"
+#include "planning/planning_task.hpp"
 #include "ui.hpp"
 #include "config_loader.hpp"
 
@@ -27,8 +28,6 @@ void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
 
     printf("Blinking pin %d at %d Hz\n", pin, freq);
 
-    // PIO counter program takes 3 more cycles in total than we pass as
-    // input (wait for n + 1; mov; jmp)
     pio->txf[sm] = (125000000 / (2 * freq)) - 3;
 }
 
@@ -44,43 +43,11 @@ int main()
     gpio_set_dir(BTN_PIN, GPIO_IN);
     gpio_pull_up(BTN_PIN);
 
-    // Motor / Suction PWM setup (50 kHz)
-    // wrap = sys_clk / freq - 1  (integer divider = 1)
-    const uint32_t sys_khz   = 150000u;
-    const uint32_t motor_wrap = (sys_khz * 1000u / MOTOR_PWM_FREQ_HZ) - 1u; // 2999
-
-    const uint motor_pins[] = { M_PWM_L1, M_PWM_L2, M_PWM_R1, M_PWM_R2, SUCTION_PWM };
-    for (uint pin : motor_pins) {
-        gpio_set_function(pin, GPIO_FUNC_PWM);
-    }
-
-    uint slice_L  = pwm_gpio_to_slice_num(M_PWM_L1);   // PWM3 (L1/L2)
-    uint slice_R  = pwm_gpio_to_slice_num(M_PWM_R1);   // PWM5 (R1/R2)
-    uint slice_S  = pwm_gpio_to_slice_num(SUCTION_PWM);// PWM4
-
-    for (uint slice : { slice_L, slice_R, slice_S }) {
-        pwm_set_clkdiv_int_frac4(slice, 1, 0);  // divider = 1.0
-        pwm_set_wrap(slice, motor_wrap);
-        pwm_set_enabled(slice, true);
-    }
-
-    auto set_motor_duty = [&](bool btn) {
-        uint16_t level = (uint16_t)(motor_wrap * MOTOR_DUTY_PCT / 100u);
-        uint16_t a = btn ? level : 0u;
-        uint16_t b = btn ? 0u : level;
-        pwm_set_chan_level(slice_L, PWM_CHAN_A, a); // M_PWM_L1
-        pwm_set_chan_level(slice_L, PWM_CHAN_B, b); // M_PWM_L2
-        pwm_set_chan_level(slice_R, PWM_CHAN_A, a); // M_PWM_R1
-        pwm_set_chan_level(slice_R, PWM_CHAN_B, b); // M_PWM_R2
-        pwm_set_chan_level(slice_S, PWM_CHAN_A, level); // SUCTION_PWM 常時5%
-    };
-    set_motor_duty(false);
-
-    // PWM setup: GPIO16 = PWM0 A (周波数はui.play_tone/set_pwm_freqで設定)
+    // PWM setup: buzzer (周波数はui.play_tone/set_pwm_freqで設定)
     gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
     uint pwm_slice   = pwm_gpio_to_slice_num(BUZZER_PIN);
     uint pwm_channel = pwm_gpio_to_channel(BUZZER_PIN);
-    pwm_set_enabled(pwm_slice, false); // 初期状態はOFF
+    pwm_set_enabled(pwm_slice, false);
 
     // UserInterface: I2C1 (LED driver) + PWM buzzer を初期化
     UserInterface ui;
@@ -100,6 +67,10 @@ int main()
     sleep_ms(300);  // enc setup ログを画面クリア前に確認するための待機（デバッグ用）
     multicore_launch_core1(SensingTask::core1_entry);
 
+    // PlanningTask: モーター/吸引 PWM 初期化 + TIMER1 alarm 0 (Core0) で 1kHz 動作
+    auto planning = PlanningTask::create();
+    planning->init(sensing);
+
     bool prev_btn = false;
     while (true) {
         bool btn_pressed = !gpio_get(BTN_PIN); // active low: LOW=pressed
@@ -108,11 +79,21 @@ int main()
             if (btn_pressed) {
                 ui.play_tone(BUZZER_FREQ_HZ);
                 ui.LED_on_all();
-                set_motor_duty(true);
+                // ボタン押下: 直進コマンドを投入 (速度 200mm/s, 実質無制限距離)
+                PlanningTask::Command cmd;
+                cmd.mode          = PlanningTask::MotionMode::STRAIGHT;
+                cmd.v_max         = 200.0f;
+                cmd.accl          = 1000.0f;
+                cmd.dist          = 1e9f;
+                cmd.duty_suction  = 5.0f;
+                planning->send_command(cmd);
             } else {
                 ui.stop_tone();
                 ui.LED_headlight();
-                set_motor_duty(false);
+                // ボタン離し: 減速停止
+                PlanningTask::Command cmd;
+                cmd.mode = PlanningTask::MotionMode::STOP;
+                planning->send_command(cmd);
             }
             prev_btn = btn_pressed;
         }
@@ -122,8 +103,8 @@ int main()
             sensing->data_ready = false;
 
             const char ESC = '\033';
-            printf("%c[2J",   ESC);   // 画面消去
-            printf("%c[0;0H", ESC);   // カーソルを先頭に戻す
+            printf("%c[2J",   ESC);
+            printf("%c[0;0H", ESC);
 
             printf("=== ExiaIgnis sensor monitor ===\n");
 
@@ -151,6 +132,16 @@ int main()
                    d.enc_r, d.enc_r_dt);
 
             printf("[power]   bat=%4u\n", d.battery);
+
+            PlanningTask::State ps = planning->state;  // volatile からコピー
+            printf("[planning] mode=%u  v=%6.1f  w=%6.3f"
+                   "  dist=%7.1f  ang=%6.3f\n",
+                   (uint8_t)ps.mode,
+                   ps.img_v, ps.img_w,
+                   ps.img_dist, ps.img_ang);
+            printf("[control]  duty_l=%6.1f%%  duty_r=%6.1f%%"
+                   "  suction=%5.1f%%  tick=%lu\n",
+                   ps.duty_l, ps.duty_r, ps.duty_suction, ps.tick);
         }
 
         sleep_ms(10);
