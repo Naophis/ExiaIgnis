@@ -49,7 +49,7 @@ int main() {
     auto sensing = SensingTask::create();
     sensing->init();
     sensing->configure(
-        (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 13),
+        (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 12),
         (uint32_t)ConfigLoader::get_int("sensing.interval_us", 1000));
 
     // PlanningTask 初期化 (モーター/吸引 PWM ハードウェア設定のみ; IRQ は Core1 で登録)

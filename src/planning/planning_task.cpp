@@ -1,4 +1,5 @@
 #include "planning/planning_task.hpp"
+#include "logging/logging_task.hpp"
 #include "define.hpp"              // M_PWM_L1/L2/R1/R2, SUCTION_PWM, MOTOR_PWM_FREQ_HZ
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"      // clock_get_hz
@@ -183,6 +184,12 @@ void PlanningTask::tick(uint32_t dt_us) {
     state.duty_suction = duty_suction_;
     state.mode         = active_cmd_.mode;
     state.tick++;
+
+    // --- ログ記録 (LoggingTask が active な場合のみ実行) ---
+    {
+        PlanningTask::State snap(state);        // volatile → non-volatile コピー
+        LoggingTask::append_from_irq(d, snap);
+    }
 }
 
 // ============================================================

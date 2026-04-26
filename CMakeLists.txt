@@ -62,10 +62,11 @@ endif()
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(ExiaIgnis
-    src/ExiaIgnis.cpp
+    src/main.cpp
     src/sensing_task.cpp
     src/planning/planning_task.cpp
     src/main/main_task.cpp
+    src/logging/logging_task.cpp
     src/ui.cpp
     src/driver/asm330lhh.cpp
     src/driver/as5147p.cpp
