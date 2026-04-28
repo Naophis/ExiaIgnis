@@ -33,8 +33,28 @@ void MainTask::run() {
     ui_.hello_exia();
 
     bool prev_btn = false;
+    // bool suction_started = false;
+    // bool suction_stopped = false;
+    // absolute_time_t start_time = get_absolute_time();
+    // absolute_time_t suction_start_time{};
 
     while (true) {
+        // if (!suction_started && absolute_time_diff_us(start_time, get_absolute_time()) >= 3000000LL) {
+        //     PlanningTask::Command cmd;
+        //     cmd.duty_suction = 42.0f;
+        //     planning_->send_command(cmd);
+        //     suction_started = true;
+        //     suction_start_time = get_absolute_time();
+        // }
+
+        // if (suction_started && !suction_stopped &&
+        //     absolute_time_diff_us(suction_start_time, get_absolute_time()) >= 5000000LL) {
+        //     PlanningTask::Command cmd;
+        //     cmd.duty_suction = 0.0f;
+        //     planning_->send_command(cmd);
+        //     suction_stopped = true;
+        // }
+
         // ---- ボタン処理 ----
         bool btn = !gpio_get(BTN_PIN);  // active low
 
