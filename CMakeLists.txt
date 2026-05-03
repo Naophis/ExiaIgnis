@@ -66,6 +66,7 @@ add_executable(ExiaIgnis
     src/sensing_task.cpp
     src/planning/planning_task.cpp
     src/action/motion_planning.cpp
+    src/action/wall_off_controller.cpp
     src/main/main_task.cpp
     src/logging/logging_task.cpp
     src/ui.cpp

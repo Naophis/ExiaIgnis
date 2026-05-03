@@ -94,6 +94,12 @@ public:
     void dump_csv()    const;   // USB CDC に CSV 出力
     void dump_binary() const;   // UART にバイナリ出力
 
+    // Astraea MotionPlanning 互換インターフェース
+    void start_slalom_log()              { start(); }
+    void stop_slalom_log()               { stop();  }
+    void save(const std::string &)       {}
+    void dump_log(const std::string &)   { dump_csv(); }
+
 private:
     LoggingTask() = default;
 
