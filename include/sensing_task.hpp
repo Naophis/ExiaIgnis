@@ -116,4 +116,5 @@ private:
     uint64_t prev_timestamp_ = 0;
 
     static std::shared_ptr<SensingTask> s_instance;
+    std::shared_ptr<sensing_result_entity_t> sensing_result;
 };

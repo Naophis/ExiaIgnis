@@ -100,6 +100,8 @@ public:
     void reset_kf_state(bool /*full*/) {}  // TODO: カルマンフィルタリセット
     void reset_pos(float /*x*/, float /*y*/, float /*ang*/) {}  // TODO: 位置リセット
 
+    void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_sensing_result);
+
 private:
     PlanningTask() = default;
 
@@ -113,6 +115,7 @@ private:
     static std::shared_ptr<PlanningTask> s_instance;
 
     std::shared_ptr<SensingTask> sensing_;
+    std::shared_ptr<sensing_result_entity_t> sensing_result;
 
     uint32_t interval_us_ = 1000;
     uint32_t next_alarm_  = 0;

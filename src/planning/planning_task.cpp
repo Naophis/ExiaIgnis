@@ -39,6 +39,11 @@ std::shared_ptr<PlanningTask> PlanningTask::create() {
   return s_instance;
 }
 
+void PlanningTask::set_sensing_entity(
+    std::shared_ptr<sensing_result_entity_t> &_sensing_result) {
+  sensing_result = _sensing_result;
+}
+
 // ============================================================
 // 初期化 (Core0 の main から呼ぶ)
 // ============================================================

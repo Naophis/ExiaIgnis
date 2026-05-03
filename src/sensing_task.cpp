@@ -61,6 +61,12 @@ void SensingTask::configure(uint32_t led_settle_us, uint32_t interval_us) {
     interval_us_   = interval_us;
 }
 
+void SensingTask::set_sensing_entity(
+    std::shared_ptr<sensing_result_entity_t> &_sensing_result) {
+  sensing_result = _sensing_result;
+}
+
+
 
 // ============================================================
 // 直接ハードウェアアラーム IRQ ハンドラ

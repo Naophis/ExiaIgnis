@@ -23,6 +23,9 @@
 static SensingTask*  s_rt_sensing  = nullptr;
 static PlanningTask* s_rt_planning = nullptr;
 
+std::shared_ptr<sensing_result_entity_t> sensing_entity =
+    std::make_shared<sensing_result_entity_t>();
+
 static void rt_core1_entry() {
     flash_safe_execute_core_init();
     s_rt_sensing->start_irq();   // TIMER0 IRQ → Core1
@@ -47,6 +50,7 @@ int main() {
 
     // SensingTask 初期化 (SPI / ADC / GPIO ハードウェア設定のみ; IRQ は Core1 で登録)
     auto sensing = SensingTask::create();
+    sensing->set_sensing_entity(sensing_entity);
     sensing->init();
     sensing->configure(
         (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 12),
@@ -54,6 +58,7 @@ int main() {
 
     // PlanningTask 初期化 (モーター/吸引 PWM ハードウェア設定のみ; IRQ は Core1 で登録)
     auto planning = PlanningTask::create();
+    planning->set_sensing_entity(sensing_entity);
     planning->init(sensing);
 
     // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
