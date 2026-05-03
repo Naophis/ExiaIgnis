@@ -83,66 +83,88 @@ void SensingTask::timer_b_irq_handler() {
     const uint64_t sense_start = time_us_64();
 
     // 1. 全LED消灯状態で ambient 読み取り
-    adc_select_input(0); self->data.dark.r90 = adc_read();
-    adc_select_input(1); self->data.dark.r45 = adc_read();
-    adc_select_input(2); self->data.dark.l45 = adc_read();
-    adc_select_input(3); self->data.dark.l90 = adc_read();
+    adc_select_input(0); se->led_sen_before.left90.raw = adc_read();
+    adc_select_input(1); se->led_sen_before.right45.raw = adc_read();
+    adc_select_input(2); se->led_sen_before.left45.raw = adc_read();
+    adc_select_input(3); se->led_sen_before.left90.raw = adc_read();
 
     // 2. 各LEDパターンを順次点灯して対応チャンネルを読み取り
+
+    bool led_on = true;
 
     // R90 (single)
     gpio_put(R90_LED_PIN, 1);
     busy_wait_us_32(self->led_settle_us_);
     adc_select_input(0);
-    self->data.lit.r90 = adc_read();
+    se->led_sen_after.left90.raw= adc_read();
     gpio_put(R90_LED_PIN, 0);
 
     // R45 シーケンス: LED1 点灯中に LED2 を追加し、LED1 を消してから LED2 単独を読む
     adc_select_input(1);
     gpio_put(R45_LED_PIN, 1);                          // LED1 ON
     busy_wait_us_32(self->led_settle_us_);
-    self->data.lit.r45_1 = adc_read();                 // LED1 single
+    se->led_sen_after.right45.raw = adc_read();                 // LED1 single
     gpio_put(R45_LED_PIN2, 1);                         // LED2 ON (LED1 still on)
     busy_wait_us_32(self->led_settle_us_);
-    self->data.lit.r45_both = adc_read();              // LED1 + LED2
+    se->led_sen_after.right45_2.raw = adc_read();              // LED1 + LED2
     gpio_put(R45_LED_PIN, 0);                          // LED1 OFF (LED2 still on)
     busy_wait_us_32(self->led_settle_us_);
-    self->data.lit.r45_2 = adc_read();                 // LED2 single
+    se->led_sen_after.right45_3.raw = adc_read();                 // LED2 single
     gpio_put(R45_LED_PIN2, 0);                         // LED2 OFF
 
     // L45 シーケンス: 同様
     adc_select_input(2);
     gpio_put(L45_LED_PIN, 1);                          // LED1 ON
     busy_wait_us_32(self->led_settle_us_);
-    self->data.lit.l45_1 = adc_read();                 // LED1 single
+    se->led_sen_after.left45.raw = adc_read();                 // LED1 single
     gpio_put(L45_LED_PIN2, 1);                         // LED2 ON (LED1 still on)
     busy_wait_us_32(self->led_settle_us_);
-    self->data.lit.l45_both = adc_read();              // LED1 + LED2
+    se->led_sen_after.left45_2.raw = adc_read();              // LED1 + LED2
     gpio_put(L45_LED_PIN, 0);                          // LED1 OFF (LED2 still on)
     busy_wait_us_32(self->led_settle_us_);
-    self->data.lit.l45_2 = adc_read();                 // LED2 single
+    se->led_sen_after.left45_3.raw = adc_read();                 // LED2 single
     gpio_put(L45_LED_PIN2, 0);                         // LED2 OFF
 
     // L90 (single)
     gpio_put(L90_LED_PIN, 1);
     busy_wait_us_32(self->led_settle_us_);
     adc_select_input(3);
-    self->data.lit.l90 = adc_read();
+    se->led_sen_after.left90.raw = adc_read();
     gpio_put(L90_LED_PIN, 0);
 
     // 3. diff 計算 (負になる場合は 0 にクランプ)
-    auto dc = [](uint16_t l, uint16_t d) -> uint16_t {
-        return l > d ? static_cast<uint16_t>(l - d) : 0u;
-    };
-    self->data.diff.r90      = dc(self->data.lit.r90,      self->data.dark.r90);
-    self->data.diff.r45_1    = dc(self->data.lit.r45_1,    self->data.dark.r45);
-    self->data.diff.r45_both = dc(self->data.lit.r45_both, self->data.dark.r45);
-    self->data.diff.r45_2    = dc(self->data.lit.r45_2,    self->data.dark.r45);
-    self->data.diff.l45_1    = dc(self->data.lit.l45_1,    self->data.dark.l45);
-    self->data.diff.l45_both = dc(self->data.lit.l45_both, self->data.dark.l45);
-    self->data.diff.l45_2    = dc(self->data.lit.l45_2,    self->data.dark.l45);
-    self->data.diff.l90      = dc(self->data.lit.l90,      self->data.dark.l90);
+    // auto dc = [](uint16_t l, uint16_t d) -> uint16_t {
+    //     return l > d ? static_cast<uint16_t>(l - d) : 0u;
+    // };
+    if (led_on) {
+      se->led_sen.right90.raw = std::max(
+          se->led_sen_after.right90.raw - se->led_sen_before.right90.raw, 0);
+      se->led_sen.right45.raw = std::max(
+          se->led_sen_after.right45.raw - se->led_sen_before.right45.raw, 0);
+      se->led_sen.right45_2.raw = std::max(se->led_sen_after.right45_2.raw -
+                                               se->led_sen_before.right45_2.raw,
+                                           0);
+      se->led_sen.right45_3.raw = std::max(se->led_sen_after.right45_3.raw -
+                                               se->led_sen_before.right45_3.raw,
+                                           0);
+      se->led_sen.left45.raw = std::max(
+          se->led_sen_after.left45.raw - se->led_sen_before.left45.raw, 0);
+      se->led_sen.left45_2.raw = std::max(
+          se->led_sen_after.left45_2.raw - se->led_sen_before.left45_2.raw, 0);
+      se->led_sen.left45_3.raw = std::max(
+          se->led_sen_after.left45_3.raw - se->led_sen_before.left45_3.raw, 0);
 
+      se->led_sen.left90.raw = std::max(
+          se->led_sen_after.left90.raw - se->led_sen_before.left90.raw, 0);
+      se->led_sen.front.raw =
+          (se->led_sen.left90.raw + se->led_sen.right90.raw) / 2;
+    } else {
+      se->led_sen.right90.raw = se->led_sen.right45.raw =
+          se->led_sen.right45_2.raw = se->led_sen.right45_3.raw =
+              se->led_sen.left45.raw = se->led_sen.left45_2.raw =
+                  se->led_sen.left45_3.raw = se->led_sen.left90.raw =
+                      se->led_sen.front.raw = 0;
+    }
     // 4. ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
     self->data.gz_ts_z  = self->data.gz_ts;
     self->data.gz_ts    = time_us_64();
@@ -160,8 +182,9 @@ void SensingTask::timer_b_irq_handler() {
     self->data.enc_l      = self->enc_l_.read_angle();
     self->data.enc_l_dt   = self->data.enc_l_ts_z ? (self->data.enc_l_ts - self->data.enc_l_ts_z) : 0;
 
-    self->data.battery  = self->battery_.read();
-
+    se->battery.raw  = self->battery_.read();
+    // se->battery.data =
+    //         param->battery_gain * 4 * sensing_result->battery.raw / 4096;
     self->data.sense_duration_us = (uint32_t)(time_us_64() - sense_start);
     self->data_ready = true;
 }
