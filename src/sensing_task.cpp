@@ -416,3 +416,10 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   vl_old = se->ego.v_l;
   vr_old = se->ego.v_r;
 }
+void SensingTask::set_input_param_entity(
+    std::shared_ptr<input_param_t> &_param) {
+  param = _param;
+}
+void SensingTask::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
+  pt = _pt;
+}

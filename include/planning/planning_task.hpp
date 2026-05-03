@@ -105,6 +105,7 @@ public:
 
     void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_sensing_result);
 
+    void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
 private:
     PlanningTask() = default;
 
@@ -119,6 +120,7 @@ private:
 
     std::shared_ptr<SensingTask> sensing_;
     std::shared_ptr<sensing_result_entity_t> sensing_result;
+    std::shared_ptr<input_param_t> param;
 
     uint32_t interval_us_ = 1000;
     uint32_t next_alarm_  = 0;

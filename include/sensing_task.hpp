@@ -96,13 +96,15 @@ public:
     volatile bool data_ready = false;
 
     void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_entity);
-
+    void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
+    void set_planning_task(std::shared_ptr<PlanningTask> &_pt);
 private:
     SensingTask() = default;
 
     void run();
     void read_spi_sensors();
 
+    std::shared_ptr<input_param_t> param;
     ASM330LHH gyro_;
     AS5147P   enc_r_;   // 右エンコーダ (SPI1, CS=GPIO9)
     AS5147P   enc_l_;   // 左エンコーダ (SPI0, CS=GPIO1)
@@ -133,6 +135,5 @@ private:
     std::shared_ptr<sensing_result_entity_t> sensing_result;
     std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
     std::shared_ptr<motion_tgt_val_t> tgt_val;
-
     std::shared_ptr<PlanningTask> pt;
 };

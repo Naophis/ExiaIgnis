@@ -14,61 +14,71 @@
 #include "sensing_task.hpp"
 #include <stdio.h>
 
-#include "define.hpp"
 #include "blink.pio.h"
+#include "define.hpp"
 
 // ============================================================
 // Core1 RT エントリ: sensing + planning IRQ を Core1 に登録
 // ============================================================
-static SensingTask*  s_rt_sensing  = nullptr;
-static PlanningTask* s_rt_planning = nullptr;
+static SensingTask *s_rt_sensing = nullptr;
+static PlanningTask *s_rt_planning = nullptr;
 
-std::shared_ptr<sensing_result_entity_t> sensing_entity =
-    std::make_shared<sensing_result_entity_t>();
+std::shared_ptr<sensing_result_entity_t> sensing_entity;
+std::shared_ptr<input_param_t> param;
 
 static void rt_core1_entry() {
-    flash_safe_execute_core_init();
-    s_rt_sensing->start_irq();   // TIMER0 IRQ → Core1
-    s_rt_planning->start_irq();  // TIMER1 IRQ → Core1
-    while (true) __wfi();
+  flash_safe_execute_core_init();
+  s_rt_sensing->start_irq();  // TIMER0 IRQ → Core1
+  s_rt_planning->start_irq(); // TIMER1 IRQ → Core1
+  while (true)
+    __wfi();
 }
 
 // ============================================================
 // Core0 main: 初期化 → Core1 起動 → MainTask (printf/UI) を実行
 // ============================================================
 int main() {
-    stdio_init_all();
-    set_sys_clock_khz(150000, true);
+  sensing_entity = std::make_shared<sensing_result_entity_t>();
+  param          = std::make_shared<input_param_t>();
 
-    // Tactile switch: pull-up (active low)
-    gpio_init(BTN_PIN);
-    gpio_set_dir(BTN_PIN, GPIO_IN);
-    gpio_pull_up(BTN_PIN);
+  stdio_init_all();
+  set_sys_clock_khz(150000, true);
 
-    // 設定ファイル読み込み (multicore 起動前に実施)
-    ConfigLoader::init();
+  // Tactile switch: pull-up (active low)
+  gpio_init(BTN_PIN);
+  gpio_set_dir(BTN_PIN, GPIO_IN);
+  gpio_pull_up(BTN_PIN);
 
-    // SensingTask 初期化 (SPI / ADC / GPIO ハードウェア設定のみ; IRQ は Core1 で登録)
-    auto sensing = SensingTask::create();
-    sensing->set_sensing_entity(sensing_entity);
-    sensing->init();
-    sensing->configure(
-        (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 12),
-        (uint32_t)ConfigLoader::get_int("sensing.interval_us", 1000));
+  // 設定ファイル読み込み (multicore 起動前に実施)
+  ConfigLoader::init();
 
-    // PlanningTask 初期化 (モーター/吸引 PWM ハードウェア設定のみ; IRQ は Core1 で登録)
-    auto planning = PlanningTask::create();
-    planning->set_sensing_entity(sensing_entity);
-    planning->init(sensing);
+  // SensingTask 初期化 (SPI / ADC / GPIO ハードウェア設定のみ; IRQ は Core1
+  // で登録)
+  auto sensing = SensingTask::create();
+  auto planning = PlanningTask::create();
+  
+  sensing->set_sensing_entity(sensing_entity);
+  sensing->set_planning_task(planning);
+  sensing->set_input_param_entity(param);
+  sensing->init();
+  sensing->configure(
+      (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 12),
+      (uint32_t)ConfigLoader::get_int("sensing.interval_us", 1000));
 
-    // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
-    MainTask::create(sensing, planning);
+  // PlanningTask 初期化 (モーター/吸引 PWM ハードウェア設定のみ; IRQ は Core1
+  // で登録)
+  planning->set_sensing_entity(sensing_entity);
+  planning->init(sensing);
 
-    // Core1 起動: sensing/planning IRQ を Core1 に登録して __wfi() ループへ
-    s_rt_sensing  = sensing.get();
-    s_rt_planning = planning.get();
-    multicore_launch_core1(rt_core1_entry);
+  // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
+  MainTask::create(sensing, planning);
 
-    // Core0: MainTask を直接実行 (TinyUSB が Core0 固定のため printf を直接呼べる)
-    MainTask::start();
+  // Core1 起動: sensing/planning IRQ を Core1 に登録して __wfi() ループへ
+  s_rt_sensing = sensing.get();
+  s_rt_planning = planning.get();
+  multicore_launch_core1(rt_core1_entry);
+
+  // Core0: MainTask を直接実行 (TinyUSB が Core0 固定のため printf
+  // を直接呼べる)
+  MainTask::start();
 }

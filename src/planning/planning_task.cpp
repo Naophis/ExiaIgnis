@@ -1,5 +1,4 @@
 #include "planning/planning_task.hpp"
-#include "sensing_task.hpp"
 #include "define.hpp" // M_PWM_L1/L2/R1/R2, SUCTION_PWM, MOTOR_PWM_FREQ_HZ
 #include "hardware/clocks.h" // clock_get_hz
 #include "hardware/irq.h"
@@ -8,6 +7,7 @@
 #include "hardware/timer.h" // timer1_hw, TIMER1_IRQ_0
 #include "logging/logging_task.hpp"
 #include "pico/stdlib.h"
+#include "sensing_task.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -43,6 +43,11 @@ std::shared_ptr<PlanningTask> PlanningTask::create() {
 void PlanningTask::set_sensing_entity(
     std::shared_ptr<sensing_result_entity_t> &_sensing_result) {
   sensing_result = _sensing_result;
+}
+
+void PlanningTask::set_input_param_entity(
+    std::shared_ptr<input_param_t> &_param) {
+  param = _param;
 }
 
 // ============================================================
@@ -208,7 +213,8 @@ void PlanningTask::tick(uint32_t dt_us) {
     //       diff = diff_old;
     //     }
     //     axel_degenerate_gain =
-    //         interp1d(axel_degenerate_dia_x, axel_degenerate_dia_y, diff, false);
+    //         interp1d(axel_degenerate_dia_x, axel_degenerate_dia_y, diff,
+    //         false);
     //     if (axel_degenerate_gain < 0 &&
     //         tgt_val->tgt_in.end_v > tgt_val->ego_in.v) {
     //       tgt_val->tgt_in.axel_degenerate_gain = 0.01f;
