@@ -297,3 +297,88 @@ void SensingTask::init() {
   printf("[bat] raw0=%u raw1=%u  (SPI0 MISO %s)\n", bat0, bat1,
          (bat0 || bat1) ? "OK" : "STUCK LOW");
 }
+
+void SensingTask::read_spi_sensors() {
+  auto *self = s_instance.get();
+  const auto se = self->get_sensing_entity();
+
+  const auto accl_l = (tgt_val->ego_in.v_l - vl_old) / dt;
+  const auto accl_r = (tgt_val->ego_in.v_r - vr_old) / dt;
+
+  const float tire = 13.0; // pt->suction_en ? param->tire2 : param->tire;
+  const float tread = 39;  // param->tire_tread;
+
+  se->ego.v_l_old = se->ego.v_l;
+  se->ego.v_r_old = se->ego.v_r;
+  se->encoder.left_old = se->encoder.left;
+  se->encoder.right_old = se->encoder.right;
+
+  gyro_timestamp_old = gyro_timestamp_now;
+  enc_r_timestamp_old = enc_r_timestamp_now;
+  enc_l_timestamp_old = enc_l_timestamp_now;
+
+  //   if (!enc_if.initialized) {
+  //     return;
+  //   }
+
+  // ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
+
+  gyro_timestamp_now = time_us_64();
+  auto gyro = self->gyro_.read_gyro_z();
+
+  enc_r_timestamp_now = time_us_64();
+  auto enc_r = self->enc_r_.read_angle();
+
+  enc_l_timestamp_now = time_us_64();
+  auto enc_l = self->enc_l_.read_angle();
+
+  auto gyro_dt = (float)(gyro_timestamp_now - gyro_timestamp_old) / 1000000;
+  auto enc_r_dt = (float)(enc_r_timestamp_now - enc_r_timestamp_old) / 1000000;
+  auto enc_l_dt = (float)(enc_l_timestamp_now - enc_l_timestamp_old) / 1000000;
+
+  //   pt->kf_w.dt = gyro_dt;
+  //   pt->kf_v_r.dt = enc_r_dt;
+  //   pt->kf_v_l.dt = enc_l_dt;
+
+  if (enc_r_dt > 0) {
+    // se->encoder.right = enc_r;
+    // se->ego.v_r =
+    //     -calc_enc_v(se->encoder.right, se->encoder.right_old, pt->kf_v_r.dt);
+    // pt->kf_v_r.dt = enc_r_dt;
+    // pt->kf_v_r.predict(accl_r);
+    // pt->kf_v_r.update(se->ego.v_r);
+  }
+  if (enc_l_dt > 0) {
+    // se->encoder.left = enc_l;
+    // se->ego.v_l =
+    //     calc_enc_v(se->encoder.left, se->encoder.left_old, pt->kf_v_l.dt);
+    // pt->kf_v_l.dt = enc_l_dt;
+    // pt->kf_v_l.predict(accl_l);
+    // pt->kf_v_l.update(se->ego.v_l);
+  }
+  if (gyro_dt > 0) {
+    // if ((gyro - tgt_val->gyro_zero_p_offset) >= 0) {
+    //   se->ego.w_raw = param->gyro_param.gyro_w_gain_left *
+    //                   (gyro - tgt_val->gyro_zero_p_offset);
+    // } else {
+    //   se->ego.w_raw = param->gyro_param.gyro_w_gain_right *
+    //                   (gyro - tgt_val->gyro_zero_p_offset);
+    // }
+    // pt->kf_w.predict(alpha);
+    // const float tread = param->tire_tread;
+    // const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
+    // pt->kf_w.update(se->ego.w_raw);
+  }
+//   if (param->enable_kalman_gyro == 1) {
+//     se->ego.w_raw = se->ego.w_kf = pt->kf_w.get_state();
+//     // se->ego.w_raw2 = se->ego.w_kf2 = pt->kf_w2.get_state();
+//   } else if (param->enable_kalman_gyro == 2) {
+//     se->ego.w_kf = se->ego.w_raw;
+//     // se->ego.w_kf2 = se->ego.w_raw;
+//   } else {
+//     se->ego.w_kf = pt->kf_w.get_state();
+//     // se->ego.w_kf2 = pt->kf_w2.get_state();
+//   }
+
+  se->battery.raw = self->battery_.read();
+}

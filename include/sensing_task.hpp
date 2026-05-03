@@ -6,6 +6,7 @@
 #include "driver/as5147p.hpp"
 #include "driver/ads7042.hpp"
 #include "structs.hpp"
+// #include "planning/planning_task.hpp"
 
 class SensingTask {
 public:
@@ -100,11 +101,23 @@ private:
     SensingTask() = default;
 
     void run();
+    void read_spi_sensors();
 
     ASM330LHH gyro_;
     AS5147P   enc_r_;   // 右エンコーダ (SPI1, CS=GPIO9)
     AS5147P   enc_l_;   // 左エンコーダ (SPI0, CS=GPIO1)
     ADS7042   battery_; // バッテリADC  (SPI0, CS=GPIO5)
+    float w_old = 0;
+    float vr_old = 0;
+    float vl_old = 0;
+    int64_t gyro_timestamp_old = 0;
+    int64_t gyro_timestamp_now = 0;
+    int64_t gyro2_timestamp_old = 0;
+    int64_t gyro2_timestamp_now = 0;
+    int64_t enc_r_timestamp_old = 0;
+    int64_t enc_r_timestamp_now = 0;
+    int64_t enc_l_timestamp_old = 0;
+    int64_t enc_l_timestamp_now = 0;
 
     static void timer_a_irq_handler();  // alarm 2: 周期タイマー
     static void timer_b_irq_handler();  // alarm 1: センサー読み取りシーケンス
@@ -118,4 +131,7 @@ private:
     static std::shared_ptr<SensingTask> s_instance;
     std::shared_ptr<sensing_result_entity_t> sensing_result;
     std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
+    std::shared_ptr<motion_tgt_val_t> tgt_val;
+
+    // std::shared_ptr<PlanningTask> pt;
 };
