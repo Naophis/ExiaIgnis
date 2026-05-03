@@ -317,6 +317,8 @@ void SensingTask::read_spi_sensors() {
   enc_r_timestamp_old = enc_r_timestamp_now;
   enc_l_timestamp_old = enc_l_timestamp_now;
 
+  self->read_spi_sensors();
+
   //   if (!enc_if.initialized) {
   //     return;
   //   }
@@ -369,16 +371,48 @@ void SensingTask::read_spi_sensors() {
     // const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
     // pt->kf_w.update(se->ego.w_raw);
   }
-//   if (param->enable_kalman_gyro == 1) {
-//     se->ego.w_raw = se->ego.w_kf = pt->kf_w.get_state();
-//     // se->ego.w_raw2 = se->ego.w_kf2 = pt->kf_w2.get_state();
-//   } else if (param->enable_kalman_gyro == 2) {
-//     se->ego.w_kf = se->ego.w_raw;
-//     // se->ego.w_kf2 = se->ego.w_raw;
-//   } else {
-//     se->ego.w_kf = pt->kf_w.get_state();
-//     // se->ego.w_kf2 = pt->kf_w2.get_state();
-//   }
+  //   if (param->enable_kalman_gyro == 1) {
+  //     se->ego.w_raw = se->ego.w_kf = pt->kf_w.get_state();
+  //     // se->ego.w_raw2 = se->ego.w_kf2 = pt->kf_w2.get_state();
+  //   } else if (param->enable_kalman_gyro == 2) {
+  //     se->ego.w_kf = se->ego.w_raw;
+  //     // se->ego.w_kf2 = se->ego.w_raw;
+  //   } else {
+  //     se->ego.w_kf = pt->kf_w.get_state();
+  //     // se->ego.w_kf2 = pt->kf_w2.get_state();
+  //   }
 
   se->battery.raw = self->battery_.read();
+  calc_vel(gyro_dt, enc_l_dt, enc_r_dt);
+}
+
+void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
+  const auto se = get_sensing_entity();
+  const float tire = 13.0; // pt->suction_en ? param->tire2 : param->tire;
+
+  // se->ego.v_l = pt->kf_v_l.get_state();
+  // se->ego.v_r = pt->kf_v_r.get_state();
+  se->ego.v_c = (se->ego.v_l + se->ego.v_r) / 2;
+
+  se->ego.rpm.right = 30.0 * se->ego.v_r / (m_PI * tire / 2);
+  se->ego.rpm.left = 30.0 * se->ego.v_l / (m_PI * tire / 2);
+
+  const auto dt = (enc_l_dt + enc_r_dt) / 2;
+  tgt_val->ego_in.dist += se->ego.v_c * dt;
+  tgt_val->global_pos.dist += se->ego.v_c * dt;
+
+//   if (param->enable_kalman_gyro == 1) {
+//     tgt_val->ego_in.ang += se->ego.w_kf * gyro_dt;
+//     tgt_val->global_pos.ang += se->ego.w_kf * gyro_dt;
+//   } else if (param->enable_kalman_gyro == 2) {
+//     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
+//     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+//   } else {
+//     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
+//     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+//   }
+
+  w_old = tgt_val->ego_in.w;
+  vl_old = se->ego.v_l;
+  vr_old = se->ego.v_r;
 }
