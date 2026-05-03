@@ -5,6 +5,7 @@
 #include "driver/asm330lhh.hpp"
 #include "driver/as5147p.hpp"
 #include "driver/ads7042.hpp"
+#include "structs.hpp"
 
 class SensingTask {
 public:
@@ -92,6 +93,8 @@ public:
 
     volatile Data data{};
     volatile bool data_ready = false;
+
+    void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_entity);
 
 private:
     SensingTask() = default;
