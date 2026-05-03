@@ -67,6 +67,7 @@ add_executable(ExiaIgnis
     src/planning/planning_task.cpp
     src/action/motion_planning.cpp
     src/action/wall_off_controller.cpp
+    src/action/trajectory_creator.cpp
     src/main/main_task.cpp
     src/logging/logging_task.cpp
     src/ui.cpp
@@ -96,6 +97,7 @@ target_link_libraries(ExiaIgnis
 target_include_directories(ExiaIgnis PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/gen_code_conv_single2half
         ${cjson_SOURCE_DIR}
 )
 

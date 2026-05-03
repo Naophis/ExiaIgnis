@@ -1,6 +1,7 @@
 #pragma once
 // Astraea WallOffController から移植 (FreeRTOS/ESP-IDF 依存・TaskHandle_t を除去)
 
+#include "include/structs.hpp"
 #include "planning/astraea_types.hpp"
 #include <memory>
 
