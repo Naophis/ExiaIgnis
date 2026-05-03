@@ -87,15 +87,15 @@ public:
     void motor_enable()  {}  // TODO: モーター有効化
     void motor_disable() {   // IDLE コマンドでモーター停止
         Command cmd; cmd.mode = MotionMode::IDLE;
-        send_command(cmd);
+        // send_command(cmd);
     }
     void suction_enable(float duty, float /*duty_low*/) {
         Command cmd; cmd.mode = MotionMode::IDLE; cmd.duty_suction = duty;
-        send_command(cmd);
+        // send_command(cmd);
     }
     void suction_disable() {
         Command cmd; cmd.mode = MotionMode::IDLE; cmd.duty_suction = 0.0f;
-        send_command(cmd);
+        // send_command(cmd);
     }
     void reset_kf_state(bool /*full*/) {}  // TODO: カルマンフィルタリセット
     void reset_pos(float /*x*/, float /*y*/, float /*ang*/) {}  // TODO: 位置リセット
