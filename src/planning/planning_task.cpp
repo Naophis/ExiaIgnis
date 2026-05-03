@@ -1,4 +1,5 @@
 #include "planning/planning_task.hpp"
+#include "sensing_task.hpp"
 #include "define.hpp" // M_PWM_L1/L2/R1/R2, SUCTION_PWM, MOTOR_PWM_FREQ_HZ
 #include "hardware/clocks.h" // clock_get_hz
 #include "hardware/irq.h"

@@ -1,8 +1,11 @@
 #pragma once
 #include <stdint.h>
 #include <memory>
-#include "sensing_task.hpp"
+#include "pico/types.h"
+#include "structs.hpp"
 #include "planning/astraea_types.hpp"
+
+class SensingTask;
 
 // 1kHz ハードウェアタイマー IRQ (TIMER1 alarm 0, Core0) で動作する
 // planning / control タスク。
