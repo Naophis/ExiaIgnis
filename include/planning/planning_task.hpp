@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <memory>
 #include "sensing_task.hpp"
+#include "planning/astraea_types.hpp"
 
 // 1kHz ハードウェアタイマー IRQ (TIMER1 alarm 0, Core0) で動作する
 // planning / control タスク。
@@ -74,6 +75,10 @@ public:
     // Core0 の MainTask から呼ぶ (IRQ は Core1 側)。__dmb() で cross-core 安全。
     void send_command(const Command &cmd);
 
+    // Astraea 互換: motion_tgt_val_t ポインタを渡して次の IRQ tick で cp_request() を実行。
+    // xTaskNotify(*th, (uint32_t)tgt_val.get(), ...) に相当。
+    void send_command(std::shared_ptr<motion_tgt_val_t> tgt);
+
     volatile State state{};
 
     // ---- Astraea MotionPlanning 互換インターフェース ----
@@ -113,10 +118,15 @@ private:
     uint32_t next_alarm_  = 0;
     uint64_t prev_ts_     = 0;
 
-    // Core1 main_task → Core0 IRQ コマンドバッファ
+    // Core1 main_task → Core0 IRQ コマンドバッファ (Command 形式)
     // __dmb() + volatile でクロスコア可視性を保証
     volatile Command pending_cmd_{};
     volatile bool    cmd_pending_ = false;
+
+    // Astraea 互換: motion_tgt_val_t ベースのコマンドバッファ
+    std::shared_ptr<motion_tgt_val_t> pending_tgt_;
+    volatile bool tgt_cmd_pending_ = false;
+    int32_t last_nmr_timestamp_   = -1;
 
     Command active_cmd_{};
 

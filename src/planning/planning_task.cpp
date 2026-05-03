@@ -98,8 +98,17 @@ void PlanningTask::send_command(const Command &cmd) {
     pending_cmd_.ang           = cmd.ang;
     pending_cmd_.duty_suction  = cmd.duty_suction;
     pending_cmd_.timestamp     = cmd.timestamp;
-    __dmb();           // store barrier: 全フィールドをメモリに書き出してから flag を立てる
+    __dmb();
     cmd_pending_ = true;
+}
+
+// Astraea 互換: motion_tgt_val_t ベースのコマンド。
+// Astraea の xTaskNotify(*th, (uint32_t)tgt_val.get(), eSetValueWithOverwrite) に相当。
+// IRQ が次の tick で cp_request() 相当の処理を実行する。
+void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
+    pending_tgt_ = tgt;
+    __dmb();
+    tgt_cmd_pending_ = true;
 }
 
 // ============================================================
