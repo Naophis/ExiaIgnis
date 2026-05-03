@@ -117,4 +117,5 @@ private:
 
     static std::shared_ptr<SensingTask> s_instance;
     std::shared_ptr<sensing_result_entity_t> sensing_result;
+    std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
 };

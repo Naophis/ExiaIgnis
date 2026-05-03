@@ -65,8 +65,9 @@ void SensingTask::set_sensing_entity(
     std::shared_ptr<sensing_result_entity_t> &_sensing_result) {
   sensing_result = _sensing_result;
 }
-
-
+std::shared_ptr<sensing_result_entity_t> SensingTask::get_sensing_entity() {
+  return sensing_result;
+}
 
 // ============================================================
 // 直接ハードウェアアラーム IRQ ハンドラ
@@ -78,6 +79,7 @@ void SensingTask::timer_b_irq_handler() {
     timer_hw->intr = 1u << 1;
 
     auto *self = s_instance.get();
+    const auto se = self->get_sensing_entity();
     const uint64_t sense_start = time_us_64();
 
     // 1. 全LED消灯状態で ambient 読み取り
