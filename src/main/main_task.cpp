@@ -101,10 +101,10 @@ void MainTask::run() {
                    d.enc_r_ts - d.gz_ts,
                    d.enc_l_ts - d.enc_r_ts);
 
-            printf("[sensor]  L90=%4u"
-                   "  |  L45  2=%4u both=%4u 1=%4u"
-                   "  |  R45  1=%4u both=%4u 2=%4u"
-                   "  |  R90=%4u\n",
+            printf("[sensor]  %4u"
+                   "  |  %4u\t%4u\t%4u"
+                   "  |  %4u\t%4u\t%4u"
+                   "  |  %4u\n",
                    d.diff.l90,
                    d.diff.l45_2, d.diff.l45_both, d.diff.l45_1,
                    d.diff.r45_1, d.diff.r45_both, d.diff.r45_2,
