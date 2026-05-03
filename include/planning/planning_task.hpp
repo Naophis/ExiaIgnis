@@ -73,7 +73,7 @@ public:
     void start_irq();
 
     // Core0 の MainTask から呼ぶ (IRQ は Core1 側)。__dmb() で cross-core 安全。
-    void send_command(const Command &cmd);
+    // void send_command(const Command &cmd);
 
     // Astraea 互換: motion_tgt_val_t ポインタを渡して次の IRQ tick で cp_request() を実行。
     // xTaskNotify(*th, (uint32_t)tgt_val.get(), ...) に相当。

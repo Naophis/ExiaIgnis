@@ -86,21 +86,21 @@ void PlanningTask::start_irq() {
 // ============================================================
 // Core1 (MainTask) から Core0 (Planning IRQ) へ cross-core 安全に投入する。
 // __dmb() で全フィールドの書き込みが cmd_pending_ より前に完了することを保証する。
-void PlanningTask::send_command(const Command &cmd) {
-    pending_cmd_.mode          = cmd.mode;
-    pending_cmd_.v_max         = cmd.v_max;
-    pending_cmd_.v_end         = cmd.v_end;
-    pending_cmd_.accl          = cmd.accl;
-    pending_cmd_.decel         = cmd.decel;
-    pending_cmd_.dist          = cmd.dist;
-    pending_cmd_.w_max         = cmd.w_max;
-    pending_cmd_.alpha         = cmd.alpha;
-    pending_cmd_.ang           = cmd.ang;
-    pending_cmd_.duty_suction  = cmd.duty_suction;
-    pending_cmd_.timestamp     = cmd.timestamp;
-    __dmb();
-    cmd_pending_ = true;
-}
+// void PlanningTask::send_command(const Command &cmd) {
+//     pending_cmd_.mode          = cmd.mode;
+//     pending_cmd_.v_max         = cmd.v_max;
+//     pending_cmd_.v_end         = cmd.v_end;
+//     pending_cmd_.accl          = cmd.accl;
+//     pending_cmd_.decel         = cmd.decel;
+//     pending_cmd_.dist          = cmd.dist;
+//     pending_cmd_.w_max         = cmd.w_max;
+//     pending_cmd_.alpha         = cmd.alpha;
+//     pending_cmd_.ang           = cmd.ang;
+//     pending_cmd_.duty_suction  = cmd.duty_suction;
+//     pending_cmd_.timestamp     = cmd.timestamp;
+//     __dmb();
+//     cmd_pending_ = true;
+// }
 
 // Astraea 互換: motion_tgt_val_t ベースのコマンド。
 // Astraea の xTaskNotify(*th, (uint32_t)tgt_val.get(), eSetValueWithOverwrite) に相当。
