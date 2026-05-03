@@ -75,6 +75,10 @@ add_executable(ExiaIgnis
     src/driver/as5147p.cpp
     src/driver/ads7042.cpp
     src/config_loader.cpp
+
+    src/utils/kalman_filter.cpp
+    src/utils/kalman_filter_matrix.cpp
+
 )
 
 pico_set_program_name(ExiaIgnis "ExiaIgnis")

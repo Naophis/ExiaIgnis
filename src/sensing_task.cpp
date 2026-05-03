@@ -338,49 +338,50 @@ void SensingTask::read_spi_sensors() {
   auto enc_r_dt = (float)(enc_r_timestamp_now - enc_r_timestamp_old) / 1000000;
   auto enc_l_dt = (float)(enc_l_timestamp_now - enc_l_timestamp_old) / 1000000;
 
-  //   pt->kf_w.dt = gyro_dt;
-  //   pt->kf_v_r.dt = enc_r_dt;
-  //   pt->kf_v_l.dt = enc_l_dt;
+  pt->kf_w.dt = gyro_dt;
+  pt->kf_v_r.dt = enc_r_dt;
+  pt->kf_v_l.dt = enc_l_dt;
 
   if (enc_r_dt > 0) {
-    // se->encoder.right = enc_r;
-    // se->ego.v_r =
-    //     -calc_enc_v(se->encoder.right, se->encoder.right_old, pt->kf_v_r.dt);
-    // pt->kf_v_r.dt = enc_r_dt;
-    // pt->kf_v_r.predict(accl_r);
-    // pt->kf_v_r.update(se->ego.v_r);
+    se->encoder.right = enc_r;
+    se->ego.v_r =
+        -calc_enc_v(se->encoder.right, se->encoder.right_old, pt->kf_v_r.dt);
+    pt->kf_v_r.dt = enc_r_dt;
+    pt->kf_v_r.predict(accl_r);
+    pt->kf_v_r.update(se->ego.v_r);
   }
   if (enc_l_dt > 0) {
-    // se->encoder.left = enc_l;
-    // se->ego.v_l =
-    //     calc_enc_v(se->encoder.left, se->encoder.left_old, pt->kf_v_l.dt);
-    // pt->kf_v_l.dt = enc_l_dt;
-    // pt->kf_v_l.predict(accl_l);
-    // pt->kf_v_l.update(se->ego.v_l);
+    se->encoder.left = enc_l;
+    se->ego.v_l =
+        calc_enc_v(se->encoder.left, se->encoder.left_old, pt->kf_v_l.dt);
+    pt->kf_v_l.dt = enc_l_dt;
+    pt->kf_v_l.predict(accl_l);
+    pt->kf_v_l.update(se->ego.v_l);
   }
   if (gyro_dt > 0) {
-    // if ((gyro - tgt_val->gyro_zero_p_offset) >= 0) {
-    //   se->ego.w_raw = param->gyro_param.gyro_w_gain_left *
-    //                   (gyro - tgt_val->gyro_zero_p_offset);
-    // } else {
-    //   se->ego.w_raw = param->gyro_param.gyro_w_gain_right *
-    //                   (gyro - tgt_val->gyro_zero_p_offset);
-    // }
-    // pt->kf_w.predict(alpha);
-    // const float tread = param->tire_tread;
-    // const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
-    // pt->kf_w.update(se->ego.w_raw);
+    if ((gyro - tgt_val->gyro_zero_p_offset) >= 0) {
+      se->ego.w_raw = param->gyro_param.gyro_w_gain_left *
+                      (gyro - tgt_val->gyro_zero_p_offset);
+    } else {
+      se->ego.w_raw = param->gyro_param.gyro_w_gain_right *
+                      (gyro - tgt_val->gyro_zero_p_offset);
+    }
+    float alpha = 0.f;
+    pt->kf_w.predict(alpha);
+    const float tread = param->tire_tread;
+    const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
+    pt->kf_w.update(se->ego.w_raw);
   }
-  //   if (param->enable_kalman_gyro == 1) {
-  //     se->ego.w_raw = se->ego.w_kf = pt->kf_w.get_state();
-  //     // se->ego.w_raw2 = se->ego.w_kf2 = pt->kf_w2.get_state();
-  //   } else if (param->enable_kalman_gyro == 2) {
-  //     se->ego.w_kf = se->ego.w_raw;
-  //     // se->ego.w_kf2 = se->ego.w_raw;
-  //   } else {
-  //     se->ego.w_kf = pt->kf_w.get_state();
-  //     // se->ego.w_kf2 = pt->kf_w2.get_state();
-  //   }
+  if (param->enable_kalman_gyro == 1) {
+    se->ego.w_raw = se->ego.w_kf = pt->kf_w.get_state();
+    // se->ego.w_raw2 = se->ego.w_kf2 = pt->kf_w2.get_state();
+  } else if (param->enable_kalman_gyro == 2) {
+    se->ego.w_kf = se->ego.w_raw;
+    // se->ego.w_kf2 = se->ego.w_raw;
+  } else {
+    se->ego.w_kf = pt->kf_w.get_state();
+    // se->ego.w_kf2 = pt->kf_w2.get_state();
+  }
 
   se->battery.raw = self->battery_.read();
   calc_vel(gyro_dt, enc_l_dt, enc_r_dt);
@@ -401,16 +402,16 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   tgt_val->ego_in.dist += se->ego.v_c * dt;
   tgt_val->global_pos.dist += se->ego.v_c * dt;
 
-//   if (param->enable_kalman_gyro == 1) {
-//     tgt_val->ego_in.ang += se->ego.w_kf * gyro_dt;
-//     tgt_val->global_pos.ang += se->ego.w_kf * gyro_dt;
-//   } else if (param->enable_kalman_gyro == 2) {
-//     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
-//     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
-//   } else {
-//     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
-//     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
-//   }
+  //   if (param->enable_kalman_gyro == 1) {
+  //     tgt_val->ego_in.ang += se->ego.w_kf * gyro_dt;
+  //     tgt_val->global_pos.ang += se->ego.w_kf * gyro_dt;
+  //   } else if (param->enable_kalman_gyro == 2) {
+  //     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
+  //     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+  //   } else {
+  //     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
+  //     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+  //   }
 
   w_old = tgt_val->ego_in.w;
   vl_old = se->ego.v_l;
@@ -422,4 +423,23 @@ void SensingTask::set_input_param_entity(
 }
 void SensingTask::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
   pt = _pt;
+}
+
+float SensingTask::calc_enc_v(float now, float old, float dt) {
+  const float tire = 14; // pt->suction_en ? param->tire2 : param->tire;
+  const auto enc_delta = now - old;
+  float enc_ang = 0.f;
+  if (ABS(enc_delta) <
+      MIN(ABS(enc_delta - ENC_RESOLUTION), ABS(enc_delta + ENC_RESOLUTION))) {
+    enc_ang = 2 * m_PI * (float)enc_delta / (float)ENC_RESOLUTION;
+  } else {
+    if (ABS(enc_delta - ENC_RESOLUTION) < ABS(enc_delta + ENC_RESOLUTION)) {
+      enc_ang = 2 * m_PI * (float)(enc_delta - ENC_RESOLUTION) /
+                (float)ENC_RESOLUTION;
+    } else {
+      enc_ang = 2 * m_PI * (float)(enc_delta + ENC_RESOLUTION) /
+                (float)ENC_RESOLUTION;
+    }
+  }
+  return tire * enc_ang / dt / 2;
 }

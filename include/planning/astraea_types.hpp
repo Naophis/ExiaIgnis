@@ -23,13 +23,13 @@
 // constexpr float m_PI   = 3.14159265358979f;
 constexpr uint16_t RESET_GYRO_LOOP_CNT = 256;
 
-#define ABS(x) ((x) < 0 ? -(x) : (x))
-#ifndef MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#endif
-#ifndef MIN
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#endif
+// #define ABS(x) ((x) < 0 ? -(x) : (x))
+// #ifndef MAX
+// #define MAX(a, b) ((a) > (b) ? (a) : (b))
+// #endif
+// #ifndef MIN
+// #define MIN(a, b) ((a) < (b) ? (a) : (b))
+// #endif
 
 static const std::string slalom_log_file("/log/sla.log");
 

@@ -1,5 +1,7 @@
 #pragma once
 #include <stdint.h>
+#include "defines.hpp"
+
 #include <memory>
 #include "pico/time.h"
 #include "driver/asm330lhh.hpp"
@@ -7,6 +9,7 @@
 #include "driver/ads7042.hpp"
 #include "structs.hpp"
 #include "planning/planning_task.hpp"
+
 
 class SensingTask {
 public:
@@ -136,4 +139,5 @@ private:
     std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
     std::shared_ptr<motion_tgt_val_t> tgt_val;
     std::shared_ptr<PlanningTask> pt;
+    float calc_enc_v(float now, float old, float dt);
 };

@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef DEFINES_HPP
 #define DEFINES_HPP
 
@@ -20,7 +22,7 @@
 // #define portTICK_RATE_MS portTICK_PERIOD_MS
 // #define xTaskHandle TaskHandle_t
 
-// #define ABS(IN) ((IN) < 0 ? -(IN) : (IN))
+#define ABS(IN) ((IN) < 0 ? -(IN) : (IN))
 
 // constexpr int GY_DQ_SIZE = 2;
 // constexpr int GY_CYCLE = 2500; // 2500=1/4msec
@@ -28,13 +30,13 @@
 // constexpr int GY_MODE = 0;
 // constexpr float cell_size = 90;
 
-// #define MAX(a, b) ((a) > (b) ? (a) : (b))
-// #define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 // constexpr int16_t ENCODER_H_LIM_VAL = 32767;
 // constexpr int16_t ENCODER_L_LIM_VAL = -32767;
 
-// const int16_t ENC_RESOLUTION = 16384 - 1;
+const int16_t ENC_RESOLUTION = 16384 - 1;
 // constexpr uint8_t READ_FLAG = 0x80;
 // constexpr uint16_t READ_FLAG2 = 0b01000000;
 // constexpr uint16_t PARITY_FLAG = 0b10000000;
