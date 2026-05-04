@@ -5,8 +5,9 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "lfs.h"
-#include "cJSON.h"
+#include <string>
 #include "config_loader.hpp"
+#include "config_mapping.hpp"
 
 // ============================================================
 // Flash ブロックデバイス設定 (末尾 256KB をFS領域に使用)
@@ -79,7 +80,10 @@ static const char DEFAULT_CONFIG[] =
 // ============================================================
 // ConfigLoader 実装
 // ============================================================
-cJSON *ConfigLoader::root_ = nullptr;
+// ============================================================
+// ConfigLoader 実装
+// ============================================================
+JsonDocument ConfigLoader::doc_;
 
 bool ConfigLoader::init() {
     if (!mount_or_format()) {
@@ -100,43 +104,53 @@ bool ConfigLoader::init() {
 }
 
 void ConfigLoader::deinit() {
-    if (root_) { cJSON_Delete(root_); root_ = nullptr; }
+    doc_.clear();
     lfs_unmount(&lfs);
 }
 
 bool ConfigLoader::save() {
-    if (!root_) return false;
-    char *text = cJSON_Print(root_);
-    if (!text) return false;
-
     lfs_file_t f;
     bool ok = false;
     if (lfs_file_open(&lfs, &f, "/config.json",
                       LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) >= 0) {
-        lfs_file_write(&lfs, &f, text, strlen(text));
+        std::string output;
+        serializeJson(doc_, output);
+        lfs_file_write(&lfs, &f, output.c_str(), output.length());
         lfs_file_close(&lfs, &f);
         ok = true;
     }
-    free(text);
     return ok;
 }
 
+static JsonVariant resolve_path(JsonDocument& doc, const char *path) {
+    if (!path) return JsonVariant();
+    
+    char buf[64];
+    strncpy(buf, path, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+
+    JsonVariant node = doc.as<JsonVariant>();
+    char *token = strtok(buf, ".");
+    while (token && !node.isNull()) {
+        node = node[token];
+        token = strtok(nullptr, ".");
+    }
+    return node;
+}
+
 int ConfigLoader::get_int(const char *path, int default_val) {
-    cJSON *node = resolve_path(path);
-    return (node && cJSON_IsNumber(node)) ? (int)node->valuedouble : default_val;
+    JsonVariant node = resolve_path(doc_, path);
+    return node.is<int>() ? node.as<int>() : default_val;
 }
 
 float ConfigLoader::get_float(const char *path, float default_val) {
-    cJSON *node = resolve_path(path);
-    return (node && cJSON_IsNumber(node)) ? (float)node->valuedouble : default_val;
+    JsonVariant node = resolve_path(doc_, path);
+    return node.is<float>() ? node.as<float>() : default_val;
 }
 
 bool ConfigLoader::get_bool(const char *path, bool default_val) {
-    cJSON *node = resolve_path(path);
-    if (!node) return default_val;
-    if (cJSON_IsTrue(node))  return true;
-    if (cJSON_IsFalse(node)) return false;
-    return default_val;
+    JsonVariant node = resolve_path(doc_, path);
+    return node.is<bool>() ? node.as<bool>() : default_val;
 }
 
 // ---- private ----
@@ -160,12 +174,11 @@ bool ConfigLoader::read_json() {
     lfs_file_close(&lfs, &f);
     buf[size] = '\0';
 
-    if (root_) cJSON_Delete(root_);
-    root_ = cJSON_Parse(buf);
+    DeserializationError error = deserializeJson(doc_, buf);
     free(buf);
 
-    if (!root_) {
-        printf("[config] JSON parse error\n");
+    if (error) {
+        printf("[config] JSON parse error: %s\n", error.c_str());
         return false;
     }
     printf("[config] loaded config.json (%d bytes)\n", (int)size);
@@ -179,21 +192,4 @@ bool ConfigLoader::write_default_json() {
     lfs_file_write(&lfs, &f, DEFAULT_CONFIG, strlen(DEFAULT_CONFIG));
     lfs_file_close(&lfs, &f);
     return true;
-}
-
-cJSON *ConfigLoader::resolve_path(const char *path) {
-    if (!root_ || !path) return nullptr;
-
-    // ドット区切りを分解して順にたどる
-    char buf[64];
-    strncpy(buf, path, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
-
-    cJSON *node = root_;
-    char *token = strtok(buf, ".");
-    while (token && node) {
-        node = cJSON_GetObjectItemCaseSensitive(node, token);
-        token = strtok(nullptr, ".");
-    }
-    return node;
 }

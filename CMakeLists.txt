@@ -33,15 +33,13 @@ project(ExiaIgnis C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# ---- cJSON ----
+# ---- ArduinoJson ----
 include(FetchContent)
-FetchContent_Declare(cjson
-    GIT_REPOSITORY https://github.com/DaveGamble/cJSON.git
-    GIT_TAG        v1.7.18
+FetchContent_Declare(ArduinoJson
+    GIT_REPOSITORY https://github.com/bblanchon/ArduinoJson.git
+    GIT_TAG        v7.0.4
 )
-set(ENABLE_CJSON_TEST   OFF CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(cjson)
+FetchContent_MakeAvailable(ArduinoJson)
 
 # ---- LittleFS ----
 FetchContent_Declare(littlefs
@@ -115,8 +113,6 @@ target_include_directories(ExiaIgnis PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/gen_code_conv_single2half
         ${CMAKE_CURRENT_LIST_DIR}/gen_code_mpc
-        
-        ${cjson_SOURCE_DIR}
 )
 
 # Add any user requested libraries
@@ -135,7 +131,7 @@ target_link_libraries(ExiaIgnis
         hardware_sync
         pico_multicore
         pico_flash
-        cjson
+        ArduinoJson
         littlefs
         )
 
