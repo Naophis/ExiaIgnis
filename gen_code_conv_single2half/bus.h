@@ -110,6 +110,10 @@ typedef struct {
   float v;
   float v_r;
   float v_l;
+  float pos_x;
+  float pos_y;
+  float ideal_px;
+  float ideal_py;
   float accl;
   float w;
   float alpha;
@@ -140,6 +144,8 @@ typedef struct {
   float ff_duty_rpm_l;
   float ff_front_torque;
   float ff_roll_torque;
+  float ff_friction_torque_l;
+  float ff_friction_torque_r;
   int decel_delay_cnt;
 } t_ego;
 
