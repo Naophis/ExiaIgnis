@@ -78,6 +78,14 @@ add_executable(ExiaIgnis
 
     src/utils/kalman_filter.cpp
     src/utils/kalman_filter_matrix.cpp
+    gen_code_mpc/mpc_tgt_calc_data.cpp
+    gen_code_mpc/mpc_tgt_calc.cpp
+    gen_code_mpc/rtGetInf.cpp
+    gen_code_mpc/rtGetNaN.cpp
+    gen_code_simple_pid/simple_pid_controller_data.cpp
+    gen_code_simple_pid/simple_pid_controller.cpp
+
+
 
 )
 
@@ -102,6 +110,8 @@ target_include_directories(ExiaIgnis PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/gen_code_conv_single2half
+        ${CMAKE_CURRENT_LIST_DIR}/gen_code_mpc
+        
         ${cjson_SOURCE_DIR}
 )
 
