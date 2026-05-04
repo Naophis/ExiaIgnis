@@ -1,8 +1,6 @@
 #include "planning/planning_task.hpp"
 #include "define.hpp" // M_PWM_L1/L2/R1/R2, SUCTION_PWM, MOTOR_PWM_FREQ_HZ
-#include "hardware/clocks.h" // clock_get_hz
 #include "hardware/irq.h"
-#include "hardware/pwm.h"
 #include "hardware/sync.h"  // __dmb
 #include "hardware/timer.h" // timer1_hw, TIMER1_IRQ_0
 #include "logging/logging_task.hpp"
@@ -55,29 +53,7 @@ void PlanningTask::set_input_param_entity(
 // ============================================================
 void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
-
-  // --- モーター / 吸引 PWM GPIO 設定 ---
-  const uint motor_pins[] = {M_PWM_L1, M_PWM_L2, M_PWM_R1, M_PWM_R2,
-                             SUCTION_PWM};
-  for (uint pin : motor_pins) {
-    gpio_set_function(pin, GPIO_FUNC_PWM);
-  }
-
-  slice_L_ = pwm_gpio_to_slice_num(M_PWM_L1);
-  slice_R_ = pwm_gpio_to_slice_num(M_PWM_R1);
-  slice_S_ = pwm_gpio_to_slice_num(SUCTION_PWM);
-
-  // wrap = sys_clk / pwm_freq - 1  (クロック変更後に呼ぶこと)
-  motor_wrap_ = (uint32_t)(clock_get_hz(clk_sys) / MOTOR_PWM_FREQ_HZ) - 1u;
-
-  for (uint slice : {slice_L_, slice_R_, slice_S_}) {
-    pwm_set_clkdiv_int_frac4(slice, 1, 0); // 分周なし
-    pwm_set_wrap(slice, motor_wrap_);
-    pwm_set_enabled(slice, true);
-  }
-
-  // 初期デューティ: 全チャンネル 0
-  apply_motor();
+  motor_.init();
 }
 
 // ============================================================
@@ -180,15 +156,15 @@ void PlanningTask::tick(uint32_t dt_us) {
 
   {
 
-    update_ego_motion();    // 30 usec
-    calc_sensor_dist_all(); // 15 ~ 20 usec
+    ego.update(tgt_val, sensing_result, param, motor_en); // 30 usec
+    sensor_.calc_dist(tgt_val, sensing_result, param);    // 15 ~ 20 usec
     // recv_notify();
     // 物理量ベース計算
     float axel_degenerate_gain = 1;
     diff_old = diff;
     if (!search_mode && tgt_val->motion_type == MotionType::STRAIGHT) {
       // if (tgt_val->motion_type == MotionType::STRAIGHT) {
-      if (axel_degenerate_x.size() > 0 &&
+      if (sensor_.axel_degenerate_x.size() > 0 &&
           tgt_val->nmr.sct == SensorCtrlType::Straight) {
         // if (tgt_val->nmr.sct == SensorCtrlType::Straight) {
         SensingControlType type = SensingControlType::None;
@@ -199,13 +175,13 @@ void PlanningTask::tick(uint32_t dt_us) {
         if (diff == 0) {
           diff = diff_old;
         }
-        axel_degenerate_gain =
-            interp1d(axel_degenerate_x, axel_degenerate_y, diff, false);
+        axel_degenerate_gain = sensor_.interp1d(
+            sensor_.axel_degenerate_x, sensor_.axel_degenerate_y, diff, false);
         tgt_val->tgt_in.axel_degenerate_gain =
             (1 - param->sensor_gain.front2.b) *
                 tgt_val->tgt_in.axel_degenerate_gain +
             param->sensor_gain.front2.b * axel_degenerate_gain;
-      } else if (axel_degenerate_dia_x.size() > 0 &&
+      } else if (sensor_.axel_degenerate_dia_x.size() > 0 &&
                  tgt_val->nmr.sct == SensorCtrlType::Dia) {
         SensingControlType type = SensingControlType::None;
         diff = ABS(check_sen_error_dia(type));
@@ -213,7 +189,8 @@ void PlanningTask::tick(uint32_t dt_us) {
           diff = diff_old;
         }
         axel_degenerate_gain =
-            interp1d(axel_degenerate_dia_x, axel_degenerate_dia_y, diff, false);
+            sensor_.interp1d(sensor_.axel_degenerate_dia_x,
+                             sensor_.axel_degenerate_dia_y, diff, false);
         if (axel_degenerate_gain < 0 &&
             tgt_val->tgt_in.end_v > tgt_val->ego_in.v) {
           tgt_val->tgt_in.axel_degenerate_gain = 0.01f;
@@ -371,513 +348,8 @@ void PlanningTask::update_trajectory(float dt) {
   }
 }
 
-// ============================================================
-// PID 制御量計算
-// ============================================================
-void PlanningTask::update_control(float dt) {
-  if (active_cmd_.mode == MotionMode::IDLE) {
-    duty_l_ = 0.0f;
-    duty_r_ = 0.0f;
-    vel_err_i_ = 0.0f;
-    gyro_err_i_ = 0.0f;
-    return;
-  }
-
-  float vel_err = img_v_ - v_est_;
-  vel_err_i_ += vel_err * dt;
-  float duty_c = VEL_KP * vel_err + VEL_KI * vel_err_i_;
-
-  float gyro_err = img_w_ - w_est_;
-  gyro_err_i_ += gyro_err * dt;
-  float duty_roll = GYRO_KP * gyro_err + GYRO_KI * gyro_err_i_;
-
-  duty_r_ = std::clamp(duty_c + duty_roll, -DUTY_MAX, DUTY_MAX);
-  duty_l_ = std::clamp(duty_c - duty_roll, -DUTY_MAX, DUTY_MAX);
-}
-
-// ============================================================
-// モーター / 吸引 PWM 出力
-// ============================================================
-void PlanningTask::apply_motor() {
-  // 左右モーター: duty > 0 = 正転 (CHAN_A), duty < 0 = 逆転 (CHAN_B)
-  auto set_drive = [&](uint slice, float duty) {
-    uint16_t level = (uint16_t)((float)motor_wrap_ * std::fabs(duty) / 100.0f);
-    if (duty >= 0.0f) {
-      pwm_set_chan_level(slice, PWM_CHAN_A, level);
-      pwm_set_chan_level(slice, PWM_CHAN_B, 0);
-    } else {
-      pwm_set_chan_level(slice, PWM_CHAN_A, 0);
-      pwm_set_chan_level(slice, PWM_CHAN_B, level);
-    }
-  };
-
-  set_drive(slice_L_, duty_l_);
-  set_drive(slice_R_, duty_r_);
-
-  // 吸引モーター: 単方向 (CHAN_A のみ)
-  uint16_t suction_level =
-      (uint16_t)((float)motor_wrap_ * std::clamp(duty_suction_, 0.0f, 100.0f) /
-                 100.0f);
-  pwm_set_chan_level(slice_S_, PWM_CHAN_A, suction_level);
-  pwm_set_chan_level(slice_S_, PWM_CHAN_B, 0);
-}
-
 std::shared_ptr<sensing_result_entity_t> PlanningTask::get_sensing_entity() {
   return sensing_result;
-}
-
-void PlanningTask::update_ego_motion() {
-  const auto se = get_sensing_entity();
-  const float dt = param->dt;
-  const float tire = param->tire;
-  tgt_val->ego_in.ff_duty_low_th = param->ff_front_dury;
-  tgt_val->ego_in.ff_duty_low_v_th = param->ff_v_th;
-  if (!motor_en) {
-    tgt_val->ego_in.v = 0;
-    tgt_val->ego_in.w = 0;
-  }
-
-  se->ego.w_lp = se->ego.w_lp * (1 - param->gyro_param.lp_delay) +
-                 se->ego.w_raw * param->gyro_param.lp_delay;
-  se->ego.w_lp2 = se->ego.w_lp2 * (1 - param->gyro_param.lp_delay) +
-                  se->ego.w_raw2 * param->gyro_param.lp_delay;
-
-  if (std::isfinite(tgt_val->ego_in.accl) && std::isfinite(se->ego.v_c)) {
-    auto tmp_v_l = kf_v_l.get_state();
-    auto tmp_v_r = kf_v_r.get_state();
-    kf_v.predict(tgt_val->ego_in.accl);
-    kf_v.update((tmp_v_l + tmp_v_r) / 2);
-    se->ego.v_kf = kf_v.get_state();
-
-    if ((tgt_val->motion_type == MotionType::NONE ||
-         tgt_val->motion_type == MotionType::READY)) {
-      se->ego.v_kf = 0;
-    }
-  }
-
-  if (std::isfinite(tgt_val->ego_in.v)) {
-    kf_dist.predict(tgt_val->ego_in.v);
-    kf_dist.update(tgt_val->ego_in.dist);
-    se->ego.dist_kf = kf_dist.get_state();
-  }
-  if (std::isfinite(tgt_val->ego_in.w)) {
-    kf_ang.predict(tgt_val->ego_in.w);
-    kf_ang.update(tgt_val->ego_in.ang);
-    kf_ang2.predict(tgt_val->ego_in.w);
-    kf_ang2.update(tgt_val->ego_in.ang);
-
-    if (param->enable_kalman_gyro == 1) {
-      se->ego.ang_kf = kf_ang.get_state();
-      se->ego.ang_kf2 = kf_ang2.get_state();
-    } else if (param->enable_kalman_gyro == 2) {
-      se->ego.ang_kf = tgt_val->ego_in.ang;
-      se->ego.ang_kf2 = tgt_val->ego_in.ang;
-    } else {
-      se->ego.ang_kf = tgt_val->ego_in.ang;
-      se->ego.ang_kf2 = tgt_val->ego_in.ang;
-    }
-  }
-
-  if (!(tgt_val->motion_type == MotionType::NONE ||
-        tgt_val->motion_type == MotionType::FRONT_CTRL ||
-        tgt_val->motion_type == MotionType::PIVOT ||
-        tgt_val->motion_type == MotionType::PIVOT_PRE ||
-        tgt_val->motion_type == MotionType::PIVOT_PRE2 ||
-        tgt_val->motion_type == MotionType::PIVOT_AFTER ||
-        tgt_val->motion_type == MotionType::PIVOT_OFFSET ||
-        tgt_val->motion_type == MotionType::BACK_STRAIGHT ||
-        tgt_val->motion_type == MotionType::READY)) {
-    if (std::isfinite(se->ego.v_kf) && std::isfinite(se->ego.ang_kf)) {
-
-      const auto pos_state_z = pos.get_state();
-      const auto pos_x_z = pos_state_z[0];
-      const auto pos_y_z = pos_state_z[1];
-      const auto pos_theta_z = pos_state_z[2];
-
-      pos.ang += se->ego.w_kf * dt;
-      // pos.ang = fmod(pos.ang + M_PI, 2 * M_PI) - M_PI;
-      const auto tmp_dist = se->ego.v_kf * dt;
-      tgt_val->ego_in.pos_x += tmp_dist * cosf(pos.ang);
-      tgt_val->ego_in.pos_y += tmp_dist * sinf(pos.ang);
-      pos.predict(tgt_val->ego_in.v, tgt_val->ego_in.w, dt);
-      const std::array<float, 3> z = {tgt_val->ego_in.pos_x, //
-                                      tgt_val->ego_in.pos_y, //
-                                      pos.ang};
-      pos.update(z);
-      const auto pos_state = pos.get_state();
-      se->ego.pos_x = pos_state[0];
-      se->ego.pos_y = pos_state[1];
-      se->ego.pos_ang = pos_state[2];
-
-      const auto d_x = se->ego.pos_x - pos_x_z;
-      const auto d_y = se->ego.pos_y - pos_y_z;
-      const auto d_ang = se->ego.pos_ang - pos_theta_z;
-
-      // calc local_pos;
-      kim.x += d_x;
-      kim.y += d_y;
-      kim.theta += d_ang;
-
-      sensing_result->ang_kf_sum += d_ang;
-      sensing_result->img_ang_sum +=
-          tgt_val->ego_in.img_ang - sensing_result->img_ang_z;
-    }
-  }
-
-  se->ego.battery_raw = se->battery.data;
-
-  se->ego.battery_lp =
-      se->ego.battery_lp * (1 - param->battery_param.lp_delay) +
-      se->ego.battery_raw * param->battery_param.lp_delay;
-
-  kf_batt.predict(0);
-  kf_batt.update(se->ego.battery_raw);
-  se->ego.batt_kf = kf_batt.get_state();
-
-  se->ego.left45_lp_old = se->ego.left45_lp;
-  se->ego.left90_lp_old = se->ego.left90_lp;
-  se->ego.front_lp_old = se->ego.front_lp;
-  se->ego.right45_lp_old = se->ego.right45_lp;
-  se->ego.right90_lp_old = se->ego.right90_lp;
-
-  // sensing_result->ego.right45_2_lp_old = sensing_result->ego.right45_2_lp;
-  // sensing_result->ego.left45_2_lp_old = sensing_result->ego.left45_2_lp;
-
-  se->ego.right90_raw = se->led_sen.right90.raw;
-  se->ego.right90_lp = se->ego.right90_lp * (1 - param->led_param.lp_delay) +
-                       se->ego.right90_raw * param->led_param.lp_delay;
-
-  se->ego.right45_raw = se->led_sen.right45.raw;
-  se->ego.right45_2_raw = se->led_sen.right45_2.raw;
-  se->ego.right45_3_raw = se->led_sen.right45_3.raw;
-
-  se->ego.right45_lp = se->ego.right45_lp * (1 - param->led_param.lp_delay) +
-                       se->ego.right45_raw * param->led_param.lp_delay;
-  se->ego.right45_2_lp =
-      se->ego.right45_2_lp * (1 - param->led_param.lp_delay) +
-      se->ego.right45_2_raw * param->led_param.lp_delay;
-  se->ego.right45_3_lp =
-      se->ego.right45_3_lp * (1 - param->led_param.lp_delay) +
-      se->ego.right45_3_raw * param->led_param.lp_delay;
-
-  se->ego.front_raw = se->led_sen.front.raw;
-  se->ego.front_lp = se->ego.front_lp * (1 - param->led_param.lp_delay) +
-                     se->ego.front_raw * param->led_param.lp_delay;
-
-  se->ego.left45_raw = se->led_sen.left45.raw;
-  se->ego.left45_2_raw = se->led_sen.left45_2.raw;
-  se->ego.left45_3_raw = se->led_sen.left45_3.raw;
-
-  se->ego.left45_lp = se->ego.left45_lp * (1 - param->led_param.lp_delay) +
-                      se->ego.left45_raw * param->led_param.lp_delay;
-  se->ego.left45_2_lp = se->ego.left45_2_lp * (1 - param->led_param.lp_delay) +
-                        se->ego.left45_2_raw * param->led_param.lp_delay;
-  se->ego.left45_3_lp = se->ego.left45_3_lp * (1 - param->led_param.lp_delay) +
-                        se->ego.left45_3_raw * param->led_param.lp_delay;
-
-  se->ego.left90_raw = se->led_sen.left90.raw;
-  se->ego.left90_lp = se->ego.left90_lp * (1 - param->led_param.lp_delay) +
-                      se->ego.left90_raw * param->led_param.lp_delay;
-
-  // sensing_result->ego.right45_2_raw = sensing_result->led_sen.right45_2.raw;
-  // sensing_result->ego.right45_2_lp =
-  //     sensing_result->ego.right45_2_lp * (1 - param->led_param.lp_delay) +
-  //     sensing_result->ego.right45_2_raw * param->led_param.lp_delay;
-
-  // sensing_result->ego.left45_2_raw = sensing_result->led_sen.left45_2.raw;
-  // sensing_result->ego.left45_2_lp =
-  //     sensing_result->ego.left45_2_lp * (1 - param->led_param.lp_delay) +
-  //     sensing_result->ego.left45_2_raw * param->led_param.lp_delay;
-  // コピー
-  tgt_val->ego_in.slip_point.w = se->ego.w_lp;
-}
-
-void PlanningTask::calc_sensor_dist_all() {
-  const auto se = get_sensing_entity();
-  if (!(tgt_val->motion_type == MotionType::NONE ||
-        tgt_val->motion_type == MotionType::PIVOT)) {
-    se->ego.left90_dist_old = se->ego.left90_dist;
-    se->ego.left45_dist_old = se->ego.left45_dist;
-    se->ego.left45_2_dist_old = se->ego.left45_2_dist;
-    se->ego.left45_3_dist_old = se->ego.left45_3_dist;
-    se->ego.front_dist_old = se->ego.front_dist;
-    se->ego.right45_dist_old = se->ego.right45_dist;
-    se->ego.right45_2_dist_old = se->ego.right45_2_dist;
-    se->ego.right45_3_dist_old = se->ego.right45_3_dist;
-    se->ego.right90_dist_old = se->ego.right90_dist;
-
-    se->ego.left90_dist = calc_sensor(
-        se->ego.left90_lp, param->sensor_gain.l90.a, param->sensor_gain.l90.b);
-    se->ego.left45_dist = calc_sensor(
-        se->ego.left45_lp, param->sensor_gain.l45.a, param->sensor_gain.l45.b);
-    se->ego.left45_2_dist =
-        calc_sensor(se->ego.left45_2_lp, param->sensor_gain.l45_2.a,
-                    param->sensor_gain.l45_2.b);
-    se->ego.left45_3_dist =
-        calc_sensor(se->ego.left45_3_lp, param->sensor_gain.l45_3.a,
-                    param->sensor_gain.l45_3.b);
-    se->ego.right45_dist = calc_sensor(
-        se->ego.right45_lp, param->sensor_gain.r45.a, param->sensor_gain.r45.b);
-    se->ego.right45_2_dist =
-        calc_sensor(se->ego.right45_2_lp, param->sensor_gain.r45_2.a,
-                    param->sensor_gain.r45_2.b);
-    se->ego.right45_3_dist =
-        calc_sensor(se->ego.right45_3_lp, param->sensor_gain.r45_3.a,
-                    param->sensor_gain.r45_3.b);
-    se->ego.right90_dist = calc_sensor(
-        se->ego.right90_lp, param->sensor_gain.r90.a, param->sensor_gain.r90.b);
-
-    se->ego.left90_far_dist =
-        calc_sensor(se->ego.left90_lp, param->sensor_gain.l90_far.a,
-                    param->sensor_gain.l90_far.b);
-    se->ego.right90_far_dist =
-        calc_sensor(se->ego.right90_lp, param->sensor_gain.r90_far.a,
-                    param->sensor_gain.r90_far.b);
-
-    se->ego.left90_mid_dist =
-        calc_sensor(se->ego.left90_lp, param->sensor_gain.l90_mid.a,
-                    param->sensor_gain.l90_mid.b);
-    se->ego.right90_mid_dist =
-        calc_sensor(se->ego.right90_lp, param->sensor_gain.r90_mid.a,
-                    param->sensor_gain.r90_mid.b);
-
-    if (se->ego.left90_dist < param->sensor_range_far_max &&
-        se->ego.right90_dist < param->sensor_range_far_max) {
-      se->ego.front_dist = (se->ego.left90_dist + se->ego.right90_dist) / 2;
-    } else if (se->ego.left90_dist > param->sensor_range_far_max &&
-               se->ego.right90_dist < param->sensor_range_far_max) {
-      se->ego.front_dist = se->ego.right90_dist;
-    } else if (se->ego.left90_dist < param->sensor_range_far_max &&
-               se->ego.right90_dist > param->sensor_range_far_max) {
-      se->ego.front_dist = se->ego.left90_dist;
-    } else {
-      se->ego.front_dist = param->sensor_range_max;
-    }
-
-    if (se->ego.left90_far_dist < param->sensor_range_far_max &&
-        se->ego.right90_far_dist < param->sensor_range_far_max) {
-      se->ego.front_far_dist =
-          (se->ego.left90_far_dist + se->ego.right90_far_dist) / 2;
-    } else if (se->ego.left90_far_dist > param->sensor_range_far_max &&
-               se->ego.right90_far_dist < param->sensor_range_far_max) {
-      se->ego.front_far_dist = se->ego.right90_far_dist;
-    } else if (se->ego.left90_far_dist < param->sensor_range_far_max &&
-               se->ego.right90_far_dist > param->sensor_range_far_max) {
-      se->ego.front_far_dist = se->ego.left90_far_dist;
-    } else {
-      se->ego.front_far_dist = param->sensor_range_max;
-    }
-    if (se->ego.left90_mid_dist < param->sensor_range_far_max &&
-        se->ego.right90_mid_dist < param->sensor_range_far_max) {
-      se->ego.front_mid_dist =
-          (se->ego.left90_mid_dist + se->ego.right90_mid_dist) / 2;
-    } else if (se->ego.left90_mid_dist > param->sensor_range_far_max &&
-               se->ego.right90_mid_dist < param->sensor_range_far_max) {
-      se->ego.front_mid_dist = se->ego.right90_mid_dist;
-    } else if (se->ego.left90_mid_dist < param->sensor_range_far_max &&
-               se->ego.right90_mid_dist > param->sensor_range_far_max) {
-      se->ego.front_mid_dist = se->ego.left90_mid_dist;
-    } else {
-      se->ego.front_mid_dist = param->sensor_range_max;
-    }
-  } else {
-    se->ego.left90_dist          //
-        = se->ego.left45_dist    //
-        = se->ego.left45_2_dist  //
-        = se->ego.left45_3_dist  //
-        = se->ego.front_dist     //
-        = se->ego.right45_dist   //
-        = se->ego.right45_2_dist //
-        = se->ego.right45_3_dist //
-        = se->ego.right90_dist = param->sensor_range_max;
-
-    se->ego.left45_dist_diff          //
-        = se->ego.right45_dist_diff   //
-        = se->ego.right45_2_dist_diff //
-        = se->ego.right45_3_dist_diff //
-        = se->ego.left45_2_dist_diff  //
-        = se->ego.left45_3_dist_diff  //
-        = se->ego.right90_dist_diff   //
-        = se->ego.left90_dist_diff = 0;
-  }
-
-  se->ego.left45_dist_diff = se->ego.left45_dist - se->ego.left45_dist_old;
-  se->ego.left45_2_dist_diff =
-      se->ego.left45_2_dist - se->ego.left45_2_dist_old;
-  se->ego.left45_3_dist_diff =
-      se->ego.left45_3_dist - se->ego.left45_3_dist_old;
-
-  se->ego.right45_dist_diff = se->ego.right45_dist - se->ego.right45_dist_old;
-  se->ego.right45_2_dist_diff =
-      se->ego.right45_2_dist - se->ego.right45_2_dist_old;
-  se->ego.right45_3_dist_diff =
-      se->ego.right45_3_dist - se->ego.right45_3_dist_old;
-
-  se->ego.left90_dist_diff = se->ego.left90_dist - se->ego.left90_dist_old;
-  se->ego.right90_dist_diff = se->ego.right90_dist - se->ego.right90_dist_old;
-
-  // 壁からの距離に変換。あとで斜め用に変更
-  calc_sensor_dist_diff();
-}
-
-void PlanningTask::calc_sensor_dist_diff() {
-  const auto se = get_sensing_entity();
-  // l45
-  if (se->sen.l45.sensor_dist > se->ego.left45_dist ||
-      se->sen.l45.sensor_dist == 0) {
-    se->sen.l45.sensor_dist = se->ego.left45_dist;
-    se->sen.l45.global_run_dist = se->sen.l45_2.global_run_dist =
-        se->sen.l45_3.global_run_dist = tgt_val->global_pos.dist;
-    se->sen.l45.angle = tgt_val->ego_in.ang;
-  } else {
-    if (((tgt_val->global_pos.dist - se->sen.l45.global_run_dist) >
-         param->wall_off_hold_dist) &&
-        se->ego.left45_dist < param->sen_ref_p.normal2.exist.left90) {
-      se->sen.l45.sensor_dist = se->ego.left45_dist;
-      se->sen.l45.angle = tgt_val->ego_in.ang;
-    }
-  }
-
-  // r45
-  if (se->sen.r45.sensor_dist > se->ego.right45_dist ||
-      se->sen.r45.sensor_dist == 0) {
-    se->sen.r45.sensor_dist = se->ego.right45_dist;
-    se->sen.r45.global_run_dist = se->sen.r45_2.global_run_dist =
-        se->sen.r45_3.global_run_dist = tgt_val->global_pos.dist;
-    se->sen.r45.angle = tgt_val->ego_in.ang;
-  } else {
-    if (((tgt_val->global_pos.dist - se->sen.r45.global_run_dist) >
-         param->wall_off_hold_dist) &&
-        se->ego.right45_dist < param->sen_ref_p.normal2.exist.right90) {
-      se->sen.r45.sensor_dist = se->ego.right45_dist;
-      se->sen.r45.angle = tgt_val->ego_in.ang;
-    }
-  }
-
-  // l45_2
-  if (se->sen.l45_2.sensor_dist > se->ego.left45_2_dist ||
-      se->sen.l45_2.sensor_dist == 0) {
-    se->sen.l45_2.sensor_dist = se->ego.left45_2_dist;
-    se->sen.l45.global_run_dist = se->sen.l45_2.global_run_dist =
-        se->sen.l45_3.global_run_dist = tgt_val->global_pos.dist;
-    se->sen.l45_2.angle = tgt_val->ego_in.ang;
-  } else {
-    if (((tgt_val->global_pos.dist - se->sen.l45_2.global_run_dist) >
-         param->wall_off_hold_dist) &&
-        se->ego.left45_dist < param->sen_ref_p.normal2.exist.left90) {
-      se->sen.l45_2.sensor_dist = se->ego.left45_2_dist;
-      se->sen.l45_2.angle = tgt_val->ego_in.ang;
-    }
-  }
-
-  // r45_2
-  if (se->sen.r45_2.sensor_dist > se->ego.right45_2_dist ||
-      se->sen.r45_2.sensor_dist == 0) {
-    se->sen.r45_2.sensor_dist = se->ego.right45_2_dist;
-    se->sen.r45.global_run_dist = se->sen.r45_2.global_run_dist =
-        se->sen.r45_3.global_run_dist = tgt_val->global_pos.dist;
-    se->sen.r45_2.angle = tgt_val->ego_in.ang;
-  } else {
-    if (((tgt_val->global_pos.dist - se->sen.r45_2.global_run_dist) >
-         param->wall_off_hold_dist) &&
-        se->ego.right45_dist < param->sen_ref_p.normal2.exist.right90) {
-      se->sen.r45_2.sensor_dist = se->ego.right45_2_dist;
-      se->sen.r45_2.angle = tgt_val->ego_in.ang;
-    }
-  }
-
-  // l45_3
-  if (se->sen.l45_3.sensor_dist > se->ego.left45_3_dist ||
-      se->sen.l45_3.sensor_dist == 0) {
-    se->sen.l45_3.sensor_dist = se->ego.left45_3_dist;
-    se->sen.l45.global_run_dist = se->sen.l45_2.global_run_dist =
-        se->sen.l45_3.global_run_dist = tgt_val->global_pos.dist;
-    se->sen.l45_3.angle = tgt_val->ego_in.ang;
-  } else {
-    if (((tgt_val->global_pos.dist - se->sen.l45_3.global_run_dist) >
-         param->wall_off_hold_dist) &&
-        se->ego.left45_dist < param->sen_ref_p.normal2.exist.left90) {
-      se->sen.l45_3.sensor_dist = se->ego.left45_3_dist;
-      se->sen.l45_3.angle = tgt_val->ego_in.ang;
-    }
-  }
-
-  // r45_3
-  if (se->sen.r45_3.sensor_dist > se->ego.right45_3_dist ||
-      se->sen.r45_3.sensor_dist == 0) {
-    se->sen.r45_3.sensor_dist = se->ego.right45_3_dist;
-    se->sen.r45.global_run_dist = se->sen.r45_2.global_run_dist =
-        se->sen.r45_3.global_run_dist = tgt_val->global_pos.dist;
-  } else {
-    if (((tgt_val->global_pos.dist - se->sen.r45_3.global_run_dist) >
-         param->wall_off_hold_dist) &&
-        se->ego.right45_dist < param->sen_ref_p.normal2.exist.right90) {
-      se->sen.r45_3.sensor_dist = se->ego.right45_3_dist;
-    }
-  }
-}
-float PlanningTask::calc_sensor(float data, float a, float b) {
-  int idx = (int)data;
-  if (idx <= param->sensor_range_min || idx >= log_table.size()) {
-    return param->sensor_range_max;
-  }
-  auto res = a / log_table.at(idx) - b;
-  if (res < param->sensor_range_min || res > param->sensor_range_max) {
-    return param->sensor_range_max;
-  }
-  if (!isfinite(res)) {
-    return param->sensor_range_max;
-  }
-  return res;
-}
-float PlanningTask::interp1d(vector<float> &vx, vector<float> &vy, float x,
-                             bool extrapolate) {
-  int size = vx.size();
-  int i = 0;
-  if (x >= vx[size - 2]) {
-    i = size - 2;
-  } else {
-    while (x > vx[i + 1])
-      i++;
-  }
-  float xL = vx[i], yL = vy[i], xR = vx[i + 1], yR = vy[i + 1];
-  if (!extrapolate) {
-    if (x < xL)
-      yR = yL;
-    if (x > xR)
-      yL = yR;
-  }
-
-  float dydx = (yR - yL) / (xR - xL);
-
-  return yL + dydx * (x - xL);
-}
-
-int PlanningTask::interp1d(vector<int> &vx, vector<int> &vy, float x,
-                           bool extrapolate) {
-  int size = vx.size();
-  int i = 0;
-
-  if (size == 0)
-    return 0;
-
-  if (x >= vx[size - 2]) {
-    i = size - 2;
-  } else {
-    while (x > vx[i + 1])
-      i++;
-  }
-  float xL = vx[i], yL = vy[i], xR = vx[i + 1], yR = vy[i + 1];
-  if (!extrapolate) {
-    if (x < xL)
-      yR = yL;
-    if (x > xR)
-      yL = yR;
-  }
-
-  float dydx = (yR - yL) / (xR - xL);
-
-  return (int)(yL + dydx * (x - xL));
 }
 
 void PlanningTask::generate_trajectory() {
@@ -922,28 +394,28 @@ void PlanningTask::calc_kanamaya_ctrl() {
     return;
 
   const auto idx_val =
-      interp1d(trj_idx_v, trj_idx_val, tgt_val->ego_in.v, false);
+      sensor_.interp1d(trj_idx_v, trj_idx_val, tgt_val->ego_in.v, false);
 
   const int idx = std::min(param->trj_length - 1, idx_val);
   const auto se = get_sensing_entity();
 
   // ideal
-  odm.x = trajectory_points[idx].ideal_px;
-  odm.y = trajectory_points[idx].ideal_py;
-  odm.theta = trajectory_points[idx].img_ang;
+  ego.odm.x = trajectory_points[idx].ideal_px;
+  ego.odm.y = trajectory_points[idx].ideal_py;
+  ego.odm.theta = trajectory_points[idx].img_ang;
 
-  float vd = odm.v = trajectory_points[idx].v;
-  float wd = odm.w = trajectory_points[idx].w;
+  float vd = ego.odm.v = trajectory_points[idx].v;
+  float wd = ego.odm.w = trajectory_points[idx].w;
 
-  float dx = odm.x - kim.x;
-  float dy = odm.y - kim.y;
+  float dx = ego.odm.x - ego.kim.x;
+  float dy = ego.odm.y - ego.kim.y;
   if (tgt_val->ego_in.v < 10) {
     dx = dy = 0;
   }
 
   dx = std::clamp(dx, 0.0f, ABS(dx));
 
-  float d_theta = odm.theta - (se->ego.ang_kf + last_tgt_angle);
+  float d_theta = ego.odm.theta - (se->ego.ang_kf + last_tgt_angle);
   float e_theta = d_theta;
   // std::clamp(d_theta, (float)(-M_PI), (float)(M_PI));
   const float cos_theta = std::cos(se->ego.ang_kf);
@@ -963,12 +435,12 @@ void PlanningTask::calc_kanamaya_ctrl() {
 
   sensing_result->ego.knym_v = vd * cos_e_theta + kx * ex;
   sensing_result->ego.knym_w = wd + vd * (ky * ey + k_theta * sin_e_theta);
-  sensing_result->ego.odm_x = odm.x;
-  sensing_result->ego.odm_y = odm.y;
-  sensing_result->ego.odm_theta = odm.theta;
-  sensing_result->ego.kim_x = kim.x;
-  sensing_result->ego.kim_y = kim.y;
-  sensing_result->ego.kim_theta = kim.theta;
+  sensing_result->ego.odm_x = ego.odm.x;
+  sensing_result->ego.odm_y = ego.odm.y;
+  sensing_result->ego.odm_theta = ego.odm.theta;
+  sensing_result->ego.kim_x = ego.kim.x;
+  sensing_result->ego.kim_y = ego.kim.y;
+  sensing_result->ego.kim_theta = ego.kim.theta;
 
   if (param->kanayama.enable > 0 &&
       (tgt_val->motion_type == MotionType::SLALOM ||
@@ -1263,11 +735,13 @@ float PlanningTask::calc_sensor_pid() {
   if (type == SensingControlType::None) {
     return 0;
   } else if (type == SensingControlType::Wall) {
-    limit = interp1d(sensor_deg_limitter_v, sensor_deg_limitter_str,
-                     tgt_val->ego_in.v, false);
+    limit = sensor_.interp1d(sensor_.sensor_deg_limitter_v,
+                             sensor_.sensor_deg_limitter_str, tgt_val->ego_in.v,
+                             false);
   } else if (type == SensingControlType::Piller) {
-    limit = interp1d(sensor_deg_limitter_v, sensor_deg_limitter_piller,
-                     tgt_val->ego_in.v, false);
+    limit = sensor_.interp1d(sensor_.sensor_deg_limitter_v,
+                             sensor_.sensor_deg_limitter_piller,
+                             tgt_val->ego_in.v, false);
   }
   duty = std::clamp(duty, -limit, limit);
   if (!search_mode) {
@@ -1305,8 +779,9 @@ float PlanningTask::calc_sensor_pid_dia() {
   if (type == SensingControlType::None) {
     return 0;
   } else if (type == SensingControlType::DiaPiller) {
-    limit = interp1d(sensor_deg_limitter_v, sensor_deg_limitter_dia,
-                     tgt_val->ego_in.v, false);
+    limit = sensor_.interp1d(sensor_.sensor_deg_limitter_v,
+                             sensor_.sensor_deg_limitter_dia, tgt_val->ego_in.v,
+                             false);
   }
   duty = std::clamp(duty, -limit, limit);
   return duty;
@@ -1329,9 +804,10 @@ float PlanningTask::check_sen_error(SensingControlType &type) {
   auto exist_left45 = prm->sen_ref_p.normal.exist.left45;
 
   auto wall_th =
-      search_mode ? interp1d(param->clear_dist_ragne_dist_list,
+      search_mode
+          ? sensor_.interp1d(param->clear_dist_ragne_dist_list,
                              param->clear_dist_ragne_th_list, tmp_dist, false)
-                  : std::min(exist_left45, exist_right45);
+          : std::min(exist_left45, exist_right45);
   // printf("wall_th %f %f\n", wall_th, tmp_dist);
 
   // auto exist_right45_expand = prm->sen_ref_p.normal.expand.right45;
@@ -1968,7 +1444,7 @@ void PlanningTask::calc_angle_i_bias() {
     ee->ang.i_bias = 0;
   } else {
     ee->ang.i_bias = tgt_val->ego_in.img_ang -
-                     kim.theta; // 指示角度 - カルマンフィルタを使った角度
+                     ego.kim.theta; // 指示角度 - カルマンフィルタを使った角度
   }
   if (search_mode) {
     ee->ang.i_bias = 0;

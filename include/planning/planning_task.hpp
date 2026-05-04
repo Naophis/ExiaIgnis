@@ -4,6 +4,9 @@
 #include "gen_code_simple_pid/simple_pid_controller.h"
 #include "pico/types.h"
 #include "planning/astraea_types.hpp"
+#include "planning/ego_estimator.hpp"
+#include "planning/motor_actuator.hpp"
+#include "planning/sensor_processor.hpp"
 #include "structs.hpp"
 #include "utils/kalman_filter.hpp"
 #include "utils/kalman_filter_matrix.hpp"
@@ -91,6 +94,8 @@ public:
   // ---- Astraea MotionPlanning 互換インターフェース ----
   float last_tgt_angle = 0.0f;
 
+  EgoEstimator ego;
+
   void motor_enable() {} // TODO: モーター有効化
   void motor_disable() { // IDLE コマンドでモーター停止
     Command cmd;
@@ -118,18 +123,6 @@ public:
 
   void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
 
-  KalmanFilter kf_w;
-  KalmanFilter kf_w2;
-  KalmanFilter kf_v;
-  KalmanFilter kf_v_r;
-  KalmanFilter kf_v_l;
-  KalmanFilter kf_dist;
-  KalmanFilter kf_ang;
-  KalmanFilter kf_ang2;
-  KalmanFilter kf_batt;
-  KalmanFilterMatrix pos;
-  kinematics_t odm = {0};
-  kinematics_t kim = {0};
 
 private:
   PlanningTask() = default;
@@ -142,15 +135,6 @@ private:
 
   void tick(uint32_t dt_us);
   void update_trajectory(float dt);
-  void update_control(float dt);
-  void apply_motor();
-  void update_ego_motion();
-  void calc_sensor_dist_all();
-  float calc_sensor(float data, float a, float b);
-  void calc_sensor_dist_diff();
-  float interp1d(vector<float> &vx, vector<float> &vy, float x,
-                 bool extrapolate);
-  int interp1d(vector<int> &vx, vector<int> &vy, float x, bool extrapolate);
   void generate_trajectory();
   void calc_kanamaya_ctrl();
   void cp_tgt_val();
@@ -198,7 +182,6 @@ private:
   uint32_t interval_us_ = 1000;
   uint32_t next_alarm_ = 0;
   uint64_t prev_ts_ = 0;
-  std::vector<float> log_table;
 
   // Core1 main_task → Core0 IRQ コマンドバッファ (Command 形式)
   // __dmb() + volatile でクロスコア可視性を保証
@@ -231,11 +214,8 @@ private:
   float vel_err_i_ = 0.0f;
   float gyro_err_i_ = 0.0f;
 
-  // モーター・吸引 PWM
-  uint slice_L_ = 0;
-  uint slice_R_ = 0;
-  uint slice_S_ = 0; // 吸引モーター
-  uint32_t motor_wrap_ = 2999;
+  MotorActuator motor_;
+  SensorProcessor sensor_;
 
   //
 
@@ -289,20 +269,9 @@ private:
   float last_accl = 0.0f;
   mpc_tgt_calcModelClass mpc_tgt_calc;
   std::vector<t_ego> trajectory_points;
-  float duty_l_ = 0.0f;
-  float duty_r_ = 0.0f;
-  float duty_suction_ = 0.0f;
   float diff_old = 0;
   float diff = 0;
   float gain_cnt = 0;
-  std::vector<float> axel_degenerate_x;
-  std::vector<float> axel_degenerate_y;
-  std::vector<float> axel_degenerate_dia_x;
-  std::vector<float> axel_degenerate_dia_y;
-  std::vector<float> sensor_deg_limitter_v;
-  std::vector<float> sensor_deg_limitter_str;
-  std::vector<float> sensor_deg_limitter_dia;
-  std::vector<float> sensor_deg_limitter_piller;
   std::vector<int> trj_idx_v;
   std::vector<int> trj_idx_val;
 };
