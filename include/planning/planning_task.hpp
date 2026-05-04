@@ -286,6 +286,7 @@ private:
   t_ego mpc_next_ego2;
   t_ego mpc_next_ego_prev;
   bool first_req = false;
+  float last_accl = 0.0f;
   mpc_tgt_calcModelClass mpc_tgt_calc;
   std::vector<t_ego> trajectory_points;
   float duty_l_ = 0.0f;

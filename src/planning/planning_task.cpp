@@ -1142,6 +1142,55 @@ void PlanningTask::calc_tgt_duty() {
   // copy_error_entity(error_entity);
 }
 
+void PlanningTask::calc_translational_ctrl() {
+  const float dt = param->dt;
+  if (!motor_en) {
+    const unsigned char reset = 0;
+    vel_pid.step(&ee->v.error_p, &param->motor_pid.p, &param->motor_pid.i,
+                 &param->motor_pid.d, &reset, &dt, &duty_c);
+    set_ctrl_val(ee->v_val, ee->v.error_p, ee->v.error_i, 0, ee->v.error_d,
+                 param->motor_pid.p * ee->v.error_p,
+                 vel_pid.simple_pid_controller_DW.Integrator_DSTATE, 0, 0, 0,
+                 0);
+  } else {
+    if (tgt_val->motion_type == MotionType::STRAIGHT ||
+        tgt_val->motion_type == MotionType::SLA_FRONT_STR ||
+        tgt_val->motion_type == MotionType::SLA_BACK_STR) {
+      // 加速から減速に切り替わったら
+      if (last_accl > 0 && tgt_val->ego_in.accl < 0) {
+        ee->v.error_i *= param->ff_front_gain_decel;
+      }
+    }
+
+    auto v_error_i = ee->v.error_i;
+    if (param->motor_pid2.antiwindup) {
+      if ((v_error_i * ee->v.error_p) < 0 &&
+          ABS(ee->v.error_p) > param->motor_pid2.windup_dead_bind) {
+        v_error_i *= param->motor_pid2.windup_gain;
+      }
+    }
+
+    const auto diff_dist =
+        tgt_val->ego_in.img_dist - sensing_result->ego.dist_kf;
+    auto kp_gain = param->motor_pid2.p * ee->v.error_p;
+    auto ki_gain = param->motor_pid2.i * v_error_i;
+    auto kb_gain = param->motor_pid2.b * diff_dist;
+    auto kd_gain = param->motor_pid2.d * ee->v_kf.error_d;
+    // limitter(kp_gain, ki_gain, kb_gain, kd_gain,
+    //          param->motor2_pid_gain_limitter);
+    duty_c = kp_gain + ki_gain + kb_gain + kd_gain;
+
+    set_ctrl_val(ee->v_val, ee->v.error_p, v_error_i, diff_dist, ee->v.error_d,
+                 kp_gain, ki_gain, kb_gain, kd_gain, ee->v_log.gain_zz,
+                 ee->v_log.gain_z);
+  }
+  if (w_reset == 0 || !motor_en) {
+    ee->w.error_i = ee->w.error_d = 0;
+    ee->w_log.gain_z = ee->w_log.gain_zz = 0;
+  }
+  last_accl = tgt_val->ego_in.accl;
+}
+
 float PlanningTask::calc_sensor_pid() {
   float duty = 0;
 
@@ -2438,8 +2487,9 @@ void PlanningTask::set_next_duty(float duty_l, float duty_r,
     tgt_val->duty_suction = duty_suction_in;
     // printf("duty_suction_in: %f\n", duty_suction_in);
     // mcpwm_set_signal_low(MCPWM_UNIT_1, MCPWM_TIMER_2, MCPWM_OPR_A);
-    // mcpwm_set_duty(MCPWM_UNIT_1, MCPWM_TIMER_2, MCPWM_OPR_A, duty_suction_in);
-    // mcpwm_set_duty_type(MCPWM_UNIT_1, MCPWM_TIMER_2, MCPWM_OPR_A,
+    // mcpwm_set_duty(MCPWM_UNIT_1, MCPWM_TIMER_2, MCPWM_OPR_A,
+    // duty_suction_in); mcpwm_set_duty_type(MCPWM_UNIT_1, MCPWM_TIMER_2,
+    // MCPWM_OPR_A,
     //                     MCPWM_DUTY_MODE_0);
   } else {
     tgt_val->duty_suction = 0;

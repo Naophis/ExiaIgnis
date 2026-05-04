@@ -82,6 +82,7 @@ add_executable(ExiaIgnis
     gen_code_mpc/mpc_tgt_calc.cpp
     gen_code_mpc/rtGetInf.cpp
     gen_code_mpc/rtGetNaN.cpp
+    gen_code_mpc/rt_nonfinite.cpp
     gen_code_simple_pid/simple_pid_controller_data.cpp
     gen_code_simple_pid/simple_pid_controller.cpp
 
