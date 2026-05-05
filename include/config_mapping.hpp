@@ -81,6 +81,10 @@ inline void from_json_vector(JsonVariantConst src, const char* key, Container& d
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * maze_solver
+ * map[row][col]
+ */
 inline void convertFromJson(JsonVariantConst src, vector_map_t& dst) {
     from_json_field(src, "n", dst.n);
     from_json_field(src, "e", dst.e);
@@ -99,29 +103,49 @@ inline void convertFromJson(JsonVariantConst src, vector_map_t& dst) {
     if (src["step"].is<int>()) dst.step = src["step"].as<int>();
 }
 
+/**
+ * maze_solver
+ * route[]
+ */
 inline void convertFromJson(JsonVariantConst src, route_t& dst) {
     from_json_field(src, "dir", dst.dir);
     from_json_field(src, "time", dst.time);
     from_json_field(src, "use", dst.use);
 }
 
+/**
+ * maze_solver
+ * path_create_status
+ */
 inline void convertFromJson(JsonVariantConst src, path_create_status_t& dst) {
     from_json_field(src, "time", dst.time);
     from_json_field(src, "state", dst.state);
     from_json_field(src, "use", dst.use);
 }
 
+/**
+ * maze_solver
+ * path_type
+ */
 inline void convertFromJson(JsonVariantConst src, path_type& dst) {
     from_json_vector(src, "s", dst.s);
     from_json_vector(src, "t", dst.t);
     from_json_field(src, "size", dst.size);
 }
 
+/**
+ * system.txt
+ * root/goals[i]
+ */
 inline void convertFromJson(JsonVariantConst src, point_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
 }
 
+/**
+ * maze_solver
+ * dir_pt
+ */
 inline void convertFromJson(JsonVariantConst src, dir_pt_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
@@ -129,6 +153,10 @@ inline void convertFromJson(JsonVariantConst src, dir_pt_t& dst) {
     from_json_field(src, "dist2", dst.dist2);
 }
 
+/**
+ * maze_solver
+ * ego
+ */
 inline void convertFromJson(JsonVariantConst src, ego_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
@@ -136,16 +164,28 @@ inline void convertFromJson(JsonVariantConst src, ego_t& dst) {
     from_json_field(src, "prev_motion", dst.prev_motion);
 }
 
+/**
+ * maze_solver
+ * path element
+ */
 inline void convertFromJson(JsonVariantConst src, path_element& dst) {
     from_json_field(src, "s", dst.s);
     from_json_field(src, "t", dst.t);
 }
 
+/**
+ * maze_solver
+ * path struct
+ */
 inline void convertFromJson(JsonVariantConst src, path_struct& dst) {
     from_json_vector(src, "paths", dst.paths);
     from_json_field(src, "size", dst.size);
 }
 
+/**
+ * sub-struct
+ * trajectory
+ */
 inline void convertFromJson(JsonVariantConst src, trajectory_point_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
@@ -154,6 +194,10 @@ inline void convertFromJson(JsonVariantConst src, trajectory_point_t& dst) {
     from_json_field(src, "type", dst.type);
 }
 
+/**
+ * sub-struct
+ * odometry
+ */
 inline void convertFromJson(JsonVariantConst src, ego_odom_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
@@ -161,6 +205,10 @@ inline void convertFromJson(JsonVariantConst src, ego_odom_t& dst) {
     from_json_field(src, "dir", dst.dir);
 }
 
+/**
+ * sub-struct
+ * slalom_data_t/<type>
+ */
 inline void convertFromJson(JsonVariantConst src, slalom_param_t& dst) {
     from_json_field(src, "radius", dst.radius);
     from_json_field(src, "time", dst.time);
@@ -169,6 +217,10 @@ inline void convertFromJson(JsonVariantConst src, slalom_param_t& dst) {
     from_json_field(src, "back", dst.back);
 }
 
+/**
+ * sub-struct
+ * input_param_t/slalom_data
+ */
 inline void convertFromJson(JsonVariantConst src, slalom_data_t& dst) {
     from_json_nested(src, "normal",  dst.normal);
     from_json_nested(src, "orval",   dst.orval);
@@ -180,6 +232,10 @@ inline void convertFromJson(JsonVariantConst src, slalom_data_t& dst) {
     from_json_nested(src, "dia90",   dst.dia90);
 }
 
+/**
+ * sub-struct
+ * run parameters
+ */
 inline void convertFromJson(JsonVariantConst src, run_param_t& dst) {
     from_json_field(src, "v_max", dst.v_max);
     from_json_field(src, "accl", dst.accl);
@@ -187,6 +243,10 @@ inline void convertFromJson(JsonVariantConst src, run_param_t& dst) {
     from_json_field(src, "turn_v", dst.turn_v);
 }
 
+/**
+ * sub-struct
+ * trajectory pattern
+ */
 inline void convertFromJson(JsonVariantConst src, base_trajectory_pattern_t& dst) {
     from_json_vector(src, "normal",   dst.normal);
     from_json_vector(src, "orval",    dst.orval);
@@ -198,6 +258,10 @@ inline void convertFromJson(JsonVariantConst src, base_trajectory_pattern_t& dst
     from_json_vector(src, "dia90",    dst.dia90);
 }
 
+/**
+ * sub-struct
+ * kinematics state
+ */
 inline void convertFromJson(JsonVariantConst src, t_kinematics_state& dst) {
     from_json_field(src, "x",     dst.x);
     from_json_field(src, "y",     dst.y);
@@ -210,6 +274,10 @@ inline void convertFromJson(JsonVariantConst src, t_kinematics_state& dst) {
     from_json_field(src, "alpha", dst.alpha);
 }
 
+/**
+ * sub-struct
+ * sensing_result_entity_t/encoder
+ */
 inline void convertFromJson(JsonVariantConst src, encoder_data_t& dst) {
     from_json_field(src, "right",     dst.right);
     from_json_field(src, "left",      dst.left);
@@ -217,11 +285,19 @@ inline void convertFromJson(JsonVariantConst src, encoder_data_t& dst) {
     from_json_field(src, "left_old",  dst.left_old);
 }
 
+/**
+ * sub-struct
+ * sensing
+ */
 inline void convertFromJson(JsonVariantConst src, sensing_data_t& dst) {
     from_json_field(src, "raw", dst.raw);
     from_json_field(src, "data", dst.data);
 }
 
+/**
+ * sub-struct
+ * sensing_result_entity_t/led_sen
+ */
 inline void convertFromJson(JsonVariantConst src, led_sensor_t& dst) {
     from_json_nested(src, "right90", dst.right90);
     from_json_nested(src, "right45", dst.right45);
@@ -234,11 +310,19 @@ inline void convertFromJson(JsonVariantConst src, led_sensor_t& dst) {
     from_json_nested(src, "left90", dst.left90);
 }
 
+/**
+ * sub-struct
+ * ego_entity_t/rpm
+ */
 inline void convertFromJson(JsonVariantConst src, rpm_t& dst) {
     from_json_field(src, "right", dst.right);
     from_json_field(src, "left", dst.left);
 }
 
+/**
+ * sub-struct
+ * ego_entity_t/duty
+ */
 inline void convertFromJson(JsonVariantConst src, duty_t& dst) {
     from_json_field(src, "duty_l", dst.duty_l);
     from_json_field(src, "duty_r", dst.duty_r);
@@ -252,11 +336,19 @@ inline void convertFromJson(JsonVariantConst src, duty_t& dst) {
     from_json_field(src, "ff_duty_rpm_l", dst.ff_duty_rpm_l);
 }
 
+/**
+ * sub-struct
+ * ego_entity_t/ff_duty
+ */
 inline void convertFromJson(JsonVariantConst src, ff_duty_t& dst) {
     from_json_field(src, "front", dst.front);
     from_json_field(src, "roll", dst.roll);
 }
 
+/**
+ * logging
+ * ego state
+ */
 inline void convertFromJson(JsonVariantConst src, ego_entity_t& dst) {
     from_json_field(src, "v_r", dst.v_r);
     from_json_field(src, "v_l", dst.v_l);
@@ -365,6 +457,10 @@ inline void convertFromJson(JsonVariantConst src, ego_entity_t& dst) {
     from_json_field(src, "kim_theta", dst.kim_theta);
 }
 
+/**
+ * logging
+ * kinematics
+ */
 inline void convertFromJson(JsonVariantConst src, kinematics_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
@@ -373,18 +469,30 @@ inline void convertFromJson(JsonVariantConst src, kinematics_t& dst) {
     from_json_field(src, "w", dst.w);
 }
 
+/**
+ * logging
+ * sensor distance log
+ */
 inline void convertFromJson(JsonVariantConst src, sen_log_t& dst) {
     from_json_field(src, "sensor_dist", dst.sensor_dist);
     from_json_field(src, "global_run_dist", dst.global_run_dist);
     from_json_field(src, "angle", dst.angle);
 }
 
+/**
+ * logging
+ * sensor distance log (2)
+ */
 inline void convertFromJson(JsonVariantConst src, sen_log2_t& dst) {
     from_json_field(src, "r45_dist", dst.r45_dist);
     from_json_field(src, "l45_dist", dst.l45_dist);
     from_json_field(src, "global_run_dist", dst.global_run_dist);
 }
 
+/**
+ * logging
+ * sensor logs (l90/l45/r45/r90 etc.)
+ */
 inline void convertFromJson(JsonVariantConst src, sen_logs_t& dst) {
     from_json_nested(src, "l90", dst.l90);
     from_json_nested(src, "l45", dst.l45);
@@ -396,10 +504,18 @@ inline void convertFromJson(JsonVariantConst src, sen_logs_t& dst) {
     from_json_nested(src, "r90", dst.r90);
 }
 
+/**
+ * logging
+ * sensor distance log list
+ */
 inline void convertFromJson(JsonVariantConst src, sen_dist_log_t& dst) {
     from_json_vector(src, "list", dst.list);
 }
 
+/**
+ * logging
+ * sensing result (all sensors)
+ */
 inline void convertFromJson(JsonVariantConst src, sensing_result_entity_t& dst) {
     from_json_nested(src, "led_sen", dst.led_sen);
     from_json_nested(src, "led_sen_after", dst.led_sen_after);
@@ -425,12 +541,20 @@ inline void convertFromJson(JsonVariantConst src, sensing_result_entity_t& dst) 
     from_json_field(src, "img_ang_z", dst.img_ang_z);
 }
 
+/**
+ * logging
+ * velocity / acceleration
+ */
 inline void convertFromJson(JsonVariantConst src, xva_t& dst) {
     from_json_field(src, "vel", dst.vel);
     from_json_field(src, "speed", dst.speed);
     from_json_field(src, "accl", dst.accl);
 }
 
+/**
+ * hardware.txt
+ * root/<pid_key>  (motor_pid, gyro_pid, front_ctrl_roll_pid, ...)
+ */
 inline void convertFromJson(JsonVariantConst src, pid_param_t& dst) {
     from_json_field(src, "p", dst.p);
     from_json_field(src, "i", dst.i);
@@ -470,6 +594,10 @@ inline void convertFromJson(JsonVariantConst src, pid_param_t& dst) {
     from_json_field(src, "mpc_observer_k", dst.mpc_observer_k);
 }
 
+/**
+ * hardware.txt
+ * root/gyro_param | root/gyro2_param
+ */
 inline void convertFromJson(JsonVariantConst src, gyro_param_t& dst) {
     from_json_field(src, "gyro_w_gain_right", dst.gyro_w_gain_right);
     from_json_field(src, "gyro_w_gain_left", dst.gyro_w_gain_left);
@@ -481,14 +609,26 @@ inline void convertFromJson(JsonVariantConst src, gyro_param_t& dst) {
     from_json_field(src, "loop_size", dst.loop_size);
 }
 
+/**
+ * hardware.txt
+ * root/accel_x_param
+ */
 inline void convertFromJson(JsonVariantConst src, accel_param_t& dst) {
     from_json_field(src, "gain", dst.gain);
 }
 
+/**
+ * hardware.txt
+ * root/sen_param
+ */
 inline void convertFromJson(JsonVariantConst src, sen_param_t& dst) {
     from_json_field(src, "lp_delay", dst.lp_delay);
 }
 
+/**
+ * sensor.txt
+ * root/<mode>/ref | exist | search_ref
+ */
 inline void convertFromJson(JsonVariantConst src, sen_ref_param3_t& dst) {
     from_json_field(src, "right45", dst.right45);
     from_json_field(src, "left45", dst.left45);
@@ -505,6 +645,10 @@ inline void convertFromJson(JsonVariantConst src, sen_ref_param3_t& dst) {
     from_json_field(src, "kireme_l_wall_off2", dst.kireme_l_wall_off2);
 }
 
+/**
+ * sensor.txt
+ * root/<mode>/ref_search
+ */
 inline void convertFromJson(JsonVariantConst src, sen_search_param_t& dst) {
     from_json_field(src, "front", dst.front);
     from_json_field(src, "right45", dst.right45);
@@ -519,6 +663,10 @@ inline void convertFromJson(JsonVariantConst src, sen_search_param_t& dst) {
     from_json_field(src, "front_ctrl_th", dst.front_ctrl_th);
 }
 
+/**
+ * sensor.txt
+ * root/<mode>/expand
+ */
 inline void convertFromJson(JsonVariantConst src, sen_expand_param_t& dst) {
     from_json_field(src, "dist", dst.dist);
     from_json_field(src, "right45", dst.right45);
@@ -527,6 +675,10 @@ inline void convertFromJson(JsonVariantConst src, sen_expand_param_t& dst) {
     from_json_field(src, "left45_2", dst.left45_2);
 }
 
+/**
+ * sensor.txt
+ * root/normal | root/normal2 | root/dia | root/search_*
+ */
 inline void convertFromJson(JsonVariantConst src, sen_ref_param2_t& dst) {
     from_json_nested(src, "ref", dst.ref);
     from_json_nested(src, "ref_search", dst.ref_search);
@@ -534,6 +686,10 @@ inline void convertFromJson(JsonVariantConst src, sen_ref_param2_t& dst) {
     from_json_nested(src, "expand", dst.expand);
 }
 
+/**
+ * sensor.txt
+ * root
+ */
 inline void convertFromJson(JsonVariantConst src, sen_ref_param_t& dst) {
     from_json_nested(src, "normal", dst.normal);
     from_json_nested(src, "normal2", dst.normal2);
@@ -542,11 +698,19 @@ inline void convertFromJson(JsonVariantConst src, sen_ref_param_t& dst) {
     from_json_nested(src, "search_ref", dst.search_ref);
 }
 
+/**
+ * sensor.txt
+ * root/sensor_gain/<sensor>
+ */
 inline void convertFromJson(JsonVariantConst src, sensor_gain_param_t& dst) {
     from_json_field(src, "a", dst.a);
     from_json_field(src, "b", dst.b);
 }
 
+/**
+ * sensor.txt
+ * root/sensor_gain
+ */
 inline void convertFromJson(JsonVariantConst src, sensor_gain_t& dst) {
     from_json_nested(src, "l90", dst.l90);
     from_json_nested(src, "l45", dst.l45);
@@ -567,6 +731,10 @@ inline void convertFromJson(JsonVariantConst src, sensor_gain_t& dst) {
     from_json_nested(src, "r90_mid", dst.r90_mid);
 }
 
+/**
+ * offset.txt
+ * root/wall_off_dist
+ */
 inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
     from_json_field(src, "left_str", dst.left_str);
     from_json_field(src, "right_str", dst.right_str);
@@ -624,6 +792,10 @@ inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
     from_json_field(src, "diff_check_dist_dia_2", dst.diff_check_dist_dia_2);
 }
 
+/**
+ * hardware.txt
+ * root/fail_check
+ */
 inline void convertFromJson(JsonVariantConst src, fail_check_cnt_t& dst) {
     from_json_field(src, "duty", dst.duty);
     from_json_field(src, "v", dst.v);
@@ -632,6 +804,10 @@ inline void convertFromJson(JsonVariantConst src, fail_check_cnt_t& dst) {
     from_json_field(src, "wall_off", dst.wall_off);
 }
 
+/**
+ * hardware.txt
+ * root/comp_param
+ */
 inline void convertFromJson(JsonVariantConst src, comp_param_t& dst) {
     from_json_field(src, "v_lp_gain", dst.v_lp_gain);
     from_json_field(src, "accl_x_hp_gain", dst.accl_x_hp_gain);
@@ -639,6 +815,10 @@ inline void convertFromJson(JsonVariantConst src, comp_param_t& dst) {
     from_json_field(src, "enable", dst.enable);
 }
 
+/**
+ * offset.txt
+ * root/kanayama
+ */
 inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
     from_json_field(src, "kx", dst.kx);
     from_json_field(src, "ky", dst.ky);
@@ -648,6 +828,10 @@ inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
     from_json_field(src, "windup_deg", dst.windup_deg);
 }
 
+/**
+ * hardware.txt | offset.txt | sensor.txt
+ * root
+ */
 inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "dt", dst.dt);
     from_json_field(src, "trj_length", dst.trj_length);
@@ -865,6 +1049,10 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "kanayama", dst.kanayama);
 }
 
+/**
+ * logging
+ * PID error terms
+ */
 inline void convertFromJson(JsonVariantConst src, pid_error_t& dst) {
     from_json_field(src, "error_p", dst.error_p);
     from_json_field(src, "error_i", dst.error_i);
@@ -875,6 +1063,10 @@ inline void convertFromJson(JsonVariantConst src, pid_error_t& dst) {
     from_json_field(src, "i_bias", dst.i_bias);
 }
 
+/**
+ * logging
+ * PID error terms (2)
+ */
 inline void convertFromJson(JsonVariantConst src, pid_error2_t& dst) {
     from_json_field(src, "p", dst.p);
     from_json_field(src, "i", dst.i);
@@ -888,6 +1080,10 @@ inline void convertFromJson(JsonVariantConst src, pid_error2_t& dst) {
     from_json_field(src, "z", dst.z);
 }
 
+/**
+ * logging
+ * gain log
+ */
 inline void convertFromJson(JsonVariantConst src, gain_log_t& dst) {
     from_json_field(src, "gain_z", dst.gain_z);
     from_json_field(src, "gain_zz", dst.gain_zz);
@@ -895,6 +1091,10 @@ inline void convertFromJson(JsonVariantConst src, gain_log_t& dst) {
     from_json_field(src, "prev_motion_type", dst.prev_motion_type);
 }
 
+/**
+ * logging
+ * anti-windup log
+ */
 inline void convertFromJson(JsonVariantConst src, aw_log_t& dst) {
     from_json_field(src, "was_aw", dst.was_aw);
     from_json_field(src, "enter_aw", dst.enter_aw);
@@ -908,6 +1108,10 @@ inline void convertFromJson(JsonVariantConst src, aw_log_t& dst) {
     from_json_field(src, "duty_roll_before", dst.duty_roll_before);
 }
 
+/**
+ * logging
+ * all PID errors
+ */
 inline void convertFromJson(JsonVariantConst src, pid_error_entity_t& dst) {
     from_json_nested(src, "v", dst.v);
     from_json_nested(src, "v_kf", dst.v_kf);
@@ -934,6 +1138,10 @@ inline void convertFromJson(JsonVariantConst src, pid_error_entity_t& dst) {
     from_json_nested(src, "aw_log", dst.aw_log);
 }
 
+/**
+ * sub-struct
+ * motion target
+ */
 inline void convertFromJson(JsonVariantConst src, motion_tgt_t& dst) {
     from_json_field(src, "v_max", dst.v_max);
     from_json_field(src, "accl", dst.accl);
@@ -941,12 +1149,20 @@ inline void convertFromJson(JsonVariantConst src, motion_tgt_t& dst) {
     from_json_field(src, "alpha", dst.alpha);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/buzzer
+ */
 inline void convertFromJson(JsonVariantConst src, buzzer_t& dst) {
     from_json_field(src, "hz", dst.hz);
     from_json_field(src, "time", dst.time);
     from_json_field(src, "timstamp", dst.timstamp);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/pl_req
+ */
 inline void convertFromJson(JsonVariantConst src, planning_req_t& dst) {
     from_json_field(src, "time_stamp", dst.time_stamp);
     from_json_field(src, "error_gyro_reset", dst.error_gyro_reset);
@@ -956,16 +1172,28 @@ inline void convertFromJson(JsonVariantConst src, planning_req_t& dst) {
     from_json_field(src, "error_dist_reset", dst.error_dist_reset);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/fss
+ */
 inline void convertFromJson(JsonVariantConst src, fail_safe_state_t& dst) {
     from_json_field(src, "error", dst.error);
 }
 
+/**
+ * sub-struct
+ * new_motion_req_t/sys_id
+ */
 inline void convertFromJson(JsonVariantConst src, sys_id_t& dst) {
     from_json_field(src, "right_v", dst.right_v);
     from_json_field(src, "left_v", dst.left_v);
     from_json_field(src, "enable", dst.enable);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/nmr
+ */
 inline void convertFromJson(JsonVariantConst src, new_motion_req_t& dst) {
     from_json_field(src, "v_max", dst.v_max);
     from_json_field(src, "v_end", dst.v_end);
@@ -994,6 +1222,10 @@ inline void convertFromJson(JsonVariantConst src, new_motion_req_t& dst) {
     from_json_field(src, "ego_reset_req", dst.ego_reset_req);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/global_pos
+ */
 inline void convertFromJson(JsonVariantConst src, global_ego_pos_t& dst) {
     from_json_field(src, "img_dist", dst.img_dist);
     from_json_field(src, "img_ang", dst.img_ang);
@@ -1001,11 +1233,19 @@ inline void convertFromJson(JsonVariantConst src, global_ego_pos_t& dst) {
     from_json_field(src, "ang", dst.ang);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/p
+ */
 inline void convertFromJson(JsonVariantConst src, pos_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/dia_state
+ */
 inline void convertFromJson(JsonVariantConst src, dia_state_t& dst) {
     from_json_field(src, "right_old", dst.right_old);
     from_json_field(src, "left_old", dst.left_old);
@@ -1014,12 +1254,20 @@ inline void convertFromJson(JsonVariantConst src, dia_state_t& dst) {
     from_json_field(src, "dia90_offset", dst.dia90_offset);
 }
 
+/**
+ * sub-struct
+ * t_tgt/kanayama_gain
+ */
 inline void convertFromJson(JsonVariantConst src, t_kanayama_gain& dst) {
     from_json_field(src, "k_x",     dst.k_x);
     from_json_field(src, "k_y",     dst.k_y);
     from_json_field(src, "k_theta", dst.k_theta);
 }
 
+/**
+ * sub-struct
+ * t_tgt/accl_param
+ */
 inline void convertFromJson(JsonVariantConst src, t_accl_param& dst) {
     from_json_field(src, "limit",          dst.limit);
     from_json_field(src, "n",              dst.n);
@@ -1027,6 +1275,10 @@ inline void convertFromJson(JsonVariantConst src, t_accl_param& dst) {
     from_json_field(src, "decel_delay_n",  dst.decel_delay_n);
 }
 
+/**
+ * sub-struct
+ * t_ego/sla_param
+ */
 inline void convertFromJson(JsonVariantConst src, t_slalom& dst) {
     from_json_field(src, "base_alpha",       dst.base_alpha);
     from_json_field(src, "base_time",        dst.base_time);
@@ -1036,12 +1288,20 @@ inline void convertFromJson(JsonVariantConst src, t_slalom& dst) {
     from_json_field(src, "counter",          dst.counter);
 }
 
+/**
+ * sub-struct
+ * t_ego/trj_diff
+ */
 inline void convertFromJson(JsonVariantConst src, t_trajectory_diff& dst) {
     from_json_field(src, "x",     dst.x);
     from_json_field(src, "y",     dst.y);
     from_json_field(src, "theta", dst.theta);
 }
 
+/**
+ * sub-struct
+ * t_ego/kanayama_point
+ */
 inline void convertFromJson(JsonVariantConst src, t_kanayama_tgt_point& dst) {
     from_json_field(src, "x",     dst.x);
     from_json_field(src, "y",     dst.y);
@@ -1050,6 +1310,10 @@ inline void convertFromJson(JsonVariantConst src, t_kanayama_tgt_point& dst) {
     from_json_field(src, "w",     dst.w);
 }
 
+/**
+ * sub-struct
+ * t_ego/ideal_point | t_ego/slip_point
+ */
 inline void convertFromJson(JsonVariantConst src, t_point& dst) {
     from_json_field(src, "x",          dst.x);
     from_json_field(src, "y",          dst.y);
@@ -1059,6 +1323,10 @@ inline void convertFromJson(JsonVariantConst src, t_point& dst) {
     from_json_field(src, "slip_angle", dst.slip_angle);
 }
 
+/**
+ * sub-struct
+ * t_ego/slip
+ */
 inline void convertFromJson(JsonVariantConst src, t_slip& dst) {
     from_json_field(src, "beta", dst.beta);
     from_json_field(src, "vx",   dst.vx);
@@ -1067,6 +1335,10 @@ inline void convertFromJson(JsonVariantConst src, t_slip& dst) {
     from_json_field(src, "accl", dst.accl);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/tgt_in
+ */
 inline void convertFromJson(JsonVariantConst src, t_tgt& dst) {
     from_json_field(src,  "v_max",                  dst.v_max);
     from_json_field(src,  "end_v",                  dst.end_v);
@@ -1090,6 +1362,10 @@ inline void convertFromJson(JsonVariantConst src, t_tgt& dst) {
     from_json_field(src,  "enable_slip_decel",       dst.enable_slip_decel);
 }
 
+/**
+ * sub-struct
+ * motion_tgt_val_t/ego_in
+ */
 inline void convertFromJson(JsonVariantConst src, t_ego& dst) {
     from_json_field(src,  "v",                     dst.v);
     from_json_field(src,  "v_r",                   dst.v_r);
@@ -1133,6 +1409,10 @@ inline void convertFromJson(JsonVariantConst src, t_ego& dst) {
     from_json_field(src, "decel_delay_cnt", dst.decel_delay_cnt);
 }
 
+/**
+ * logging
+ * motion target values (runtime state)
+ */
 inline void convertFromJson(JsonVariantConst src, motion_tgt_val_t& dst) {
     from_json_nested(src, "tgt_in", dst.tgt_in);
     from_json_nested(src, "ego_in", dst.ego_in);
@@ -1166,6 +1446,10 @@ inline void convertFromJson(JsonVariantConst src, motion_tgt_val_t& dst) {
     from_json_field(src,  "duty_suction", dst.duty_suction);
 }
 
+/**
+ * sub-struct
+ * planning straight param
+ */
 inline void convertFromJson(JsonVariantConst src, param_straight_t& dst) {
     from_json_field(src, "v_max",                dst.v_max);
     from_json_field(src, "v_end",                dst.v_end);
@@ -1185,6 +1469,10 @@ inline void convertFromJson(JsonVariantConst src, param_straight_t& dst) {
     from_json_field(src, "dia90_offset",         dst.dia90_offset);
 }
 
+/**
+ * sub-struct
+ * planning roll param
+ */
 inline void convertFromJson(JsonVariantConst src, param_roll_t& dst) {
     from_json_field(src, "w_max", dst.w_max);
     from_json_field(src, "w_end", dst.w_end);
@@ -1193,6 +1481,10 @@ inline void convertFromJson(JsonVariantConst src, param_roll_t& dst) {
     from_json_field(src, "RorL", dst.RorL);
 }
 
+/**
+ * sub-struct
+ * planning normal slalom param
+ */
 inline void convertFromJson(JsonVariantConst src, param_normal_slalom_t& dst) {
     from_json_field(src, "radius", dst.radius);
     from_json_field(src, "v_max", dst.v_max);
@@ -1200,7 +1492,14 @@ inline void convertFromJson(JsonVariantConst src, param_normal_slalom_t& dst) {
     from_json_field(src, "ang", dst.ang);
     from_json_field(src, "RorL", dst.RorL);
 }
-
+/**
+ * system.yaml
+ * root/test
+ */
+/**
+ * system.txt
+ * root/test
+ */
 inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "v_max", dst.v_max);
     from_json_field(src, "end_v", dst.end_v);
@@ -1233,7 +1532,14 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "start_turn", dst.start_turn);
     from_json_field(src, "search_mode", dst.search_mode);
 }
-
+/**
+ * system.yaml
+ * root
+ */
+/**
+ * system.txt
+ * root
+ */
 inline void convertFromJson(JsonVariantConst src, system_t& dst) {
     from_json_vector(src, "goals", dst.goals);
     from_json_field(src, "maze_size", dst.maze_size);
@@ -1243,6 +1549,10 @@ inline void convertFromJson(JsonVariantConst src, system_t& dst) {
     from_json_field(src, "hf_cl", dst.hf_cl);
 }
 
+/**
+ * profiles.txt
+ * root/profile_list/<name>
+ */
 inline void convertFromJson(JsonVariantConst src, profile_idx_t& dst) {
     from_json_field(src, "normal", dst.normal);
     from_json_field(src, "large", dst.large);
@@ -1254,6 +1564,10 @@ inline void convertFromJson(JsonVariantConst src, profile_idx_t& dst) {
     from_json_field(src, "dia90", dst.dia90);
 }
 
+/**
+ * profiles.txt
+ * root
+ */
 inline void convertFromJson(JsonVariantConst src, turn_param_profile_t& dst) {
     from_json_vector(src, "file_list", dst.file_list);
     from_json_field(src, "file_list_size", dst.file_list_size);
@@ -1262,16 +1576,28 @@ inline void convertFromJson(JsonVariantConst src, turn_param_profile_t& dst) {
     // profile_map unordered_map skipped
 }
 
+/**
+ * sub-struct
+ * motor request
+ */
 inline void convertFromJson(JsonVariantConst src, motor_req_t& dst) {
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "timestamp", dst.timestamp);
 }
 
+/**
+ * sub-struct
+ * planning
+ */
 inline void convertFromJson(JsonVariantConst src, slalom_offset_t& dst) {
     from_json_field(src, "right", dst.right);
     from_json_field(src, "left", dst.left);
 }
 
+/**
+ * <profile>.txt
+ * root/<turn_type>
+ */
 inline void convertFromJson(JsonVariantConst src, slalom_param2_t& dst) {
     from_json_field(src, "v", dst.v);
     from_json_field(src, "end_v", dst.end_v);
@@ -1287,6 +1613,10 @@ inline void convertFromJson(JsonVariantConst src, slalom_param2_t& dst) {
     from_json_field(src, "type", dst.type);
 }
 
+/**
+ * vel_prof.txt
+ * root/v_prof[i]/<str_type>
+ */
 inline void convertFromJson(JsonVariantConst src, straight_param_t& dst) {
     from_json_field(src, "v_max", dst.v_max);
     from_json_field(src, "accl", dst.accl);
@@ -1296,6 +1626,10 @@ inline void convertFromJson(JsonVariantConst src, straight_param_t& dst) {
     from_json_field(src, "alpha", dst.alpha);
 }
 
+/**
+ * sub-struct
+ * parameter set
+ */
 inline void convertFromJson(JsonVariantConst src, param_set_t& dst) {
     // map unordered_map skipped
     // map_slow unordered_map skipped
@@ -1308,6 +1642,10 @@ inline void convertFromJson(JsonVariantConst src, param_set_t& dst) {
     from_json_field(src, "start_offset", dst.start_offset);
 }
 
+/**
+ * sub-struct
+ * path set
+ */
 inline void convertFromJson(JsonVariantConst src, path_set_t& dst) {
     from_json_vector(src, "path_s", dst.path_s);
     // path_t vector<unsigned char> skipped
@@ -1316,14 +1654,26 @@ inline void convertFromJson(JsonVariantConst src, path_set_t& dst) {
     from_json_field(src, "type", dst.type);
 }
 
+/**
+ * sub-struct
+ * path request
+ */
 inline void convertFromJson(JsonVariantConst src, path_req_t& dst) {
     from_json_field(src, "time", dst.time);
 }
 
+/**
+ * sub-struct
+ * path creation result
+ */
 inline void convertFromJson(JsonVariantConst src, create_path_result_t& dst) {
     from_json_field(src, "time", dst.time);
 }
 
+/**
+ * sub-struct
+ * next motion
+ */
 inline void convertFromJson(JsonVariantConst src, next_motion_t& dst) {
     from_json_field(src, "is_turn", dst.is_turn);
     from_json_field(src, "next_turn_type", dst.next_turn_type);
@@ -1335,6 +1685,10 @@ inline void convertFromJson(JsonVariantConst src, next_motion_t& dst) {
     from_json_field(src, "carry_over_dist", dst.carry_over_dist);
 }
 
+/**
+ * logging
+ * motion log (float)
+ */
 inline void convertFromJson(JsonVariantConst src, log_data_t& dst) {
     from_json_field(src, "img_v", dst.img_v);
     from_json_field(src, "v_l", dst.v_l);
@@ -1364,12 +1718,20 @@ inline void convertFromJson(JsonVariantConst src, log_data_t& dst) {
     from_json_field(src, "pos_y", dst.pos_y);
 }
 
+/**
+ * run_prf.txt
+ * root/exec_prof[i]
+ */
 inline void convertFromJson(JsonVariantConst src, exec_pram_t& dst) {
     from_json_field(src, "fast_idx", dst.fast_idx);
     from_json_field(src, "normal_idx", dst.normal_idx);
     from_json_field(src, "slow_idx", dst.slow_idx);
 }
 
+/**
+ * logging
+ * motion log (compact / half_t)
+ */
 inline void convertFromJson(JsonVariantConst src, log_data_t2& dst) {
     // img_v is half_t, skipping
     // v_l is half_t, skipping
@@ -1466,6 +1828,10 @@ inline void convertFromJson(JsonVariantConst src, log_data_t2& dst) {
     // duty_roll_before is half_t, skipping
 }
 
+/**
+ * logging
+ * system identification log
+ */
 inline void convertFromJson(JsonVariantConst src, sysid_log& dst) {
     // v_l is half_t, skipping
     // v_c is half_t, skipping
@@ -1475,6 +1841,10 @@ inline void convertFromJson(JsonVariantConst src, sysid_log& dst) {
     // volt_r is half_t, skipping
 }
 
+/**
+ * sub-struct
+ * fail safe
+ */
 inline void convertFromJson(JsonVariantConst src, fail_safe_t& dst) {
     from_json_field(src, "invalid_front_led", dst.invalid_front_led);
     from_json_field(src, "invalid_duty_r_cnt", dst.invalid_duty_r_cnt);
@@ -1483,6 +1853,10 @@ inline void convertFromJson(JsonVariantConst src, fail_safe_t& dst) {
     from_json_field(src, "invalid_w_cnt", dst.invalid_w_cnt);
 }
 
+/**
+ * sub-struct
+ * slip
+ */
 inline void convertFromJson(JsonVariantConst src, slip_t& dst) {
     from_json_field(src, "K", dst.K);
     from_json_field(src, "k", dst.k);
@@ -1492,10 +1866,18 @@ inline void convertFromJson(JsonVariantConst src, slip_t& dst) {
     from_json_field(src, "v", dst.v);
 }
 
+/**
+ * sub-struct
+ * sensor ctrl keep dist
+ */
 inline void convertFromJson(JsonVariantConst src, sensor_ctrl_keep_dist_t& dst) {
     from_json_field(src, "star_dist", dst.star_dist);
 }
 
+/**
+ * sub-struct
+ * planning time
+ */
 inline void convertFromJson(JsonVariantConst src, planning_time_t& dst) {
     from_json_field(src, "v_start", dst.v_start);
     from_json_field(src, "v_max", dst.v_max);
@@ -1505,6 +1887,10 @@ inline void convertFromJson(JsonVariantConst src, planning_time_t& dst) {
     from_json_field(src, "total_time", dst.total_time);
 }
 
+/**
+ * logging
+ * log chunk 1
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct1& dst) {
     from_json_field(src, "index", dst.index);
     from_json_field(src, "ideal_v", dst.ideal_v);
@@ -1520,6 +1906,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct1& dst) {
     from_json_field(src, "accl_x", dst.accl_x);
 }
 
+/**
+ * logging
+ * log chunk 2
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct2& dst) {
     from_json_field(src, "ideal_w", dst.ideal_w);
     from_json_field(src, "w_lp", dst.w_lp);
@@ -1535,6 +1925,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct2& dst) {
     from_json_field(src, "front", dst.front);
 }
 
+/**
+ * logging
+ * log chunk 3
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct3& dst) {
     from_json_field(src, "right45", dst.right45);
     from_json_field(src, "right90", dst.right90);
@@ -1550,6 +1944,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct3& dst) {
     from_json_field(src, "duty_l", dst.duty_l);
 }
 
+/**
+ * logging
+ * log chunk 4
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct4& dst) {
     from_json_field(src, "duty_r", dst.duty_r);
     from_json_field(src, "motion_state", dst.motion_state);
@@ -1565,6 +1963,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct4& dst) {
     from_json_field(src, "pln_time_diff", dst.pln_time_diff);
 }
 
+/**
+ * logging
+ * log chunk 5
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct5& dst) {
     from_json_field(src, "m_pid_p", dst.m_pid_p);
     from_json_field(src, "m_pid_i", dst.m_pid_i);
@@ -1580,6 +1982,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct5& dst) {
     from_json_field(src, "g_pid_d", dst.g_pid_d);
 }
 
+/**
+ * logging
+ * log chunk 6
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct6& dst) {
     from_json_field(src, "g_pid_p_v", dst.g_pid_p_v);
     from_json_field(src, "g_pid_i_v", dst.g_pid_i_v);
@@ -1595,6 +2001,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct6& dst) {
     from_json_field(src, "s_pid_d_v", dst.s_pid_d_v);
 }
 
+/**
+ * logging
+ * log chunk 7
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct7& dst) {
     from_json_field(src, "ang_pid_p", dst.ang_pid_p);
     from_json_field(src, "ang_pid_i", dst.ang_pid_i);
@@ -1610,6 +2020,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct7& dst) {
     from_json_field(src, "y", dst.y);
 }
 
+/**
+ * logging
+ * log chunk 8
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct8& dst) {
     from_json_field(src, "right45_2", dst.right45_2);
     from_json_field(src, "right45_3", dst.right45_3);
@@ -1625,6 +2039,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct8& dst) {
     from_json_field(src, "sen_dist_r45_3", dst.sen_dist_r45_3);
 }
 
+/**
+ * logging
+ * log chunk 9
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct9& dst) {
     from_json_field(src, "knym_v", dst.knym_v);
     from_json_field(src, "knym_w", dst.knym_w);
@@ -1640,6 +2058,10 @@ inline void convertFromJson(JsonVariantConst src, LogStruct9& dst) {
     from_json_field(src, "right90_d_diff", dst.right90_d_diff);
 }
 
+/**
+ * logging
+ * log chunk 10
+ */
 inline void convertFromJson(JsonVariantConst src, LogStruct10& dst) {
     from_json_field(src, "right45_3_d_diff", dst.right45_3_d_diff);
     from_json_field(src, "right45_2_d_diff", dst.right45_2_d_diff);
