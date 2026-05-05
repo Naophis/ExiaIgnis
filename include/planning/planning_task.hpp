@@ -1,8 +1,8 @@
 #pragma once
 
-#include "gen_code_simple_pid/simple_pid_controller.h"
 #include "pico/types.h"
 #include "planning/astraea_types.hpp"
+#include "planning/control_law.hpp"
 #include "planning/ego_estimator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
@@ -127,7 +127,7 @@ public:
 private:
   PlanningTask() = default;
 
-  bool motor_en = false;
+  bool motor_en   = false;
   bool suction_en = false;
   bool search_mode = false;
   bool mode_select = false;
@@ -135,127 +135,52 @@ private:
 
   void tick(uint32_t dt_us);
   void update_trajectory(float dt);
-  void calc_tgt_duty();
-  float calc_sensor_pid();
-  float calc_sensor_pid_dia();
-  float check_sen_error(SensingControlType &type);
-  float check_sen_error_dia(SensingControlType &type);
-  void check_fail_safe();
-  void calc_pid_val();
-  void calc_pid_val_ang();
-  void calc_pid_val_ang_vel();
-  void calc_pid_val_front_ctrl();
-  void reset_pid_val();
-  void calc_angle_i_bias();
-  void calc_front_ctrl_duty();
-  void calc_translational_ctrl();
-  void calc_angle_velocity_ctrl();
-  void summation_duty();
-  void apply_duty_limitter();
-  void clear_ctrl_val();
-  void limitter(float &kp, float &ki, float &kb, float &kd,
-                pid_param_t &limitter);
-  void set_next_duty(float duty_l, float duty_r, float duty_suction);
-  std::shared_ptr<input_param_t> get_param() {
-    return param; //
-  }
-  std::shared_ptr<motion_tgt_val_t> get_tgt_entity() { return tgt_val; }
   std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
-  void check_left_sensor_error(float &error, int &check, bool range_check_left,
-                               bool dist_check_left, bool check_diff_left,
-                               bool expand_left, bool range_check_left_expand);
-  void check_right_sensor_error(float &error, int &check,
-                                bool range_check_right, bool dist_check_right,
-                                bool check_diff_right, bool expand_right,
-                                bool range_check_right_expand);
-  void set_ctrl_val(pid_error2_t &val, float error_p, float error_i,
-                    float error_i2, float error_d, float val_p, float val_i,
-                    float val_i2, float val_d, float zz, float z);
+
   static std::shared_ptr<PlanningTask> s_instance;
 
   std::shared_ptr<SensingTask> sensing_;
   std::shared_ptr<sensing_result_entity_t> sensing_result;
   std::shared_ptr<input_param_t> param;
   uint32_t interval_us_ = 1000;
-  uint32_t next_alarm_ = 0;
-  uint64_t prev_ts_ = 0;
+  uint32_t next_alarm_  = 0;
+  uint64_t prev_ts_     = 0;
 
-  // Core1 main_task → Core0 IRQ コマンドバッファ (Command 形式)
-  // __dmb() + volatile でクロスコア可視性を保証
   volatile Command pending_cmd_{};
-  volatile bool cmd_pending_ = false;
+  volatile bool    cmd_pending_ = false;
 
-  // Astraea 互換: motion_tgt_val_t ベースのコマンドバッファ
   std::shared_ptr<motion_tgt_val_t> pending_tgt_;
   std::shared_ptr<motion_tgt_val_t> tgt_val;
-  std::shared_ptr<pid_error_entity_t> ee;
   volatile bool tgt_cmd_pending_ = false;
-  int32_t last_nmr_timestamp_ = -1;
+  int32_t last_nmr_timestamp_    = -1;
 
   Command active_cmd_{};
 
-  // 軌道生成 (台形速度プロファイル)
-  float img_v_ = 0.0f;
-  float img_w_ = 0.0f;
-  float img_dist_ = 0.0f;
-  float img_ang_ = 0.0f;
+  float    img_v_    = 0.0f;
+  float    img_w_    = 0.0f;
+  float    img_dist_ = 0.0f;
+  float    img_ang_  = 0.0f;
 
-  // 推定値 (エンコーダ差分から)
-  float v_est_ = 0.0f;
-  float w_est_ = 0.0f;
+  float    v_est_     = 0.0f;
+  float    w_est_     = 0.0f;
   uint16_t enc_r_prev_ = 0;
   uint16_t enc_l_prev_ = 0;
-  bool first_tick_ = true;
+  bool     first_tick_ = true;
 
-  // PID 積分項
-  float vel_err_i_ = 0.0f;
+  float vel_err_i_  = 0.0f;
   float gyro_err_i_ = 0.0f;
 
-  MotorActuator motor_;
-  SensorProcessor sensor_;
+  MotorActuator     motor_;
+  SensorProcessor   sensor_;
   TrajectoryGenerator trj_;
+  ControlLaw        ctl_;
 
-  //
-
-  float suction_gain = 200;
-  bool gyro_pid_windup_histerisis = false;
-  float gyro_pid_histerisis_i = 0.0;
-
-  Simple_PID_Controller vel_pid;
-  Simple_PID_Controller gyro_pid;
-  Simple_PID_Controller ang_pid;
-
-  sensor_ctrl_keep_dist_t right_keep;
-  sensor_ctrl_keep_dist_t left_keep;
-  float mpc_d_estimated = 0;
-  float mpc_w_prev = 0;
-  float mpc_u_prev = 0;
-  duty_t tgt_duty;
-  int fail_check_ang = 0;
-  int keep_wall_off_cnt = 0;
-  int buzzer_time_cnt = 0;
-  int buzzer_timestamp = 0;
-  int motion_req_timestamp = 0;
-  int pid_req_timestamp = 0;
-  int motor_req_timestamp = 0;
+  int buzzer_time_cnt    = 0;
+  int buzzer_timestamp   = 0;
+  int motion_req_timestamp  = 0;
+  int pid_req_timestamp     = 0;
+  int motor_req_timestamp   = 0;
   int suction_req_timestamp = 0;
-  bool enable_expand_right = false;
-  bool enable_expand_left = false;
 
   unsigned char w_reset = 0;
-
-  float duty_c = 0;
-  float duty_c2 = 0;
-  float duty_roll = 0;
-  float duty_roll_ang = 0;
-  float duty_front_ctrl_roll = 0;
-  float duty_front_ctrl_trans = 0;
-  float duty_front_ctrl_roll_keep = 0;
-  float duty_sen = 0;
-  float sen_ang = 0;
-
-  float last_accl = 0.0f;
-  float diff_old = 0;
-  float diff = 0;
-  float gain_cnt = 0;
 };
