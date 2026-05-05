@@ -162,9 +162,12 @@ bool ConfigLoader::mount_or_format() {
     return lfs_mount(&lfs, &lfs_cfg) == 0;
 }
 
-bool ConfigLoader::read_json() {
+bool ConfigLoader::load_file(const char* path, JsonDocument& dst) {
     lfs_file_t f;
-    if (lfs_file_open(&lfs, &f, "/config.json", LFS_O_RDONLY) < 0) return false;
+    if (lfs_file_open(&lfs, &f, path, LFS_O_RDONLY) < 0) {
+        printf("[config] cannot open %s\n", path);
+        return false;
+    }
 
     lfs_ssize_t size = lfs_file_size(&lfs, &f);
     char *buf = static_cast<char*>(malloc(size + 1));
@@ -174,15 +177,19 @@ bool ConfigLoader::read_json() {
     lfs_file_close(&lfs, &f);
     buf[size] = '\0';
 
-    DeserializationError error = deserializeJson(doc_, buf);
+    DeserializationError error = deserializeJson(dst, buf);
     free(buf);
 
     if (error) {
-        printf("[config] JSON parse error: %s\n", error.c_str());
+        printf("[config] JSON parse error in %s: %s\n", path, error.c_str());
         return false;
     }
-    printf("[config] loaded config.json (%d bytes)\n", (int)size);
+    printf("[config] loaded %s (%d bytes)\n", path, (int)size);
     return true;
+}
+
+bool ConfigLoader::read_json() {
+    return load_file("/config.json", doc_);
 }
 
 bool ConfigLoader::write_default_json() {

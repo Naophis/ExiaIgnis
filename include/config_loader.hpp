@@ -4,50 +4,54 @@
 
 // ConfigLoader — LittleFS on flash + ArduinoJson による設定ファイル読み書き
 //
-// 使い方:
-//   1. main() の先頭 (multicore_launch_core1 より前) で ConfigLoader::init() を呼ぶ
-//   2. 各モジュールで ConfigLoader::doc()["sensing"]["led_settle_us"] | 13 のように取得
-//   3. /config.json が存在しない場合は自動的にデフォルト値で生成される
+// 基本の使い方:
+//   ConfigLoader::init();                              // 起動時に一度だけ
+//   int v = ConfigLoader::get_int("sensing.interval_us", 1000);
+//
+// 構造体への一括ロード (config_mapping.hpp の convertFromJson が必要):
+//   input_param_t param;
+//   ConfigLoader::load_as("/hardware.json", param);   // ファイル → 構造体
+//   // または既存の doc() から:
+//   param = ConfigLoader::doc().as<input_param_t>();  // /config.json から
 //
 // Flash レイアウト: 末尾 256KB をファイルシステム領域として使用
 
-// --------------------------------------------------------
-// [使用例] 複雑な構造体のパラメータを一括で読み込む方法
-// --------------------------------------------------------
-// ArduinoJsonでは、以下の関数を同一ネームスペースに定義することで
-// JSONから構造体へのマッピング（doc["pid"].as<PidParam>()）が可能です。
-//
-// 例:
-// struct PidParam { float p, i, d; };
-// void convertFromJson(JsonVariantConst src, PidParam& dst) {
-//     dst.p = src["p"] | 0.0f;
-//     dst.i = src["i"] | 0.0f;
-//     dst.d = src["d"] | 0.0f;
-// }
-// 
-// 利用側 (main_task.cppなど):
-// param->motor_pid = ConfigLoader::doc()["motor_pid"].as<PidParam>();
-// --------------------------------------------------------
-
 class ConfigLoader {
 public:
-    // LittleFS マウント + config.json 読み込み
+    // LittleFS マウント + /config.json 読み込み
     // 初回起動時はフォーマットしてデフォルト config.json を生成
     static bool init();
 
     static void deinit();
 
     // ドット区切りパスで値を取得 (例: "sensing.led_settle_us")
-    // ※ArduinoJson を直接使うこともできますが、互換性のため残します
     static int   get_int  (const char *path, int   default_val);
     static float get_float(const char *path, float default_val);
     static bool  get_bool (const char *path, bool  default_val);
 
-    // config.json を現在の doc_ の内容で上書き保存
+    // /config.json を現在の doc_ の内容で上書き保存
     static bool save();
 
-    // JSON ルートドキュメントへの直接アクセス
+    // JSON ルートドキュメントへの直接アクセス (/config.json の内容)
     static JsonDocument& doc() { return doc_; }
+
+    // LittleFS 上の任意の JSON ファイルを dst に読み込む
+    // 戻り値: true=成功, false=ファイル不在 or パースエラー
+    static bool load_file(const char* path, JsonDocument& dst);
+
+    // LittleFS 上の JSON ファイルを読み込んで型 T に変換する
+    // config_mapping.hpp の convertFromJson(JsonVariantConst, T&) が定義されている型で使用可能
+    //
+    // 使用例:
+    //   input_param_t param;
+    //   if (!ConfigLoader::load_as("/hardware.json", param)) { /* エラー処理 */ }
+    template<typename T>
+    static bool load_as(const char* path, T& dst) {
+        JsonDocument tmp;
+        if (!load_file(path, tmp)) return false;
+        convertFromJson(tmp.as<JsonVariantConst>(), dst);
+        return true;
+    }
 
 private:
     static JsonDocument doc_;
