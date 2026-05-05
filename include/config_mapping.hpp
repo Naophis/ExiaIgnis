@@ -28,6 +28,8 @@ template<typename T>
 inline void from_json_field(JsonVariantConst src, const char* key, T& dst) {
     if constexpr (std::is_enum_v<T>) {
         if (src[key].is<int>()) dst = static_cast<T>(src[key].as<int>());
+    } else if constexpr (std::is_same_v<T, char>) {
+        if (src[key].is<int>()) dst = static_cast<char>(src[key].as<int>());
     } else {
         if (src[key].is<T>()) dst = src[key].as<T>();
     }
@@ -38,6 +40,8 @@ template<typename T>
 inline void from_json_field(JsonVariantConst src, const char* key, volatile T& dst) {
     if constexpr (std::is_enum_v<T>) {
         if (src[key].is<int>()) dst = static_cast<T>(src[key].as<int>());
+    } else if constexpr (std::is_same_v<T, char>) {
+        if (src[key].is<int>()) dst = static_cast<char>(src[key].as<int>());
     } else {
         if (src[key].is<T>()) dst = src[key].as<T>();
     }
@@ -96,7 +100,7 @@ inline void convertFromJson(JsonVariantConst src, vector_map_t& dst) {
 }
 
 inline void convertFromJson(JsonVariantConst src, route_t& dst) {
-    from_json_nested(src, "dir", dst.dir);
+    from_json_field(src, "dir", dst.dir);
     from_json_field(src, "time", dst.time);
     from_json_field(src, "use", dst.use);
 }
@@ -121,14 +125,14 @@ inline void convertFromJson(JsonVariantConst src, point_t& dst) {
 inline void convertFromJson(JsonVariantConst src, dir_pt_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
-    from_json_nested(src, "dir", dst.dir);
+    from_json_field(src, "dir", dst.dir);
     from_json_field(src, "dist2", dst.dist2);
 }
 
 inline void convertFromJson(JsonVariantConst src, ego_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
-    from_json_nested(src, "dir", dst.dir);
+    from_json_field(src, "dir", dst.dir);
     from_json_field(src, "prev_motion", dst.prev_motion);
 }
 
@@ -154,7 +158,7 @@ inline void convertFromJson(JsonVariantConst src, ego_odom_t& dst) {
     from_json_field(src, "x", dst.x);
     from_json_field(src, "y", dst.y);
     from_json_field(src, "ang", dst.ang);
-    from_json_nested(src, "dir", dst.dir);
+    from_json_field(src, "dir", dst.dir);
 }
 
 inline void convertFromJson(JsonVariantConst src, slalom_param_t& dst) {
