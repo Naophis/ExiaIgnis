@@ -66,6 +66,7 @@ add_executable(ExiaIgnis
     src/planning/motor_actuator.cpp
     src/planning/ego_estimator.cpp
     src/planning/sensor_processor.cpp
+    src/planning/trajectory_generator.cpp
     src/action/motion_planning.cpp
     src/action/wall_off_controller.cpp
     src/action/trajectory_creator.cpp

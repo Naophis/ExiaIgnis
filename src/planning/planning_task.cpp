@@ -206,19 +206,13 @@ void PlanningTask::tick(uint32_t dt_us) {
     }
 
     // start_calc_mpc = esp_timer_get_time();
-    if (first_req) {
-
+    if (trj_.first_req) {
       if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
         tgt_val->tgt_in.enable_slip_decel = 1;
       } else {
         tgt_val->tgt_in.enable_slip_decel = 0;
       }
-      // auto time = esp_timer_get_time();
-      // Generate trajectory points
-      generate_trajectory();
-      // auto time2 = esp_timer_get_time();
-
-      // printf("mpc calc time: %lld usec\n", time2 - time);
+      trj_.generate(tgt_val, param, last_tgt_angle);
     }
     // end_calc_mpc = esp_timer_get_time();
     // check 3
@@ -227,22 +221,22 @@ void PlanningTask::tick(uint32_t dt_us) {
         tgt_val->motion_type == MotionType::SLA_FRONT_STR ||
         tgt_val->motion_type == MotionType::SLA_BACK_STR) {
       if (tgt_val->ego_in.img_dist >= tgt_val->tgt_in.tgt_dist) {
-        mpc_next_ego.v = tgt_val->tgt_in.end_v;
+        trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
       }
       if (tgt_val->ego_in.dist >= tgt_val->tgt_in.tgt_dist) {
-        mpc_next_ego.v = tgt_val->tgt_in.end_v;
+        trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
       }
     }
-    calc_kanamaya_ctrl();
+    trj_.calc_kanayama(tgt_val, sensing_result, param, ego, sensor_, last_tgt_angle);
 
     if (tgt_val->motion_type == MotionType::PIVOT ||
         tgt_val->motion_type == MotionType::FRONT_CTRL) {
-      v_cmd = tgt_val->ego_in.v;
-      w_cmd = tgt_val->ego_in.w;
+      trj_.v_cmd = tgt_val->ego_in.v;
+      trj_.w_cmd = tgt_val->ego_in.w;
     }
 
     // 算出結果をコピー
-    cp_tgt_val(); // 1~2usec
+    trj_.copy_tgt(tgt_val, sensing_result, param, dt); // 1~2usec
 
     // Duty計算
     calc_tgt_duty(); // 15 ~ 20 usec
@@ -352,179 +346,6 @@ std::shared_ptr<sensing_result_entity_t> PlanningTask::get_sensing_entity() {
   return sensing_result;
 }
 
-void PlanningTask::generate_trajectory() {
-  // mpc_tgt_calc.step(&tgt_val->tgt_in, &tgt_val->ego_in,
-  // tgt_val->motion_mode,
-  //                   mpc_step, &mpc_next_ego, &dynamics);
-  // tgt_val->ego_in.ideal_px = tgt_val->ego_in.ideal_py = 0;
-  auto tmp = tgt_val->ego_in.img_ang;
-  tgt_val->ego_in.img_ang += last_tgt_angle;
-
-  // if (tgt_val->motion_type == MotionType::NONE && motion_req_timestamp > 10)
-  // {
-  //   return;
-  // }
-
-  if (param->trj_length <= 0) {
-    return;
-  }
-
-  for (int i = 0; i < param->trj_length; i++) {
-    int32_T index = i + 1;
-    if (i == 0) {
-      mpc_tgt_calc.step(&tgt_val->tgt_in, &tgt_val->ego_in,
-                        tgt_val->motion_mode, mpc_step, &mpc_next_ego,
-                        &dynamics, &index);
-      trajectory_points[i] = mpc_next_ego;
-      mpc_next_ego_prev = mpc_next_ego;
-    } else {
-      mpc_tgt_calc.step(&tgt_val->tgt_in, &mpc_next_ego_prev,
-                        tgt_val->motion_mode, mpc_step, &mpc_next_ego2,
-                        &dynamics, &index);
-      trajectory_points[i] = mpc_next_ego2;
-      mpc_next_ego_prev = mpc_next_ego2;
-    }
-  }
-  mpc_next_ego.img_ang -= last_tgt_angle;
-}
-
-void PlanningTask::calc_kanamaya_ctrl() {
-
-  if (trj_idx_v.size() == 0 || trj_idx_val.size() == 0)
-    return;
-
-  const auto idx_val =
-      sensor_.interp1d(trj_idx_v, trj_idx_val, tgt_val->ego_in.v, false);
-
-  const int idx = std::min(param->trj_length - 1, idx_val);
-  const auto se = get_sensing_entity();
-
-  // ideal
-  ego.odm.x = trajectory_points[idx].ideal_px;
-  ego.odm.y = trajectory_points[idx].ideal_py;
-  ego.odm.theta = trajectory_points[idx].img_ang;
-
-  float vd = ego.odm.v = trajectory_points[idx].v;
-  float wd = ego.odm.w = trajectory_points[idx].w;
-
-  float dx = ego.odm.x - ego.kim.x;
-  float dy = ego.odm.y - ego.kim.y;
-  if (tgt_val->ego_in.v < 10) {
-    dx = dy = 0;
-  }
-
-  dx = std::clamp(dx, 0.0f, ABS(dx));
-
-  float d_theta = ego.odm.theta - (se->ego.ang_kf + last_tgt_angle);
-  float e_theta = d_theta;
-  // std::clamp(d_theta, (float)(-M_PI), (float)(M_PI));
-  const float cos_theta = std::cos(se->ego.ang_kf);
-  const float sin_theta = std::sin(se->ego.ang_kf);
-  if (tgt_val->ego_in.v < 10) {
-    e_theta = 0;
-  }
-  const float ex = cos_theta * dx + sin_theta * dy;
-  const float ey = -sin_theta * dx + cos_theta * dy;
-
-  const float cos_e_theta = std::cos(e_theta);
-  const float sin_e_theta = std::sin(e_theta);
-
-  const float kx = param->kanayama.kx;
-  const float ky = param->kanayama.ky;
-  const float k_theta = param->kanayama.k_theta;
-
-  sensing_result->ego.knym_v = vd * cos_e_theta + kx * ex;
-  sensing_result->ego.knym_w = wd + vd * (ky * ey + k_theta * sin_e_theta);
-  sensing_result->ego.odm_x = ego.odm.x;
-  sensing_result->ego.odm_y = ego.odm.y;
-  sensing_result->ego.odm_theta = ego.odm.theta;
-  sensing_result->ego.kim_x = ego.kim.x;
-  sensing_result->ego.kim_y = ego.kim.y;
-  sensing_result->ego.kim_theta = ego.kim.theta;
-
-  if (param->kanayama.enable > 0 &&
-      (tgt_val->motion_type == MotionType::SLALOM ||
-       tgt_val->motion_type == MotionType::SLA_BACK_STR)) {
-    v_cmd = sensing_result->ego.knym_v;
-    w_cmd = sensing_result->ego.knym_w;
-  } else {
-    v_cmd = tgt_val->ego_in.v;
-    w_cmd = tgt_val->ego_in.w;
-  }
-  if (tgt_val->motion_type != MotionType::SLALOM ||
-      tgt_val->motion_type == MotionType::SLA_BACK_STR) {
-    sensing_result->ego.knym_v = tgt_val->ego_in.v;
-    sensing_result->ego.knym_w = tgt_val->ego_in.w;
-  }
-}
-
-void PlanningTask::cp_tgt_val() {
-  const auto se = get_sensing_entity();
-  tgt_val->ego_in.accl = mpc_next_ego.accl;
-  tgt_val->ego_in.alpha = mpc_next_ego.alpha;
-  tgt_val->ego_in.pivot_state = mpc_next_ego.pivot_state;
-  tgt_val->ego_in.sla_param = mpc_next_ego.sla_param;
-  tgt_val->ego_in.state = mpc_next_ego.state;
-  tgt_val->ego_in.decel_delay_cnt = mpc_next_ego.decel_delay_cnt;
-
-  const auto tmp_v = tgt_val->ego_in.v;
-  tgt_val->ego_in.v = mpc_next_ego.v;
-  tgt_val->ego_in.v_l = mpc_next_ego.v - mpc_next_ego.w * param->tire_tread / 2;
-  tgt_val->ego_in.v_r = mpc_next_ego.v + mpc_next_ego.w * param->tire_tread / 2;
-  if (tgt_val->motion_type == MotionType::SLALOM) {
-    if (tgt_val->ego_in.v < 10) {
-      tgt_val->ego_in.v = tmp_v;
-    }
-    se->sen.r45.sensor_dist = 0;
-    se->sen.l45.sensor_dist = 0;
-    se->sen.r45_2.sensor_dist = 0;
-    se->sen.l45_2.sensor_dist = 0;
-    se->sen.r45_3.sensor_dist = 0;
-    se->sen.l45_3.sensor_dist = 0;
-  }
-  tgt_val->ego_in.w = mpc_next_ego.w;
-  tgt_val->ego_in.sla_param.state = mpc_next_ego.sla_param.state;
-  tgt_val->ego_in.sla_param.counter = mpc_next_ego.sla_param.counter;
-  tgt_val->ego_in.sla_param.state = mpc_next_ego.sla_param.state;
-  sensing_result->img_ang_z = tgt_val->ego_in.img_ang;
-  tgt_val->ego_in.img_ang = mpc_next_ego.img_ang;
-  tgt_val->ego_in.img_dist = mpc_next_ego.img_dist;
-
-  tgt_val->global_pos.img_ang += mpc_next_ego.w * dt;
-
-  if (tgt_val->motion_type == MotionType::SLALOM) {
-    if (tgt_val->ego_in.pivot_state == 3) {
-      tgt_val->global_pos.img_ang = //
-          tgt_val->ego_in.img_ang = tgt_val->tgt_in.tgt_angle;
-    }
-  }
-
-  tgt_val->global_pos.img_dist += mpc_next_ego.v * dt;
-
-  tgt_val->ego_in.slip_point.slip_angle = mpc_next_ego.slip_point.slip_angle;
-
-  tgt_val->ego_in.cnt_delay_accl_ratio = mpc_next_ego.cnt_delay_accl_ratio;
-  tgt_val->ego_in.cnt_delay_decel_ratio = mpc_next_ego.cnt_delay_decel_ratio;
-
-  // const auto theta = tgt_val->ego_in.img_ang + slip_param.beta;
-  // const auto x = tgt_val->ego_in.v * std::cos(theta);
-  // const auto y = tgt_val->ego_in.v * std::sin(theta);
-  // tgt_val->p.x += x;
-  // tgt_val->p.y += y;
-
-  tgt_val->ego_in.slip.beta = mpc_next_ego.slip.beta;
-  tgt_val->ego_in.slip.accl = mpc_next_ego.slip.accl;
-  tgt_val->ego_in.slip.v = mpc_next_ego.slip.v;
-  tgt_val->ego_in.slip.vx = mpc_next_ego.slip.vx;
-  tgt_val->ego_in.slip.vy = mpc_next_ego.slip.vy;
-
-  ideal_v_r = tgt_val->ego_in.v - tgt_val->ego_in.w * param->tire_tread / 2;
-  ideal_v_l = tgt_val->ego_in.v + tgt_val->ego_in.w * param->tire_tread / 2;
-
-  tgt_val->ego_in.ideal_px = mpc_next_ego.ideal_px;
-  tgt_val->ego_in.ideal_py = mpc_next_ego.ideal_py;
-}
-
 void PlanningTask::calc_tgt_duty() {
 
   float duty_ff_front = 0;
@@ -604,10 +425,10 @@ void PlanningTask::calc_tgt_duty() {
   sensing_result->ego.duty.duty_r = tgt_duty.duty_r;
   sensing_result->ego.duty.duty_l = tgt_duty.duty_l;
 
-  sensing_result->ego.duty.ff_duty_front = mpc_next_ego.ff_duty_front;
-  sensing_result->ego.duty.ff_duty_roll = mpc_next_ego.ff_duty_roll;
-  sensing_result->ego.duty.ff_duty_rpm_r = mpc_next_ego.ff_duty_rpm_r;
-  sensing_result->ego.duty.ff_duty_rpm_l = mpc_next_ego.ff_duty_rpm_l;
+  sensing_result->ego.duty.ff_duty_front = trj_.mpc_next_ego.ff_duty_front;
+  sensing_result->ego.duty.ff_duty_roll = trj_.mpc_next_ego.ff_duty_roll;
+  sensing_result->ego.duty.ff_duty_rpm_r = trj_.mpc_next_ego.ff_duty_rpm_r;
+  sensing_result->ego.duty.ff_duty_rpm_l = trj_.mpc_next_ego.ff_duty_rpm_l;
 
   // sensing_result->ego.ff_duty.front = duty_ff_front;
   // sensing_result->ego.ff_duty.roll = duty_ff_roll;
@@ -1238,12 +1059,12 @@ void PlanningTask::calc_pid_val() {
   ee->v_kf.error_d = ee->v_kf.error_p;
   ee->dist.error_d = ee->dist.error_p;
 
-  ee->v.error_p = v_cmd - sensing_result->ego.v_c;
+  ee->v.error_p = trj_.v_cmd - sensing_result->ego.v_c;
 
-  ee->v_r.error_p = ideal_v_r - sensing_result->ego.v_r;
-  ee->v_l.error_p = ideal_v_l - sensing_result->ego.v_l;
-  ee->v_kf.error_p = v_cmd - sensing_result->ego.v_kf;
-  ee->w_kf.error_p = w_cmd - sensing_result->ego.w_kf;
+  ee->v_r.error_p = trj_.ideal_v_r - sensing_result->ego.v_r;
+  ee->v_l.error_p = trj_.ideal_v_l - sensing_result->ego.v_l;
+  ee->v_kf.error_p = trj_.v_cmd - sensing_result->ego.v_kf;
+  ee->w_kf.error_p = trj_.w_cmd - sensing_result->ego.w_kf;
 
   ee->dist.error_p = tgt_val->global_pos.img_dist - tgt_val->global_pos.dist;
 
@@ -1754,19 +1575,19 @@ void PlanningTask::limitter(float &kp, float &ki, float &kb, float &kd,
 
 void PlanningTask::summation_duty() {
 
-  auto ff_front = mpc_next_ego.ff_duty_front;
-  auto ff_roll = mpc_next_ego.ff_duty_roll;
+  auto ff_front = trj_.mpc_next_ego.ff_duty_front;
+  auto ff_roll = trj_.mpc_next_ego.ff_duty_roll;
   const auto se = get_sensing_entity();
 
   if (tgt_val->motion_type == MotionType::WALL_OFF ||
       tgt_val->motion_type == MotionType::WALL_OFF_DIA) {
     ff_front = param->ff_roll_gain_before * ff_front;
-    mpc_next_ego.ff_duty_front = ff_front;
+    trj_.mpc_next_ego.ff_duty_front = ff_front;
   }
 
   if (tgt_val->motion_type == MotionType::SLA_BACK_STR) {
     ff_front = param->ff_front_gain_14 * ff_front;
-    mpc_next_ego.ff_duty_front = ff_front;
+    trj_.mpc_next_ego.ff_duty_front = ff_front;
   }
 
   if (tgt_val->motion_type == MotionType::SLALOM) {
@@ -1780,9 +1601,9 @@ void PlanningTask::summation_duty() {
                     : ff_roll;
     }
   }
-  se->ego.duty.ff_duty_roll = mpc_next_ego.ff_duty_roll = ff_roll;
-  auto ff_duty_r = ff_front + ff_roll + mpc_next_ego.ff_duty_rpm_r;
-  auto ff_duty_l = ff_front - ff_roll + mpc_next_ego.ff_duty_rpm_l;
+  se->ego.duty.ff_duty_roll = trj_.mpc_next_ego.ff_duty_roll = ff_roll;
+  auto ff_duty_r = ff_front + ff_roll + trj_.mpc_next_ego.ff_duty_rpm_r;
+  auto ff_duty_l = ff_front - ff_roll + trj_.mpc_next_ego.ff_duty_rpm_l;
 
   if (param->FF_keV == 0) {
     ff_duty_l = ff_duty_r = 0;
@@ -1800,15 +1621,15 @@ void PlanningTask::summation_duty() {
 
   } else if (param->torque_mode == 1) {
   } else if (param->torque_mode == 2) {
-    auto ff_front = mpc_next_ego.ff_front_torque;
-    auto ff_roll = mpc_next_ego.ff_roll_torque;
-    auto ff_duty_r = mpc_next_ego.ff_duty_rpm_r;
-    auto ff_duty_l = mpc_next_ego.ff_duty_rpm_l;
-    auto ff_friction_r = mpc_next_ego.ff_friction_torque_r;
-    auto ff_friction_l = mpc_next_ego.ff_friction_torque_l;
+    auto ff_front = trj_.mpc_next_ego.ff_front_torque;
+    auto ff_roll = trj_.mpc_next_ego.ff_roll_torque;
+    auto ff_duty_r = trj_.mpc_next_ego.ff_duty_rpm_r;
+    auto ff_duty_l = trj_.mpc_next_ego.ff_duty_rpm_l;
+    auto ff_friction_r = trj_.mpc_next_ego.ff_friction_torque_r;
+    auto ff_friction_l = trj_.mpc_next_ego.ff_friction_torque_l;
 
-    // auto v = mpc_next_ego.v;
-    // auto w = mpc_next_ego.w;
+    // auto v = trj_.mpc_next_ego.v;
+    // auto w = trj_.mpc_next_ego.w;
     // auto tread = param->tire_tread;
     // auto v_l = v - w * tread / 2;
     // auto v_r = v + w * tread / 2;

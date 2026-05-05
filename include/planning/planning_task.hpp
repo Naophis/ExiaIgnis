@@ -1,12 +1,12 @@
 #pragma once
 
-#include "gen_code_mpc/mpc_tgt_calc.h"
 #include "gen_code_simple_pid/simple_pid_controller.h"
 #include "pico/types.h"
 #include "planning/astraea_types.hpp"
 #include "planning/ego_estimator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
+#include "planning/trajectory_generator.hpp"
 #include "structs.hpp"
 #include "utils/kalman_filter.hpp"
 #include "utils/kalman_filter_matrix.hpp"
@@ -135,9 +135,6 @@ private:
 
   void tick(uint32_t dt_us);
   void update_trajectory(float dt);
-  void generate_trajectory();
-  void calc_kanamaya_ctrl();
-  void cp_tgt_val();
   void calc_tgt_duty();
   float calc_sensor_pid();
   float calc_sensor_pid_dia();
@@ -216,6 +213,7 @@ private:
 
   MotorActuator motor_;
   SensorProcessor sensor_;
+  TrajectoryGenerator trj_;
 
   //
 
@@ -245,9 +243,6 @@ private:
   bool enable_expand_left = false;
 
   unsigned char w_reset = 0;
-  float ideal_v_r, ideal_v_l;
-  float v_cmd = 0;
-  float w_cmd = 0;
 
   float duty_c = 0;
   float duty_c2 = 0;
@@ -259,19 +254,8 @@ private:
   float duty_sen = 0;
   float sen_ang = 0;
 
-  int32_t mpc_mode;
-  int32_t mpc_step;
-  t_dynamics dynamics;
-  t_ego mpc_next_ego;
-  t_ego mpc_next_ego2;
-  t_ego mpc_next_ego_prev;
-  bool first_req = false;
   float last_accl = 0.0f;
-  mpc_tgt_calcModelClass mpc_tgt_calc;
-  std::vector<t_ego> trajectory_points;
   float diff_old = 0;
   float diff = 0;
   float gain_cnt = 0;
-  std::vector<int> trj_idx_v;
-  std::vector<int> trj_idx_val;
 };
