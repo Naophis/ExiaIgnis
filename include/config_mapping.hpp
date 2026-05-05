@@ -181,10 +181,10 @@ inline void convertFromJson(JsonVariantConst src, slalom_data_t& dst) {
 }
 
 inline void convertFromJson(JsonVariantConst src, run_param_t& dst) {
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["decel"].is<float>()) dst.decel = src["decel"].as<float>();
-    if (src["turn_v"].is<float>()) dst.turn_v = src["turn_v"].as<float>();
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "decel", dst.decel);
+    from_json_field(src, "turn_v", dst.turn_v);
 }
 
 inline void convertFromJson(JsonVariantConst src, base_trajectory_pattern_t& dst) {
@@ -218,822 +218,800 @@ inline void convertFromJson(JsonVariantConst src, encoder_data_t& dst) {
 }
 
 inline void convertFromJson(JsonVariantConst src, sensing_data_t& dst) {
-    if (src["raw"].is<int>()) dst.raw = src["raw"].as<int>();
-    if (src["data"].is<float>()) dst.data = src["data"].as<float>();
+    from_json_field(src, "raw", dst.raw);
+    from_json_field(src, "data", dst.data);
 }
 
 inline void convertFromJson(JsonVariantConst src, led_sensor_t& dst) {
-    if (!src["right90"].isNull()) convertFromJson(src["right90"], dst.right90);
-    if (!src["right45"].isNull()) convertFromJson(src["right45"], dst.right45);
-    if (!src["right45_2"].isNull()) convertFromJson(src["right45_2"], dst.right45_2);
-    if (!src["right45_3"].isNull()) convertFromJson(src["right45_3"], dst.right45_3);
-    if (!src["front"].isNull()) convertFromJson(src["front"], dst.front);
-    if (!src["left45"].isNull()) convertFromJson(src["left45"], dst.left45);
-    if (!src["left45_2"].isNull()) convertFromJson(src["left45_2"], dst.left45_2);
-    if (!src["left45_3"].isNull()) convertFromJson(src["left45_3"], dst.left45_3);
-    if (!src["left90"].isNull()) convertFromJson(src["left90"], dst.left90);
+    from_json_nested(src, "right90", dst.right90);
+    from_json_nested(src, "right45", dst.right45);
+    from_json_nested(src, "right45_2", dst.right45_2);
+    from_json_nested(src, "right45_3", dst.right45_3);
+    from_json_nested(src, "front", dst.front);
+    from_json_nested(src, "left45", dst.left45);
+    from_json_nested(src, "left45_2", dst.left45_2);
+    from_json_nested(src, "left45_3", dst.left45_3);
+    from_json_nested(src, "left90", dst.left90);
 }
 
 inline void convertFromJson(JsonVariantConst src, rpm_t& dst) {
-    if (src["right"].is<float>()) dst.right = src["right"].as<float>();
-    if (src["left"].is<float>()) dst.left = src["left"].as<float>();
+    from_json_field(src, "right", dst.right);
+    from_json_field(src, "left", dst.left);
 }
 
 inline void convertFromJson(JsonVariantConst src, duty_t& dst) {
-    if (src["duty_l"].is<float>()) dst.duty_l = src["duty_l"].as<float>();
-    if (src["duty_r"].is<float>()) dst.duty_r = src["duty_r"].as<float>();
-    if (src["duty_suction"].is<float>()) dst.duty_suction = src["duty_suction"].as<float>();
-    if (src["duty_suction_low"].is<float>()) dst.duty_suction_low = src["duty_suction_low"].as<float>();
-    if (src["sen"].is<float>()) dst.sen = src["sen"].as<float>();
-    if (src["sen_ang"].is<float>()) dst.sen_ang = src["sen_ang"].as<float>();
-    if (src["ff_duty_front"].is<float>()) dst.ff_duty_front = src["ff_duty_front"].as<float>();
-    if (src["ff_duty_roll"].is<float>()) dst.ff_duty_roll = src["ff_duty_roll"].as<float>();
-    if (src["ff_duty_rpm_r"].is<float>()) dst.ff_duty_rpm_r = src["ff_duty_rpm_r"].as<float>();
-    if (src["ff_duty_rpm_l"].is<float>()) dst.ff_duty_rpm_l = src["ff_duty_rpm_l"].as<float>();
+    from_json_field(src, "duty_l", dst.duty_l);
+    from_json_field(src, "duty_r", dst.duty_r);
+    from_json_field(src, "duty_suction", dst.duty_suction);
+    from_json_field(src, "duty_suction_low", dst.duty_suction_low);
+    from_json_field(src, "sen", dst.sen);
+    from_json_field(src, "sen_ang", dst.sen_ang);
+    from_json_field(src, "ff_duty_front", dst.ff_duty_front);
+    from_json_field(src, "ff_duty_roll", dst.ff_duty_roll);
+    from_json_field(src, "ff_duty_rpm_r", dst.ff_duty_rpm_r);
+    from_json_field(src, "ff_duty_rpm_l", dst.ff_duty_rpm_l);
 }
 
 inline void convertFromJson(JsonVariantConst src, ff_duty_t& dst) {
-    if (src["front"].is<float>()) dst.front = src["front"].as<float>();
-    if (src["roll"].is<float>()) dst.roll = src["roll"].as<float>();
+    from_json_field(src, "front", dst.front);
+    from_json_field(src, "roll", dst.roll);
 }
 
 inline void convertFromJson(JsonVariantConst src, ego_entity_t& dst) {
-    if (src["v_r"].is<float>()) dst.v_r = src["v_r"].as<float>();
-    if (src["v_l"].is<float>()) dst.v_l = src["v_l"].as<float>();
-    if (src["v_r_old"].is<float>()) dst.v_r_old = src["v_r_old"].as<float>();
-    if (src["v_l_old"].is<float>()) dst.v_l_old = src["v_l_old"].as<float>();
-    if (src["v_c"].is<float>()) dst.v_c = src["v_c"].as<float>();
-    if (src["filter_v"].is<float>()) dst.filter_v = src["filter_v"].as<float>();
-    if (src["main_v"].is<float>()) dst.main_v = src["main_v"].as<float>();
-    if (src["w_raw"].is<float>()) dst.w_raw = src["w_raw"].as<float>();
-    if (src["w_raw2"].is<float>()) dst.w_raw2 = src["w_raw2"].as<float>();
-    if (src["w_lp"].is<float>()) dst.w_lp = src["w_lp"].as<float>();
-    if (src["w_lp2"].is<float>()) dst.w_lp2 = src["w_lp2"].as<float>();
-    if (src["w_kf"].is<float>()) dst.w_kf = src["w_kf"].as<float>();
-    if (src["w_kf2"].is<float>()) dst.w_kf2 = src["w_kf2"].as<float>();
-    if (src["v_kf"].is<float>()) dst.v_kf = src["v_kf"].as<float>();
-    if (src["dist_kf"].is<float>()) dst.dist_kf = src["dist_kf"].as<float>();
-    if (src["ang_kf"].is<float>()) dst.ang_kf = src["ang_kf"].as<float>();
-    if (src["ang_kf2"].is<float>()) dst.ang_kf2 = src["ang_kf2"].as<float>();
-    if (src["batt_kf"].is<float>()) dst.batt_kf = src["batt_kf"].as<float>();
-    if (src["accel_x_raw"].is<float>()) dst.accel_x_raw = src["accel_x_raw"].as<float>();
-    if (src["v_ave"].is<float>()) dst.v_ave = src["v_ave"].as<float>();
-    if (src["v_lp"].is<float>()) dst.v_lp = src["v_lp"].as<float>();
-    if (src["integrate_accl_x_ave"].is<float>()) dst.integrate_accl_x_ave = src["integrate_accl_x_ave"].as<float>();
-    if (src["sum_v_ave"].is<float>()) dst.sum_v_ave = src["sum_v_ave"].as<float>();
-    if (src["sum_integrate_accl_x_ave"].is<float>()) dst.sum_integrate_accl_x_ave = src["sum_integrate_accl_x_ave"].as<float>();
-    if (src["w_kalman"].is<float>()) dst.w_kalman = src["w_kalman"].as<float>();
-    if (src["ang_kalman"].is<float>()) dst.ang_kalman = src["ang_kalman"].as<float>();
-    if (src["battery_raw"].is<float>()) dst.battery_raw = src["battery_raw"].as<float>();
-    if (src["battery_lp"].is<float>()) dst.battery_lp = src["battery_lp"].as<float>();
-    if (src["right90_raw"].is<float>()) dst.right90_raw = src["right90_raw"].as<float>();
-    if (src["right90_lp"].is<float>()) dst.right90_lp = src["right90_lp"].as<float>();
-    if (src["right45_raw"].is<float>()) dst.right45_raw = src["right45_raw"].as<float>();
-    if (src["right45_lp"].is<float>()) dst.right45_lp = src["right45_lp"].as<float>();
-    if (src["front_raw"].is<float>()) dst.front_raw = src["front_raw"].as<float>();
-    if (src["front_lp"].is<float>()) dst.front_lp = src["front_lp"].as<float>();
-    if (src["left45_raw"].is<float>()) dst.left45_raw = src["left45_raw"].as<float>();
-    if (src["left45_lp"].is<float>()) dst.left45_lp = src["left45_lp"].as<float>();
-    if (src["left90_raw"].is<float>()) dst.left90_raw = src["left90_raw"].as<float>();
-    if (src["left90_lp"].is<float>()) dst.left90_lp = src["left90_lp"].as<float>();
-    if (src["right45_2_raw"].is<float>()) dst.right45_2_raw = src["right45_2_raw"].as<float>();
-    if (src["right45_2_lp"].is<float>()) dst.right45_2_lp = src["right45_2_lp"].as<float>();
-    if (src["left45_2_raw"].is<float>()) dst.left45_2_raw = src["left45_2_raw"].as<float>();
-    if (src["left45_2_lp"].is<float>()) dst.left45_2_lp = src["left45_2_lp"].as<float>();
-    if (src["right45_3_raw"].is<float>()) dst.right45_3_raw = src["right45_3_raw"].as<float>();
-    if (src["right45_3_lp"].is<float>()) dst.right45_3_lp = src["right45_3_lp"].as<float>();
-    if (src["left45_3_raw"].is<float>()) dst.left45_3_raw = src["left45_3_raw"].as<float>();
-    if (src["left45_3_lp"].is<float>()) dst.left45_3_lp = src["left45_3_lp"].as<float>();
-    if (src["front_lp_old"].is<float>()) dst.front_lp_old = src["front_lp_old"].as<float>();
-    if (src["left45_lp_old"].is<float>()) dst.left45_lp_old = src["left45_lp_old"].as<float>();
-    if (src["left90_lp_old"].is<float>()) dst.left90_lp_old = src["left90_lp_old"].as<float>();
-    if (src["right45_lp_old"].is<float>()) dst.right45_lp_old = src["right45_lp_old"].as<float>();
-    if (src["right90_lp_old"].is<float>()) dst.right90_lp_old = src["right90_lp_old"].as<float>();
-    if (src["left45_2_lp_old"].is<float>()) dst.left45_2_lp_old = src["left45_2_lp_old"].as<float>();
-    if (src["right45_2_lp_old"].is<float>()) dst.right45_2_lp_old = src["right45_2_lp_old"].as<float>();
-    if (src["left45_3_lp_old"].is<float>()) dst.left45_3_lp_old = src["left45_3_lp_old"].as<float>();
-    if (src["right45_3_lp_old"].is<float>()) dst.right45_3_lp_old = src["right45_3_lp_old"].as<float>();
-    if (src["front_dist"].is<float>()) dst.front_dist = src["front_dist"].as<float>();
-    if (src["left45_dist"].is<float>()) dst.left45_dist = src["left45_dist"].as<float>();
-    if (src["left45_2_dist"].is<float>()) dst.left45_2_dist = src["left45_2_dist"].as<float>();
-    if (src["left45_3_dist"].is<float>()) dst.left45_3_dist = src["left45_3_dist"].as<float>();
-    if (src["left90_dist"].is<float>()) dst.left90_dist = src["left90_dist"].as<float>();
-    if (src["right45_dist"].is<float>()) dst.right45_dist = src["right45_dist"].as<float>();
-    if (src["right45_2_dist"].is<float>()) dst.right45_2_dist = src["right45_2_dist"].as<float>();
-    if (src["right45_3_dist"].is<float>()) dst.right45_3_dist = src["right45_3_dist"].as<float>();
-    if (src["right90_dist"].is<float>()) dst.right90_dist = src["right90_dist"].as<float>();
-    if (src["front_far_dist"].is<float>()) dst.front_far_dist = src["front_far_dist"].as<float>();
-    if (src["left90_far_dist"].is<float>()) dst.left90_far_dist = src["left90_far_dist"].as<float>();
-    if (src["right90_far_dist"].is<float>()) dst.right90_far_dist = src["right90_far_dist"].as<float>();
-    if (src["left90_mid_dist"].is<float>()) dst.left90_mid_dist = src["left90_mid_dist"].as<float>();
-    if (src["right90_mid_dist"].is<float>()) dst.right90_mid_dist = src["right90_mid_dist"].as<float>();
-    if (src["front_mid_dist"].is<float>()) dst.front_mid_dist = src["front_mid_dist"].as<float>();
-    if (src["left45_dist_diff"].is<float>()) dst.left45_dist_diff = src["left45_dist_diff"].as<float>();
-    if (src["left45_2_dist_diff"].is<float>()) dst.left45_2_dist_diff = src["left45_2_dist_diff"].as<float>();
-    if (src["left45_3_dist_diff"].is<float>()) dst.left45_3_dist_diff = src["left45_3_dist_diff"].as<float>();
-    if (src["right45_dist_diff"].is<float>()) dst.right45_dist_diff = src["right45_dist_diff"].as<float>();
-    if (src["right45_2_dist_diff"].is<float>()) dst.right45_2_dist_diff = src["right45_2_dist_diff"].as<float>();
-    if (src["right45_3_dist_diff"].is<float>()) dst.right45_3_dist_diff = src["right45_3_dist_diff"].as<float>();
-    if (src["left90_dist_diff"].is<float>()) dst.left90_dist_diff = src["left90_dist_diff"].as<float>();
-    if (src["right90_dist_diff"].is<float>()) dst.right90_dist_diff = src["right90_dist_diff"].as<float>();
-    if (src["temp"].is<float>()) dst.temp = src["temp"].as<float>();
-    if (src["front_dist_old"].is<float>()) dst.front_dist_old = src["front_dist_old"].as<float>();
-    if (src["left45_dist_old"].is<float>()) dst.left45_dist_old = src["left45_dist_old"].as<float>();
-    if (src["left45_2_dist_old"].is<float>()) dst.left45_2_dist_old = src["left45_2_dist_old"].as<float>();
-    if (src["left45_3_dist_old"].is<float>()) dst.left45_3_dist_old = src["left45_3_dist_old"].as<float>();
-    if (src["left90_dist_old"].is<float>()) dst.left90_dist_old = src["left90_dist_old"].as<float>();
-    if (src["right45_dist_old"].is<float>()) dst.right45_dist_old = src["right45_dist_old"].as<float>();
-    if (src["right45_2_dist_old"].is<float>()) dst.right45_2_dist_old = src["right45_2_dist_old"].as<float>();
-    if (src["right45_3_dist_old"].is<float>()) dst.right45_3_dist_old = src["right45_3_dist_old"].as<float>();
-    if (src["right90_dist_old"].is<float>()) dst.right90_dist_old = src["right90_dist_old"].as<float>();
-    if (src["exist_r_wall"].is<bool>()) dst.exist_r_wall = src["exist_r_wall"].as<bool>();
-    if (src["exist_l_wall"].is<bool>()) dst.exist_l_wall = src["exist_l_wall"].as<bool>();
-    if (!src["rpm"].isNull()) convertFromJson(src["rpm"], dst.rpm);
-    if (!src["duty"].isNull()) convertFromJson(src["duty"], dst.duty);
-    if (!src["ff_duty"].isNull()) convertFromJson(src["ff_duty"], dst.ff_duty);
-    if (src["motion_type"].is<int8_t>()) dst.motion_type = src["motion_type"].as<int8_t>();
-    if (src["pos_x"].is<float>()) dst.pos_x = src["pos_x"].as<float>();
-    if (src["pos_y"].is<float>()) dst.pos_y = src["pos_y"].as<float>();
-    if (src["pos_ang"].is<float>()) dst.pos_ang = src["pos_ang"].as<float>();
-    if (src["knym_v"].is<float>()) dst.knym_v = src["knym_v"].as<float>();
-    if (src["knym_w"].is<float>()) dst.knym_w = src["knym_w"].as<float>();
-    if (src["odm_x"].is<float>()) dst.odm_x = src["odm_x"].as<float>();
-    if (src["odm_y"].is<float>()) dst.odm_y = src["odm_y"].as<float>();
-    if (src["odm_theta"].is<float>()) dst.odm_theta = src["odm_theta"].as<float>();
-    if (src["kim_x"].is<float>()) dst.kim_x = src["kim_x"].as<float>();
-    if (src["kim_y"].is<float>()) dst.kim_y = src["kim_y"].as<float>();
-    if (src["kim_theta"].is<float>()) dst.kim_theta = src["kim_theta"].as<float>();
+    from_json_field(src, "v_r", dst.v_r);
+    from_json_field(src, "v_l", dst.v_l);
+    from_json_field(src, "v_r_old", dst.v_r_old);
+    from_json_field(src, "v_l_old", dst.v_l_old);
+    from_json_field(src, "v_c", dst.v_c);
+    from_json_field(src, "filter_v", dst.filter_v);
+    from_json_field(src, "main_v", dst.main_v);
+    from_json_field(src, "w_raw", dst.w_raw);
+    from_json_field(src, "w_raw2", dst.w_raw2);
+    from_json_field(src, "w_lp", dst.w_lp);
+    from_json_field(src, "w_lp2", dst.w_lp2);
+    from_json_field(src, "w_kf", dst.w_kf);
+    from_json_field(src, "w_kf2", dst.w_kf2);
+    from_json_field(src, "v_kf", dst.v_kf);
+    from_json_field(src, "dist_kf", dst.dist_kf);
+    from_json_field(src, "ang_kf", dst.ang_kf);
+    from_json_field(src, "ang_kf2", dst.ang_kf2);
+    from_json_field(src, "batt_kf", dst.batt_kf);
+    from_json_field(src, "accel_x_raw", dst.accel_x_raw);
+    from_json_field(src, "v_ave", dst.v_ave);
+    from_json_field(src, "v_lp", dst.v_lp);
+    from_json_field(src, "integrate_accl_x_ave", dst.integrate_accl_x_ave);
+    from_json_field(src, "sum_v_ave", dst.sum_v_ave);
+    from_json_field(src, "sum_integrate_accl_x_ave", dst.sum_integrate_accl_x_ave);
+    from_json_field(src, "w_kalman", dst.w_kalman);
+    from_json_field(src, "ang_kalman", dst.ang_kalman);
+    from_json_field(src, "battery_raw", dst.battery_raw);
+    from_json_field(src, "battery_lp", dst.battery_lp);
+    from_json_field(src, "right90_raw", dst.right90_raw);
+    from_json_field(src, "right90_lp", dst.right90_lp);
+    from_json_field(src, "right45_raw", dst.right45_raw);
+    from_json_field(src, "right45_lp", dst.right45_lp);
+    from_json_field(src, "front_raw", dst.front_raw);
+    from_json_field(src, "front_lp", dst.front_lp);
+    from_json_field(src, "left45_raw", dst.left45_raw);
+    from_json_field(src, "left45_lp", dst.left45_lp);
+    from_json_field(src, "left90_raw", dst.left90_raw);
+    from_json_field(src, "left90_lp", dst.left90_lp);
+    from_json_field(src, "right45_2_raw", dst.right45_2_raw);
+    from_json_field(src, "right45_2_lp", dst.right45_2_lp);
+    from_json_field(src, "left45_2_raw", dst.left45_2_raw);
+    from_json_field(src, "left45_2_lp", dst.left45_2_lp);
+    from_json_field(src, "right45_3_raw", dst.right45_3_raw);
+    from_json_field(src, "right45_3_lp", dst.right45_3_lp);
+    from_json_field(src, "left45_3_raw", dst.left45_3_raw);
+    from_json_field(src, "left45_3_lp", dst.left45_3_lp);
+    from_json_field(src, "front_lp_old", dst.front_lp_old);
+    from_json_field(src, "left45_lp_old", dst.left45_lp_old);
+    from_json_field(src, "left90_lp_old", dst.left90_lp_old);
+    from_json_field(src, "right45_lp_old", dst.right45_lp_old);
+    from_json_field(src, "right90_lp_old", dst.right90_lp_old);
+    from_json_field(src, "left45_2_lp_old", dst.left45_2_lp_old);
+    from_json_field(src, "right45_2_lp_old", dst.right45_2_lp_old);
+    from_json_field(src, "left45_3_lp_old", dst.left45_3_lp_old);
+    from_json_field(src, "right45_3_lp_old", dst.right45_3_lp_old);
+    from_json_field(src, "front_dist", dst.front_dist);
+    from_json_field(src, "left45_dist", dst.left45_dist);
+    from_json_field(src, "left45_2_dist", dst.left45_2_dist);
+    from_json_field(src, "left45_3_dist", dst.left45_3_dist);
+    from_json_field(src, "left90_dist", dst.left90_dist);
+    from_json_field(src, "right45_dist", dst.right45_dist);
+    from_json_field(src, "right45_2_dist", dst.right45_2_dist);
+    from_json_field(src, "right45_3_dist", dst.right45_3_dist);
+    from_json_field(src, "right90_dist", dst.right90_dist);
+    from_json_field(src, "front_far_dist", dst.front_far_dist);
+    from_json_field(src, "left90_far_dist", dst.left90_far_dist);
+    from_json_field(src, "right90_far_dist", dst.right90_far_dist);
+    from_json_field(src, "left90_mid_dist", dst.left90_mid_dist);
+    from_json_field(src, "right90_mid_dist", dst.right90_mid_dist);
+    from_json_field(src, "front_mid_dist", dst.front_mid_dist);
+    from_json_field(src, "left45_dist_diff", dst.left45_dist_diff);
+    from_json_field(src, "left45_2_dist_diff", dst.left45_2_dist_diff);
+    from_json_field(src, "left45_3_dist_diff", dst.left45_3_dist_diff);
+    from_json_field(src, "right45_dist_diff", dst.right45_dist_diff);
+    from_json_field(src, "right45_2_dist_diff", dst.right45_2_dist_diff);
+    from_json_field(src, "right45_3_dist_diff", dst.right45_3_dist_diff);
+    from_json_field(src, "left90_dist_diff", dst.left90_dist_diff);
+    from_json_field(src, "right90_dist_diff", dst.right90_dist_diff);
+    from_json_field(src, "temp", dst.temp);
+    from_json_field(src, "front_dist_old", dst.front_dist_old);
+    from_json_field(src, "left45_dist_old", dst.left45_dist_old);
+    from_json_field(src, "left45_2_dist_old", dst.left45_2_dist_old);
+    from_json_field(src, "left45_3_dist_old", dst.left45_3_dist_old);
+    from_json_field(src, "left90_dist_old", dst.left90_dist_old);
+    from_json_field(src, "right45_dist_old", dst.right45_dist_old);
+    from_json_field(src, "right45_2_dist_old", dst.right45_2_dist_old);
+    from_json_field(src, "right45_3_dist_old", dst.right45_3_dist_old);
+    from_json_field(src, "right90_dist_old", dst.right90_dist_old);
+    from_json_field(src, "exist_r_wall", dst.exist_r_wall);
+    from_json_field(src, "exist_l_wall", dst.exist_l_wall);
+    from_json_nested(src, "rpm", dst.rpm);
+    from_json_nested(src, "duty", dst.duty);
+    from_json_nested(src, "ff_duty", dst.ff_duty);
+    from_json_field(src, "motion_type", dst.motion_type);
+    from_json_field(src, "pos_x", dst.pos_x);
+    from_json_field(src, "pos_y", dst.pos_y);
+    from_json_field(src, "pos_ang", dst.pos_ang);
+    from_json_field(src, "knym_v", dst.knym_v);
+    from_json_field(src, "knym_w", dst.knym_w);
+    from_json_field(src, "odm_x", dst.odm_x);
+    from_json_field(src, "odm_y", dst.odm_y);
+    from_json_field(src, "odm_theta", dst.odm_theta);
+    from_json_field(src, "kim_x", dst.kim_x);
+    from_json_field(src, "kim_y", dst.kim_y);
+    from_json_field(src, "kim_theta", dst.kim_theta);
 }
 
 inline void convertFromJson(JsonVariantConst src, kinematics_t& dst) {
-    if (src["x"].is<float>()) dst.x = src["x"].as<float>();
-    if (src["y"].is<float>()) dst.y = src["y"].as<float>();
-    if (src["theta"].is<float>()) dst.theta = src["theta"].as<float>();
-    if (src["v"].is<float>()) dst.v = src["v"].as<float>();
-    if (src["w"].is<float>()) dst.w = src["w"].as<float>();
+    from_json_field(src, "x", dst.x);
+    from_json_field(src, "y", dst.y);
+    from_json_field(src, "theta", dst.theta);
+    from_json_field(src, "v", dst.v);
+    from_json_field(src, "w", dst.w);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_log_t& dst) {
-    if (src["sensor_dist"].is<float>()) dst.sensor_dist = src["sensor_dist"].as<float>();
-    if (src["global_run_dist"].is<float>()) dst.global_run_dist = src["global_run_dist"].as<float>();
-    if (src["angle"].is<float>()) dst.angle = src["angle"].as<float>();
+    from_json_field(src, "sensor_dist", dst.sensor_dist);
+    from_json_field(src, "global_run_dist", dst.global_run_dist);
+    from_json_field(src, "angle", dst.angle);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_log2_t& dst) {
-    if (src["r45_dist"].is<float>()) dst.r45_dist = src["r45_dist"].as<float>();
-    if (src["l45_dist"].is<float>()) dst.l45_dist = src["l45_dist"].as<float>();
-    if (src["global_run_dist"].is<float>()) dst.global_run_dist = src["global_run_dist"].as<float>();
+    from_json_field(src, "r45_dist", dst.r45_dist);
+    from_json_field(src, "l45_dist", dst.l45_dist);
+    from_json_field(src, "global_run_dist", dst.global_run_dist);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_logs_t& dst) {
-    if (!src["l90"].isNull()) convertFromJson(src["l90"], dst.l90);
-    if (!src["l45"].isNull()) convertFromJson(src["l45"], dst.l45);
-    if (!src["l45_2"].isNull()) convertFromJson(src["l45_2"], dst.l45_2);
-    if (!src["l45_3"].isNull()) convertFromJson(src["l45_3"], dst.l45_3);
-    if (!src["r45"].isNull()) convertFromJson(src["r45"], dst.r45);
-    if (!src["r45_2"].isNull()) convertFromJson(src["r45_2"], dst.r45_2);
-    if (!src["r45_3"].isNull()) convertFromJson(src["r45_3"], dst.r45_3);
-    if (!src["r90"].isNull()) convertFromJson(src["r90"], dst.r90);
+    from_json_nested(src, "l90", dst.l90);
+    from_json_nested(src, "l45", dst.l45);
+    from_json_nested(src, "l45_2", dst.l45_2);
+    from_json_nested(src, "l45_3", dst.l45_3);
+    from_json_nested(src, "r45", dst.r45);
+    from_json_nested(src, "r45_2", dst.r45_2);
+    from_json_nested(src, "r45_3", dst.r45_3);
+    from_json_nested(src, "r90", dst.r90);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_dist_log_t& dst) {
-    if (src["list"].is<JsonArrayConst>()) {
-        dst.list.clear();
-        for (auto v : src["list"].as<JsonArrayConst>()) {
-            sen_log2_t temp;
-            convertFromJson(v, temp);
-            dst.list.push_back(temp);
-        }
-    }
+    from_json_vector(src, "list", dst.list);
 }
 
 inline void convertFromJson(JsonVariantConst src, sensing_result_entity_t& dst) {
-    if (!src["led_sen"].isNull()) convertFromJson(src["led_sen"], dst.led_sen);
-    if (!src["led_sen_after"].isNull()) convertFromJson(src["led_sen_after"], dst.led_sen_after);
-    if (!src["led_sen_before"].isNull()) convertFromJson(src["led_sen_before"], dst.led_sen_before);
-    if (!src["gyro"].isNull()) convertFromJson(src["gyro"], dst.gyro);
-    if (!src["gyro2"].isNull()) convertFromJson(src["gyro2"], dst.gyro2);
+    from_json_nested(src, "led_sen", dst.led_sen);
+    from_json_nested(src, "led_sen_after", dst.led_sen_after);
+    from_json_nested(src, "led_sen_before", dst.led_sen_before);
+    from_json_nested(src, "gyro", dst.gyro);
+    from_json_nested(src, "gyro2", dst.gyro2);
     from_json_nested(src, "accel_x",   dst.accel_x);
     from_json_nested(src, "accel_y",   dst.accel_y);
     from_json_array(src,  "gyro_list", dst.gyro_list);  // int[5] 固定長配列
     from_json_vector(src, "enc_r_list",dst.enc_r_list);
     from_json_vector(src, "enc_l_list",dst.enc_l_list);
     from_json_nested(src, "battery",   dst.battery);
-    if (!src["encoder_raw"].isNull()) convertFromJson(src["encoder_raw"], dst.encoder_raw);
-    if (!src["encoder"].isNull()) convertFromJson(src["encoder"], dst.encoder);
-    if (!src["ego"].isNull()) convertFromJson(src["ego"], dst.ego);
-    if (!src["sen"].isNull()) convertFromJson(src["sen"], dst.sen);
-    if (!src["sen_dist_log"].isNull()) convertFromJson(src["sen_dist_log"], dst.sen_dist_log);
-    if (src["calc_time"].is<int16_t>()) dst.calc_time = src["calc_time"].as<int16_t>();
-    if (src["calc_time2"].is<int16_t>()) dst.calc_time2 = src["calc_time2"].as<int16_t>();
-    if (src["sensing_timestamp"].is<int64_t>()) dst.sensing_timestamp = src["sensing_timestamp"].as<int64_t>();
-    if (src["ang_kf_sum"].is<float>()) dst.ang_kf_sum = src["ang_kf_sum"].as<float>();
-    if (src["img_ang_sum"].is<float>()) dst.img_ang_sum = src["img_ang_sum"].as<float>();
-    if (src["img_ang_z"].is<float>()) dst.img_ang_z = src["img_ang_z"].as<float>();
+    from_json_nested(src, "encoder_raw", dst.encoder_raw);
+    from_json_nested(src, "encoder", dst.encoder);
+    from_json_nested(src, "ego", dst.ego);
+    from_json_nested(src, "sen", dst.sen);
+    from_json_nested(src, "sen_dist_log", dst.sen_dist_log);
+    from_json_field(src, "calc_time", dst.calc_time);
+    from_json_field(src, "calc_time2", dst.calc_time2);
+    from_json_field(src, "sensing_timestamp", dst.sensing_timestamp);
+    from_json_field(src, "ang_kf_sum", dst.ang_kf_sum);
+    from_json_field(src, "img_ang_sum", dst.img_ang_sum);
+    from_json_field(src, "img_ang_z", dst.img_ang_z);
 }
 
 inline void convertFromJson(JsonVariantConst src, xva_t& dst) {
-    if (src["vel"].is<float>()) dst.vel = src["vel"].as<float>();
-    if (src["speed"].is<float>()) dst.speed = src["speed"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
+    from_json_field(src, "vel", dst.vel);
+    from_json_field(src, "speed", dst.speed);
+    from_json_field(src, "accl", dst.accl);
 }
 
 inline void convertFromJson(JsonVariantConst src, pid_param_t& dst) {
-    if (src["p"].is<float>()) dst.p = src["p"].as<float>();
-    if (src["i"].is<float>()) dst.i = src["i"].as<float>();
-    if (src["d"].is<float>()) dst.d = src["d"].as<float>();
-    if (src["b"].is<float>()) dst.b = src["b"].as<float>();
-    if (src["c"].is<float>()) dst.c = src["c"].as<float>();
-    if (src["mode"].is<int8_t>()) dst.mode = src["mode"].as<int8_t>();
-    if (src["antiwindup"].is<int8_t>()) dst.antiwindup = src["antiwindup"].as<int8_t>();
-    if (src["windup_gain"].is<float>()) dst.windup_gain = src["windup_gain"].as<float>();
-    if (src["windup_dead_bind"].is<float>()) dst.windup_dead_bind = src["windup_dead_bind"].as<float>();
-    if (src["i_theta_tau"].is<float>()) dst.i_theta_tau = src["i_theta_tau"].as<float>();
-    if (src["theta_gate"].is<float>()) dst.theta_gate = src["theta_gate"].as<float>();
-    if (src["omega_gate"].is<float>()) dst.omega_gate = src["omega_gate"].as<float>();
-    if (src["i_theta_slew"].is<float>()) dst.i_theta_slew = src["i_theta_slew"].as<float>();
-    if (src["i_theta_max"].is<float>()) dst.i_theta_max = src["i_theta_max"].as<float>();
-    if (src["alpha_stop"].is<float>()) dst.alpha_stop = src["alpha_stop"].as<float>();
-    if (src["alpha_rate"].is<float>()) dst.alpha_rate = src["alpha_rate"].as<float>();
-    if (src["theta_damp_th"].is<float>()) dst.theta_damp_th = src["theta_damp_th"].as<float>();
-    if (src["omega_damp"].is<float>()) dst.omega_damp = src["omega_damp"].as<float>();
-    if (src["th"].is<float>()) dst.th = src["th"].as<float>();
-    if (src["theta_gate_on"].is<float>()) dst.theta_gate_on = src["theta_gate_on"].as<float>();
-    if (src["theta_gate_full"].is<float>()) dst.theta_gate_full = src["theta_gate_full"].as<float>();
-    if (src["theta_kp"].is<float>()) dst.theta_kp = src["theta_kp"].as<float>();
-    if (src["theta_kd"].is<float>()) dst.theta_kd = src["theta_kd"].as<float>();
-    if (src["omega_add_max"].is<float>()) dst.omega_add_max = src["omega_add_max"].as<float>();
-    if (src["alpha_rate_end"].is<float>()) dst.alpha_rate_end = src["alpha_rate_end"].as<float>();
-    if (src["k_stop"].is<float>()) dst.k_stop = src["k_stop"].as<float>();
-    if (src["theta_eps"].is<float>()) dst.theta_eps = src["theta_eps"].as<float>();
-    if (src["s_gate"].is<float>()) dst.s_gate = src["s_gate"].as<float>();
-    if (src["mpc_q_ang"].is<float>()) dst.mpc_q_ang = src["mpc_q_ang"].as<float>();
-    if (src["mpc_q_vel"].is<float>()) dst.mpc_q_vel = src["mpc_q_vel"].as<float>();
-    if (src["mpc_b"].is<float>()) dst.mpc_b = src["mpc_b"].as<float>();
-    if (src["mpc_r"].is<float>()) dst.mpc_r = src["mpc_r"].as<float>();
-    if (src["mpc_horizon"].is<int>()) dst.mpc_horizon = src["mpc_horizon"].as<int>();
-    if (src["mpc_max_iter"].is<int>()) dst.mpc_max_iter = src["mpc_max_iter"].as<int>();
-    if (src["mpc_max_torque"].is<float>()) dst.mpc_max_torque = src["mpc_max_torque"].as<float>();
-    if (src["mpc_observer_k"].is<float>()) dst.mpc_observer_k = src["mpc_observer_k"].as<float>();
+    from_json_field(src, "p", dst.p);
+    from_json_field(src, "i", dst.i);
+    from_json_field(src, "d", dst.d);
+    from_json_field(src, "b", dst.b);
+    from_json_field(src, "c", dst.c);
+    from_json_field(src, "mode", dst.mode);
+    from_json_field(src, "antiwindup", dst.antiwindup);
+    from_json_field(src, "windup_gain", dst.windup_gain);
+    from_json_field(src, "windup_dead_bind", dst.windup_dead_bind);
+    from_json_field(src, "i_theta_tau", dst.i_theta_tau);
+    from_json_field(src, "theta_gate", dst.theta_gate);
+    from_json_field(src, "omega_gate", dst.omega_gate);
+    from_json_field(src, "i_theta_slew", dst.i_theta_slew);
+    from_json_field(src, "i_theta_max", dst.i_theta_max);
+    from_json_field(src, "alpha_stop", dst.alpha_stop);
+    from_json_field(src, "alpha_rate", dst.alpha_rate);
+    from_json_field(src, "theta_damp_th", dst.theta_damp_th);
+    from_json_field(src, "omega_damp", dst.omega_damp);
+    from_json_field(src, "th", dst.th);
+    from_json_field(src, "theta_gate_on", dst.theta_gate_on);
+    from_json_field(src, "theta_gate_full", dst.theta_gate_full);
+    from_json_field(src, "theta_kp", dst.theta_kp);
+    from_json_field(src, "theta_kd", dst.theta_kd);
+    from_json_field(src, "omega_add_max", dst.omega_add_max);
+    from_json_field(src, "alpha_rate_end", dst.alpha_rate_end);
+    from_json_field(src, "k_stop", dst.k_stop);
+    from_json_field(src, "theta_eps", dst.theta_eps);
+    from_json_field(src, "s_gate", dst.s_gate);
+    from_json_field(src, "mpc_q_ang", dst.mpc_q_ang);
+    from_json_field(src, "mpc_q_vel", dst.mpc_q_vel);
+    from_json_field(src, "mpc_b", dst.mpc_b);
+    from_json_field(src, "mpc_r", dst.mpc_r);
+    from_json_field(src, "mpc_horizon", dst.mpc_horizon);
+    from_json_field(src, "mpc_max_iter", dst.mpc_max_iter);
+    from_json_field(src, "mpc_max_torque", dst.mpc_max_torque);
+    from_json_field(src, "mpc_observer_k", dst.mpc_observer_k);
 }
 
 inline void convertFromJson(JsonVariantConst src, gyro_param_t& dst) {
-    if (src["gyro_w_gain_right"].is<float>()) dst.gyro_w_gain_right = src["gyro_w_gain_right"].as<float>();
-    if (src["gyro_w_gain_left"].is<float>()) dst.gyro_w_gain_left = src["gyro_w_gain_left"].as<float>();
-    if (src["retry_min_th"].is<float>()) dst.retry_min_th = src["retry_min_th"].as<float>();
-    if (src["retry_max_th"].is<float>()) dst.retry_max_th = src["retry_max_th"].as<float>();
-    if (src["robust_th"].is<float>()) dst.robust_th = src["robust_th"].as<float>();
-    if (src["lp_delay"].is<float>()) dst.lp_delay = src["lp_delay"].as<float>();
-    if (src["list_size"].is<int>()) dst.list_size = src["list_size"].as<int>();
-    if (src["loop_size"].is<int>()) dst.loop_size = src["loop_size"].as<int>();
+    from_json_field(src, "gyro_w_gain_right", dst.gyro_w_gain_right);
+    from_json_field(src, "gyro_w_gain_left", dst.gyro_w_gain_left);
+    from_json_field(src, "retry_min_th", dst.retry_min_th);
+    from_json_field(src, "retry_max_th", dst.retry_max_th);
+    from_json_field(src, "robust_th", dst.robust_th);
+    from_json_field(src, "lp_delay", dst.lp_delay);
+    from_json_field(src, "list_size", dst.list_size);
+    from_json_field(src, "loop_size", dst.loop_size);
 }
 
 inline void convertFromJson(JsonVariantConst src, accel_param_t& dst) {
-    if (src["gain"].is<float>()) dst.gain = src["gain"].as<float>();
+    from_json_field(src, "gain", dst.gain);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_param_t& dst) {
-    if (src["lp_delay"].is<float>()) dst.lp_delay = src["lp_delay"].as<float>();
+    from_json_field(src, "lp_delay", dst.lp_delay);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_ref_param3_t& dst) {
-    if (src["right45"].is<float>()) dst.right45 = src["right45"].as<float>();
-    if (src["left45"].is<float>()) dst.left45 = src["left45"].as<float>();
-    if (src["right90"].is<float>()) dst.right90 = src["right90"].as<float>();
-    if (src["left90"].is<float>()) dst.left90 = src["left90"].as<float>();
-    if (src["front"].is<float>()) dst.front = src["front"].as<float>();
-    if (src["kireme_r"].is<float>()) dst.kireme_r = src["kireme_r"].as<float>();
-    if (src["kireme_l"].is<float>()) dst.kireme_l = src["kireme_l"].as<float>();
-    if (src["kireme_r_fast"].is<float>()) dst.kireme_r_fast = src["kireme_r_fast"].as<float>();
-    if (src["kireme_l_fast"].is<float>()) dst.kireme_l_fast = src["kireme_l_fast"].as<float>();
-    if (src["kireme_r_wall_off"].is<float>()) dst.kireme_r_wall_off = src["kireme_r_wall_off"].as<float>();
-    if (src["kireme_l_wall_off"].is<float>()) dst.kireme_l_wall_off = src["kireme_l_wall_off"].as<float>();
-    if (src["kireme_r_wall_off2"].is<float>()) dst.kireme_r_wall_off2 = src["kireme_r_wall_off2"].as<float>();
-    if (src["kireme_l_wall_off2"].is<float>()) dst.kireme_l_wall_off2 = src["kireme_l_wall_off2"].as<float>();
+    from_json_field(src, "right45", dst.right45);
+    from_json_field(src, "left45", dst.left45);
+    from_json_field(src, "right90", dst.right90);
+    from_json_field(src, "left90", dst.left90);
+    from_json_field(src, "front", dst.front);
+    from_json_field(src, "kireme_r", dst.kireme_r);
+    from_json_field(src, "kireme_l", dst.kireme_l);
+    from_json_field(src, "kireme_r_fast", dst.kireme_r_fast);
+    from_json_field(src, "kireme_l_fast", dst.kireme_l_fast);
+    from_json_field(src, "kireme_r_wall_off", dst.kireme_r_wall_off);
+    from_json_field(src, "kireme_l_wall_off", dst.kireme_l_wall_off);
+    from_json_field(src, "kireme_r_wall_off2", dst.kireme_r_wall_off2);
+    from_json_field(src, "kireme_l_wall_off2", dst.kireme_l_wall_off2);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_search_param_t& dst) {
-    if (src["front"].is<float>()) dst.front = src["front"].as<float>();
-    if (src["right45"].is<float>()) dst.right45 = src["right45"].as<float>();
-    if (src["left45"].is<float>()) dst.left45 = src["left45"].as<float>();
-    if (src["right90"].is<float>()) dst.right90 = src["right90"].as<float>();
-    if (src["left90"].is<float>()) dst.left90 = src["left90"].as<float>();
-    if (src["kireme_r"].is<float>()) dst.kireme_r = src["kireme_r"].as<float>();
-    if (src["kireme_l"].is<float>()) dst.kireme_l = src["kireme_l"].as<float>();
-    if (src["offset_r"].is<float>()) dst.offset_r = src["offset_r"].as<float>();
-    if (src["offset_l"].is<float>()) dst.offset_l = src["offset_l"].as<float>();
-    if (src["front_ctrl"].is<float>()) dst.front_ctrl = src["front_ctrl"].as<float>();
-    if (src["front_ctrl_th"].is<float>()) dst.front_ctrl_th = src["front_ctrl_th"].as<float>();
+    from_json_field(src, "front", dst.front);
+    from_json_field(src, "right45", dst.right45);
+    from_json_field(src, "left45", dst.left45);
+    from_json_field(src, "right90", dst.right90);
+    from_json_field(src, "left90", dst.left90);
+    from_json_field(src, "kireme_r", dst.kireme_r);
+    from_json_field(src, "kireme_l", dst.kireme_l);
+    from_json_field(src, "offset_r", dst.offset_r);
+    from_json_field(src, "offset_l", dst.offset_l);
+    from_json_field(src, "front_ctrl", dst.front_ctrl);
+    from_json_field(src, "front_ctrl_th", dst.front_ctrl_th);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_expand_param_t& dst) {
-    if (src["dist"].is<float>()) dst.dist = src["dist"].as<float>();
-    if (src["right45"].is<float>()) dst.right45 = src["right45"].as<float>();
-    if (src["left45"].is<float>()) dst.left45 = src["left45"].as<float>();
-    if (src["right45_2"].is<float>()) dst.right45_2 = src["right45_2"].as<float>();
-    if (src["left45_2"].is<float>()) dst.left45_2 = src["left45_2"].as<float>();
+    from_json_field(src, "dist", dst.dist);
+    from_json_field(src, "right45", dst.right45);
+    from_json_field(src, "left45", dst.left45);
+    from_json_field(src, "right45_2", dst.right45_2);
+    from_json_field(src, "left45_2", dst.left45_2);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_ref_param2_t& dst) {
-    if (!src["ref"].isNull()) convertFromJson(src["ref"], dst.ref);
-    if (!src["ref_search"].isNull()) convertFromJson(src["ref_search"], dst.ref_search);
-    if (!src["exist"].isNull()) convertFromJson(src["exist"], dst.exist);
-    if (!src["expand"].isNull()) convertFromJson(src["expand"], dst.expand);
+    from_json_nested(src, "ref", dst.ref);
+    from_json_nested(src, "ref_search", dst.ref_search);
+    from_json_nested(src, "exist", dst.exist);
+    from_json_nested(src, "expand", dst.expand);
 }
 
 inline void convertFromJson(JsonVariantConst src, sen_ref_param_t& dst) {
-    if (!src["normal"].isNull()) convertFromJson(src["normal"], dst.normal);
-    if (!src["normal2"].isNull()) convertFromJson(src["normal2"], dst.normal2);
-    if (!src["dia"].isNull()) convertFromJson(src["dia"], dst.dia);
-    if (!src["search_exist"].isNull()) convertFromJson(src["search_exist"], dst.search_exist);
-    if (!src["search_ref"].isNull()) convertFromJson(src["search_ref"], dst.search_ref);
+    from_json_nested(src, "normal", dst.normal);
+    from_json_nested(src, "normal2", dst.normal2);
+    from_json_nested(src, "dia", dst.dia);
+    from_json_nested(src, "search_exist", dst.search_exist);
+    from_json_nested(src, "search_ref", dst.search_ref);
 }
 
 inline void convertFromJson(JsonVariantConst src, sensor_gain_param_t& dst) {
-    if (src["a"].is<float>()) dst.a = src["a"].as<float>();
-    if (src["b"].is<float>()) dst.b = src["b"].as<float>();
+    from_json_field(src, "a", dst.a);
+    from_json_field(src, "b", dst.b);
 }
 
 inline void convertFromJson(JsonVariantConst src, sensor_gain_t& dst) {
-    if (!src["l90"].isNull()) convertFromJson(src["l90"], dst.l90);
-    if (!src["l45"].isNull()) convertFromJson(src["l45"], dst.l45);
-    if (!src["front"].isNull()) convertFromJson(src["front"], dst.front);
-    if (!src["front2"].isNull()) convertFromJson(src["front2"], dst.front2);
-    if (!src["front3"].isNull()) convertFromJson(src["front3"], dst.front3);
-    if (!src["front4"].isNull()) convertFromJson(src["front4"], dst.front4);
-    if (!src["front_ctrl_th"].isNull()) convertFromJson(src["front_ctrl_th"], dst.front_ctrl_th);
-    if (!src["r45"].isNull()) convertFromJson(src["r45"], dst.r45);
-    if (!src["l45_2"].isNull()) convertFromJson(src["l45_2"], dst.l45_2);
-    if (!src["r45_2"].isNull()) convertFromJson(src["r45_2"], dst.r45_2);
-    if (!src["l45_3"].isNull()) convertFromJson(src["l45_3"], dst.l45_3);
-    if (!src["r45_3"].isNull()) convertFromJson(src["r45_3"], dst.r45_3);
-    if (!src["r90"].isNull()) convertFromJson(src["r90"], dst.r90);
-    if (!src["l90_far"].isNull()) convertFromJson(src["l90_far"], dst.l90_far);
-    if (!src["r90_far"].isNull()) convertFromJson(src["r90_far"], dst.r90_far);
-    if (!src["l90_mid"].isNull()) convertFromJson(src["l90_mid"], dst.l90_mid);
-    if (!src["r90_mid"].isNull()) convertFromJson(src["r90_mid"], dst.r90_mid);
+    from_json_nested(src, "l90", dst.l90);
+    from_json_nested(src, "l45", dst.l45);
+    from_json_nested(src, "front", dst.front);
+    from_json_nested(src, "front2", dst.front2);
+    from_json_nested(src, "front3", dst.front3);
+    from_json_nested(src, "front4", dst.front4);
+    from_json_nested(src, "front_ctrl_th", dst.front_ctrl_th);
+    from_json_nested(src, "r45", dst.r45);
+    from_json_nested(src, "l45_2", dst.l45_2);
+    from_json_nested(src, "r45_2", dst.r45_2);
+    from_json_nested(src, "l45_3", dst.l45_3);
+    from_json_nested(src, "r45_3", dst.r45_3);
+    from_json_nested(src, "r90", dst.r90);
+    from_json_nested(src, "l90_far", dst.l90_far);
+    from_json_nested(src, "r90_far", dst.r90_far);
+    from_json_nested(src, "l90_mid", dst.l90_mid);
+    from_json_nested(src, "r90_mid", dst.r90_mid);
 }
 
 inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
-    if (src["left_str"].is<float>()) dst.left_str = src["left_str"].as<float>();
-    if (src["right_str"].is<float>()) dst.right_str = src["right_str"].as<float>();
-    if (src["left_diff_th"].is<float>()) dst.left_diff_th = src["left_diff_th"].as<float>();
-    if (src["right_diff_th"].is<float>()) dst.right_diff_th = src["right_diff_th"].as<float>();
-    if (src["left_str_exist"].is<float>()) dst.left_str_exist = src["left_str_exist"].as<float>();
-    if (src["right_str_exist"].is<float>()) dst.right_str_exist = src["right_str_exist"].as<float>();
-    if (src["left_dia"].is<float>()) dst.left_dia = src["left_dia"].as<float>();
-    if (src["right_dia"].is<float>()) dst.right_dia = src["right_dia"].as<float>();
-    if (src["left_dia_noexit"].is<float>()) dst.left_dia_noexit = src["left_dia_noexit"].as<float>();
-    if (src["right_dia_noexit"].is<float>()) dst.right_dia_noexit = src["right_dia_noexit"].as<float>();
-    if (src["left_dia_oppo"].is<float>()) dst.left_dia_oppo = src["left_dia_oppo"].as<float>();
-    if (src["right_dia_oppo"].is<float>()) dst.right_dia_oppo = src["right_dia_oppo"].as<float>();
-    if (src["left_dia2"].is<float>()) dst.left_dia2 = src["left_dia2"].as<float>();
-    if (src["right_dia2"].is<float>()) dst.right_dia2 = src["right_dia2"].as<float>();
-    if (src["exist_dist_l"].is<float>()) dst.exist_dist_l = src["exist_dist_l"].as<float>();
-    if (src["exist_dist_r"].is<float>()) dst.exist_dist_r = src["exist_dist_r"].as<float>();
-    if (src["exist_dist_l2"].is<float>()) dst.exist_dist_l2 = src["exist_dist_l2"].as<float>();
-    if (src["exist_dist_r2"].is<float>()) dst.exist_dist_r2 = src["exist_dist_r2"].as<float>();
-    if (src["noexist_th_l"].is<float>()) dst.noexist_th_l = src["noexist_th_l"].as<float>();
-    if (src["noexist_th_r"].is<float>()) dst.noexist_th_r = src["noexist_th_r"].as<float>();
-    if (src["noexist_th_l2"].is<float>()) dst.noexist_th_l2 = src["noexist_th_l2"].as<float>();
-    if (src["noexist_th_r2"].is<float>()) dst.noexist_th_r2 = src["noexist_th_r2"].as<float>();
-    if (src["div_th_l"].is<float>()) dst.div_th_l = src["div_th_l"].as<float>();
-    if (src["div_th_r"].is<float>()) dst.div_th_r = src["div_th_r"].as<float>();
-    if (src["div_th_l2"].is<float>()) dst.div_th_l2 = src["div_th_l2"].as<float>();
-    if (src["div_th_r2"].is<float>()) dst.div_th_r2 = src["div_th_r2"].as<float>();
-    if (src["div_th_l3"].is<float>()) dst.div_th_l3 = src["div_th_l3"].as<float>();
-    if (src["div_th_r3"].is<float>()) dst.div_th_r3 = src["div_th_r3"].as<float>();
-    if (src["div_th_dia_l"].is<float>()) dst.div_th_dia_l = src["div_th_dia_l"].as<float>();
-    if (src["div_th_dia_r"].is<float>()) dst.div_th_dia_r = src["div_th_dia_r"].as<float>();
-    if (src["exist_dia_th_l"].is<float>()) dst.exist_dia_th_l = src["exist_dia_th_l"].as<float>();
-    if (src["exist_dia_th_r"].is<float>()) dst.exist_dia_th_r = src["exist_dia_th_r"].as<float>();
-    if (src["exist_dia_th_l2"].is<float>()) dst.exist_dia_th_l2 = src["exist_dia_th_l2"].as<float>();
-    if (src["exist_dia_th_r2"].is<float>()) dst.exist_dia_th_r2 = src["exist_dia_th_r2"].as<float>();
-    if (src["noexist_dia_th_l"].is<float>()) dst.noexist_dia_th_l = src["noexist_dia_th_l"].as<float>();
-    if (src["noexist_dia_th_r"].is<float>()) dst.noexist_dia_th_r = src["noexist_dia_th_r"].as<float>();
-    if (src["noexist_dia_th_l2"].is<float>()) dst.noexist_dia_th_l2 = src["noexist_dia_th_l2"].as<float>();
-    if (src["noexist_dia_th_r2"].is<float>()) dst.noexist_dia_th_r2 = src["noexist_dia_th_r2"].as<float>();
-    if (src["wall_off_exist_wall_th_l"].is<float>()) dst.wall_off_exist_wall_th_l = src["wall_off_exist_wall_th_l"].as<float>();
-    if (src["wall_off_exist_wall_th_r"].is<float>()) dst.wall_off_exist_wall_th_r = src["wall_off_exist_wall_th_r"].as<float>();
-    if (src["wall_off_exist_dia_wall_th_l"].is<float>()) dst.wall_off_exist_dia_wall_th_l = src["wall_off_exist_dia_wall_th_l"].as<float>();
-    if (src["wall_off_exist_dia_wall_th_r"].is<float>()) dst.wall_off_exist_dia_wall_th_r = src["wall_off_exist_dia_wall_th_r"].as<float>();
-    if (src["search_wall_off_enable"].is<bool>()) dst.search_wall_off_enable = src["search_wall_off_enable"].as<bool>();
-    if (src["search_wall_off_l_dist_offset"].is<float>()) dst.search_wall_off_l_dist_offset = src["search_wall_off_l_dist_offset"].as<float>();
-    if (src["search_wall_off_r_dist_offset"].is<float>()) dst.search_wall_off_r_dist_offset = src["search_wall_off_r_dist_offset"].as<float>();
-    if (src["search_wall_off_offset_dist"].is<float>()) dst.search_wall_off_offset_dist = src["search_wall_off_offset_dist"].as<float>();
-    if (src["ctrl_exist_wall_th_l"].is<float>()) dst.ctrl_exist_wall_th_l = src["ctrl_exist_wall_th_l"].as<float>();
-    if (src["ctrl_exist_wall_th_r"].is<float>()) dst.ctrl_exist_wall_th_r = src["ctrl_exist_wall_th_r"].as<float>();
-    if (src["go_straight_wide_ctrl_th"].is<float>()) dst.go_straight_wide_ctrl_th = src["go_straight_wide_ctrl_th"].as<float>();
-    if (src["diff_check_dist"].is<float>()) dst.diff_check_dist = src["diff_check_dist"].as<float>();
-    if (src["diff_dist_th_l"].is<float>()) dst.diff_dist_th_l = src["diff_dist_th_l"].as<float>();
-    if (src["diff_dist_th_r"].is<float>()) dst.diff_dist_th_r = src["diff_dist_th_r"].as<float>();
-    if (src["diff_check_dist_dia"].is<float>()) dst.diff_check_dist_dia = src["diff_check_dist_dia"].as<float>();
-    if (src["diff_check_dist_dia_2"].is<float>()) dst.diff_check_dist_dia_2 = src["diff_check_dist_dia_2"].as<float>();
+    from_json_field(src, "left_str", dst.left_str);
+    from_json_field(src, "right_str", dst.right_str);
+    from_json_field(src, "left_diff_th", dst.left_diff_th);
+    from_json_field(src, "right_diff_th", dst.right_diff_th);
+    from_json_field(src, "left_str_exist", dst.left_str_exist);
+    from_json_field(src, "right_str_exist", dst.right_str_exist);
+    from_json_field(src, "left_dia", dst.left_dia);
+    from_json_field(src, "right_dia", dst.right_dia);
+    from_json_field(src, "left_dia_noexit", dst.left_dia_noexit);
+    from_json_field(src, "right_dia_noexit", dst.right_dia_noexit);
+    from_json_field(src, "left_dia_oppo", dst.left_dia_oppo);
+    from_json_field(src, "right_dia_oppo", dst.right_dia_oppo);
+    from_json_field(src, "left_dia2", dst.left_dia2);
+    from_json_field(src, "right_dia2", dst.right_dia2);
+    from_json_field(src, "exist_dist_l", dst.exist_dist_l);
+    from_json_field(src, "exist_dist_r", dst.exist_dist_r);
+    from_json_field(src, "exist_dist_l2", dst.exist_dist_l2);
+    from_json_field(src, "exist_dist_r2", dst.exist_dist_r2);
+    from_json_field(src, "noexist_th_l", dst.noexist_th_l);
+    from_json_field(src, "noexist_th_r", dst.noexist_th_r);
+    from_json_field(src, "noexist_th_l2", dst.noexist_th_l2);
+    from_json_field(src, "noexist_th_r2", dst.noexist_th_r2);
+    from_json_field(src, "div_th_l", dst.div_th_l);
+    from_json_field(src, "div_th_r", dst.div_th_r);
+    from_json_field(src, "div_th_l2", dst.div_th_l2);
+    from_json_field(src, "div_th_r2", dst.div_th_r2);
+    from_json_field(src, "div_th_l3", dst.div_th_l3);
+    from_json_field(src, "div_th_r3", dst.div_th_r3);
+    from_json_field(src, "div_th_dia_l", dst.div_th_dia_l);
+    from_json_field(src, "div_th_dia_r", dst.div_th_dia_r);
+    from_json_field(src, "exist_dia_th_l", dst.exist_dia_th_l);
+    from_json_field(src, "exist_dia_th_r", dst.exist_dia_th_r);
+    from_json_field(src, "exist_dia_th_l2", dst.exist_dia_th_l2);
+    from_json_field(src, "exist_dia_th_r2", dst.exist_dia_th_r2);
+    from_json_field(src, "noexist_dia_th_l", dst.noexist_dia_th_l);
+    from_json_field(src, "noexist_dia_th_r", dst.noexist_dia_th_r);
+    from_json_field(src, "noexist_dia_th_l2", dst.noexist_dia_th_l2);
+    from_json_field(src, "noexist_dia_th_r2", dst.noexist_dia_th_r2);
+    from_json_field(src, "wall_off_exist_wall_th_l", dst.wall_off_exist_wall_th_l);
+    from_json_field(src, "wall_off_exist_wall_th_r", dst.wall_off_exist_wall_th_r);
+    from_json_field(src, "wall_off_exist_dia_wall_th_l", dst.wall_off_exist_dia_wall_th_l);
+    from_json_field(src, "wall_off_exist_dia_wall_th_r", dst.wall_off_exist_dia_wall_th_r);
+    from_json_field(src, "search_wall_off_enable", dst.search_wall_off_enable);
+    from_json_field(src, "search_wall_off_l_dist_offset", dst.search_wall_off_l_dist_offset);
+    from_json_field(src, "search_wall_off_r_dist_offset", dst.search_wall_off_r_dist_offset);
+    from_json_field(src, "search_wall_off_offset_dist", dst.search_wall_off_offset_dist);
+    from_json_field(src, "ctrl_exist_wall_th_l", dst.ctrl_exist_wall_th_l);
+    from_json_field(src, "ctrl_exist_wall_th_r", dst.ctrl_exist_wall_th_r);
+    from_json_field(src, "go_straight_wide_ctrl_th", dst.go_straight_wide_ctrl_th);
+    from_json_field(src, "diff_check_dist", dst.diff_check_dist);
+    from_json_field(src, "diff_dist_th_l", dst.diff_dist_th_l);
+    from_json_field(src, "diff_dist_th_r", dst.diff_dist_th_r);
+    from_json_field(src, "diff_check_dist_dia", dst.diff_check_dist_dia);
+    from_json_field(src, "diff_check_dist_dia_2", dst.diff_check_dist_dia_2);
 }
 
 inline void convertFromJson(JsonVariantConst src, fail_check_cnt_t& dst) {
-    if (src["duty"].is<int>()) dst.duty = src["duty"].as<int>();
-    if (src["v"].is<int>()) dst.v = src["v"].as<int>();
-    if (src["w"].is<int>()) dst.w = src["w"].as<int>();
-    if (src["ang"].is<int>()) dst.ang = src["ang"].as<int>();
-    if (src["wall_off"].is<int>()) dst.wall_off = src["wall_off"].as<int>();
+    from_json_field(src, "duty", dst.duty);
+    from_json_field(src, "v", dst.v);
+    from_json_field(src, "w", dst.w);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "wall_off", dst.wall_off);
 }
 
 inline void convertFromJson(JsonVariantConst src, comp_param_t& dst) {
-    if (src["v_lp_gain"].is<float>()) dst.v_lp_gain = src["v_lp_gain"].as<float>();
-    if (src["accl_x_hp_gain"].is<float>()) dst.accl_x_hp_gain = src["accl_x_hp_gain"].as<float>();
-    if (src["gain"].is<float>()) dst.gain = src["gain"].as<float>();
-    if (src["enable"].is<int>()) dst.enable = src["enable"].as<int>();
+    from_json_field(src, "v_lp_gain", dst.v_lp_gain);
+    from_json_field(src, "accl_x_hp_gain", dst.accl_x_hp_gain);
+    from_json_field(src, "gain", dst.gain);
+    from_json_field(src, "enable", dst.enable);
 }
 
 inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
-    if (src["kx"].is<float>()) dst.kx = src["kx"].as<float>();
-    if (src["ky"].is<float>()) dst.ky = src["ky"].as<float>();
-    if (src["k_theta"].is<float>()) dst.k_theta = src["k_theta"].as<float>();
-    if (src["enable"].is<int8_t>()) dst.enable = src["enable"].as<int8_t>();
-    if (src["windup"].is<int8_t>()) dst.windup = src["windup"].as<int8_t>();
-    if (src["windup_deg"].is<float>()) dst.windup_deg = src["windup_deg"].as<float>();
+    from_json_field(src, "kx", dst.kx);
+    from_json_field(src, "ky", dst.ky);
+    from_json_field(src, "k_theta", dst.k_theta);
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "windup", dst.windup);
+    from_json_field(src, "windup_deg", dst.windup_deg);
 }
 
 inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
-    if (src["dt"].is<float>()) dst.dt = src["dt"].as<float>();
-    if (src["trj_length"].is<int>()) dst.trj_length = src["trj_length"].as<int>();
-    if (src["tire"].is<float>()) dst.tire = src["tire"].as<float>();
-    if (src["tire2"].is<float>()) dst.tire2 = src["tire2"].as<float>();
-    if (src["log_size"].is<int>()) dst.log_size = src["log_size"].as<int>();
-    if (src["gear_a"].is<float>()) dst.gear_a = src["gear_a"].as<float>();
-    if (src["gear_b"].is<float>()) dst.gear_b = src["gear_b"].as<float>();
-    if (src["max_duty"].is<float>()) dst.max_duty = src["max_duty"].as<float>();
-    if (src["min_duty"].is<float>()) dst.min_duty = src["min_duty"].as<float>();
-    if (src["battery_gain"].is<float>()) dst.battery_gain = src["battery_gain"].as<float>();
-    if (src["Ke"].is<float>()) dst.Ke = src["Ke"].as<float>();
-    if (src["Km"].is<float>()) dst.Km = src["Km"].as<float>();
-    if (src["Resist"].is<float>()) dst.Resist = src["Resist"].as<float>();
-    if (src["Mass"].is<float>()) dst.Mass = src["Mass"].as<float>();
-    if (src["Lm"].is<float>()) dst.Lm = src["Lm"].as<float>();
-    if (src["coulomb_friction"].is<float>()) dst.coulomb_friction = src["coulomb_friction"].as<float>();
-    if (src["viscous_friction"].is<float>()) dst.viscous_friction = src["viscous_friction"].as<float>();
-    if (src["battery_init_cov"].is<float>()) dst.battery_init_cov = src["battery_init_cov"].as<float>();
-    if (src["battery_p_noise"].is<float>()) dst.battery_p_noise = src["battery_p_noise"].as<float>();
-    if (src["battery_m_noise"].is<float>()) dst.battery_m_noise = src["battery_m_noise"].as<float>();
-    if (src["encoder_init_cov"].is<float>()) dst.encoder_init_cov = src["encoder_init_cov"].as<float>();
-    if (src["encoder_p_noise"].is<float>()) dst.encoder_p_noise = src["encoder_p_noise"].as<float>();
-    if (src["encoder_m_noise"].is<float>()) dst.encoder_m_noise = src["encoder_m_noise"].as<float>();
-    if (src["w_init_cov"].is<float>()) dst.w_init_cov = src["w_init_cov"].as<float>();
-    if (src["w_p_noise"].is<float>()) dst.w_p_noise = src["w_p_noise"].as<float>();
-    if (src["w_m_noise"].is<float>()) dst.w_m_noise = src["w_m_noise"].as<float>();
-    if (src["v_init_cov"].is<float>()) dst.v_init_cov = src["v_init_cov"].as<float>();
-    if (src["v_p_noise"].is<float>()) dst.v_p_noise = src["v_p_noise"].as<float>();
-    if (src["v_m_noise"].is<float>()) dst.v_m_noise = src["v_m_noise"].as<float>();
-    if (src["ang_init_cov"].is<float>()) dst.ang_init_cov = src["ang_init_cov"].as<float>();
-    if (src["ang_p_noise"].is<float>()) dst.ang_p_noise = src["ang_p_noise"].as<float>();
-    if (src["ang_m_noise"].is<float>()) dst.ang_m_noise = src["ang_m_noise"].as<float>();
-    if (src["dist_init_cov"].is<float>()) dst.dist_init_cov = src["dist_init_cov"].as<float>();
-    if (src["dist_p_noise"].is<float>()) dst.dist_p_noise = src["dist_p_noise"].as<float>();
-    if (src["dist_m_noise"].is<float>()) dst.dist_m_noise = src["dist_m_noise"].as<float>();
-    if (src["pos_init_cov"].is<float>()) dst.pos_init_cov = src["pos_init_cov"].as<float>();
-    if (src["pos_p_noise"].is<float>()) dst.pos_p_noise = src["pos_p_noise"].as<float>();
-    if (src["pos_m_noise"].is<float>()) dst.pos_m_noise = src["pos_m_noise"].as<float>();
-    if (src["tread"].is<float>()) dst.tread = src["tread"].as<float>();
-    if (src["FF_front"].is<int>()) dst.FF_front = src["FF_front"].as<int>();
-    if (src["FF_roll"].is<int>()) dst.FF_roll = src["FF_roll"].as<int>();
-    if (src["FF_keV"].is<int>()) dst.FF_keV = src["FF_keV"].as<int>();
-    if (src["offset_start_dist"].is<float>()) dst.offset_start_dist = src["offset_start_dist"].as<float>();
-    if (src["offset_start_dist_search"].is<float>()) dst.offset_start_dist_search = src["offset_start_dist_search"].as<float>();
-    if (src["long_run_offset_dist"].is<float>()) dst.long_run_offset_dist = src["long_run_offset_dist"].as<float>();
-    if (src["pivot_back_offset"].is<float>()) dst.pivot_back_offset = src["pivot_back_offset"].as<float>();
-    if (src["cell"].is<float>()) dst.cell = src["cell"].as<float>();
-    if (src["cell2"].is<float>()) dst.cell2 = src["cell2"].as<float>();
-    if (src["pivot_angle_180"].is<float>()) dst.pivot_angle_180 = src["pivot_angle_180"].as<float>();
-    if (src["pivot_angle_90"].is<float>()) dst.pivot_angle_90 = src["pivot_angle_90"].as<float>();
-    if (src["wall_off_front_move_dist_th"].is<float>()) dst.wall_off_front_move_dist_th = src["wall_off_front_move_dist_th"].as<float>();
-    if (src["wall_off_front_move_dia_dist_th"].is<float>()) dst.wall_off_front_move_dia_dist_th = src["wall_off_front_move_dia_dist_th"].as<float>();
-    if (src["ff_front_gain_14"].is<float>()) dst.ff_front_gain_14 = src["ff_front_gain_14"].as<float>();
-    if (src["ff_roll_gain_before"].is<float>()) dst.ff_roll_gain_before = src["ff_roll_gain_before"].as<float>();
-    if (src["ff_roll_gain_after"].is<float>()) dst.ff_roll_gain_after = src["ff_roll_gain_after"].as<float>();
-    if (src["ff_front_gain_decel"].is<float>()) dst.ff_front_gain_decel = src["ff_front_gain_decel"].as<float>();
-    if (!src["front_ctrl_roll_pid"].isNull()) convertFromJson(src["front_ctrl_roll_pid"], dst.front_ctrl_roll_pid);
-    if (!src["motor_pid"].isNull()) convertFromJson(src["motor_pid"], dst.motor_pid);
-    if (!src["motor_pid_gain_limitter"].isNull()) convertFromJson(src["motor_pid_gain_limitter"], dst.motor_pid_gain_limitter);
-    if (!src["motor_pid2"].isNull()) convertFromJson(src["motor_pid2"], dst.motor_pid2);
-    if (!src["motor2_pid_gain_limitter"].isNull()) convertFromJson(src["motor2_pid_gain_limitter"], dst.motor2_pid_gain_limitter);
-    if (!src["motor_pid3"].isNull()) convertFromJson(src["motor_pid3"], dst.motor_pid3);
-    if (!src["gyro_pid"].isNull()) convertFromJson(src["gyro_pid"], dst.gyro_pid);
-    if (!src["gyro_pid_gain_limitter"].isNull()) convertFromJson(src["gyro_pid_gain_limitter"], dst.gyro_pid_gain_limitter);
-    if (!src["str_ang_pid"].isNull()) convertFromJson(src["str_ang_pid"], dst.str_ang_pid);
-    if (!src["str_ang_dia_pid"].isNull()) convertFromJson(src["str_ang_dia_pid"], dst.str_ang_dia_pid);
-    if (!src["angle_pid"].isNull()) convertFromJson(src["angle_pid"], dst.angle_pid);
-    if (!src["front_ctrl_angle_pid"].isNull()) convertFromJson(src["front_ctrl_angle_pid"], dst.front_ctrl_angle_pid);
-    if (!src["front_ctrl_dist_pid"].isNull()) convertFromJson(src["front_ctrl_dist_pid"], dst.front_ctrl_dist_pid);
-    if (!src["front_ctrl_keep_angle_pid"].isNull()) convertFromJson(src["front_ctrl_keep_angle_pid"], dst.front_ctrl_keep_angle_pid);
-    if (!src["sensor_pid_dia"].isNull()) convertFromJson(src["sensor_pid_dia"], dst.sensor_pid_dia);
-    if (!src["gyro_param"].isNull()) convertFromJson(src["gyro_param"], dst.gyro_param);
-    if (!src["gyro2_param"].isNull()) convertFromJson(src["gyro2_param"], dst.gyro2_param);
-    if (!src["accel_x_param"].isNull()) convertFromJson(src["accel_x_param"], dst.accel_x_param);
-    if (!src["comp_param"].isNull()) convertFromJson(src["comp_param"], dst.comp_param);
-    if (!src["battery_param"].isNull()) convertFromJson(src["battery_param"], dst.battery_param);
-    if (!src["led_param"].isNull()) convertFromJson(src["led_param"], dst.led_param);
-    if (src["motion_dir"].is<int>()) dst.motion_dir = (MotionDirection)src["motion_dir"].as<int>();
-    if (!src["sen_ref_p"].isNull()) convertFromJson(src["sen_ref_p"], dst.sen_ref_p);
-    if (!src["sensor_gain"].isNull()) convertFromJson(src["sensor_gain"], dst.sensor_gain);
-    if (src["sakiyomi_time"].is<float>()) dst.sakiyomi_time = src["sakiyomi_time"].as<float>();
-    if (src["search_sen_ctrl_limitter"].is<float>()) dst.search_sen_ctrl_limitter = src["search_sen_ctrl_limitter"].as<float>();
-    if (src["clear_angle"].is<float>()) dst.clear_angle = src["clear_angle"].as<float>();
-    if (src["clear_dist_order"].is<float>()) dst.clear_dist_order = src["clear_dist_order"].as<float>();
-    if (src["front_dist_offset"].is<float>()) dst.front_dist_offset = src["front_dist_offset"].as<float>();
-    if (src["front_dist_offset0"].is<float>()) dst.front_dist_offset0 = src["front_dist_offset0"].as<float>();
-    if (src["front_dist_offset2"].is<float>()) dst.front_dist_offset2 = src["front_dist_offset2"].as<float>();
-    if (src["front_dist_offset3"].is<float>()) dst.front_dist_offset3 = src["front_dist_offset3"].as<float>();
-    if (src["front_dist_offset4"].is<float>()) dst.front_dist_offset4 = src["front_dist_offset4"].as<float>();
-    if (src["front_dist_offset_dia_front"].is<float>()) dst.front_dist_offset_dia_front = src["front_dist_offset_dia_front"].as<float>();
-    if (src["front_dist_offset_dia_45_th"].is<float>()) dst.front_dist_offset_dia_45_th = src["front_dist_offset_dia_45_th"].as<float>();
-    if (src["front_dist_offset_dia_right45"].is<float>()) dst.front_dist_offset_dia_right45 = src["front_dist_offset_dia_right45"].as<float>();
-    if (src["front_dist_offset_dia_left45"].is<float>()) dst.front_dist_offset_dia_left45 = src["front_dist_offset_dia_left45"].as<float>();
-    if (src["sla_wall_ref_l"].is<float>()) dst.sla_wall_ref_l = src["sla_wall_ref_l"].as<float>();
-    if (src["sla_wall_ref_r"].is<float>()) dst.sla_wall_ref_r = src["sla_wall_ref_r"].as<float>();
-    if (src["sla_max_offset_dist"].is<float>()) dst.sla_max_offset_dist = src["sla_max_offset_dist"].as<float>();
-    if (src["large_offset_enable"].is<bool>()) dst.large_offset_enable = src["large_offset_enable"].as<bool>();
-    if (src["dia45_offset_enable"].is<bool>()) dst.dia45_offset_enable = src["dia45_offset_enable"].as<bool>();
-    if (src["dia135_offset_enable"].is<bool>()) dst.dia135_offset_enable = src["dia135_offset_enable"].as<bool>();
-    if (src["orval_offset_enable"].is<bool>()) dst.orval_offset_enable = src["orval_offset_enable"].as<bool>();
-    if (src["large_offset_max_dist"].is<float>()) dst.large_offset_max_dist = src["large_offset_max_dist"].as<float>();
-    if (src["dia45_offset_max_dist"].is<float>()) dst.dia45_offset_max_dist = src["dia45_offset_max_dist"].as<float>();
-    if (src["dia135_offset_max_dist"].is<float>()) dst.dia135_offset_max_dist = src["dia135_offset_max_dist"].as<float>();
-    if (src["orval_offset_max_dist"].is<float>()) dst.orval_offset_max_dist = src["orval_offset_max_dist"].as<float>();
-    if (src["dia45_2_offset_max_dist"].is<float>()) dst.dia45_2_offset_max_dist = src["dia45_2_offset_max_dist"].as<float>();
-    if (src["dia135_2_offset_max_dist"].is<float>()) dst.dia135_2_offset_max_dist = src["dia135_2_offset_max_dist"].as<float>();
-    if (src["dia90_offset_max_dist"].is<float>()) dst.dia90_offset_max_dist = src["dia90_offset_max_dist"].as<float>();
-    if (src["lim_angle"].is<float>()) dst.lim_angle = src["lim_angle"].as<float>();
-    if (src["front_ctrl_error_th"].is<float>()) dst.front_ctrl_error_th = src["front_ctrl_error_th"].as<float>();
-    if (src["clear_dist_ragne_from"].is<float>()) dst.clear_dist_ragne_from = src["clear_dist_ragne_from"].as<float>();
-    if (src["clear_dist_ragne_to"].is<float>()) dst.clear_dist_ragne_to = src["clear_dist_ragne_to"].as<float>();
-    if (src["clear_dist_ragne_to2"].is<float>()) dst.clear_dist_ragne_to2 = src["clear_dist_ragne_to2"].as<float>();
-    if (src["clear_dist_ragne_dist_list"].is<JsonArrayConst>()) {
-        dst.clear_dist_ragne_dist_list.clear();
-        for (auto v : src["clear_dist_ragne_dist_list"].as<JsonArrayConst>()) {
-            dst.clear_dist_ragne_dist_list.push_back(v.as<float>());
-        }
-    }
-    if (src["clear_dist_ragne_th_list"].is<JsonArrayConst>()) {
-        dst.clear_dist_ragne_th_list.clear();
-        for (auto v : src["clear_dist_ragne_th_list"].as<JsonArrayConst>()) {
-            dst.clear_dist_ragne_th_list.push_back(v.as<float>());
-        }
-    }
-    if (src["clear_dist_ragne_dist_list_fast"].is<JsonArrayConst>()) {
-        dst.clear_dist_ragne_dist_list_fast.clear();
-        for (auto v : src["clear_dist_ragne_dist_list_fast"].as<JsonArrayConst>()) {
-            dst.clear_dist_ragne_dist_list_fast.push_back(v.as<float>());
-        }
-    }
-    if (src["wall_off_hold_dist"].is<float>()) dst.wall_off_hold_dist = src["wall_off_hold_dist"].as<float>();
-    if (!src["wall_off_dist"].isNull()) convertFromJson(src["wall_off_dist"], dst.wall_off_dist);
-    if (src["wall_off_diff_ref_th"].is<float>()) dst.wall_off_diff_ref_th = src["wall_off_diff_ref_th"].as<float>();
-    if (src["wall_off_diff_ref_front_th"].is<float>()) dst.wall_off_diff_ref_front_th = src["wall_off_diff_ref_front_th"].as<float>();
-    if (src["wall_off_wait_dist"].is<float>()) dst.wall_off_wait_dist = src["wall_off_wait_dist"].as<float>();
-    if (src["wall_off_wait_dist_dia"].is<float>()) dst.wall_off_wait_dist_dia = src["wall_off_wait_dist_dia"].as<float>();
-    if (src["search_log_enable"].is<int>()) dst.search_log_enable = src["search_log_enable"].as<int>();
-    if (src["seach_timer"].is<int>()) dst.seach_timer = src["seach_timer"].as<int>();
-    if (src["test_log_enable"].is<int>()) dst.test_log_enable = src["test_log_enable"].as<int>();
-    if (src["fast_log_enable"].is<int>()) dst.fast_log_enable = src["fast_log_enable"].as<int>();
-    if (src["front_dist_offset_pivot_th"].is<float>()) dst.front_dist_offset_pivot_th = src["front_dist_offset_pivot_th"].as<float>();
-    if (src["front_dist_offset_pivot"].is<float>()) dst.front_dist_offset_pivot = src["front_dist_offset_pivot"].as<float>();
-    if (src["pivot_back_dist0"].is<float>()) dst.pivot_back_dist0 = src["pivot_back_dist0"].as<float>();
-    if (src["pivot_back_dist1"].is<float>()) dst.pivot_back_dist1 = src["pivot_back_dist1"].as<float>();
-    if (src["sen_log_size"].is<int>()) dst.sen_log_size = src["sen_log_size"].as<int>();
-    if (src["sen_log_size2"].is<int>()) dst.sen_log_size2 = src["sen_log_size2"].as<int>();
-    if (src["led_light_delay_cnt"].is<int>()) dst.led_light_delay_cnt = src["led_light_delay_cnt"].as<int>();
-    if (src["led_light_delay_cnt2"].is<int>()) dst.led_light_delay_cnt2 = src["led_light_delay_cnt2"].as<int>();
-    if (src["set_param"].is<bool>()) dst.set_param = src["set_param"].as<bool>();
-    if (src["logging_time"].is<float>()) dst.logging_time = src["logging_time"].as<float>();
-    if (src["offset_after_turn_l2"].is<float>()) dst.offset_after_turn_l2 = src["offset_after_turn_l2"].as<float>();
-    if (src["offset_after_turn_r2"].is<float>()) dst.offset_after_turn_r2 = src["offset_after_turn_r2"].as<float>();
-    if (src["offset_after_turn_l"].is<float>()) dst.offset_after_turn_l = src["offset_after_turn_l"].as<float>();
-    if (src["offset_after_turn_r"].is<float>()) dst.offset_after_turn_r = src["offset_after_turn_r"].as<float>();
-    if (src["offset_after_turn_dia_l"].is<float>()) dst.offset_after_turn_dia_l = src["offset_after_turn_dia_l"].as<float>();
-    if (src["offset_after_turn_dia_r"].is<float>()) dst.offset_after_turn_dia_r = src["offset_after_turn_dia_r"].as<float>();
-    if (src["dia_turn_exist_th_l"].is<float>()) dst.dia_turn_exist_th_l = src["dia_turn_exist_th_l"].as<float>();
-    if (src["dia_turn_exist_th_r"].is<float>()) dst.dia_turn_exist_th_r = src["dia_turn_exist_th_r"].as<float>();
-    if (src["dia_turn_th_l"].is<float>()) dst.dia_turn_th_l = src["dia_turn_th_l"].as<float>();
-    if (src["dia_turn_th_r"].is<float>()) dst.dia_turn_th_r = src["dia_turn_th_r"].as<float>();
-    if (src["dia_turn_ref_l"].is<float>()) dst.dia_turn_ref_l = src["dia_turn_ref_l"].as<float>();
-    if (src["dia_turn_ref_r"].is<float>()) dst.dia_turn_ref_r = src["dia_turn_ref_r"].as<float>();
-    if (src["dia_turn_max_dist_l"].is<float>()) dst.dia_turn_max_dist_l = src["dia_turn_max_dist_l"].as<float>();
-    if (src["dia_turn_max_dist_r"].is<float>()) dst.dia_turn_max_dist_r = src["dia_turn_max_dist_r"].as<float>();
-    if (src["wall_off_pass_dist"].is<float>()) dst.wall_off_pass_dist = src["wall_off_pass_dist"].as<float>();
-    if (src["dia_wall_off_ref_l"].is<float>()) dst.dia_wall_off_ref_l = src["dia_wall_off_ref_l"].as<float>();
-    if (src["dia_wall_off_ref_r"].is<float>()) dst.dia_wall_off_ref_r = src["dia_wall_off_ref_r"].as<float>();
-    if (src["dia_wall_off_ref_l_wall"].is<float>()) dst.dia_wall_off_ref_l_wall = src["dia_wall_off_ref_l_wall"].as<float>();
-    if (src["dia_wall_off_ref_r_wall"].is<float>()) dst.dia_wall_off_ref_r_wall = src["dia_wall_off_ref_r_wall"].as<float>();
-    if (src["dia_wall_off_ref_l_wall2"].is<float>()) dst.dia_wall_off_ref_l_wall2 = src["dia_wall_off_ref_l_wall2"].as<float>();
-    if (src["dia_wall_off_ref_r_wall2"].is<float>()) dst.dia_wall_off_ref_r_wall2 = src["dia_wall_off_ref_r_wall2"].as<float>();
-    if (src["dia_wall_off_ref_l_piller"].is<float>()) dst.dia_wall_off_ref_l_piller = src["dia_wall_off_ref_l_piller"].as<float>();
-    if (src["dia_wall_off_ref_r_piller"].is<float>()) dst.dia_wall_off_ref_r_piller = src["dia_wall_off_ref_r_piller"].as<float>();
-    if (src["dia_offset_max_dist"].is<float>()) dst.dia_offset_max_dist = src["dia_offset_max_dist"].as<float>();
-    if (src["slip_param_K"].is<float>()) dst.slip_param_K = src["slip_param_K"].as<float>();
-    if (src["slip_param_k2"].is<float>()) dst.slip_param_k2 = src["slip_param_k2"].as<float>();
-    if (!src["fail_check"].isNull()) convertFromJson(src["fail_check"], dst.fail_check);
-    if (src["fail_check_ang_th"].is<float>()) dst.fail_check_ang_th = src["fail_check_ang_th"].as<float>();
-    if (src["normal_sla_offset"].is<float>()) dst.normal_sla_offset = src["normal_sla_offset"].as<float>();
-    if (src["normal_sla_offset_front"].is<float>()) dst.normal_sla_offset_front = src["normal_sla_offset_front"].as<float>();
-    if (src["normal_sla_offset_back"].is<float>()) dst.normal_sla_offset_back = src["normal_sla_offset_back"].as<float>();
-    if (src["front_diff_th"].is<float>()) dst.front_diff_th = src["front_diff_th"].as<float>();
-    if (src["ff_v_th"].is<float>()) dst.ff_v_th = src["ff_v_th"].as<float>();
-    if (src["ff_front_dury"].is<float>()) dst.ff_front_dury = src["ff_front_dury"].as<float>();
-    if (src["motor_driver_type"].is<int>()) dst.motor_driver_type = (MotorDriveType)src["motor_driver_type"].as<int>();
-    if (src["motor_debug_mode"].is<uint8_t>()) dst.motor_debug_mode = src["motor_debug_mode"].as<uint8_t>();
-    if (src["motor_r_cw_ccw_type"].is<uint8_t>()) dst.motor_r_cw_ccw_type = src["motor_r_cw_ccw_type"].as<uint8_t>();
-    if (src["motor_l_cw_ccw_type"].is<uint8_t>()) dst.motor_l_cw_ccw_type = src["motor_l_cw_ccw_type"].as<uint8_t>();
-    if (src["motor_debug_mode_duty_r"].is<float>()) dst.motor_debug_mode_duty_r = src["motor_debug_mode_duty_r"].as<float>();
-    if (src["motor_debug_mode_duty_l"].is<float>()) dst.motor_debug_mode_duty_l = src["motor_debug_mode_duty_l"].as<float>();
-    if (src["pivot_straight"].is<float>()) dst.pivot_straight = src["pivot_straight"].as<float>();
-    if (src["pivot_back_enable_front_th"].is<float>()) dst.pivot_back_enable_front_th = src["pivot_back_enable_front_th"].as<float>();
-    if (src["search_front_ctrl_th"].is<float>()) dst.search_front_ctrl_th = src["search_front_ctrl_th"].as<float>();
-    if (src["judge_pivot"].is<float>()) dst.judge_pivot = src["judge_pivot"].as<float>();
-    if (src["sensor_range_min"].is<float>()) dst.sensor_range_min = src["sensor_range_min"].as<float>();
-    if (src["sensor_range_max"].is<float>()) dst.sensor_range_max = src["sensor_range_max"].as<float>();
-    if (src["sensor_range_mid_max"].is<float>()) dst.sensor_range_mid_max = src["sensor_range_mid_max"].as<float>();
-    if (src["sensor_range_far_max"].is<float>()) dst.sensor_range_far_max = src["sensor_range_far_max"].as<float>();
-    if (src["dist_mod_num"].is<float>()) dst.dist_mod_num = src["dist_mod_num"].as<float>();
-    if (src["sen_ctrl_front_th"].is<float>()) dst.sen_ctrl_front_th = src["sen_ctrl_front_th"].as<float>();
-    if (src["sen_ctrl_front_diff_th"].is<float>()) dst.sen_ctrl_front_diff_th = src["sen_ctrl_front_diff_th"].as<float>();
-    if (src["th_offset_dist"].is<float>()) dst.th_offset_dist = src["th_offset_dist"].as<float>();
-    if (src["sla_front_ctrl_th"].is<float>()) dst.sla_front_ctrl_th = src["sla_front_ctrl_th"].as<float>();
-    if (src["orval_front_ctrl_min"].is<float>()) dst.orval_front_ctrl_min = src["orval_front_ctrl_min"].as<float>();
-    if (src["orval_front_ctrl_max"].is<float>()) dst.orval_front_ctrl_max = src["orval_front_ctrl_max"].as<float>();
-    if (src["wall_off_front_ctrl_min"].is<float>()) dst.wall_off_front_ctrl_min = src["wall_off_front_ctrl_min"].as<float>();
-    if (src["dia_turn_offset_calc_th"].is<float>()) dst.dia_turn_offset_calc_th = src["dia_turn_offset_calc_th"].as<float>();
-    if (src["go_straight_wide_ctrl_th"].is<float>()) dst.go_straight_wide_ctrl_th = src["go_straight_wide_ctrl_th"].as<float>();
-    if (src["wall_off_pass_through_offset_r"].is<float>()) dst.wall_off_pass_through_offset_r = src["wall_off_pass_through_offset_r"].as<float>();
-    if (src["wall_off_pass_through_offset_l"].is<float>()) dst.wall_off_pass_through_offset_l = src["wall_off_pass_through_offset_l"].as<float>();
-    if (src["tire_tread"].is<float>()) dst.tire_tread = src["tire_tread"].as<float>();
-    if (src["right_keep_dist_th"].is<float>()) dst.right_keep_dist_th = src["right_keep_dist_th"].as<float>();
-    if (src["left_keep_dist_th"].is<float>()) dst.left_keep_dist_th = src["left_keep_dist_th"].as<float>();
-    if (src["normal_sla_l_wall_off_th_in"].is<float>()) dst.normal_sla_l_wall_off_th_in = src["normal_sla_l_wall_off_th_in"].as<float>();
-    if (src["normal_sla_r_wall_off_th_in"].is<float>()) dst.normal_sla_r_wall_off_th_in = src["normal_sla_r_wall_off_th_in"].as<float>();
-    if (src["normal_sla_l_wall_off_th_out"].is<float>()) dst.normal_sla_l_wall_off_th_out = src["normal_sla_l_wall_off_th_out"].as<float>();
-    if (src["normal_sla_r_wall_off_th_out"].is<float>()) dst.normal_sla_r_wall_off_th_out = src["normal_sla_r_wall_off_th_out"].as<float>();
-    if (src["normal_sla_l_wall_off_ref_cnt"].is<float>()) dst.normal_sla_l_wall_off_ref_cnt = src["normal_sla_l_wall_off_ref_cnt"].as<float>();
-    if (src["normal_sla_r_wall_off_ref_cnt"].is<float>()) dst.normal_sla_r_wall_off_ref_cnt = src["normal_sla_r_wall_off_ref_cnt"].as<float>();
-    if (src["normal_sla_l_wall_off_dist"].is<float>()) dst.normal_sla_l_wall_off_dist = src["normal_sla_l_wall_off_dist"].as<float>();
-    if (src["normal_sla_r_wall_off_dist"].is<float>()) dst.normal_sla_r_wall_off_dist = src["normal_sla_r_wall_off_dist"].as<float>();
-    if (src["normal_sla_l_wall_off_margin"].is<float>()) dst.normal_sla_l_wall_off_margin = src["normal_sla_l_wall_off_margin"].as<float>();
-    if (src["normal_sla_r_wall_off_margin"].is<float>()) dst.normal_sla_r_wall_off_margin = src["normal_sla_r_wall_off_margin"].as<float>();
-    if (src["torque_mode"].is<int8_t>()) dst.torque_mode = src["torque_mode"].as<int8_t>();
-    if (src["enable_kalman_gyro"].is<int8_t>()) dst.enable_kalman_gyro = src["enable_kalman_gyro"].as<int8_t>();
-    if (src["enable_kalman_encoder"].is<int8_t>()) dst.enable_kalman_encoder = src["enable_kalman_encoder"].as<int8_t>();
-    if (src["enable_mpc"].is<int8_t>()) dst.enable_mpc = src["enable_mpc"].as<int8_t>();
-    if (src["dia90_offset"].is<float>()) dst.dia90_offset = src["dia90_offset"].as<float>();
-    if (!src["kanayama"].isNull()) convertFromJson(src["kanayama"], dst.kanayama);
+    from_json_field(src, "dt", dst.dt);
+    from_json_field(src, "trj_length", dst.trj_length);
+    from_json_field(src, "tire", dst.tire);
+    from_json_field(src, "tire2", dst.tire2);
+    from_json_field(src, "log_size", dst.log_size);
+    from_json_field(src, "gear_a", dst.gear_a);
+    from_json_field(src, "gear_b", dst.gear_b);
+    from_json_field(src, "max_duty", dst.max_duty);
+    from_json_field(src, "min_duty", dst.min_duty);
+    from_json_field(src, "battery_gain", dst.battery_gain);
+    from_json_field(src, "Ke", dst.Ke);
+    from_json_field(src, "Km", dst.Km);
+    from_json_field(src, "Resist", dst.Resist);
+    from_json_field(src, "Mass", dst.Mass);
+    from_json_field(src, "Lm", dst.Lm);
+    from_json_field(src, "coulomb_friction", dst.coulomb_friction);
+    from_json_field(src, "viscous_friction", dst.viscous_friction);
+    from_json_field(src, "battery_init_cov", dst.battery_init_cov);
+    from_json_field(src, "battery_p_noise", dst.battery_p_noise);
+    from_json_field(src, "battery_m_noise", dst.battery_m_noise);
+    from_json_field(src, "encoder_init_cov", dst.encoder_init_cov);
+    from_json_field(src, "encoder_p_noise", dst.encoder_p_noise);
+    from_json_field(src, "encoder_m_noise", dst.encoder_m_noise);
+    from_json_field(src, "w_init_cov", dst.w_init_cov);
+    from_json_field(src, "w_p_noise", dst.w_p_noise);
+    from_json_field(src, "w_m_noise", dst.w_m_noise);
+    from_json_field(src, "v_init_cov", dst.v_init_cov);
+    from_json_field(src, "v_p_noise", dst.v_p_noise);
+    from_json_field(src, "v_m_noise", dst.v_m_noise);
+    from_json_field(src, "ang_init_cov", dst.ang_init_cov);
+    from_json_field(src, "ang_p_noise", dst.ang_p_noise);
+    from_json_field(src, "ang_m_noise", dst.ang_m_noise);
+    from_json_field(src, "dist_init_cov", dst.dist_init_cov);
+    from_json_field(src, "dist_p_noise", dst.dist_p_noise);
+    from_json_field(src, "dist_m_noise", dst.dist_m_noise);
+    from_json_field(src, "pos_init_cov", dst.pos_init_cov);
+    from_json_field(src, "pos_p_noise", dst.pos_p_noise);
+    from_json_field(src, "pos_m_noise", dst.pos_m_noise);
+    from_json_field(src, "tread", dst.tread);
+    from_json_field(src, "FF_front", dst.FF_front);
+    from_json_field(src, "FF_roll", dst.FF_roll);
+    from_json_field(src, "FF_keV", dst.FF_keV);
+    from_json_field(src, "offset_start_dist", dst.offset_start_dist);
+    from_json_field(src, "offset_start_dist_search", dst.offset_start_dist_search);
+    from_json_field(src, "long_run_offset_dist", dst.long_run_offset_dist);
+    from_json_field(src, "pivot_back_offset", dst.pivot_back_offset);
+    from_json_field(src, "cell", dst.cell);
+    from_json_field(src, "cell2", dst.cell2);
+    from_json_field(src, "pivot_angle_180", dst.pivot_angle_180);
+    from_json_field(src, "pivot_angle_90", dst.pivot_angle_90);
+    from_json_field(src, "wall_off_front_move_dist_th", dst.wall_off_front_move_dist_th);
+    from_json_field(src, "wall_off_front_move_dia_dist_th", dst.wall_off_front_move_dia_dist_th);
+    from_json_field(src, "ff_front_gain_14", dst.ff_front_gain_14);
+    from_json_field(src, "ff_roll_gain_before", dst.ff_roll_gain_before);
+    from_json_field(src, "ff_roll_gain_after", dst.ff_roll_gain_after);
+    from_json_field(src, "ff_front_gain_decel", dst.ff_front_gain_decel);
+    from_json_nested(src, "front_ctrl_roll_pid", dst.front_ctrl_roll_pid);
+    from_json_nested(src, "motor_pid", dst.motor_pid);
+    from_json_nested(src, "motor_pid_gain_limitter", dst.motor_pid_gain_limitter);
+    from_json_nested(src, "motor_pid2", dst.motor_pid2);
+    from_json_nested(src, "motor2_pid_gain_limitter", dst.motor2_pid_gain_limitter);
+    from_json_nested(src, "motor_pid3", dst.motor_pid3);
+    from_json_nested(src, "gyro_pid", dst.gyro_pid);
+    from_json_nested(src, "gyro_pid_gain_limitter", dst.gyro_pid_gain_limitter);
+    from_json_nested(src, "str_ang_pid", dst.str_ang_pid);
+    from_json_nested(src, "str_ang_dia_pid", dst.str_ang_dia_pid);
+    from_json_nested(src, "angle_pid", dst.angle_pid);
+    from_json_nested(src, "front_ctrl_angle_pid", dst.front_ctrl_angle_pid);
+    from_json_nested(src, "front_ctrl_dist_pid", dst.front_ctrl_dist_pid);
+    from_json_nested(src, "front_ctrl_keep_angle_pid", dst.front_ctrl_keep_angle_pid);
+    from_json_nested(src, "sensor_pid_dia", dst.sensor_pid_dia);
+    from_json_nested(src, "gyro_param", dst.gyro_param);
+    from_json_nested(src, "gyro2_param", dst.gyro2_param);
+    from_json_nested(src, "accel_x_param", dst.accel_x_param);
+    from_json_nested(src, "comp_param", dst.comp_param);
+    from_json_nested(src, "battery_param", dst.battery_param);
+    from_json_nested(src, "led_param", dst.led_param);
+    from_json_field(src, "motion_dir", dst.motion_dir);
+    from_json_nested(src, "sen_ref_p", dst.sen_ref_p);
+    from_json_nested(src, "sensor_gain", dst.sensor_gain);
+    from_json_field(src, "sakiyomi_time", dst.sakiyomi_time);
+    from_json_field(src, "search_sen_ctrl_limitter", dst.search_sen_ctrl_limitter);
+    from_json_field(src, "clear_angle", dst.clear_angle);
+    from_json_field(src, "clear_dist_order", dst.clear_dist_order);
+    from_json_field(src, "front_dist_offset", dst.front_dist_offset);
+    from_json_field(src, "front_dist_offset0", dst.front_dist_offset0);
+    from_json_field(src, "front_dist_offset2", dst.front_dist_offset2);
+    from_json_field(src, "front_dist_offset3", dst.front_dist_offset3);
+    from_json_field(src, "front_dist_offset4", dst.front_dist_offset4);
+    from_json_field(src, "front_dist_offset_dia_front", dst.front_dist_offset_dia_front);
+    from_json_field(src, "front_dist_offset_dia_45_th", dst.front_dist_offset_dia_45_th);
+    from_json_field(src, "front_dist_offset_dia_right45", dst.front_dist_offset_dia_right45);
+    from_json_field(src, "front_dist_offset_dia_left45", dst.front_dist_offset_dia_left45);
+    from_json_field(src, "sla_wall_ref_l", dst.sla_wall_ref_l);
+    from_json_field(src, "sla_wall_ref_r", dst.sla_wall_ref_r);
+    from_json_field(src, "sla_max_offset_dist", dst.sla_max_offset_dist);
+    from_json_field(src, "large_offset_enable", dst.large_offset_enable);
+    from_json_field(src, "dia45_offset_enable", dst.dia45_offset_enable);
+    from_json_field(src, "dia135_offset_enable", dst.dia135_offset_enable);
+    from_json_field(src, "orval_offset_enable", dst.orval_offset_enable);
+    from_json_field(src, "large_offset_max_dist", dst.large_offset_max_dist);
+    from_json_field(src, "dia45_offset_max_dist", dst.dia45_offset_max_dist);
+    from_json_field(src, "dia135_offset_max_dist", dst.dia135_offset_max_dist);
+    from_json_field(src, "orval_offset_max_dist", dst.orval_offset_max_dist);
+    from_json_field(src, "dia45_2_offset_max_dist", dst.dia45_2_offset_max_dist);
+    from_json_field(src, "dia135_2_offset_max_dist", dst.dia135_2_offset_max_dist);
+    from_json_field(src, "dia90_offset_max_dist", dst.dia90_offset_max_dist);
+    from_json_field(src, "lim_angle", dst.lim_angle);
+    from_json_field(src, "front_ctrl_error_th", dst.front_ctrl_error_th);
+    from_json_field(src, "clear_dist_ragne_from", dst.clear_dist_ragne_from);
+    from_json_field(src, "clear_dist_ragne_to", dst.clear_dist_ragne_to);
+    from_json_field(src, "clear_dist_ragne_to2", dst.clear_dist_ragne_to2);
+    from_json_vector(src, "clear_dist_ragne_dist_list", dst.clear_dist_ragne_dist_list);
+    from_json_vector(src, "clear_dist_ragne_th_list", dst.clear_dist_ragne_th_list);
+    from_json_vector(src, "clear_dist_ragne_dist_list_fast", dst.clear_dist_ragne_dist_list_fast);
+    from_json_field(src, "wall_off_hold_dist", dst.wall_off_hold_dist);
+    from_json_nested(src, "wall_off_dist", dst.wall_off_dist);
+    from_json_field(src, "wall_off_diff_ref_th", dst.wall_off_diff_ref_th);
+    from_json_field(src, "wall_off_diff_ref_front_th", dst.wall_off_diff_ref_front_th);
+    from_json_field(src, "wall_off_wait_dist", dst.wall_off_wait_dist);
+    from_json_field(src, "wall_off_wait_dist_dia", dst.wall_off_wait_dist_dia);
+    from_json_field(src, "search_log_enable", dst.search_log_enable);
+    from_json_field(src, "seach_timer", dst.seach_timer);
+    from_json_field(src, "test_log_enable", dst.test_log_enable);
+    from_json_field(src, "fast_log_enable", dst.fast_log_enable);
+    from_json_field(src, "front_dist_offset_pivot_th", dst.front_dist_offset_pivot_th);
+    from_json_field(src, "front_dist_offset_pivot", dst.front_dist_offset_pivot);
+    from_json_field(src, "pivot_back_dist0", dst.pivot_back_dist0);
+    from_json_field(src, "pivot_back_dist1", dst.pivot_back_dist1);
+    from_json_field(src, "sen_log_size", dst.sen_log_size);
+    from_json_field(src, "sen_log_size2", dst.sen_log_size2);
+    from_json_field(src, "led_light_delay_cnt", dst.led_light_delay_cnt);
+    from_json_field(src, "led_light_delay_cnt2", dst.led_light_delay_cnt2);
+    from_json_field(src, "set_param", dst.set_param);
+    from_json_field(src, "logging_time", dst.logging_time);
+    from_json_field(src, "offset_after_turn_l2", dst.offset_after_turn_l2);
+    from_json_field(src, "offset_after_turn_r2", dst.offset_after_turn_r2);
+    from_json_field(src, "offset_after_turn_l", dst.offset_after_turn_l);
+    from_json_field(src, "offset_after_turn_r", dst.offset_after_turn_r);
+    from_json_field(src, "offset_after_turn_dia_l", dst.offset_after_turn_dia_l);
+    from_json_field(src, "offset_after_turn_dia_r", dst.offset_after_turn_dia_r);
+    from_json_field(src, "dia_turn_exist_th_l", dst.dia_turn_exist_th_l);
+    from_json_field(src, "dia_turn_exist_th_r", dst.dia_turn_exist_th_r);
+    from_json_field(src, "dia_turn_th_l", dst.dia_turn_th_l);
+    from_json_field(src, "dia_turn_th_r", dst.dia_turn_th_r);
+    from_json_field(src, "dia_turn_ref_l", dst.dia_turn_ref_l);
+    from_json_field(src, "dia_turn_ref_r", dst.dia_turn_ref_r);
+    from_json_field(src, "dia_turn_max_dist_l", dst.dia_turn_max_dist_l);
+    from_json_field(src, "dia_turn_max_dist_r", dst.dia_turn_max_dist_r);
+    from_json_field(src, "wall_off_pass_dist", dst.wall_off_pass_dist);
+    from_json_field(src, "dia_wall_off_ref_l", dst.dia_wall_off_ref_l);
+    from_json_field(src, "dia_wall_off_ref_r", dst.dia_wall_off_ref_r);
+    from_json_field(src, "dia_wall_off_ref_l_wall", dst.dia_wall_off_ref_l_wall);
+    from_json_field(src, "dia_wall_off_ref_r_wall", dst.dia_wall_off_ref_r_wall);
+    from_json_field(src, "dia_wall_off_ref_l_wall2", dst.dia_wall_off_ref_l_wall2);
+    from_json_field(src, "dia_wall_off_ref_r_wall2", dst.dia_wall_off_ref_r_wall2);
+    from_json_field(src, "dia_wall_off_ref_l_piller", dst.dia_wall_off_ref_l_piller);
+    from_json_field(src, "dia_wall_off_ref_r_piller", dst.dia_wall_off_ref_r_piller);
+    from_json_field(src, "dia_offset_max_dist", dst.dia_offset_max_dist);
+    from_json_field(src, "slip_param_K", dst.slip_param_K);
+    from_json_field(src, "slip_param_k2", dst.slip_param_k2);
+    from_json_nested(src, "fail_check", dst.fail_check);
+    from_json_field(src, "fail_check_ang_th", dst.fail_check_ang_th);
+    from_json_field(src, "normal_sla_offset", dst.normal_sla_offset);
+    from_json_field(src, "normal_sla_offset_front", dst.normal_sla_offset_front);
+    from_json_field(src, "normal_sla_offset_back", dst.normal_sla_offset_back);
+    from_json_field(src, "front_diff_th", dst.front_diff_th);
+    from_json_field(src, "ff_v_th", dst.ff_v_th);
+    from_json_field(src, "ff_front_dury", dst.ff_front_dury);
+    from_json_field(src, "motor_driver_type", dst.motor_driver_type);
+    from_json_field(src, "motor_debug_mode", dst.motor_debug_mode);
+    from_json_field(src, "motor_r_cw_ccw_type", dst.motor_r_cw_ccw_type);
+    from_json_field(src, "motor_l_cw_ccw_type", dst.motor_l_cw_ccw_type);
+    from_json_field(src, "motor_debug_mode_duty_r", dst.motor_debug_mode_duty_r);
+    from_json_field(src, "motor_debug_mode_duty_l", dst.motor_debug_mode_duty_l);
+    from_json_field(src, "pivot_straight", dst.pivot_straight);
+    from_json_field(src, "pivot_back_enable_front_th", dst.pivot_back_enable_front_th);
+    from_json_field(src, "search_front_ctrl_th", dst.search_front_ctrl_th);
+    from_json_field(src, "judge_pivot", dst.judge_pivot);
+    from_json_field(src, "sensor_range_min", dst.sensor_range_min);
+    from_json_field(src, "sensor_range_max", dst.sensor_range_max);
+    from_json_field(src, "sensor_range_mid_max", dst.sensor_range_mid_max);
+    from_json_field(src, "sensor_range_far_max", dst.sensor_range_far_max);
+    from_json_field(src, "dist_mod_num", dst.dist_mod_num);
+    from_json_field(src, "sen_ctrl_front_th", dst.sen_ctrl_front_th);
+    from_json_field(src, "sen_ctrl_front_diff_th", dst.sen_ctrl_front_diff_th);
+    from_json_field(src, "th_offset_dist", dst.th_offset_dist);
+    from_json_field(src, "sla_front_ctrl_th", dst.sla_front_ctrl_th);
+    from_json_field(src, "orval_front_ctrl_min", dst.orval_front_ctrl_min);
+    from_json_field(src, "orval_front_ctrl_max", dst.orval_front_ctrl_max);
+    from_json_field(src, "wall_off_front_ctrl_min", dst.wall_off_front_ctrl_min);
+    from_json_field(src, "dia_turn_offset_calc_th", dst.dia_turn_offset_calc_th);
+    from_json_field(src, "go_straight_wide_ctrl_th", dst.go_straight_wide_ctrl_th);
+    from_json_field(src, "wall_off_pass_through_offset_r", dst.wall_off_pass_through_offset_r);
+    from_json_field(src, "wall_off_pass_through_offset_l", dst.wall_off_pass_through_offset_l);
+    from_json_field(src, "tire_tread", dst.tire_tread);
+    from_json_field(src, "right_keep_dist_th", dst.right_keep_dist_th);
+    from_json_field(src, "left_keep_dist_th", dst.left_keep_dist_th);
+    from_json_field(src, "normal_sla_l_wall_off_th_in", dst.normal_sla_l_wall_off_th_in);
+    from_json_field(src, "normal_sla_r_wall_off_th_in", dst.normal_sla_r_wall_off_th_in);
+    from_json_field(src, "normal_sla_l_wall_off_th_out", dst.normal_sla_l_wall_off_th_out);
+    from_json_field(src, "normal_sla_r_wall_off_th_out", dst.normal_sla_r_wall_off_th_out);
+    from_json_field(src, "normal_sla_l_wall_off_ref_cnt", dst.normal_sla_l_wall_off_ref_cnt);
+    from_json_field(src, "normal_sla_r_wall_off_ref_cnt", dst.normal_sla_r_wall_off_ref_cnt);
+    from_json_field(src, "normal_sla_l_wall_off_dist", dst.normal_sla_l_wall_off_dist);
+    from_json_field(src, "normal_sla_r_wall_off_dist", dst.normal_sla_r_wall_off_dist);
+    from_json_field(src, "normal_sla_l_wall_off_margin", dst.normal_sla_l_wall_off_margin);
+    from_json_field(src, "normal_sla_r_wall_off_margin", dst.normal_sla_r_wall_off_margin);
+    from_json_field(src, "torque_mode", dst.torque_mode);
+    from_json_field(src, "enable_kalman_gyro", dst.enable_kalman_gyro);
+    from_json_field(src, "enable_kalman_encoder", dst.enable_kalman_encoder);
+    from_json_field(src, "enable_mpc", dst.enable_mpc);
+    from_json_field(src, "dia90_offset", dst.dia90_offset);
+    from_json_nested(src, "kanayama", dst.kanayama);
 }
 
 inline void convertFromJson(JsonVariantConst src, pid_error_t& dst) {
-    if (src["error_p"].is<float>()) dst.error_p = src["error_p"].as<float>();
-    if (src["error_i"].is<float>()) dst.error_i = src["error_i"].as<float>();
-    if (src["error_i_keep"].is<float>()) dst.error_i_keep = src["error_i_keep"].as<float>();
-    if (src["error_d"].is<float>()) dst.error_d = src["error_d"].as<float>();
-    if (src["error_dd"].is<float>()) dst.error_dd = src["error_dd"].as<float>();
-    if (src["i_slow"].is<float>()) dst.i_slow = src["i_slow"].as<float>();
-    if (src["i_bias"].is<float>()) dst.i_bias = src["i_bias"].as<float>();
+    from_json_field(src, "error_p", dst.error_p);
+    from_json_field(src, "error_i", dst.error_i);
+    from_json_field(src, "error_i_keep", dst.error_i_keep);
+    from_json_field(src, "error_d", dst.error_d);
+    from_json_field(src, "error_dd", dst.error_dd);
+    from_json_field(src, "i_slow", dst.i_slow);
+    from_json_field(src, "i_bias", dst.i_bias);
 }
 
 inline void convertFromJson(JsonVariantConst src, pid_error2_t& dst) {
-    if (src["p"].is<float>()) dst.p = src["p"].as<float>();
-    if (src["i"].is<float>()) dst.i = src["i"].as<float>();
-    if (src["i2"].is<float>()) dst.i2 = src["i2"].as<float>();
-    if (src["d"].is<float>()) dst.d = src["d"].as<float>();
-    if (src["p_val"].is<float>()) dst.p_val = src["p_val"].as<float>();
-    if (src["i_val"].is<float>()) dst.i_val = src["i_val"].as<float>();
-    if (src["i2_val"].is<float>()) dst.i2_val = src["i2_val"].as<float>();
-    if (src["d_val"].is<float>()) dst.d_val = src["d_val"].as<float>();
-    if (src["zz"].is<float>()) dst.zz = src["zz"].as<float>();
-    if (src["z"].is<float>()) dst.z = src["z"].as<float>();
+    from_json_field(src, "p", dst.p);
+    from_json_field(src, "i", dst.i);
+    from_json_field(src, "i2", dst.i2);
+    from_json_field(src, "d", dst.d);
+    from_json_field(src, "p_val", dst.p_val);
+    from_json_field(src, "i_val", dst.i_val);
+    from_json_field(src, "i2_val", dst.i2_val);
+    from_json_field(src, "d_val", dst.d_val);
+    from_json_field(src, "zz", dst.zz);
+    from_json_field(src, "z", dst.z);
 }
 
 inline void convertFromJson(JsonVariantConst src, gain_log_t& dst) {
-    if (src["gain_z"].is<float>()) dst.gain_z = src["gain_z"].as<float>();
-    if (src["gain_zz"].is<float>()) dst.gain_zz = src["gain_zz"].as<float>();
-    if (src["omega_ref_prev"].is<float>()) dst.omega_ref_prev = src["omega_ref_prev"].as<float>();
-    if (src["prev_motion_type"].is<int>()) dst.prev_motion_type = (MotionType)src["prev_motion_type"].as<int>();
+    from_json_field(src, "gain_z", dst.gain_z);
+    from_json_field(src, "gain_zz", dst.gain_zz);
+    from_json_field(src, "omega_ref_prev", dst.omega_ref_prev);
+    from_json_field(src, "prev_motion_type", dst.prev_motion_type);
 }
 
 inline void convertFromJson(JsonVariantConst src, aw_log_t& dst) {
-    if (src["was_aw"].is<float>()) dst.was_aw = src["was_aw"].as<float>();
-    if (src["enter_aw"].is<float>()) dst.enter_aw = src["enter_aw"].as<float>();
-    if (src["keep_aw"].is<float>()) dst.keep_aw = src["keep_aw"].as<float>();
-    if (src["w_i_base"].is<float>()) dst.w_i_base = src["w_i_base"].as<float>();
-    if (src["w_error_i_raw"].is<float>()) dst.w_error_i_raw = src["w_error_i_raw"].as<float>();
-    if (src["w_error_i_clamped"].is<float>()) dst.w_error_i_clamped = src["w_error_i_clamped"].as<float>();
-    if (src["gyro_pid_histerisis_i"].is<float>()) dst.gyro_pid_histerisis_i = src["gyro_pid_histerisis_i"].as<float>();
-    if (src["sat_flag"].is<float>()) dst.sat_flag = src["sat_flag"].as<float>();
-    if (src["duty_roll"].is<float>()) dst.duty_roll = src["duty_roll"].as<float>();
-    if (src["duty_roll_before"].is<float>()) dst.duty_roll_before = src["duty_roll_before"].as<float>();
+    from_json_field(src, "was_aw", dst.was_aw);
+    from_json_field(src, "enter_aw", dst.enter_aw);
+    from_json_field(src, "keep_aw", dst.keep_aw);
+    from_json_field(src, "w_i_base", dst.w_i_base);
+    from_json_field(src, "w_error_i_raw", dst.w_error_i_raw);
+    from_json_field(src, "w_error_i_clamped", dst.w_error_i_clamped);
+    from_json_field(src, "gyro_pid_histerisis_i", dst.gyro_pid_histerisis_i);
+    from_json_field(src, "sat_flag", dst.sat_flag);
+    from_json_field(src, "duty_roll", dst.duty_roll);
+    from_json_field(src, "duty_roll_before", dst.duty_roll_before);
 }
 
 inline void convertFromJson(JsonVariantConst src, pid_error_entity_t& dst) {
-    if (!src["v"].isNull()) convertFromJson(src["v"], dst.v);
-    if (!src["v_kf"].isNull()) convertFromJson(src["v_kf"], dst.v_kf);
-    if (!src["dist"].isNull()) convertFromJson(src["dist"], dst.dist);
-    if (!src["w"].isNull()) convertFromJson(src["w"], dst.w);
-    if (!src["v_r"].isNull()) convertFromJson(src["v_r"], dst.v_r);
-    if (!src["v_l"].isNull()) convertFromJson(src["v_l"], dst.v_l);
-    if (!src["w_kf"].isNull()) convertFromJson(src["w_kf"], dst.w_kf);
-    if (!src["ang"].isNull()) convertFromJson(src["ang"], dst.ang);
-    if (!src["v_log"].isNull()) convertFromJson(src["v_log"], dst.v_log);
-    if (!src["dist_log"].isNull()) convertFromJson(src["dist_log"], dst.dist_log);
-    if (!src["w_log"].isNull()) convertFromJson(src["w_log"], dst.w_log);
-    if (!src["v_r_log"].isNull()) convertFromJson(src["v_r_log"], dst.v_r_log);
-    if (!src["v_l_log"].isNull()) convertFromJson(src["v_l_log"], dst.v_l_log);
-    if (!src["ang_log"].isNull()) convertFromJson(src["ang_log"], dst.ang_log);
-    if (!src["sen_log"].isNull()) convertFromJson(src["sen_log"], dst.sen_log);
-    if (!src["sen_log_dia"].isNull()) convertFromJson(src["sen_log_dia"], dst.sen_log_dia);
-    if (!src["sen"].isNull()) convertFromJson(src["sen"], dst.sen);
-    if (!src["sen_dia"].isNull()) convertFromJson(src["sen_dia"], dst.sen_dia);
-    if (!src["v_val"].isNull()) convertFromJson(src["v_val"], dst.v_val);
-    if (!src["w_val"].isNull()) convertFromJson(src["w_val"], dst.w_val);
-    if (!src["ang_val"].isNull()) convertFromJson(src["ang_val"], dst.ang_val);
-    if (!src["s_val"].isNull()) convertFromJson(src["s_val"], dst.s_val);
-    if (!src["aw_log"].isNull()) convertFromJson(src["aw_log"], dst.aw_log);
+    from_json_nested(src, "v", dst.v);
+    from_json_nested(src, "v_kf", dst.v_kf);
+    from_json_nested(src, "dist", dst.dist);
+    from_json_nested(src, "w", dst.w);
+    from_json_nested(src, "v_r", dst.v_r);
+    from_json_nested(src, "v_l", dst.v_l);
+    from_json_nested(src, "w_kf", dst.w_kf);
+    from_json_nested(src, "ang", dst.ang);
+    from_json_nested(src, "v_log", dst.v_log);
+    from_json_nested(src, "dist_log", dst.dist_log);
+    from_json_nested(src, "w_log", dst.w_log);
+    from_json_nested(src, "v_r_log", dst.v_r_log);
+    from_json_nested(src, "v_l_log", dst.v_l_log);
+    from_json_nested(src, "ang_log", dst.ang_log);
+    from_json_nested(src, "sen_log", dst.sen_log);
+    from_json_nested(src, "sen_log_dia", dst.sen_log_dia);
+    from_json_nested(src, "sen", dst.sen);
+    from_json_nested(src, "sen_dia", dst.sen_dia);
+    from_json_nested(src, "v_val", dst.v_val);
+    from_json_nested(src, "w_val", dst.w_val);
+    from_json_nested(src, "ang_val", dst.ang_val);
+    from_json_nested(src, "s_val", dst.s_val);
+    from_json_nested(src, "aw_log", dst.aw_log);
 }
 
 inline void convertFromJson(JsonVariantConst src, motion_tgt_t& dst) {
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["w_max"].is<float>()) dst.w_max = src["w_max"].as<float>();
-    if (src["alpha"].is<float>()) dst.alpha = src["alpha"].as<float>();
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "w_max", dst.w_max);
+    from_json_field(src, "alpha", dst.alpha);
 }
 
 inline void convertFromJson(JsonVariantConst src, buzzer_t& dst) {
-    if (src["hz"].is<int>()) dst.hz = src["hz"].as<int>();
-    if (src["time"].is<int>()) dst.time = src["time"].as<int>();
-    if (src["timstamp"].is<int>()) dst.timstamp = src["timstamp"].as<int>();
+    from_json_field(src, "hz", dst.hz);
+    from_json_field(src, "time", dst.time);
+    from_json_field(src, "timstamp", dst.timstamp);
 }
 
 inline void convertFromJson(JsonVariantConst src, planning_req_t& dst) {
-    if (src["time_stamp"].is<int>()) dst.time_stamp = src["time_stamp"].as<int>();
-    if (src["error_gyro_reset"].is<int>()) dst.error_gyro_reset = src["error_gyro_reset"].as<int>();
-    if (src["error_vel_reset"].is<int>()) dst.error_vel_reset = src["error_vel_reset"].as<int>();
-    if (src["error_led_reset"].is<int>()) dst.error_led_reset = src["error_led_reset"].as<int>();
-    if (src["error_ang_reset"].is<int>()) dst.error_ang_reset = src["error_ang_reset"].as<int>();
-    if (src["error_dist_reset"].is<int>()) dst.error_dist_reset = src["error_dist_reset"].as<int>();
+    from_json_field(src, "time_stamp", dst.time_stamp);
+    from_json_field(src, "error_gyro_reset", dst.error_gyro_reset);
+    from_json_field(src, "error_vel_reset", dst.error_vel_reset);
+    from_json_field(src, "error_led_reset", dst.error_led_reset);
+    from_json_field(src, "error_ang_reset", dst.error_ang_reset);
+    from_json_field(src, "error_dist_reset", dst.error_dist_reset);
 }
 
 inline void convertFromJson(JsonVariantConst src, fail_safe_state_t& dst) {
-    if (src["error"].is<int>()) dst.error = src["error"].as<int>();
+    from_json_field(src, "error", dst.error);
 }
 
 inline void convertFromJson(JsonVariantConst src, sys_id_t& dst) {
-    if (src["right_v"].is<float>()) dst.right_v = src["right_v"].as<float>();
-    if (src["left_v"].is<float>()) dst.left_v = src["left_v"].as<float>();
-    if (src["enable"].is<bool>()) dst.enable = src["enable"].as<bool>();
+    from_json_field(src, "right_v", dst.right_v);
+    from_json_field(src, "left_v", dst.left_v);
+    from_json_field(src, "enable", dst.enable);
 }
 
 inline void convertFromJson(JsonVariantConst src, new_motion_req_t& dst) {
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["v_end"].is<float>()) dst.v_end = src["v_end"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["decel"].is<float>()) dst.decel = src["decel"].as<float>();
-    if (src["dist"].is<float>()) dst.dist = src["dist"].as<float>();
-    if (src["w_max"].is<float>()) dst.w_max = src["w_max"].as<float>();
-    if (src["w_end"].is<float>()) dst.w_end = src["w_end"].as<float>();
-    if (src["alpha"].is<float>()) dst.alpha = src["alpha"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
-    if (src["sla_alpha"].is<float>()) dst.sla_alpha = src["sla_alpha"].as<float>();
-    if (src["sla_time"].is<float>()) dst.sla_time = src["sla_time"].as<float>();
-    if (src["sla_pow_n"].is<float>()) dst.sla_pow_n = src["sla_pow_n"].as<float>();
-    if (src["sla_rad"].is<float>()) dst.sla_rad = src["sla_rad"].as<float>();
-    if (src["dia90_offset"].is<float>()) dst.dia90_offset = src["dia90_offset"].as<float>();
-    if (src["td"].is<int>()) dst.td = (TurnDirection)src["td"].as<int>();
-    if (src["tt"].is<int>()) dst.tt = (TurnType)src["tt"].as<int>();
-    if (src["motion_mode"].is<int>()) dst.motion_mode = (RUN_MODE2)src["motion_mode"].as<int>();
-    if (src["motion_type"].is<int>()) dst.motion_type = (MotionType)src["motion_type"].as<int>();
-    if (src["timstamp"].is<int>()) dst.timstamp = src["timstamp"].as<int>();
-    if (src["motion_dir"].is<int>()) dst.motion_dir = (MotionDirection)src["motion_dir"].as<int>();
-    if (src["dia_mode"].is<bool>()) dst.dia_mode = src["dia_mode"].as<bool>();
-    if (src["sct"].is<int>()) dst.sct = (SensorCtrlType)src["sct"].as<int>();
-    if (!src["sys_id"].isNull()) convertFromJson(src["sys_id"], dst.sys_id);
-    if (src["tgt_reset_req"].is<bool>()) dst.tgt_reset_req = src["tgt_reset_req"].as<bool>();
-    if (src["ego_reset_req"].is<bool>()) dst.ego_reset_req = src["ego_reset_req"].as<bool>();
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "v_end", dst.v_end);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "decel", dst.decel);
+    from_json_field(src, "dist", dst.dist);
+    from_json_field(src, "w_max", dst.w_max);
+    from_json_field(src, "w_end", dst.w_end);
+    from_json_field(src, "alpha", dst.alpha);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "sla_alpha", dst.sla_alpha);
+    from_json_field(src, "sla_time", dst.sla_time);
+    from_json_field(src, "sla_pow_n", dst.sla_pow_n);
+    from_json_field(src, "sla_rad", dst.sla_rad);
+    from_json_field(src, "dia90_offset", dst.dia90_offset);
+    from_json_field(src, "td", dst.td);
+    from_json_field(src, "tt", dst.tt);
+    from_json_field(src, "motion_mode", dst.motion_mode);
+    from_json_field(src, "motion_type", dst.motion_type);
+    from_json_field(src, "timstamp", dst.timstamp);
+    from_json_field(src, "motion_dir", dst.motion_dir);
+    from_json_field(src, "dia_mode", dst.dia_mode);
+    from_json_field(src, "sct", dst.sct);
+    from_json_nested(src, "sys_id", dst.sys_id);
+    from_json_field(src, "tgt_reset_req", dst.tgt_reset_req);
+    from_json_field(src, "ego_reset_req", dst.ego_reset_req);
 }
 
 inline void convertFromJson(JsonVariantConst src, global_ego_pos_t& dst) {
-    if (src["img_dist"].is<float>()) dst.img_dist = src["img_dist"].as<float>();
-    if (src["img_ang"].is<float>()) dst.img_ang = src["img_ang"].as<float>();
-    if (src["dist"].is<float>()) dst.dist = src["dist"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
+    from_json_field(src, "img_dist", dst.img_dist);
+    from_json_field(src, "img_ang", dst.img_ang);
+    from_json_field(src, "dist", dst.dist);
+    from_json_field(src, "ang", dst.ang);
 }
 
 inline void convertFromJson(JsonVariantConst src, pos_t& dst) {
-    if (src["x"].is<float>()) dst.x = src["x"].as<float>();
-    if (src["y"].is<float>()) dst.y = src["y"].as<float>();
+    from_json_field(src, "x", dst.x);
+    from_json_field(src, "y", dst.y);
 }
 
 inline void convertFromJson(JsonVariantConst src, dia_state_t& dst) {
-    if (src["right_old"].is<float>()) dst.right_old = src["right_old"].as<float>();
-    if (src["left_old"].is<float>()) dst.left_old = src["left_old"].as<float>();
-    if (src["right_save"].is<bool>()) dst.right_save = src["right_save"].as<bool>();
-    if (src["left_save"].is<bool>()) dst.left_save = src["left_save"].as<bool>();
-    if (src["dia90_offset"].is<float>()) dst.dia90_offset = src["dia90_offset"].as<float>();
+    from_json_field(src, "right_old", dst.right_old);
+    from_json_field(src, "left_old", dst.left_old);
+    from_json_field(src, "right_save", dst.right_save);
+    from_json_field(src, "left_save", dst.left_save);
+    from_json_field(src, "dia90_offset", dst.dia90_offset);
 }
 
 inline void convertFromJson(JsonVariantConst src, t_kanayama_gain& dst) {
@@ -1147,41 +1125,37 @@ inline void convertFromJson(JsonVariantConst src, t_ego& dst) {
     from_json_field(src,  "ff_duty_front",         dst.ff_duty_front);
     from_json_field(src,  "ff_duty_roll",          dst.ff_duty_roll);
     from_json_field(src,  "ff_duty_rpm_r",         dst.ff_duty_rpm_r);
-    if (src["ff_duty_rpm_l"].is<float>()) dst.ff_duty_rpm_l = src["ff_duty_rpm_l"].as<float>();
-    if (src["ff_front_torque"].is<float>()) dst.ff_front_torque = src["ff_front_torque"].as<float>();
-    if (src["ff_roll_torque"].is<float>()) dst.ff_roll_torque = src["ff_roll_torque"].as<float>();
-    if (src["ff_friction_torque_l"].is<float>()) dst.ff_friction_torque_l = src["ff_friction_torque_l"].as<float>();
-    if (src["ff_friction_torque_r"].is<float>()) dst.ff_friction_torque_r = src["ff_friction_torque_r"].as<float>();
-    if (src["decel_delay_cnt"].is<int>()) dst.decel_delay_cnt = src["decel_delay_cnt"].as<int>();
+    from_json_field(src, "ff_duty_rpm_l", dst.ff_duty_rpm_l);
+    from_json_field(src, "ff_front_torque", dst.ff_front_torque);
+    from_json_field(src, "ff_roll_torque", dst.ff_roll_torque);
+    from_json_field(src, "ff_friction_torque_l", dst.ff_friction_torque_l);
+    from_json_field(src, "ff_friction_torque_r", dst.ff_friction_torque_r);
+    from_json_field(src, "decel_delay_cnt", dst.decel_delay_cnt);
 }
 
 inline void convertFromJson(JsonVariantConst src, motion_tgt_val_t& dst) {
-    if (!src["tgt_in"].isNull()) convertFromJson(src["tgt_in"], dst.tgt_in);
-    if (!src["ego_in"].isNull()) convertFromJson(src["ego_in"], dst.ego_in);
-    if (src["calc_time"].is<int16_t>()) dst.calc_time = src["calc_time"].as<int16_t>();
-    if (src["calc_time2"].is<int16_t>()) dst.calc_time2 = src["calc_time2"].as<int16_t>();
-    if (src["calc_time_diff"].is<int16_t>()) dst.calc_time_diff = src["calc_time_diff"].as<int16_t>();
-    if (!src["global_pos"].isNull()) {
-        global_ego_pos_t tmp{};
-        convertFromJson(src["global_pos"], tmp);
-        memcpy(const_cast<global_ego_pos_t*>(&dst.global_pos), &tmp, sizeof(global_ego_pos_t));
-    }
-    if (src["motion_mode"].is<int32_t>()) dst.motion_mode = src["motion_mode"].as<int32_t>();
-    if (src["motion_type"].is<int>()) dst.motion_type = (MotionType)src["motion_type"].as<int>();
-    if (src["motion_dir"].is<int>()) dst.motion_dir = (MotionDirection)src["motion_dir"].as<int>();
-    if (src["dia_mode"].is<bool>()) dst.dia_mode = src["dia_mode"].as<bool>();
-    if (!src["pl_req"].isNull()) convertFromJson(src["pl_req"], dst.pl_req);
-    if (!src["fss"].isNull()) convertFromJson(src["fss"], dst.fss);
-    if (src["gyro_zero_p_offset"].is<float>()) dst.gyro_zero_p_offset = src["gyro_zero_p_offset"].as<float>();
-    if (src["var_unbiased_dps2"].is<float>()) dst.var_unbiased_dps2 = src["var_unbiased_dps2"].as<float>();
-    if (src["var_robust_dps2"].is<float>()) dst.var_robust_dps2 = src["var_robust_dps2"].as<float>();
-    if (src["gyro_retry"].is<int>()) dst.gyro_retry = src["gyro_retry"].as<int>();
-    if (src["calibration_mode"].is<int>()) dst.calibration_mode = (CalibrationMode)src["calibration_mode"].as<int>();
-    if (src["gyro2_zero_p_offset"].is<float>()) dst.gyro2_zero_p_offset = src["gyro2_zero_p_offset"].as<float>();
-    if (src["accel_x_zero_p_offset"].is<float>()) dst.accel_x_zero_p_offset = src["accel_x_zero_p_offset"].as<float>();
-    if (src["accel_y_zero_p_offset"].is<float>()) dst.accel_y_zero_p_offset = src["accel_y_zero_p_offset"].as<float>();
-    if (src["temp_zero_p_offset"].is<float>()) dst.temp_zero_p_offset = src["temp_zero_p_offset"].as<float>();
-    if (!src["buzzer"].isNull()) convertFromJson(src["buzzer"], dst.buzzer);
+    from_json_nested(src, "tgt_in", dst.tgt_in);
+    from_json_nested(src, "ego_in", dst.ego_in);
+    from_json_field(src, "calc_time", dst.calc_time);
+    from_json_field(src, "calc_time2", dst.calc_time2);
+    from_json_field(src, "calc_time_diff", dst.calc_time_diff);
+    from_json_nested(src, "global_pos", dst.global_pos);
+    from_json_field(src, "motion_mode", dst.motion_mode);
+    from_json_field(src, "motion_type", dst.motion_type);
+    from_json_field(src, "motion_dir", dst.motion_dir);
+    from_json_field(src, "dia_mode", dst.dia_mode);
+    from_json_nested(src, "pl_req", dst.pl_req);
+    from_json_nested(src, "fss", dst.fss);
+    from_json_field(src, "gyro_zero_p_offset", dst.gyro_zero_p_offset);
+    from_json_field(src, "var_unbiased_dps2", dst.var_unbiased_dps2);
+    from_json_field(src, "var_robust_dps2", dst.var_robust_dps2);
+    from_json_field(src, "gyro_retry", dst.gyro_retry);
+    from_json_field(src, "calibration_mode", dst.calibration_mode);
+    from_json_field(src, "gyro2_zero_p_offset", dst.gyro2_zero_p_offset);
+    from_json_field(src, "accel_x_zero_p_offset", dst.accel_x_zero_p_offset);
+    from_json_field(src, "accel_y_zero_p_offset", dst.accel_y_zero_p_offset);
+    from_json_field(src, "temp_zero_p_offset", dst.temp_zero_p_offset);
+    from_json_nested(src, "buzzer", dst.buzzer);
     from_json_nested(src, "nmr",       dst.nmr);
     from_json_nested(src, "p",         dst.p);
     from_json_nested(src, "dia_state", dst.dia_state);
@@ -1212,128 +1186,114 @@ inline void convertFromJson(JsonVariantConst src, param_straight_t& dst) {
 }
 
 inline void convertFromJson(JsonVariantConst src, param_roll_t& dst) {
-    if (src["w_max"].is<float>()) dst.w_max = src["w_max"].as<float>();
-    if (src["w_end"].is<float>()) dst.w_end = src["w_end"].as<float>();
-    if (src["alpha"].is<float>()) dst.alpha = src["alpha"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
-    if (src["RorL"].is<int>()) dst.RorL = (TurnDirection)src["RorL"].as<int>();
+    from_json_field(src, "w_max", dst.w_max);
+    from_json_field(src, "w_end", dst.w_end);
+    from_json_field(src, "alpha", dst.alpha);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "RorL", dst.RorL);
 }
 
 inline void convertFromJson(JsonVariantConst src, param_normal_slalom_t& dst) {
-    if (src["radius"].is<float>()) dst.radius = src["radius"].as<float>();
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["v_end"].is<float>()) dst.v_end = src["v_end"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
-    if (src["RorL"].is<int>()) dst.RorL = (TurnDirection)src["RorL"].as<int>();
+    from_json_field(src, "radius", dst.radius);
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "v_end", dst.v_end);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "RorL", dst.RorL);
 }
 
 inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["end_v"].is<float>()) dst.end_v = src["end_v"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["decel"].is<float>()) dst.decel = src["decel"].as<float>();
-    if (src["dia_accl"].is<float>()) dst.dia_accl = src["dia_accl"].as<float>();
-    if (src["dia_decel"].is<float>()) dst.dia_decel = src["dia_decel"].as<float>();
-    if (src["dist"].is<float>()) dst.dist = src["dist"].as<float>();
-    if (src["w_max"].is<float>()) dst.w_max = src["w_max"].as<float>();
-    if (src["w_end"].is<float>()) dst.w_end = src["w_end"].as<float>();
-    if (src["alpha"].is<float>()) dst.alpha = src["alpha"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
-    if (src["suction_active"].is<int>()) dst.suction_active = src["suction_active"].as<int>();
-    if (src["suction_duty"].is<float>()) dst.suction_duty = src["suction_duty"].as<float>();
-    if (src["suction_duty_low"].is<float>()) dst.suction_duty_low = src["suction_duty_low"].as<float>();
-    if (src["suction_duty_burst"].is<float>()) dst.suction_duty_burst = src["suction_duty_burst"].as<float>();
-    if (src["suction_duty_burst_low"].is<float>()) dst.suction_duty_burst_low = src["suction_duty_burst_low"].as<float>();
-    if (src["suction_gain"].is<float>()) dst.suction_gain = src["suction_gain"].as<float>();
-    if (src["sla_dist"].is<float>()) dst.sla_dist = src["sla_dist"].as<float>();
-    if (src["file_idx"].is<int>()) dst.file_idx = src["file_idx"].as<int>();
-    if (src["sla_type"].is<int>()) dst.sla_type = src["sla_type"].as<int>();
-    if (src["sla_return"].is<int>()) dst.sla_return = src["sla_return"].as<int>();
-    if (src["sla_type2"].is<int>()) dst.sla_type2 = src["sla_type2"].as<int>();
-    if (src["turn_times"].is<int>()) dst.turn_times = src["turn_times"].as<int>();
-    if (src["ignore_opp_sen"].is<int>()) dst.ignore_opp_sen = src["ignore_opp_sen"].as<int>();
-    if (src["dia"].is<int>()) dst.dia = src["dia"].as<int>();
-    if (src["sysid_test_mode"].is<int>()) dst.sysid_test_mode = src["sysid_test_mode"].as<int>();
-    if (src["sysid_duty"].is<float>()) dst.sysid_duty = src["sysid_duty"].as<float>();
-    if (src["sysid_time"].is<float>()) dst.sysid_time = src["sysid_time"].as<float>();
-    if (src["start_turn"].is<int>()) dst.start_turn = src["start_turn"].as<int>();
-    if (src["search_mode"].is<int>()) dst.search_mode = src["search_mode"].as<int>();
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "end_v", dst.end_v);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "decel", dst.decel);
+    from_json_field(src, "dia_accl", dst.dia_accl);
+    from_json_field(src, "dia_decel", dst.dia_decel);
+    from_json_field(src, "dist", dst.dist);
+    from_json_field(src, "w_max", dst.w_max);
+    from_json_field(src, "w_end", dst.w_end);
+    from_json_field(src, "alpha", dst.alpha);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "suction_active", dst.suction_active);
+    from_json_field(src, "suction_duty", dst.suction_duty);
+    from_json_field(src, "suction_duty_low", dst.suction_duty_low);
+    from_json_field(src, "suction_duty_burst", dst.suction_duty_burst);
+    from_json_field(src, "suction_duty_burst_low", dst.suction_duty_burst_low);
+    from_json_field(src, "suction_gain", dst.suction_gain);
+    from_json_field(src, "sla_dist", dst.sla_dist);
+    from_json_field(src, "file_idx", dst.file_idx);
+    from_json_field(src, "sla_type", dst.sla_type);
+    from_json_field(src, "sla_return", dst.sla_return);
+    from_json_field(src, "sla_type2", dst.sla_type2);
+    from_json_field(src, "turn_times", dst.turn_times);
+    from_json_field(src, "ignore_opp_sen", dst.ignore_opp_sen);
+    from_json_field(src, "dia", dst.dia);
+    from_json_field(src, "sysid_test_mode", dst.sysid_test_mode);
+    from_json_field(src, "sysid_duty", dst.sysid_duty);
+    from_json_field(src, "sysid_time", dst.sysid_time);
+    from_json_field(src, "start_turn", dst.start_turn);
+    from_json_field(src, "search_mode", dst.search_mode);
 }
 
 inline void convertFromJson(JsonVariantConst src, system_t& dst) {
-    if (src["goals"].is<JsonArrayConst>()) {
-        dst.goals.clear();
-        for (auto v : src["goals"].as<JsonArrayConst>()) {
-            point_t temp;
-            convertFromJson(v, temp);
-            dst.goals.push_back(temp);
-        }
-    }
-    if (src["maze_size"].is<int>()) dst.maze_size = src["maze_size"].as<int>();
-    if (src["user_mode"].is<int>()) dst.user_mode = src["user_mode"].as<int>();
-    if (src["circuit_mode"].is<int>()) dst.circuit_mode = src["circuit_mode"].as<int>();
-    if (!src["test"].isNull()) convertFromJson(src["test"], dst.test);
-    if (src["hf_cl"].is<int>()) dst.hf_cl = src["hf_cl"].as<int>();
+    from_json_vector(src, "goals", dst.goals);
+    from_json_field(src, "maze_size", dst.maze_size);
+    from_json_field(src, "user_mode", dst.user_mode);
+    from_json_field(src, "circuit_mode", dst.circuit_mode);
+    from_json_nested(src, "test", dst.test);
+    from_json_field(src, "hf_cl", dst.hf_cl);
 }
 
 inline void convertFromJson(JsonVariantConst src, profile_idx_t& dst) {
-    if (src["normal"].is<int>()) dst.normal = src["normal"].as<int>();
-    if (src["large"].is<int>()) dst.large = src["large"].as<int>();
-    if (src["orval"].is<int>()) dst.orval = src["orval"].as<int>();
-    if (src["dia45"].is<int>()) dst.dia45 = src["dia45"].as<int>();
-    if (src["dia45_2"].is<int>()) dst.dia45_2 = src["dia45_2"].as<int>();
-    if (src["dia135"].is<int>()) dst.dia135 = src["dia135"].as<int>();
-    if (src["dia135_2"].is<int>()) dst.dia135_2 = src["dia135_2"].as<int>();
-    if (src["dia90"].is<int>()) dst.dia90 = src["dia90"].as<int>();
+    from_json_field(src, "normal", dst.normal);
+    from_json_field(src, "large", dst.large);
+    from_json_field(src, "orval", dst.orval);
+    from_json_field(src, "dia45", dst.dia45);
+    from_json_field(src, "dia45_2", dst.dia45_2);
+    from_json_field(src, "dia135", dst.dia135);
+    from_json_field(src, "dia135_2", dst.dia135_2);
+    from_json_field(src, "dia90", dst.dia90);
 }
 
 inline void convertFromJson(JsonVariantConst src, turn_param_profile_t& dst) {
-    if (src["file_list"].is<JsonArrayConst>()) {
-        dst.file_list.clear();
-        for (auto v : src["file_list"].as<JsonArrayConst>()) {
-            std::string temp;
-            convertFromJson(v, temp);
-            dst.file_list.push_back(temp);
-        }
-    }
-    if (src["file_list_size"].is<int>()) dst.file_list_size = src["file_list_size"].as<int>();
-    if (src["profile_idx_size"].is<int>()) dst.profile_idx_size = src["profile_idx_size"].as<int>();
+    from_json_vector(src, "file_list", dst.file_list);
+    from_json_field(src, "file_list_size", dst.file_list_size);
+    from_json_field(src, "profile_idx_size", dst.profile_idx_size);
     // profile_list unordered_map skipped
     // profile_map unordered_map skipped
 }
 
 inline void convertFromJson(JsonVariantConst src, motor_req_t& dst) {
-    if (src["enable"].is<bool>()) dst.enable = src["enable"].as<bool>();
-    if (src["timestamp"].is<int>()) dst.timestamp = src["timestamp"].as<int>();
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "timestamp", dst.timestamp);
 }
 
 inline void convertFromJson(JsonVariantConst src, slalom_offset_t& dst) {
-    if (src["right"].is<float>()) dst.right = src["right"].as<float>();
-    if (src["left"].is<float>()) dst.left = src["left"].as<float>();
+    from_json_field(src, "right", dst.right);
+    from_json_field(src, "left", dst.left);
 }
 
 inline void convertFromJson(JsonVariantConst src, slalom_param2_t& dst) {
-    if (src["v"].is<float>()) dst.v = src["v"].as<float>();
-    if (src["end_v"].is<float>()) dst.end_v = src["end_v"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
-    if (src["ref_ang"].is<float>()) dst.ref_ang = src["ref_ang"].as<float>();
-    if (src["rad"].is<float>()) dst.rad = src["rad"].as<float>();
-    if (src["rad2"].is<float>()) dst.rad2 = src["rad2"].as<float>();
-    if (!src["front"].isNull()) convertFromJson(src["front"], dst.front);
-    if (!src["back"].isNull()) convertFromJson(src["back"], dst.back);
-    if (src["pow_n"].is<int>()) dst.pow_n = src["pow_n"].as<int>();
-    if (src["time"].is<float>()) dst.time = src["time"].as<float>();
-    if (src["time2"].is<float>()) dst.time2 = src["time2"].as<float>();
-    if (src["type"].is<int>()) dst.type = (TurnType)src["type"].as<int>();
+    from_json_field(src, "v", dst.v);
+    from_json_field(src, "end_v", dst.end_v);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "ref_ang", dst.ref_ang);
+    from_json_field(src, "rad", dst.rad);
+    from_json_field(src, "rad2", dst.rad2);
+    from_json_nested(src, "front", dst.front);
+    from_json_nested(src, "back", dst.back);
+    from_json_field(src, "pow_n", dst.pow_n);
+    from_json_field(src, "time", dst.time);
+    from_json_field(src, "time2", dst.time2);
+    from_json_field(src, "type", dst.type);
 }
 
 inline void convertFromJson(JsonVariantConst src, straight_param_t& dst) {
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["decel"].is<float>()) dst.decel = src["decel"].as<float>();
-    if (src["w_max"].is<float>()) dst.w_max = src["w_max"].as<float>();
-    if (src["w_end"].is<float>()) dst.w_end = src["w_end"].as<float>();
-    if (src["alpha"].is<float>()) dst.alpha = src["alpha"].as<float>();
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "decel", dst.decel);
+    from_json_field(src, "w_max", dst.w_max);
+    from_json_field(src, "w_end", dst.w_end);
+    from_json_field(src, "alpha", dst.alpha);
 }
 
 inline void convertFromJson(JsonVariantConst src, param_set_t& dst) {
@@ -1341,78 +1301,73 @@ inline void convertFromJson(JsonVariantConst src, param_set_t& dst) {
     // map_slow unordered_map skipped
     // map_fast unordered_map skipped
     // str_map unordered_map skipped
-    if (src["suction"].is<int8_t>()) dst.suction = src["suction"].as<int8_t>();
-    if (src["suction_duty"].is<float>()) dst.suction_duty = src["suction_duty"].as<float>();
-    if (src["suction_duty_low"].is<float>()) dst.suction_duty_low = src["suction_duty_low"].as<float>();
-    if (src["cell_size"].is<float>()) dst.cell_size = src["cell_size"].as<float>();
-    if (src["start_offset"].is<float>()) dst.start_offset = src["start_offset"].as<float>();
+    from_json_field(src, "suction", dst.suction);
+    from_json_field(src, "suction_duty", dst.suction_duty);
+    from_json_field(src, "suction_duty_low", dst.suction_duty_low);
+    from_json_field(src, "cell_size", dst.cell_size);
+    from_json_field(src, "start_offset", dst.start_offset);
 }
 
 inline void convertFromJson(JsonVariantConst src, path_set_t& dst) {
-    if (src["path_s"].is<JsonArrayConst>()) {
-        dst.path_s.clear();
-        for (auto v : src["path_s"].as<JsonArrayConst>()) {
-            dst.path_s.push_back(v.as<float>());
-        }
-    }
+    from_json_vector(src, "path_s", dst.path_s);
     // path_t vector<unsigned char> skipped
-    if (src["time"].is<float>()) dst.time = src["time"].as<float>();
-    if (src["result"].is<bool>()) dst.result = src["result"].as<bool>();
-    if (src["type"].is<int8_t>()) dst.type = src["type"].as<int8_t>();
+    from_json_field(src, "time", dst.time);
+    from_json_field(src, "result", dst.result);
+    from_json_field(src, "type", dst.type);
 }
 
 inline void convertFromJson(JsonVariantConst src, path_req_t& dst) {
-    if (src["time"].is<float>()) dst.time = src["time"].as<float>();
+    from_json_field(src, "time", dst.time);
 }
 
 inline void convertFromJson(JsonVariantConst src, create_path_result_t& dst) {
-    if (src["time"].is<float>()) dst.time = src["time"].as<float>();
+    from_json_field(src, "time", dst.time);
 }
 
 inline void convertFromJson(JsonVariantConst src, next_motion_t& dst) {
-    if (src["is_turn"].is<bool>()) dst.is_turn = src["is_turn"].as<bool>();
-    if (src["next_turn_type"].is<int>()) dst.next_turn_type = (TurnType)src["next_turn_type"].as<int>();
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["v_end"].is<float>()) dst.v_end = src["v_end"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["decel"].is<float>()) dst.decel = src["decel"].as<float>();
-    if (src["skip_wall_off"].is<bool>()) dst.skip_wall_off = src["skip_wall_off"].as<bool>();
-    if (src["carry_over_dist"].is<float>()) dst.carry_over_dist = src["carry_over_dist"].as<float>();
+    from_json_field(src, "is_turn", dst.is_turn);
+    from_json_field(src, "next_turn_type", dst.next_turn_type);
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "v_end", dst.v_end);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "decel", dst.decel);
+    from_json_field(src, "skip_wall_off", dst.skip_wall_off);
+    from_json_field(src, "carry_over_dist", dst.carry_over_dist);
 }
 
 inline void convertFromJson(JsonVariantConst src, log_data_t& dst) {
-    if (src["img_v"].is<float>()) dst.img_v = src["img_v"].as<float>();
-    if (src["v_l"].is<float>()) dst.v_l = src["v_l"].as<float>();
-    if (src["v_c"].is<float>()) dst.v_c = src["v_c"].as<float>();
-    if (src["v_r"].is<float>()) dst.v_r = src["v_r"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["img_w"].is<float>()) dst.img_w = src["img_w"].as<float>();
-    if (src["w_lp"].is<float>()) dst.w_lp = src["w_lp"].as<float>();
-    if (src["alpha"].is<float>()) dst.alpha = src["alpha"].as<float>();
-    if (src["img_dist"].is<float>()) dst.img_dist = src["img_dist"].as<float>();
-    if (src["dist"].is<float>()) dst.dist = src["dist"].as<float>();
-    if (src["img_ang"].is<float>()) dst.img_ang = src["img_ang"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
-    if (src["duty_l"].is<float>()) dst.duty_l = src["duty_l"].as<float>();
-    if (src["duty_r"].is<float>()) dst.duty_r = src["duty_r"].as<float>();
-    if (src["left90_lp"].is<float>()) dst.left90_lp = src["left90_lp"].as<float>();
-    if (src["left45_lp"].is<float>()) dst.left45_lp = src["left45_lp"].as<float>();
-    if (src["front_lp"].is<float>()) dst.front_lp = src["front_lp"].as<float>();
-    if (src["right45_lp"].is<float>()) dst.right45_lp = src["right45_lp"].as<float>();
-    if (src["right90_lp"].is<float>()) dst.right90_lp = src["right90_lp"].as<float>();
-    if (src["battery_lp"].is<float>()) dst.battery_lp = src["battery_lp"].as<float>();
-    if (src["motion_type"].is<int8_t>()) dst.motion_type = src["motion_type"].as<int8_t>();
-    if (src["duty_ff_front"].is<float>()) dst.duty_ff_front = src["duty_ff_front"].as<float>();
-    if (src["duty_ff_roll"].is<float>()) dst.duty_ff_roll = src["duty_ff_roll"].as<float>();
-    if (src["duty_sensor_ctrl"].is<float>()) dst.duty_sensor_ctrl = src["duty_sensor_ctrl"].as<float>();
-    if (src["pos_x"].is<float>()) dst.pos_x = src["pos_x"].as<float>();
-    if (src["pos_y"].is<float>()) dst.pos_y = src["pos_y"].as<float>();
+    from_json_field(src, "img_v", dst.img_v);
+    from_json_field(src, "v_l", dst.v_l);
+    from_json_field(src, "v_c", dst.v_c);
+    from_json_field(src, "v_r", dst.v_r);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "img_w", dst.img_w);
+    from_json_field(src, "w_lp", dst.w_lp);
+    from_json_field(src, "alpha", dst.alpha);
+    from_json_field(src, "img_dist", dst.img_dist);
+    from_json_field(src, "dist", dst.dist);
+    from_json_field(src, "img_ang", dst.img_ang);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "duty_l", dst.duty_l);
+    from_json_field(src, "duty_r", dst.duty_r);
+    from_json_field(src, "left90_lp", dst.left90_lp);
+    from_json_field(src, "left45_lp", dst.left45_lp);
+    from_json_field(src, "front_lp", dst.front_lp);
+    from_json_field(src, "right45_lp", dst.right45_lp);
+    from_json_field(src, "right90_lp", dst.right90_lp);
+    from_json_field(src, "battery_lp", dst.battery_lp);
+    from_json_field(src, "motion_type", dst.motion_type);
+    from_json_field(src, "duty_ff_front", dst.duty_ff_front);
+    from_json_field(src, "duty_ff_roll", dst.duty_ff_roll);
+    from_json_field(src, "duty_sensor_ctrl", dst.duty_sensor_ctrl);
+    from_json_field(src, "pos_x", dst.pos_x);
+    from_json_field(src, "pos_y", dst.pos_y);
 }
 
 inline void convertFromJson(JsonVariantConst src, exec_pram_t& dst) {
-    if (src["fast_idx"].is<int8_t>()) dst.fast_idx = src["fast_idx"].as<int8_t>();
-    if (src["normal_idx"].is<int8_t>()) dst.normal_idx = src["normal_idx"].as<int8_t>();
-    if (src["slow_idx"].is<int8_t>()) dst.slow_idx = src["slow_idx"].as<int8_t>();
+    from_json_field(src, "fast_idx", dst.fast_idx);
+    from_json_field(src, "normal_idx", dst.normal_idx);
+    from_json_field(src, "slow_idx", dst.slow_idx);
 }
 
 inline void convertFromJson(JsonVariantConst src, log_data_t2& dst) {
@@ -1421,8 +1376,8 @@ inline void convertFromJson(JsonVariantConst src, log_data_t2& dst) {
     // v_c is half_t, skipping
     // v_c2 is half_t, skipping
     // v_r is half_t, skipping
-    if (src["v_r_enc"].is<int16_t>()) dst.v_r_enc = src["v_r_enc"].as<int16_t>();
-    if (src["v_l_enc"].is<int16_t>()) dst.v_l_enc = src["v_l_enc"].as<int16_t>();
+    from_json_field(src, "v_r_enc", dst.v_r_enc);
+    from_json_field(src, "v_l_enc", dst.v_l_enc);
     // accl is half_t, skipping
     // accl_x is half_t, skipping
     // dist_kf is half_t, skipping
@@ -1436,17 +1391,17 @@ inline void convertFromJson(JsonVariantConst src, log_data_t2& dst) {
     // ang_kf is half_t, skipping
     // duty_l is half_t, skipping
     // duty_r is half_t, skipping
-    if (src["left90_lp"].is<int16_t>()) dst.left90_lp = src["left90_lp"].as<int16_t>();
-    if (src["left45_lp"].is<int16_t>()) dst.left45_lp = src["left45_lp"].as<int16_t>();
-    if (src["right45_lp"].is<int16_t>()) dst.right45_lp = src["right45_lp"].as<int16_t>();
-    if (src["right90_lp"].is<int16_t>()) dst.right90_lp = src["right90_lp"].as<int16_t>();
+    from_json_field(src, "left90_lp", dst.left90_lp);
+    from_json_field(src, "left45_lp", dst.left45_lp);
+    from_json_field(src, "right45_lp", dst.right45_lp);
+    from_json_field(src, "right90_lp", dst.right90_lp);
     // battery_lp is half_t, skipping
-    if (src["left45_2_lp"].is<int16_t>()) dst.left45_2_lp = src["left45_2_lp"].as<int16_t>();
-    if (src["right45_2_lp"].is<int16_t>()) dst.right45_2_lp = src["right45_2_lp"].as<int16_t>();
-    if (src["left45_3_lp"].is<int16_t>()) dst.left45_3_lp = src["left45_3_lp"].as<int16_t>();
-    if (src["right45_3_lp"].is<int16_t>()) dst.right45_3_lp = src["right45_3_lp"].as<int16_t>();
-    if (src["motion_type"].is<uint8_t>()) dst.motion_type = src["motion_type"].as<uint8_t>();
-    if (src["motion_timestamp"].is<int16_t>()) dst.motion_timestamp = src["motion_timestamp"].as<int16_t>();
+    from_json_field(src, "left45_2_lp", dst.left45_2_lp);
+    from_json_field(src, "right45_2_lp", dst.right45_2_lp);
+    from_json_field(src, "left45_3_lp", dst.left45_3_lp);
+    from_json_field(src, "right45_3_lp", dst.right45_3_lp);
+    from_json_field(src, "motion_type", dst.motion_type);
+    from_json_field(src, "motion_timestamp", dst.motion_timestamp);
     // duty_sensor_ctrl is half_t, skipping
     // sen_log_l45 is half_t, skipping
     // sen_log_r45 is half_t, skipping
@@ -1454,10 +1409,10 @@ inline void convertFromJson(JsonVariantConst src, log_data_t2& dst) {
     // sen_log_r45_2 is half_t, skipping
     // sen_log_l45_3 is half_t, skipping
     // sen_log_r45_3 is half_t, skipping
-    if (src["sen_calc_time"].is<int16_t>()) dst.sen_calc_time = src["sen_calc_time"].as<int16_t>();
-    if (src["sen_calc_time2"].is<int16_t>()) dst.sen_calc_time2 = src["sen_calc_time2"].as<int16_t>();
-    if (src["pln_calc_time"].is<int16_t>()) dst.pln_calc_time = src["pln_calc_time"].as<int16_t>();
-    if (src["pln_time_diff"].is<int16_t>()) dst.pln_time_diff = src["pln_time_diff"].as<int16_t>();
+    from_json_field(src, "sen_calc_time", dst.sen_calc_time);
+    from_json_field(src, "sen_calc_time2", dst.sen_calc_time2);
+    from_json_field(src, "pln_calc_time", dst.pln_calc_time);
+    from_json_field(src, "pln_time_diff", dst.pln_time_diff);
     // m_pid_p is half_t, skipping
     // m_pid_i is half_t, skipping
     // m_pid_i2 is half_t, skipping
@@ -1521,182 +1476,182 @@ inline void convertFromJson(JsonVariantConst src, sysid_log& dst) {
 }
 
 inline void convertFromJson(JsonVariantConst src, fail_safe_t& dst) {
-    if (src["invalid_front_led"].is<int>()) dst.invalid_front_led = src["invalid_front_led"].as<int>();
-    if (src["invalid_duty_r_cnt"].is<int>()) dst.invalid_duty_r_cnt = src["invalid_duty_r_cnt"].as<int>();
-    if (src["invalid_duty_l_cnt"].is<int>()) dst.invalid_duty_l_cnt = src["invalid_duty_l_cnt"].as<int>();
-    if (src["invalid_v_cnt"].is<int>()) dst.invalid_v_cnt = src["invalid_v_cnt"].as<int>();
-    if (src["invalid_w_cnt"].is<int>()) dst.invalid_w_cnt = src["invalid_w_cnt"].as<int>();
+    from_json_field(src, "invalid_front_led", dst.invalid_front_led);
+    from_json_field(src, "invalid_duty_r_cnt", dst.invalid_duty_r_cnt);
+    from_json_field(src, "invalid_duty_l_cnt", dst.invalid_duty_l_cnt);
+    from_json_field(src, "invalid_v_cnt", dst.invalid_v_cnt);
+    from_json_field(src, "invalid_w_cnt", dst.invalid_w_cnt);
 }
 
 inline void convertFromJson(JsonVariantConst src, slip_t& dst) {
-    if (src["K"].is<float>()) dst.K = src["K"].as<float>();
-    if (src["k"].is<float>()) dst.k = src["k"].as<float>();
-    if (src["beta"].is<float>()) dst.beta = src["beta"].as<float>();
-    if (src["vx"].is<float>()) dst.vx = src["vx"].as<float>();
-    if (src["vy"].is<float>()) dst.vy = src["vy"].as<float>();
-    if (src["v"].is<float>()) dst.v = src["v"].as<float>();
+    from_json_field(src, "K", dst.K);
+    from_json_field(src, "k", dst.k);
+    from_json_field(src, "beta", dst.beta);
+    from_json_field(src, "vx", dst.vx);
+    from_json_field(src, "vy", dst.vy);
+    from_json_field(src, "v", dst.v);
 }
 
 inline void convertFromJson(JsonVariantConst src, sensor_ctrl_keep_dist_t& dst) {
-    if (src["star_dist"].is<float>()) dst.star_dist = src["star_dist"].as<float>();
+    from_json_field(src, "star_dist", dst.star_dist);
 }
 
 inline void convertFromJson(JsonVariantConst src, planning_time_t& dst) {
-    if (src["v_start"].is<float>()) dst.v_start = src["v_start"].as<float>();
-    if (src["v_max"].is<float>()) dst.v_max = src["v_max"].as<float>();
-    if (src["v_end"].is<float>()) dst.v_end = src["v_end"].as<float>();
-    if (src["dist"].is<float>()) dst.dist = src["dist"].as<float>();
-    if (src["lap_time"].is<float>()) dst.lap_time = src["lap_time"].as<float>();
-    if (src["total_time"].is<float>()) dst.total_time = src["total_time"].as<float>();
+    from_json_field(src, "v_start", dst.v_start);
+    from_json_field(src, "v_max", dst.v_max);
+    from_json_field(src, "v_end", dst.v_end);
+    from_json_field(src, "dist", dst.dist);
+    from_json_field(src, "lap_time", dst.lap_time);
+    from_json_field(src, "total_time", dst.total_time);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct1& dst) {
-    if (src["index"].is<int>()) dst.index = src["index"].as<int>();
-    if (src["ideal_v"].is<float>()) dst.ideal_v = src["ideal_v"].as<float>();
-    if (src["v_c"].is<float>()) dst.v_c = src["v_c"].as<float>();
-    if (src["v_c2"].is<float>()) dst.v_c2 = src["v_c2"].as<float>();
-    if (src["v_l"].is<float>()) dst.v_l = src["v_l"].as<float>();
-    if (src["v_r"].is<float>()) dst.v_r = src["v_r"].as<float>();
-    if (src["v_l_enc"].is<int>()) dst.v_l_enc = src["v_l_enc"].as<int>();
-    if (src["v_r_enc"].is<int>()) dst.v_r_enc = src["v_r_enc"].as<int>();
-    if (src["v_l_enc_sin"].is<float>()) dst.v_l_enc_sin = src["v_l_enc_sin"].as<float>();
-    if (src["v_r_enc_sin"].is<float>()) dst.v_r_enc_sin = src["v_r_enc_sin"].as<float>();
-    if (src["accl"].is<float>()) dst.accl = src["accl"].as<float>();
-    if (src["accl_x"].is<float>()) dst.accl_x = src["accl_x"].as<float>();
+    from_json_field(src, "index", dst.index);
+    from_json_field(src, "ideal_v", dst.ideal_v);
+    from_json_field(src, "v_c", dst.v_c);
+    from_json_field(src, "v_c2", dst.v_c2);
+    from_json_field(src, "v_l", dst.v_l);
+    from_json_field(src, "v_r", dst.v_r);
+    from_json_field(src, "v_l_enc", dst.v_l_enc);
+    from_json_field(src, "v_r_enc", dst.v_r_enc);
+    from_json_field(src, "v_l_enc_sin", dst.v_l_enc_sin);
+    from_json_field(src, "v_r_enc_sin", dst.v_r_enc_sin);
+    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "accl_x", dst.accl_x);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct2& dst) {
-    if (src["ideal_w"].is<float>()) dst.ideal_w = src["ideal_w"].as<float>();
-    if (src["w_lp"].is<float>()) dst.w_lp = src["w_lp"].as<float>();
-    if (src["alpha"].is<float>()) dst.alpha = src["alpha"].as<float>();
-    if (src["ideal_dist"].is<float>()) dst.ideal_dist = src["ideal_dist"].as<float>();
-    if (src["dist"].is<float>()) dst.dist = src["dist"].as<float>();
-    if (src["dist_kf"].is<float>()) dst.dist_kf = src["dist_kf"].as<float>();
-    if (src["ideal_ang"].is<float>()) dst.ideal_ang = src["ideal_ang"].as<float>();
-    if (src["ang"].is<float>()) dst.ang = src["ang"].as<float>();
-    if (src["ang_kf"].is<float>()) dst.ang_kf = src["ang_kf"].as<float>();
-    if (src["left90"].is<int>()) dst.left90 = src["left90"].as<int>();
-    if (src["left45"].is<int>()) dst.left45 = src["left45"].as<int>();
-    if (src["front"].is<int>()) dst.front = src["front"].as<int>();
+    from_json_field(src, "ideal_w", dst.ideal_w);
+    from_json_field(src, "w_lp", dst.w_lp);
+    from_json_field(src, "alpha", dst.alpha);
+    from_json_field(src, "ideal_dist", dst.ideal_dist);
+    from_json_field(src, "dist", dst.dist);
+    from_json_field(src, "dist_kf", dst.dist_kf);
+    from_json_field(src, "ideal_ang", dst.ideal_ang);
+    from_json_field(src, "ang", dst.ang);
+    from_json_field(src, "ang_kf", dst.ang_kf);
+    from_json_field(src, "left90", dst.left90);
+    from_json_field(src, "left45", dst.left45);
+    from_json_field(src, "front", dst.front);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct3& dst) {
-    if (src["right45"].is<int>()) dst.right45 = src["right45"].as<int>();
-    if (src["right90"].is<int>()) dst.right90 = src["right90"].as<int>();
-    if (src["left90_d"].is<float>()) dst.left90_d = src["left90_d"].as<float>();
-    if (src["left45_d"].is<float>()) dst.left45_d = src["left45_d"].as<float>();
-    if (src["front_d"].is<float>()) dst.front_d = src["front_d"].as<float>();
-    if (src["right45_d"].is<float>()) dst.right45_d = src["right45_d"].as<float>();
-    if (src["right90_d"].is<float>()) dst.right90_d = src["right90_d"].as<float>();
-    if (src["left90_far_d"].is<float>()) dst.left90_far_d = src["left90_far_d"].as<float>();
-    if (src["front_far_d"].is<float>()) dst.front_far_d = src["front_far_d"].as<float>();
-    if (src["right90_far_d"].is<float>()) dst.right90_far_d = src["right90_far_d"].as<float>();
-    if (src["battery"].is<float>()) dst.battery = src["battery"].as<float>();
-    if (src["duty_l"].is<float>()) dst.duty_l = src["duty_l"].as<float>();
+    from_json_field(src, "right45", dst.right45);
+    from_json_field(src, "right90", dst.right90);
+    from_json_field(src, "left90_d", dst.left90_d);
+    from_json_field(src, "left45_d", dst.left45_d);
+    from_json_field(src, "front_d", dst.front_d);
+    from_json_field(src, "right45_d", dst.right45_d);
+    from_json_field(src, "right90_d", dst.right90_d);
+    from_json_field(src, "left90_far_d", dst.left90_far_d);
+    from_json_field(src, "front_far_d", dst.front_far_d);
+    from_json_field(src, "right90_far_d", dst.right90_far_d);
+    from_json_field(src, "battery", dst.battery);
+    from_json_field(src, "duty_l", dst.duty_l);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct4& dst) {
-    if (src["duty_r"].is<float>()) dst.duty_r = src["duty_r"].as<float>();
-    if (src["motion_state"].is<int>()) dst.motion_state = src["motion_state"].as<int>();
-    if (src["duty_sen"].is<float>()) dst.duty_sen = src["duty_sen"].as<float>();
-    if (src["dist_mod90"].is<float>()) dst.dist_mod90 = src["dist_mod90"].as<float>();
-    if (src["sen_dist_l45"].is<float>()) dst.sen_dist_l45 = src["sen_dist_l45"].as<float>();
-    if (src["sen_dist_r45"].is<float>()) dst.sen_dist_r45 = src["sen_dist_r45"].as<float>();
-    if (src["timestamp"].is<int>()) dst.timestamp = src["timestamp"].as<int>();
-    if (src["sen_calc_time"].is<int>()) dst.sen_calc_time = src["sen_calc_time"].as<int>();
-    if (src["sen_calc_time2"].is<int>()) dst.sen_calc_time2 = src["sen_calc_time2"].as<int>();
-    if (src["pln_calc_time"].is<int>()) dst.pln_calc_time = src["pln_calc_time"].as<int>();
-    if (src["pln_calc_time2"].is<int>()) dst.pln_calc_time2 = src["pln_calc_time2"].as<int>();
-    if (src["pln_time_diff"].is<int>()) dst.pln_time_diff = src["pln_time_diff"].as<int>();
+    from_json_field(src, "duty_r", dst.duty_r);
+    from_json_field(src, "motion_state", dst.motion_state);
+    from_json_field(src, "duty_sen", dst.duty_sen);
+    from_json_field(src, "dist_mod90", dst.dist_mod90);
+    from_json_field(src, "sen_dist_l45", dst.sen_dist_l45);
+    from_json_field(src, "sen_dist_r45", dst.sen_dist_r45);
+    from_json_field(src, "timestamp", dst.timestamp);
+    from_json_field(src, "sen_calc_time", dst.sen_calc_time);
+    from_json_field(src, "sen_calc_time2", dst.sen_calc_time2);
+    from_json_field(src, "pln_calc_time", dst.pln_calc_time);
+    from_json_field(src, "pln_calc_time2", dst.pln_calc_time2);
+    from_json_field(src, "pln_time_diff", dst.pln_time_diff);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct5& dst) {
-    if (src["m_pid_p"].is<float>()) dst.m_pid_p = src["m_pid_p"].as<float>();
-    if (src["m_pid_i"].is<float>()) dst.m_pid_i = src["m_pid_i"].as<float>();
-    if (src["m_pid_i2"].is<float>()) dst.m_pid_i2 = src["m_pid_i2"].as<float>();
-    if (src["m_pid_d"].is<float>()) dst.m_pid_d = src["m_pid_d"].as<float>();
-    if (src["m_pid_p_v"].is<float>()) dst.m_pid_p_v = src["m_pid_p_v"].as<float>();
-    if (src["m_pid_i_v"].is<float>()) dst.m_pid_i_v = src["m_pid_i_v"].as<float>();
-    if (src["m_pid_i2_v"].is<float>()) dst.m_pid_i2_v = src["m_pid_i2_v"].as<float>();
-    if (src["m_pid_d_v"].is<float>()) dst.m_pid_d_v = src["m_pid_d_v"].as<float>();
-    if (src["g_pid_p"].is<float>()) dst.g_pid_p = src["g_pid_p"].as<float>();
-    if (src["g_pid_i"].is<float>()) dst.g_pid_i = src["g_pid_i"].as<float>();
-    if (src["g_pid_i2"].is<float>()) dst.g_pid_i2 = src["g_pid_i2"].as<float>();
-    if (src["g_pid_d"].is<float>()) dst.g_pid_d = src["g_pid_d"].as<float>();
+    from_json_field(src, "m_pid_p", dst.m_pid_p);
+    from_json_field(src, "m_pid_i", dst.m_pid_i);
+    from_json_field(src, "m_pid_i2", dst.m_pid_i2);
+    from_json_field(src, "m_pid_d", dst.m_pid_d);
+    from_json_field(src, "m_pid_p_v", dst.m_pid_p_v);
+    from_json_field(src, "m_pid_i_v", dst.m_pid_i_v);
+    from_json_field(src, "m_pid_i2_v", dst.m_pid_i2_v);
+    from_json_field(src, "m_pid_d_v", dst.m_pid_d_v);
+    from_json_field(src, "g_pid_p", dst.g_pid_p);
+    from_json_field(src, "g_pid_i", dst.g_pid_i);
+    from_json_field(src, "g_pid_i2", dst.g_pid_i2);
+    from_json_field(src, "g_pid_d", dst.g_pid_d);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct6& dst) {
-    if (src["g_pid_p_v"].is<float>()) dst.g_pid_p_v = src["g_pid_p_v"].as<float>();
-    if (src["g_pid_i_v"].is<float>()) dst.g_pid_i_v = src["g_pid_i_v"].as<float>();
-    if (src["g_pid_i2_v"].is<float>()) dst.g_pid_i2_v = src["g_pid_i2_v"].as<float>();
-    if (src["g_pid_d_v"].is<float>()) dst.g_pid_d_v = src["g_pid_d_v"].as<float>();
-    if (src["s_pid_p"].is<float>()) dst.s_pid_p = src["s_pid_p"].as<float>();
-    if (src["s_pid_i"].is<float>()) dst.s_pid_i = src["s_pid_i"].as<float>();
-    if (src["s_pid_i2"].is<float>()) dst.s_pid_i2 = src["s_pid_i2"].as<float>();
-    if (src["s_pid_d"].is<float>()) dst.s_pid_d = src["s_pid_d"].as<float>();
-    if (src["s_pid_p_v"].is<float>()) dst.s_pid_p_v = src["s_pid_p_v"].as<float>();
-    if (src["s_pid_i_v"].is<float>()) dst.s_pid_i_v = src["s_pid_i_v"].as<float>();
-    if (src["s_pid_i2_v"].is<float>()) dst.s_pid_i2_v = src["s_pid_i2_v"].as<float>();
-    if (src["s_pid_d_v"].is<float>()) dst.s_pid_d_v = src["s_pid_d_v"].as<float>();
+    from_json_field(src, "g_pid_p_v", dst.g_pid_p_v);
+    from_json_field(src, "g_pid_i_v", dst.g_pid_i_v);
+    from_json_field(src, "g_pid_i2_v", dst.g_pid_i2_v);
+    from_json_field(src, "g_pid_d_v", dst.g_pid_d_v);
+    from_json_field(src, "s_pid_p", dst.s_pid_p);
+    from_json_field(src, "s_pid_i", dst.s_pid_i);
+    from_json_field(src, "s_pid_i2", dst.s_pid_i2);
+    from_json_field(src, "s_pid_d", dst.s_pid_d);
+    from_json_field(src, "s_pid_p_v", dst.s_pid_p_v);
+    from_json_field(src, "s_pid_i_v", dst.s_pid_i_v);
+    from_json_field(src, "s_pid_i2_v", dst.s_pid_i2_v);
+    from_json_field(src, "s_pid_d_v", dst.s_pid_d_v);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct7& dst) {
-    if (src["ang_pid_p"].is<float>()) dst.ang_pid_p = src["ang_pid_p"].as<float>();
-    if (src["ang_pid_i"].is<float>()) dst.ang_pid_i = src["ang_pid_i"].as<float>();
-    if (src["ang_pid_d"].is<float>()) dst.ang_pid_d = src["ang_pid_d"].as<float>();
-    if (src["ang_pid_p_v"].is<float>()) dst.ang_pid_p_v = src["ang_pid_p_v"].as<float>();
-    if (src["ang_pid_i_v"].is<float>()) dst.ang_pid_i_v = src["ang_pid_i_v"].as<float>();
-    if (src["ang_pid_d_v"].is<float>()) dst.ang_pid_d_v = src["ang_pid_d_v"].as<float>();
-    if (src["ff_duty_front"].is<float>()) dst.ff_duty_front = src["ff_duty_front"].as<float>();
-    if (src["ff_duty_roll"].is<float>()) dst.ff_duty_roll = src["ff_duty_roll"].as<float>();
-    if (src["ff_duty_rpm_r"].is<float>()) dst.ff_duty_rpm_r = src["ff_duty_rpm_r"].as<float>();
-    if (src["ff_duty_rpm_l"].is<float>()) dst.ff_duty_rpm_l = src["ff_duty_rpm_l"].as<float>();
-    if (src["x"].is<float>()) dst.x = src["x"].as<float>();
-    if (src["y"].is<float>()) dst.y = src["y"].as<float>();
+    from_json_field(src, "ang_pid_p", dst.ang_pid_p);
+    from_json_field(src, "ang_pid_i", dst.ang_pid_i);
+    from_json_field(src, "ang_pid_d", dst.ang_pid_d);
+    from_json_field(src, "ang_pid_p_v", dst.ang_pid_p_v);
+    from_json_field(src, "ang_pid_i_v", dst.ang_pid_i_v);
+    from_json_field(src, "ang_pid_d_v", dst.ang_pid_d_v);
+    from_json_field(src, "ff_duty_front", dst.ff_duty_front);
+    from_json_field(src, "ff_duty_roll", dst.ff_duty_roll);
+    from_json_field(src, "ff_duty_rpm_r", dst.ff_duty_rpm_r);
+    from_json_field(src, "ff_duty_rpm_l", dst.ff_duty_rpm_l);
+    from_json_field(src, "x", dst.x);
+    from_json_field(src, "y", dst.y);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct8& dst) {
-    if (src["right45_2"].is<int>()) dst.right45_2 = src["right45_2"].as<int>();
-    if (src["right45_3"].is<int>()) dst.right45_3 = src["right45_3"].as<int>();
-    if (src["left45_2"].is<int>()) dst.left45_2 = src["left45_2"].as<int>();
-    if (src["left45_3"].is<int>()) dst.left45_3 = src["left45_3"].as<int>();
-    if (src["right45_2_d"].is<float>()) dst.right45_2_d = src["right45_2_d"].as<float>();
-    if (src["right45_3_d"].is<float>()) dst.right45_3_d = src["right45_3_d"].as<float>();
-    if (src["left45_2_d"].is<float>()) dst.left45_2_d = src["left45_2_d"].as<float>();
-    if (src["left45_3_d"].is<float>()) dst.left45_3_d = src["left45_3_d"].as<float>();
-    if (src["sen_dist_l45_2"].is<float>()) dst.sen_dist_l45_2 = src["sen_dist_l45_2"].as<float>();
-    if (src["sen_dist_r45_2"].is<float>()) dst.sen_dist_r45_2 = src["sen_dist_r45_2"].as<float>();
-    if (src["sen_dist_l45_3"].is<float>()) dst.sen_dist_l45_3 = src["sen_dist_l45_3"].as<float>();
-    if (src["sen_dist_r45_3"].is<float>()) dst.sen_dist_r45_3 = src["sen_dist_r45_3"].as<float>();
+    from_json_field(src, "right45_2", dst.right45_2);
+    from_json_field(src, "right45_3", dst.right45_3);
+    from_json_field(src, "left45_2", dst.left45_2);
+    from_json_field(src, "left45_3", dst.left45_3);
+    from_json_field(src, "right45_2_d", dst.right45_2_d);
+    from_json_field(src, "right45_3_d", dst.right45_3_d);
+    from_json_field(src, "left45_2_d", dst.left45_2_d);
+    from_json_field(src, "left45_3_d", dst.left45_3_d);
+    from_json_field(src, "sen_dist_l45_2", dst.sen_dist_l45_2);
+    from_json_field(src, "sen_dist_r45_2", dst.sen_dist_r45_2);
+    from_json_field(src, "sen_dist_l45_3", dst.sen_dist_l45_3);
+    from_json_field(src, "sen_dist_r45_3", dst.sen_dist_r45_3);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct9& dst) {
-    if (src["knym_v"].is<float>()) dst.knym_v = src["knym_v"].as<float>();
-    if (src["knym_w"].is<float>()) dst.knym_w = src["knym_w"].as<float>();
-    if (src["odm_x"].is<float>()) dst.odm_x = src["odm_x"].as<float>();
-    if (src["odm_y"].is<float>()) dst.odm_y = src["odm_y"].as<float>();
-    if (src["odm_theta"].is<float>()) dst.odm_theta = src["odm_theta"].as<float>();
-    if (src["kim_x"].is<float>()) dst.kim_x = src["kim_x"].as<float>();
-    if (src["kim_y"].is<float>()) dst.kim_y = src["kim_y"].as<float>();
-    if (src["kim_theta"].is<float>()) dst.kim_theta = src["kim_theta"].as<float>();
-    if (src["ang_i_bias"].is<float>()) dst.ang_i_bias = src["ang_i_bias"].as<float>();
-    if (src["ang_i_bias_val"].is<float>()) dst.ang_i_bias_val = src["ang_i_bias_val"].as<float>();
-    if (src["left90_d_diff"].is<float>()) dst.left90_d_diff = src["left90_d_diff"].as<float>();
-    if (src["right90_d_diff"].is<float>()) dst.right90_d_diff = src["right90_d_diff"].as<float>();
+    from_json_field(src, "knym_v", dst.knym_v);
+    from_json_field(src, "knym_w", dst.knym_w);
+    from_json_field(src, "odm_x", dst.odm_x);
+    from_json_field(src, "odm_y", dst.odm_y);
+    from_json_field(src, "odm_theta", dst.odm_theta);
+    from_json_field(src, "kim_x", dst.kim_x);
+    from_json_field(src, "kim_y", dst.kim_y);
+    from_json_field(src, "kim_theta", dst.kim_theta);
+    from_json_field(src, "ang_i_bias", dst.ang_i_bias);
+    from_json_field(src, "ang_i_bias_val", dst.ang_i_bias_val);
+    from_json_field(src, "left90_d_diff", dst.left90_d_diff);
+    from_json_field(src, "right90_d_diff", dst.right90_d_diff);
 }
 
 inline void convertFromJson(JsonVariantConst src, LogStruct10& dst) {
-    if (src["right45_3_d_diff"].is<float>()) dst.right45_3_d_diff = src["right45_3_d_diff"].as<float>();
-    if (src["right45_2_d_diff"].is<float>()) dst.right45_2_d_diff = src["right45_2_d_diff"].as<float>();
-    if (src["right45_d_diff"].is<float>()) dst.right45_d_diff = src["right45_d_diff"].as<float>();
-    if (src["left45_d_diff"].is<float>()) dst.left45_d_diff = src["left45_d_diff"].as<float>();
-    if (src["left45_2_d_diff"].is<float>()) dst.left45_2_d_diff = src["left45_2_d_diff"].as<float>();
-    if (src["left45_3_d_diff"].is<float>()) dst.left45_3_d_diff = src["left45_3_d_diff"].as<float>();
-    if (src["duty_suction"].is<float>()) dst.duty_suction = src["duty_suction"].as<float>();
-    if (src["duty_roll"].is<float>()) dst.duty_roll = src["duty_roll"].as<float>();
-    if (src["ang_kf_sum"].is<float>()) dst.ang_kf_sum = src["ang_kf_sum"].as<float>();
-    if (src["img_ang_sum"].is<float>()) dst.img_ang_sum = src["img_ang_sum"].as<float>();
-    if (src["duty_roll_before"].is<float>()) dst.duty_roll_before = src["duty_roll_before"].as<float>();
-    if (src["reserve5"].is<int>()) dst.reserve5 = src["reserve5"].as<int>();
+    from_json_field(src, "right45_3_d_diff", dst.right45_3_d_diff);
+    from_json_field(src, "right45_2_d_diff", dst.right45_2_d_diff);
+    from_json_field(src, "right45_d_diff", dst.right45_d_diff);
+    from_json_field(src, "left45_d_diff", dst.left45_d_diff);
+    from_json_field(src, "left45_2_d_diff", dst.left45_2_d_diff);
+    from_json_field(src, "left45_3_d_diff", dst.left45_3_d_diff);
+    from_json_field(src, "duty_suction", dst.duty_suction);
+    from_json_field(src, "duty_roll", dst.duty_roll);
+    from_json_field(src, "ang_kf_sum", dst.ang_kf_sum);
+    from_json_field(src, "img_ang_sum", dst.img_ang_sum);
+    from_json_field(src, "duty_roll_before", dst.duty_roll_before);
+    from_json_field(src, "reserve5", dst.reserve5);
 }
 
