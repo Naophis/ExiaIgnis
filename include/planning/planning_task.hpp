@@ -114,7 +114,10 @@ public:
     cmd.duty_suction = 0.0f;
     // send_command(cmd);
   }
-  void reset_kf_state(bool /*full*/) {} // TODO: カルマンフィルタリセット
+  void reset_kf_state(bool full) {
+    if (sensing_result && param)
+      ego.reset_kf_state(full, sensing_result, param);
+  }
   void reset_pos(float /*x*/, float /*y*/, float /*ang*/) {
   } // TODO: 位置リセット
 

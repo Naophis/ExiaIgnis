@@ -14,6 +14,12 @@ public:
               std::shared_ptr<sensing_result_entity_t> sensing_result,
               std::shared_ptr<input_param_t> param, bool motor_en);
 
+  // KF を初期化・リセットする。
+  // reset_battery=true のとき kf_batt と pos も再初期化する。
+  void reset_kf_state(bool reset_battery,
+                      std::shared_ptr<sensing_result_entity_t> sensing_result,
+                      std::shared_ptr<input_param_t> param);
+
   // 以下は公開状態 (PlanningTask の公開メンバーから移動)
   KalmanFilter kf_w, kf_w2;
   KalmanFilter kf_v, kf_v_r, kf_v_l;

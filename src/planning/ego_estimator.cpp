@@ -148,3 +148,51 @@ void EgoEstimator::update(
 
   tgt_val->ego_in.slip_point.w = se->ego.w_lp;
 }
+
+void EgoEstimator::reset_kf_state(
+    bool reset_battery,
+    std::shared_ptr<sensing_result_entity_t> sensing_result,
+    std::shared_ptr<input_param_t> param) {
+  const float initial_state = 0.0f;
+
+  kf_w.dt   = 0.001f;
+  kf_w2.dt  = 0.001f;
+  kf_v_r.dt = 0.001f;
+  kf_v_l.dt = 0.001f;
+
+  if (reset_battery) {
+    kf_batt.init(sensing_result->ego.battery_raw,
+                 param->battery_init_cov,
+                 param->battery_p_noise,
+                 param->battery_m_noise);
+    pos.init(-param->offset_start_dist, 0.0f, 0.0f,
+             param->pos_init_cov,
+             param->pos_p_noise,
+             param->pos_m_noise);
+  } else {
+    pos.reset_cov(param->pos_init_cov,
+                  param->pos_p_noise,
+                  param->pos_m_noise);
+  }
+
+  kf_w.init(initial_state,
+            param->w_init_cov, param->w_p_noise, param->w_m_noise);
+  kf_w2.init(initial_state,
+             param->w_init_cov, param->w_p_noise, param->w_m_noise);
+  kf_v.init(initial_state,
+            param->v_init_cov, param->v_p_noise, param->v_m_noise);
+  kf_v_r.init(initial_state,
+              param->encoder_init_cov, param->encoder_p_noise, param->encoder_m_noise);
+  kf_v_l.init(initial_state,
+              param->encoder_init_cov, param->encoder_p_noise, param->encoder_m_noise);
+  kf_dist.init(initial_state,
+               param->dist_init_cov, param->dist_p_noise, param->dist_m_noise);
+  kf_ang.init(initial_state,
+              param->ang_init_cov, param->ang_p_noise, param->ang_m_noise);
+  kf_ang2.init(initial_state,
+               param->ang_init_cov, param->ang_p_noise, param->ang_m_noise);
+
+  sensing_result->ang_kf_sum  = 0;
+  sensing_result->img_ang_sum = 0;
+  sensing_result->img_ang_z   = 0;
+}

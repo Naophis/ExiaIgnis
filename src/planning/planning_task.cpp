@@ -46,6 +46,10 @@ void PlanningTask::set_sensing_entity(
 void PlanningTask::set_input_param_entity(
     std::shared_ptr<input_param_t> &_param) {
   param = _param;
+  // sensing_result と param が揃った段階で KF を初回初期化する
+  if (sensing_result && param) {
+    ego.reset_kf_state(true, sensing_result, param);
+  }
 }
 
 // ============================================================

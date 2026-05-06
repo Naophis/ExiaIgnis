@@ -120,7 +120,7 @@ void MainTask::run() {
              "  |  encR=%5u (dt=%4llu us)\n",
              se->gyro.raw, d.gz_dt, d.enc_l, d.enc_l_dt, d.enc_r, d.enc_r_dt);
 
-      printf("[power]   bat=%4u\n", se->battery.raw);
+      printf("[power]   bat=%4u, %.4f\n", se->battery.raw, se->ego.batt_kf);
 
       PlanningTask::State ps = planning_->state; // volatile → コピー
       printf("[planning] mode=%u  v=%6.1f  w=%6.3f"
