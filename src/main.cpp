@@ -72,7 +72,7 @@ int main() {
   planning->init(sensing);
 
   // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
-  MainTask::create(sensing, planning);
+  MainTask::create(sensing, planning, param);
 
   // Core1 起動: sensing/planning IRQ を Core1 に登録して __wfi() ループへ
   s_rt_sensing = sensing.get();

@@ -1,18 +1,23 @@
 #include "main/main_task.hpp"
+#include "config_loader.hpp"
+#include "config_mapping.hpp"
 #include "define.hpp"
 #include "hardware/pwm.h"
 #include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
+#include "pico/time.h"
 #include <stdio.h>
 
 std::shared_ptr<MainTask> MainTask::s_instance;
 
 std::shared_ptr<MainTask>
-MainTask::create(std::shared_ptr<SensingTask> sensing,
-                 std::shared_ptr<PlanningTask> planning) {
+MainTask::create(std::shared_ptr<SensingTask>   sensing,
+                 std::shared_ptr<PlanningTask>  planning,
+                 std::shared_ptr<input_param_t> param) {
   s_instance = std::shared_ptr<MainTask>(new MainTask());
-  s_instance->sensing_ = sensing;
+  s_instance->sensing_  = sensing;
   s_instance->planning_ = planning;
+  s_instance->param_    = param;
   return s_instance;
 }
 
@@ -21,10 +26,21 @@ void MainTask::start() { s_instance->run(); }
 std::shared_ptr<sensing_result_entity_t> MainTask::get_sensing_entity() {
   return sensing_->get_sensing_entity();
 }
+
+bool MainTask::load_params() {
+  bool any = false;
+  // 各ファイルが存在しない場合は警告を出してスキップ (初回未転送でも動作継続)
+  any |= ConfigLoader::load_as("/hardware.json", *param_);
+  any |= ConfigLoader::load_as("/sensor.json",   *param_);
+  any |= ConfigLoader::load_as("/offset.json",   *param_);
+  any |= ConfigLoader::load_as("/system.json",   sys_);
+  return any;
+}
+
 void MainTask::run() {
   // ブザー PWM 設定 (GPIO はどのコアからでも設定可)
   gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
-  uint pwm_slice = pwm_gpio_to_slice_num(BUZZER_PIN);
+  uint pwm_slice   = pwm_gpio_to_slice_num(BUZZER_PIN);
   uint pwm_channel = pwm_gpio_to_channel(BUZZER_PIN);
   pwm_set_enabled(pwm_slice, false);
 
@@ -34,14 +50,48 @@ void MainTask::run() {
   ui_.LED_headlight();
   ui_.hello_exia();
 
-  // 吸引 PWM テスト: ボタン押下から 3 秒後に duty_suction を直接駆動する。
+  // ─── パラメータ読み込み ───────────────────────────────────────────────────
+  printf("[main] loading params from LittleFS...\n");
+  if (load_params()) {
+    ui_.coin(80);
+    printf("[main] params OK  mode=%d  maze=%d\n",
+           sys_.user_mode, sys_.maze_size);
+  } else {
+    printf("[main] no param files found, using defaults.\n");
+  }
+
+  // ─── ボタン待機ループ ────────────────────────────────────────────────────
+  // ファイルが更新された場合に備えて 1 秒ごとに再ロードを試みる。
+  // ボタンを押して離したら (button_state_hold) 抜ける。
+  printf("[main] waiting for button press...\n");
+  absolute_time_t next_reload = make_timeout_time_ms(1000);
+  while (true) {
+    if (ui_.button_state_hold()) {
+      ui_.coin(100);
+      break;
+    }
+
+    if (absolute_time_diff_us(get_absolute_time(), next_reload) <= 0) {
+      if (load_params()) {
+        printf("[main] params reloaded  mode=%d  maze=%d\n",
+               sys_.user_mode, sys_.maze_size);
+      }
+      next_reload = make_timeout_time_ms(1000);
+    }
+
+    sleep_ms(25);
+  }
+  printf("[main] starting.\n");
+
+  // ─── 吸引 PWM テスト ─────────────────────────────────────────────────────
+  // ボタン押下から 3 秒後に duty_suction を直接駆動する。
   // ControlLaw・バッテリ補正・ランプを完全バイパスして motor_.apply() を直叩き。
-  static constexpr float    SUCTION_TEST_DUTY    = 15.0f;    // [%] 要チューニング
-  static constexpr uint32_t SUCTION_DELAY_MS     = 3000;     // 押下から起動までの遅延
-  bool             prev_btn       = false;
-  bool             suction_test_on = false;
-  bool             btn_held        = false;         // 押下中フラグ
-  absolute_time_t  btn_press_time  = nil_time;      // 押下時刻
+  static constexpr float    SUCTION_TEST_DUTY = 15.0f;  // [%] 要チューニング
+  static constexpr uint32_t SUCTION_DELAY_MS  = 3000;   // 押下から起動までの遅延
+  bool            prev_btn        = false;
+  bool            suction_test_on = false;
+  bool            btn_held        = false;
+  absolute_time_t btn_press_time  = nil_time;
 
   while (true) {
     // ---- ボタン処理 (吸引 PWM 直接テスト) ----
@@ -49,7 +99,6 @@ void MainTask::run() {
 
     if (btn != prev_btn) {
       if (btn) {
-        // 押下エッジ
         if (suction_test_on) {
           // 2 回目押下: 吸引 OFF
           planning_->set_suction_test(0.0f);
@@ -123,6 +172,10 @@ void MainTask::run() {
              "  suction=%5.1f%%  tick=%lu  %s\n",
              ps.duty_l, ps.duty_r, ps.duty_suction, ps.tick,
              suction_test_on ? "[SUCTION TEST]" : "");
+
+      printf("[sys]      mode=%d  maze=%d  goals=%u\n",
+             sys_.user_mode, sys_.maze_size,
+             (unsigned)sys_.goals.size());
     }
 
     sleep_ms(25);
