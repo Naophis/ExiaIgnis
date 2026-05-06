@@ -1,0 +1,463 @@
+dt: 0.001
+# tire: 13.60125
+# tire2: 13.60125
+
+# tire_tread: 38.0
+# tire_tread: 37.72230756
+tire_tread: 38.72230756
+tire: 13.9125 #10deg 
+tire2: 13.9125 #10deg
+
+battery_gain: 3.7341136661526666
+# battery_gain: 4.567
+
+# tire: 14.120 #新品(#30) 14.12
+# tire2: 14.120 #新品(#30) 14.12
+# tire: 13.4645
+# tire2: 13.4645
+# offset_start_dist: 21.0
+offset_start_dist_search: 15.0
+offset_start_dist: 2.0
+long_run_offset_dist: 0
+
+gear_a: 63
+gear_b: 13
+# max_duty: 99.9
+max_duty: 99.950
+min_duty: 0.01
+FF_front: 1
+FF_roll: 1
+FF_keV: 1 #FF制御on/off flag
+
+motor_driver_type: 3 # 1: EN1_PH1, 2: EN1_PH2, 3: TWO_PWM
+motor_r_cw_ccw_type: 1 # 1: duty > 0 -> true, 0: duty < 0 -> true
+motor_l_cw_ccw_type: 0 # 1: duty > 0 -> true, 0: duty < 0 -> true
+# debug for motor io direction
+motor_debug_mode: 0
+motor_debug_mode_duty_r: 10
+motor_debug_mode_duty_l: -10
+
+MotorHz: 37500
+SuctionHz: 42500
+MotorResolution: 40
+SuctionResolution: 40
+
+# roll
+# Ke: 0.00172 # 大：逆起電力大
+# Ke: 0.002560632779648483  # 大：逆起電力大
+Ke: 0.000975  # 大：逆起電力大
+# Km: 0.00260946 # トルク定数：　大-> 縦系の出力小
+# Km: 0.00130473 # トルク定数：　大-> 縦系の出力小
+# Km: 0.00145 # トルク定数：　大-> 縦系の出力小
+Km: 0.00180 # トルク定数：　大-> 縦系の出力小
+Lm: 0.00000035 # 大：横系の出力大
+
+coulomb_friction: 0.000015 # クーロン摩擦
+viscous_friction: 0.001475 # 粘性摩擦
+
+# coulomb_friction: 0.0 # クーロン摩擦
+# viscous_friction: 0.0 # 粘性摩擦
+
+Resist: 4.4
+Mass: 0.030
+
+slip_param_K: 0.5
+slip_param_k2: 150
+
+sakiyomi_time: 2
+
+#ログON_OFF
+logging_time: 1.0
+search_log_enable: 1
+test_log_enable: 1
+fast_log_enable: 1
+sen_log_size: 100
+log_size: 8000
+
+front_ctrl_error_th: 1
+
+ff_v_th: 0
+ff_front_dury: 0.95
+
+# fail_safe
+fail_duty_cnt: 150
+fail_v_cnt: 12500
+fail_w_cnt: 2500
+fail_ang_cnt: 120
+fail_wall_off_cnt: 500
+fail_check_ang_th: 45 #deg
+
+cell: 90
+cell2: 90
+
+# led_light_delay_cnt: 1250
+# led_light_delay_cnt2: 1250
+led_light_delay_cnt: 950
+led_light_delay_cnt2: 950
+
+axel_degenerate_x: [0, 1, 2, 4, 6, 8, 10]
+# axel_degenerate_y: [1, 1, 0.2, 0.1, 0.1, 0.1, 0.1]
+# axel_degenerate_y: [1, 1, 0.5, 0.2, 0.2, 0.1, 0.1]
+# axel_degenerate_y: [1, 1, 0.8, 0.75, 0.5, 0.2, 0.1]
+
+axel_degenerate_y: [1, 1, 0.9, 0.85, 0.5, 0.2, 0.1]
+# axel_degenerate_y: [1, 1, 1, 1, 0.8, 0.75, 0.5]
+# axel_degenerate_y: [1, 1, 1, 1, 1, 1, 1]
+
+# axel_degenerate_dia_x: [0, 1, 2, 4, 6, 8, 10]
+# axel_degenerate_dia_y: [1, 1, 1, 0.75, 0.75, 0.5, 0.125]
+axel_degenerate_dia_x: [0, 1, 2, 4, 6, 8, 10, 40]
+axel_degenerate_dia_y: [1, 1, 1, 0.95, 0.85, 0.75, 0.25, -0.1]
+
+decel_delay_cnt: 5
+dedel_delay_n: 4
+
+search_sen_ctrl_limitter: 8
+torque_mode: 2
+
+ff_front_gain_14: 0.325
+ff_roll_gain_before: 0.25
+ff_roll_gain_after: 0.75
+ff_front_gain_decel: 0.5
+
+enable_kalman_gyro: 0
+enable_mpc: 0
+enable_kalman_encoder: 1
+
+# motor_pid_gain_limitter: 
+#   mode: 0
+#   p: 15
+#   i: 15
+#   d: 15
+#   b: 15
+#   c: 15
+# motor2_pid_gain_limitter: 
+#   mode: 1
+#   p: 15
+#   i: 15
+#   d: 15
+#   b: 15
+#   c: 15
+gyro_pid_gain_limitter: 
+  mode: 1
+  p: 15
+  i: 15
+  d: 15
+  b: 15
+  c: 15
+
+sensor_deg_limitter_v: [0, 500, 1000, 2000, 4000, 5000, 6000, 7000, 8000, 12000]
+# sensor_deg_limitter_str: [125, 125, 125, 125, 125, 125, 125, 125, 125]
+sensor_deg_limitter_str: [5, 5, 7.5, 125, 125, 125, 125, 125, 125, 125]
+# sensor_deg_limitter_str: [0, 0, 75, 125, 125, 125, 125, 125, 125, 125]
+# sensor_deg_limitter_str: [8, 8, 50, 75, 75, 75, 75, 75, 75]
+# sensor_deg_limitter_str: [8, 8, 5, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5]
+# sensor_deg_limitter_str: [25, 25, 25, 25, 25, 25, 25, 25, 25]
+# sensor_deg_limitter_str: [3, 3, 3, 3, 3, 3, 3, 3, 3]
+# sensor_deg_limitter_dia: [3, 3, 6, 6, 8, 8, 6, 4.5, 4.5, 4.5]
+# sensor_deg_limitter_dia: [3, 3, 6, 12, 12, 8, 6, 4.5, 4.5, 4.5] # main
+sensor_deg_limitter_dia: [3, 3, 3, 3, 3, 3, 6, 6.5, 4.5, 4.5]
+# sensor_deg_limitter_dia: [3, 3, 4.5, 4.5, 4.5, 4.6, 4.5, 4.5, 4.5]
+sensor_deg_limitter_piller: [3, 3, 3, 3, 10, 10, 10, 3, 3, 3]
+# sensor_deg_limitter_piller: [0, 0, 0, 0, 3, 3, 3, 3, 3, 3]
+
+front_ctrl_roll_pid:
+  mode: 3
+  p: 0.375
+  i: 0.0225
+  b: 0.0195
+  d: 0.225
+  c: 0.0
+  # p: 0.0
+  # i: 0.0
+  # d: 0.0
+  # b: 0
+  # c: 0
+
+motor_pid2:
+  #AS5147P 
+  mode: 7
+
+  # p: 0.0000175
+  # i: 0.0000045
+  # b: 0.00
+  # d: 0.0000125
+  p: 0.0000225
+  i: 0.00000425
+  b: 0.00
+  d: 0.0000175
+
+  antiwindup: 0
+  windup_gain: 0.05
+  windup_dead_bind: 50
+
+  # test: 0
+  # p: 0.0
+  # i: 0.0
+  # b: 0.0
+  # d: 0.0
+
+  c: 1
+# motor_pid3:
+#   mode: 0
+#   p: 0.0
+#   i: 0.0
+#   b: 0.00
+#   d: 0.00
+#   c: 0
+gyro_pid:
+  mode: 3
+  # p: 0.000325
+  # i: 0.01465
+  # b: 0.0000275
+  # d: 0.000775
+
+  p: 0.000325
+  i: 0.01465 # dif angle
+  # b: 0.0000375 #summation
+  b: 0.0000595 #summation
+  # b: 0.0000425 #summation
+  d: 0.000295
+
+  antiwindup: 1
+  windup_gain: 10.0
+  windup_dead_bind: 1.50
+
+  # p: 0.000325
+  # i: 0.01365 #dif angle
+  # b: 0.0000275 #summation
+  # d: 0.000295
+
+  # p: 0.00
+  # i: 0.0
+  # b: 0.00
+  # d: 0.00
+
+  c: 0.0075
+  # c: 0.0
+  i_theta_tau: 0.08      # [s] 角度I低域化の一次LPF時定数（例: 0.08〜0.15）
+  i_theta_slew: 10.0     # [/s] 角度Iバイアスの変化率制限（例: 10〜50）
+  i_theta_max: 20.0      # [-]  角度Iバイアスの振幅上限（例: 5〜20）
+  # theta_gate: 0.00875      # [rad] |eθ|が小さい終盤で効かせるゲートの閾値（例: 0.05〜0.15）
+  theta_gate: 0.004375      # [rad] |eθ|が小さい終盤で効かせるゲートの閾値（例: 0.05〜0.15）
+  omega_gate: 25.0      # [rad/s] |ω_ref|が低い時だけ効かせるゲート（例: 15〜40）
+
+  mpc_q_ang: 500.0  # Angle error weight: HIGH for good tracking (terminal cost is 10x this!)
+  mpc_q_vel: 125.0   # Velocity error weight: HIGH for damping to prevent oscillation
+  mpc_b: 0.000475        # System gain: CRITICAL! Increase gradually (0.5→1→2→5→10)
+  mpc_r: 0.01       # Control cost: SMALL to allow aggressive control
+  mpc_horizon: 5    # Prediction horizon
+  mpc_max_iter: 10  # QP solver iterations
+  mpc_max_torque: 0.0025
+  mpc_observer_k: 0.25  # Disturbance observer gain (0.01=slow, 0.05=default, 0.1-0.2=aggressive)
+
+angle_pid: # pid for angle
+  # p: 44.50
+  # # i: 0.045
+  # # p: 0.195
+  # i: 0.0
+  # d: 9.5
+  mode: 0
+  b: 40 #deg
+  c: 0
+
+  # p: 7.50
+  # i: 0.0
+  # d: 4.5
+
+  p: 9.50
+  i: 0.0
+  d: 4.5
+
+  antiwindup: 0 #I制御してないので意味ない
+  windup_gain: 1
+  windup_dead_bind: 0
+
+###### front_ctrl #######
+motor_pid: #front_ctrl
+  p: 0.00325
+  i: 0.0
+  d: 0.0
+  b: 0
+  c: 0
+  mode: 1
+front_ctrl_dist_pid:  #front_ctrl(front)
+  p: 0.80
+  i: 0.0015
+  d: -0.0125
+  b: 0
+  c: 0
+  mode: 1
+  # p: 0.0
+  # i: 0.0
+  # d: 0.0
+front_ctrl_angle_pid: #front_ctrl(roll)
+  p: 0.755
+  # i: 0.045
+  # p: 0.195
+  i: 0.0
+  d: -0.245
+  mode: 2
+  b: 10
+  c: 0
+front_ctrl_keep_angle_pid: # pid for angle
+  p: 0.755
+  # i: 0.045
+  # p: 0.195
+  i: 0.0
+  d: -0.245
+  mode: 2
+  b: 10
+  c: 0
+####################################
+
+# 光センサー制御
+str_ang_pid:
+  mode: 2
+  # p: 0.000235 #search_mode
+  # d: 0.0000125
+  # b: 0.000275 #!searchm_mode
+  # i: 0.0000075
+
+  # test
+  p: 0.035
+  i: 0.0325
+
+  b: 0.035
+  d: 0.0325
+  c: 0
+
+  # p: 0.0
+  # d: 0.0
+  # b: 0.0
+  # i: 0.0
+  # c: 0
+  # p: 0.2975
+  # d: 0.125
+  # b: 0.4975
+  # i: 0.125
+  # c: 0
+
+# str_ang_dia_pid: #not use
+#   # p: 0.095
+#   # d: 1.25
+#   p: 0.0
+#   # p: 0.0125
+#   # d: 0.000275
+#   # p: 0
+#   d: 0
+#   i: 0.0
+#   mode: 1
+#   b: 0
+#   c: 0
+sensor_pid_dia:
+  p: 0.0975
+  # p: 0.15
+  # p: 0.0
+  i: 0.0
+  d: 0.015
+  b: 0
+  c: 0
+  mode: 0
+gyro_param:
+  gyro_w_gain_left: 0.0024621
+  gyro_w_gain_right: 0.0024621
+  retry_min_th: 0
+  retry_max_th: 3
+  robust_th: 0.95
+  lp_delay: 1
+  list_size: 256
+  loop_size: 5
+
+# gyro2_param:
+#   # gyro_w_gain_left: 0.00246095
+#   # gyro_w_gain_right: 0.00246095
+#   gyro_w_gain_left: 0.0024475
+#   gyro_w_gain_right: 0.0024475
+#   lp_delay: 1
+# accel_x_param: # not use
+#   gain: 77.5 # 4g
+
+# comp_v_param:
+#   enc_v_lp: 0
+#   acc_x_hp: 0.85
+#   gain_v: 0.75
+#   enable: 0
+
+battery_param:
+  # lp_delay: 0.25
+  lp_delay: 0.5
+led_param:
+  lp_delay: 0.995
+  # lp_delay: 1
+
+# float initial_covariance = 0.950; // 初期姿勢の誤差共分散行列
+# float process_noise = 0.05;       // プロセスノイズの共分散
+# float measurement_noise = 0.35;   // 観測ノイズの共分散
+
+battery_kalman_config:
+  init_cov: 0.99999999 # initial_covariance
+  p_noise: 0.0000001 # process_noise
+  m_noise: 0.9999999 # measurement_noise
+  # init_cov: 0.95 # initial_covariance
+  # p_noise: 0.05 # process_noise
+  # m_noise: 0.35 # measurement_noise
+
+encoder_kalman_config:
+  init_cov: 0.95 # initial_covariance
+  p_noise: 0.05 # process_noise
+  m_noise: 0.35 # measurement_noise
+
+w_kalman_config:
+  # init_cov: 0.995 # initial_covariance
+  # p_noise: 0.075 # process_noise
+  # m_noise: 0.25 # measurement_noise
+
+  init_cov: 0.950 # initial_covariance
+  p_noise: 0.05 # process_noise
+  m_noise: 0.35 # measurement_noise
+
+  # init_cov: 0.750 # initial_covariance
+  # p_noise: 0.05 # process_noise
+  # m_noise: 0.35 # measurement_noise
+
+v_kalman_config:
+  init_cov: 0.95 # initial_covariance
+  p_noise: 0.05 # process_noise
+  m_noise: 0.35 # measurement_noise
+
+ang_kalman_config:
+  init_cov: 0.95 # initial_covariance
+  p_noise: 0.05 # process_noise
+  m_noise: 0.35 # measurement_noise
+
+dist_kalman_config:
+  init_cov: 0.95 # initial_covariance
+  p_noise: 0.05 # process_noise
+  m_noise: 0.35 # measurement_noise
+
+pos_kalman_config:
+  init_cov: 0.95 # initial_covariance
+  p_noise: 0.05 # process_noise
+  m_noise: 0.35 # measurement_noise
+
+# led_blight: [0x05, 0x05, 0x08, 0x0d, 0x02, 0x05]
+led_blight: [0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d]
+
+left_keep_dist_th: 8
+right_keep_dist_th: 8
+
+normal_sla_l_wall_off_th_in: 70 #[mm]
+normal_sla_r_wall_off_th_in: 70 #[mm]
+normal_sla_l_wall_off_th_out: 80 #[mm]
+normal_sla_r_wall_off_th_out: 80 #[mm]
+
+normal_sla_l_wall_off_ref_cnt: 133 #125~144
+normal_sla_r_wall_off_ref_cnt: 139 #125~144
+
+normal_sla_l_wall_off_dist: 6
+normal_sla_r_wall_off_dist: 6
+# normal_sla_l_wall_off_dist: 0
+# normal_sla_r_wall_off_dist: 0
+normal_sla_l_wall_off_margin: 4
+normal_sla_r_wall_off_margin: 4

@@ -1,0 +1,26 @@
+{
+  "name": "param_tuner",
+  "version": "1.0.0",
+  "description": "ESP32-S3 Parameter Tuner GUI",
+  "main": "gui/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@foxglove/eslint-plugin": "0.21.0",
+    "@mcap/core": "*",
+    "@serialport/parser-byte-length": "^13.0.0",
+    "@serialport/parser-readline": "^13.0.0",
+    "@types/node": "^20.3.3",
+    "csvtojson": "^2.0.10",
+    "electron": "^28.0.0",
+    "js-yaml": "^4.1.0",
+    "serialport": "^13.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.9.5"
+  }
+}

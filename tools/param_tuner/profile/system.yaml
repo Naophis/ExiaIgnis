@@ -1,0 +1,153 @@
+# goals: [[7, 7], [7, 8], [8, 7], [8, 8]]
+# goals: [[8, 8],[8, 9],[9, 8],[9, 9]]
+# goals: [[1, 0], [2, 0]]
+# goals: [[1, 0], [2, 0], [1, 1], [2, 1]]
+# goals: [[1, 0]]
+# goals: [[3, 0]]
+goals: [[7, 0], [8, 0]]
+# goals: [[6, 2], [7, 2]]
+# goals: [[3, 0], [4, 0]]
+# goals: [[1, 1], [1, 2], [2, 1], [2, 2]]
+# goals: [[3, 0], [3, 1], [2, 0], [2, 1]]
+# goals: [[7, 3], [7, 4], [8, 3], [8, 4]]
+# goals: [[1, 1]]
+# goals: [[6, 9], [6, 10], [7, 9], [7, 10]]
+# goals: [[11, 0], [11, 1], [12, 0], [12, 1]]
+# goals: [[5, 0], [5, 1], [6, 0], [6, 1]]
+# goals: [[9, 9], [9, 10], [10, 9], [10, 10]] #北信越
+
+# goals: [[24, 23], [25, 23], [24, 22], [25, 22]] # 2010hef
+# goals: [[25, 29], [26, 29], [27, 29], [25, 28], [26, 28], [27, 28],[25, 27], [26, 27], [27, 27]] # 2011hef
+
+# goals: [[17, 15], [18, 15], [19, 15], [17, 14], [18, 14], [19, 14],[17, 13], [18, 13], [19, 13]] # 2019hef
+# goals: [[16,16],[16,17],[16,18],[17,16],[17,17],[17,18],[18,16],[18,17],[18,18]] # 2021hf
+# goals: [[14,14],[14,15],[14,16],[15,14],[14,15],[15,16],[16,14],[16,15],[14,16]] # 2022hf
+
+
+# goals: [[14, 14], [14, 15], [15, 14], [15, 15]] #東日本
+
+# goals: [ [4,4],[4,5],[5,4],[5,5]]
+# goals: [ [11, 10],[12, 10],[11, 11],[12, 11]] # 金沢草の根 2023
+# goals: [ [9, 9], [9, 10], [10, 9], [10, 10]] # 金沢草の根 2018
+# goals: [ [11, 10], [12, 10], [11, 11], [12, 11]] # 北信越2023
+# goals: [ [2, 11], [2, 12], [3, 11], [3, 12]] # 東北2023
+
+# goals: [[6, 9], [6, 10], [7, 9], [7, 10]] #東日本2023
+# goals: [ [16 ,16],[17, 16], [17,16],[17,17]] #クラシック迷路
+
+
+# goals: [[10, 3], [11, 3], [10, 4], [11, 4]] #東日本2023
+
+# 2023 all japan final
+# goals: [[8,8],[8,9],[8,10],[9,8],[9,9],[9,10],[10,8],[10,9],[10,10]] # 2023hf
+
+
+# goals: [[1, 0], [1, 1], [2, 0], [2, 1]]
+# goals: [[3, 0], [4, 0]]
+
+# goals: [[1, 0], [2, 0]]
+
+# goals: [[6, 9], [6, 10], [7, 9], [7, 10]] #東日本2023
+
+
+# goals: [[14, 14], [14, 15], [15, 14], [15, 15]] #東日本2023
+
+# goals: [[19, 8],[19, 9],[19, 10],[20, 8],[20, 9],[20, 10],[21, 8],[21, 9],[21, 10]]  #全日本2024 Final
+
+# goals: [[5, 6],[5, 7],[6, 6],[6, 7]]
+
+#  27 *55
+maze_size: 32
+debug: 0 #
+circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
+hf_cl: 0 # half(0) or classic(1)
+mode: 0 # メイン
+# mode: 1 # 最短スローム
+# mode: 2 # 直進
+# mode: 3 # 超信地
+# mode: 5 # 探索スラローム sla_wall_ref_l/r
+# mode: 7 # front ctrl
+# mode: 9 # wall off, search_mode(1)->search_wall_off, 0->fast_run_wall_off
+# mode: 11 # vacume/suction test
+# mode: 12 # silent_keep
+# mode: 13 # keep_pos
+# mode: 14 # sensing
+# mode: 15 # sensor calib
+# mode: 16 # system identification (para)
+# mode: 17 # system identification (roll)
+# mode: 20 # pivot turn n
+# mode: 21 # pivot turn n2
+# mode: 22 # encoder_test
+# mode: 23 # search pivot turn
+
+test: # テスト走行時に使用するパラメータ群
+  v_max: 400
+  accl: 2500
+  decel: -2500 
+  dia_accl: 2500
+  dia_decel: -2500
+  dist: 420 #直進
+  suction_active: 0
+
+  # v_max: 5500
+  # # accl: 42500
+  # # decel: -52500
+  # accl: 22500
+  # decel: -22500
+  # dia_accl: 45000
+  # dia_decel: -47500
+  # dist: 720 #直進
+  # suction_active: 2
+
+  # sla_accl: 28000
+  # sla_decel: -30000
+
+  # v_max: 11550
+  # accl: 28000
+  # decel: -68000
+  # dist: 720 #直進
+  # suction_active: 2
+
+  end_v: 10
+  dia: 0
+  w_max: 12.5
+  alpha: 180
+  ang: 3600
+  search_mode: 0
+  
+  suction_duty: 4.6
+  suction_duty_low: 4.35
+  # Alter
+  # suction_duty_burst: 4.0
+  # suction_duty_burst_low: 3.750
+  # Nova
+  suction_duty_burst: 4.25
+  suction_duty_burst_low: 4.0 # suction_duty_burst -0.25
+
+  # suction_duty_burst: 4.0
+  # suction_duty_burst_low: 3.75
+
+  suction_gain: 200
+  # suction_duty: 3.25
+  file_idx: 4
+  sla_dist: 90
+  # sla_type: 3
+  sla_type: 4
+  sla_type2: 9 # 復路ターン種類
+  sla_return: 0 # 往復フラグ
+  # sla_type: 1 normal
+  # sla_type: 2 #orval
+  # sla_type: 3 #large
+  # sla_type: 4 #dia45
+  # sla_type: 5 #dia135
+  # sla_type: 6 #dia90
+  # sla_type: 7 #Kojima
+  # sla_type: 8 #dia45_2
+  # sla_type: 9 #dia135_2
+  turn_times: 0
+  ignore_opp_sen: 2 #斜めターン後の直進テスト 0無効、1斜め制御なし、2斜め制御あり
+  sysid_test_mode: 0 #システム同定のテスト:0 直進、1回転
+  sysid_duty: 1.5 #duty 
+  sysid_time: 1250 #duty 
+  start_turn: 0 #開幕ターンテスト
+  
