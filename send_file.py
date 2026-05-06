@@ -9,15 +9,19 @@ Pico へ USB CDC 経由でファイルを送受信するスクリプト。
   python send_file.py <port> delete <Pico上のファイル名>
 
 例:
-  python send_file.py /dev/ttyACM0 write config.bin
+  python send_file.py /dev/ttyACM0 write hardware.json
   python send_file.py /dev/ttyACM0 list
-  python send_file.py /dev/ttyACM0 read config.bin out.bin
-  python send_file.py /dev/ttyACM0 delete config.bin
+  python send_file.py /dev/ttyACM0 read hardware.json out.json
+  python send_file.py /dev/ttyACM0 delete hardware.json
+
+プロトコル (write):
+  "filename@minified_json\n" を送信し "OK\n" を受信する。
 """
 
 import sys
 import os
 import time
+import json
 import serial
 
 TIMEOUT_SEC = 10  # コマンド応答タイムアウト
@@ -41,15 +45,20 @@ def readline_skip_sensor(ser: serial.Serial) -> str:
 
 
 def cmd_write(ser: serial.Serial, local_path: str, remote_name: str) -> None:
-    with open(local_path, "rb") as f:
-        data = f.read()
-    size = len(data)
-    ser.write(f"WRITE:{remote_name}:{size}\n".encode())
-    ser.write(data)
+    with open(local_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    try:
+        content = json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+    except json.JSONDecodeError:
+        # JSON でなければ改行を除いてそのまま使用
+        content = text.replace("\n", " ").replace("\r", "")
+
+    message = f"{remote_name}@{content}\n"
+    ser.write(message.encode("utf-8"))
     ser.flush()
     response = readline_skip_sensor(ser)
     if response == "OK":
-        print(f"OK: {size} バイトを '{remote_name}' に書き込みました")
+        print(f"OK: {len(content)} バイトを '{remote_name}' に書き込みました")
     else:
         print(f"失敗: {response}", file=sys.stderr)
         sys.exit(1)
