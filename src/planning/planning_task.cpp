@@ -41,6 +41,9 @@ std::shared_ptr<PlanningTask> PlanningTask::create() {
 void PlanningTask::set_sensing_entity(
     std::shared_ptr<sensing_result_entity_t> &_sensing_result) {
   sensing_result = _sensing_result;
+  if (sensing_result && param) {
+    ego.reset_kf_state(true, sensing_result, param);
+  }
 }
 
 void PlanningTask::set_input_param_entity(

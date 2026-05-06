@@ -340,7 +340,7 @@ typedef struct {
 } accel_param_t;
 
 typedef struct {
-  float lp_delay = 0;
+  float lp_delay = 1.0;
 } sen_param_t;
 
 typedef struct {

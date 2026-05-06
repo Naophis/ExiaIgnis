@@ -102,7 +102,9 @@ void EgoEstimator::update(
       se->ego.battery_raw * param->battery_param.lp_delay;
   kf_batt.predict(0);
   kf_batt.update(se->ego.battery_raw);
-  se->ego.batt_kf = kf_batt.get_state();
+  // battery_raw が未確定(0)の間は lp 値にフォールバックして除算 Inf/NaN を防ぐ
+  const float batt_kf_raw = kf_batt.get_state();
+  se->ego.batt_kf = (batt_kf_raw > 0.01f) ? batt_kf_raw : se->ego.battery_lp;
 
   se->ego.left45_lp_old = se->ego.left45_lp;
   se->ego.left90_lp_old = se->ego.left90_lp;

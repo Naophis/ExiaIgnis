@@ -68,6 +68,7 @@ int main() {
   // PlanningTask 初期化 (モーター/吸引 PWM ハードウェア設定のみ; IRQ は Core1
   // で登録)
   planning->set_sensing_entity(sensing_entity);
+  planning->set_input_param_entity(param);
   planning->init(sensing);
 
   // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
