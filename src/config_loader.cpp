@@ -192,6 +192,58 @@ bool ConfigLoader::read_json() {
     return load_file("/config.json", doc_);
 }
 
+bool ConfigLoader::write_file(const char* path, const uint8_t* data, size_t size) {
+    lfs_file_t f;
+    if (lfs_file_open(&lfs, &f, path,
+                      LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) < 0)
+        return false;
+    lfs_ssize_t n = lfs_file_write(&lfs, &f, data, size);
+    lfs_file_close(&lfs, &f);
+    return n == (lfs_ssize_t)size;
+}
+
+bool ConfigLoader::read_file_raw(const char* path,
+                                  uint8_t* buf, size_t buf_size,
+                                  size_t& out_size) {
+    lfs_file_t f;
+    if (lfs_file_open(&lfs, &f, path, LFS_O_RDONLY) < 0) return false;
+    lfs_ssize_t size = lfs_file_size(&lfs, &f);
+    if (size < 0 || (size_t)size > buf_size) {
+        lfs_file_close(&lfs, &f);
+        return false;
+    }
+    lfs_ssize_t n = lfs_file_read(&lfs, &f, buf, size);
+    lfs_file_close(&lfs, &f);
+    if (n < 0) return false;
+    out_size = (size_t)n;
+    return true;
+}
+
+int32_t ConfigLoader::file_size(const char* path) {
+    lfs_file_t f;
+    if (lfs_file_open(&lfs, &f, path, LFS_O_RDONLY) < 0) return -1;
+    lfs_soff_t size = lfs_file_size(&lfs, &f);
+    lfs_file_close(&lfs, &f);
+    return (int32_t)size;
+}
+
+bool ConfigLoader::delete_file(const char* path) {
+    return lfs_remove(&lfs, path) == LFS_ERR_OK;
+}
+
+void ConfigLoader::list_files(void (*cb)(void* ctx, const char* name, int32_t size),
+                               void* ctx) {
+    lfs_dir_t dir;
+    if (lfs_dir_open(&lfs, &dir, "/") < 0) return;
+    struct lfs_info info;
+    while (lfs_dir_read(&lfs, &dir, &info) > 0) {
+        if (info.type == LFS_TYPE_REG) {
+            cb(ctx, info.name, (int32_t)info.size);
+        }
+    }
+    lfs_dir_close(&lfs, &dir);
+}
+
 bool ConfigLoader::write_default_json() {
     lfs_file_t f;
     if (lfs_file_open(&lfs, &f, "/config.json",

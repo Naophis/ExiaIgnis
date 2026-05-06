@@ -53,6 +53,26 @@ public:
         return true;
     }
 
+    // ---- ファイル転送用 低レベル API ----------------------------------------
+
+    // rawバイト列をファイルに書き込む (作成 or 上書き)
+    static bool write_file(const char* path, const uint8_t* data, size_t size);
+
+    // rawバイト列としてファイルを読み出す。buf_size より大きければ失敗
+    static bool read_file_raw(const char* path,
+                              uint8_t* buf, size_t buf_size, size_t& out_size);
+
+    // ファイルサイズを返す。ファイルが存在しなければ -1
+    static int32_t file_size(const char* path);
+
+    // ファイルを削除する
+    static bool delete_file(const char* path);
+
+    // ルートディレクトリのファイル一覧を列挙する
+    // cb(ctx, name, size) がファイルごとに呼ばれる
+    static void list_files(void (*cb)(void* ctx, const char* name, int32_t size),
+                           void* ctx);
+
 private:
     static JsonDocument doc_;
 
