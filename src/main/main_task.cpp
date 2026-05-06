@@ -34,55 +34,48 @@ void MainTask::run() {
   ui_.LED_headlight();
   ui_.hello_exia();
 
-  bool prev_btn = false;
-  // bool suction_started = false;
-  // bool suction_stopped = false;
-  // absolute_time_t start_time = get_absolute_time();
-  // absolute_time_t suction_start_time{};
+  // 吸引 PWM テスト: ボタン押下から 3 秒後に duty_suction を直接駆動する。
+  // ControlLaw・バッテリ補正・ランプを完全バイパスして motor_.apply() を直叩き。
+  static constexpr float    SUCTION_TEST_DUTY    = 15.0f;    // [%] 要チューニング
+  static constexpr uint32_t SUCTION_DELAY_MS     = 3000;     // 押下から起動までの遅延
+  bool             prev_btn       = false;
+  bool             suction_test_on = false;
+  bool             btn_held        = false;         // 押下中フラグ
+  absolute_time_t  btn_press_time  = nil_time;      // 押下時刻
 
   while (true) {
-    // if (!suction_started && absolute_time_diff_us(start_time,
-    // get_absolute_time()) >= 3000000LL) {
-    //     PlanningTask::Command cmd;
-    //     cmd.duty_suction = 42.0f;
-    //     planning_->send_command(cmd);
-    //     suction_started = true;
-    //     suction_start_time = get_absolute_time();
-    // }
-
-    // if (suction_started && !suction_stopped &&
-    //     absolute_time_diff_us(suction_start_time, get_absolute_time()) >=
-    //     5000000LL) { PlanningTask::Command cmd; cmd.duty_suction = 0.0f;
-    //     planning_->send_command(cmd);
-    //     suction_stopped = true;
-    // }
-
-    // ---- ボタン処理 ----
+    // ---- ボタン処理 (吸引 PWM 直接テスト) ----
     bool btn = !gpio_get(BTN_PIN); // active low
 
     if (btn != prev_btn) {
-      // if (btn) {
-      //     ui_.play_tone(BUZZER_FREQ_HZ);
-      //     ui_.LED_on_all();
-
-      //     // ボタン押下: planning に直進コマンドを投入
-      //     PlanningTask::Command cmd;
-      //     cmd.mode         = PlanningTask::MotionMode::STRAIGHT;
-      //     cmd.v_max        = 200.0f;   // 200 mm/s
-      //     cmd.accl         = 1000.0f;  // 1000 mm/s^2
-      //     cmd.dist         = 1e9f;     // 実質無制限
-      //     cmd.duty_suction = 5.0f;     // 5%
-      //     planning_->send_command(cmd);
-      // } else {
-      //     ui_.stop_tone();
-      //     ui_.LED_headlight();
-
-      //     // ボタン離し: 減速停止
-      //     PlanningTask::Command cmd;
-      //     cmd.mode = PlanningTask::MotionMode::STOP;
-      //     planning_->send_command(cmd);
-      // }
+      if (btn) {
+        // 押下エッジ
+        if (suction_test_on) {
+          // 2 回目押下: 吸引 OFF
+          planning_->set_suction_test(0.0f);
+          suction_test_on = false;
+          btn_held        = false;
+          ui_.stop_tone();
+          ui_.LED_headlight();
+        } else {
+          // 1 回目押下: 3 秒タイマー開始
+          btn_held       = true;
+          btn_press_time = get_absolute_time();
+          ui_.LED_on_all();
+        }
+      }
       prev_btn = btn;
+    }
+
+    // 押下中かつ未起動: 3 秒経過で吸引 ON
+    if (btn_held && !suction_test_on) {
+      if (absolute_time_diff_us(btn_press_time, get_absolute_time()) >=
+          (int64_t)SUCTION_DELAY_MS * 1000LL) {
+        planning_->set_suction_test(SUCTION_TEST_DUTY);
+        suction_test_on = true;
+        btn_held        = false;
+        ui_.play_tone(BUZZER_FREQ_HZ);
+      }
     }
 
     // ---- シリアル出力 (sensing が更新されたタイミングで表示) ----
@@ -127,8 +120,9 @@ void MainTask::run() {
              "  dist=%7.1f  ang=%6.3f\n",
              (uint8_t)ps.mode, ps.img_v, ps.img_w, ps.img_dist, ps.img_ang);
       printf("[control]  duty_l=%6.1f%%  duty_r=%6.1f%%"
-             "  suction=%5.1f%%  tick=%lu\n",
-             ps.duty_l, ps.duty_r, ps.duty_suction, ps.tick);
+             "  suction=%5.1f%%  tick=%lu  %s\n",
+             ps.duty_l, ps.duty_r, ps.duty_suction, ps.tick,
+             suction_test_on ? "[SUCTION TEST]" : "");
     }
 
     sleep_ms(25);
