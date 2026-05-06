@@ -30,8 +30,12 @@
 // constexpr int GY_MODE = 0;
 // constexpr float cell_size = 90;
 
+#ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+#ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 // constexpr int16_t ENCODER_H_LIM_VAL = 32767;
 // constexpr int16_t ENCODER_L_LIM_VAL = -32767;
