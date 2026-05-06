@@ -178,7 +178,8 @@ void PlanningTask::tick(uint32_t dt_us) {
         trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
       }
     }
-    trj_.calc_kanayama(tgt_val, sensing_result, param, ego, sensor_, last_tgt_angle);
+    trj_.calc_kanayama(tgt_val, sensing_result, param, ego, sensor_,
+                       last_tgt_angle);
 
     if (tgt_val->motion_type == MotionType::PIVOT ||
         tgt_val->motion_type == MotionType::FRONT_CTRL) {
@@ -190,8 +191,7 @@ void PlanningTask::tick(uint32_t dt_us) {
     trj_.copy_tgt(tgt_val, sensing_result, param, dt); // 1~2usec
 
     // PID制御・デューティ計算・モーター出力
-    ctl_.calc(tgt_val, sensing_result, param,
-              motor_en, suction_en, search_mode,
+    ctl_.calc(tgt_val, sensing_result, param, motor_en, suction_en, search_mode,
               w_reset, last_tgt_angle, dt);
   }
 
