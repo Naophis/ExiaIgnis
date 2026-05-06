@@ -82,7 +82,7 @@ void SensingTask::timer_b_irq_handler() {
 
   // 1. 全LED消灯状態で ambient 読み取り
   adc_select_input(0);
-  se->led_sen_before.left90.raw = adc_read();
+  se->led_sen_before.right90.raw = adc_read();
   adc_select_input(1);
   se->led_sen_before.right45.raw = adc_read();
   adc_select_input(2);
@@ -98,7 +98,7 @@ void SensingTask::timer_b_irq_handler() {
   gpio_put(R90_LED_PIN, 1);
   busy_wait_us_32(self->led_settle_us_);
   adc_select_input(0);
-  se->led_sen_after.left90.raw = adc_read();
+  se->led_sen_after.right90.raw = adc_read();
   gpio_put(R90_LED_PIN, 0);
 
   // R45 シーケンス: LED1 点灯中に LED2 を追加し、LED1 を消してから LED2
@@ -170,6 +170,7 @@ void SensingTask::timer_b_irq_handler() {
   self->data.gz_ts_z = self->data.gz_ts;
   self->data.gz_ts = time_us_64();
   self->data.gz = self->gyro_.read_gyro_z();
+  se->gyro.raw = se->gyro.data = self->data.gz;
   self->data.gz_dt =
       self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z) : 0;
 

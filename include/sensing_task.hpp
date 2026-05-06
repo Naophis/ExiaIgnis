@@ -101,6 +101,7 @@ public:
     void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_entity);
     void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
     void set_planning_task(std::shared_ptr<PlanningTask> &_pt);
+    std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
 private:
     SensingTask() = default;
 
@@ -136,7 +137,6 @@ private:
 
     static std::shared_ptr<SensingTask> s_instance;
     std::shared_ptr<sensing_result_entity_t> sensing_result;
-    std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
     std::shared_ptr<motion_tgt_val_t> tgt_val;
     std::shared_ptr<PlanningTask> pt;
     float calc_enc_v(float now, float old, float dt);

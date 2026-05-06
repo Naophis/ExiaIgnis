@@ -19,6 +19,8 @@ public:
 private:
     MainTask() = default;
     void run();
+    
+    std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
 
     static std::shared_ptr<MainTask> s_instance;
 

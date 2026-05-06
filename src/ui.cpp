@@ -65,8 +65,7 @@ void UserInterface::LED_bit(int b0, int b1, int b2, int b3, int b4, int b5) {
 }
 
 void UserInterface::LED_headlight() {
-    // b0(ch1) と b5(ch4) のみ点灯 — 左右前照灯
-    LED_bit(1, 0, 0, 0, 0, 1);
+    LED_bit(0, 0, 0, 0, 0, 0);
 }
 
 
