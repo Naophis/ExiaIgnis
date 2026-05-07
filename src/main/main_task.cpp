@@ -187,6 +187,9 @@ void MainTask::run() {
   printf("[main] ready. send files or press button to start.\n");
   static char rx_buf[16384];
   bool updated = false;
+
+  print_system_params();
+
   while (true) {
     if (ui_.button_state_hold()) {
       ui_.coin(100);
@@ -214,6 +217,7 @@ void MainTask::run() {
   bool suction_test_on = false;
   bool btn_held = false;
   absolute_time_t btn_press_time = nil_time;
+
   sleep_ms(500);
 
   while (true) {
@@ -301,5 +305,16 @@ void MainTask::run() {
     }
 
     sleep_ms(25);
+  }
+}
+void MainTask::print_system_params() {
+  printf("=== System Parameters ===\n");
+  printf("User Mode: %d\n", sys_.user_mode);
+  printf("Maze Size: %d\n", sys_.maze_size);
+  printf("Circuit Mode: %d\n", sys_.circuit_mode);
+  printf("HF CL: %d\n", sys_.hf_cl);
+  printf("Goals:\n");
+  for (const auto &goal : sys_.goals) {
+    printf("  - (x: %d, y: %d)\n", goal.x, goal.y);
   }
 }

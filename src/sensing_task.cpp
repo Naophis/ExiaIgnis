@@ -201,7 +201,14 @@ void SensingTask::timer_a_irq_handler() {
   auto *self = s_instance.get();
 
   // 次回アラームをすぐに設定 (絶対時刻 → ドリフトなし)
+  // flash write 等で Core1 が長時間停止した場合、next_alarm が過去値になると
+  // RP2350 タイマーの等値比較では ~71分後まで発火しない。1周期以上遅れたらリセット。
   self->next_alarm_a_ += self->interval_us_;
+  {
+    uint32_t now32 = (uint32_t)time_us_64();
+    if ((int32_t)(now32 - self->next_alarm_a_) > (int32_t)self->interval_us_)
+      self->next_alarm_a_ = now32 + self->interval_us_;
+  }
   timer_hw->alarm[2] = self->next_alarm_a_;
 
   // アラーム鳴動直後の時刻を記録

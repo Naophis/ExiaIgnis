@@ -41,4 +41,5 @@ private:
     std::shared_ptr<input_param_t> param_;
     // 走行モード・ゴール設定など主タスク管理の系統パラメータ
     system_t sys_{};
+    void print_system_params();
 };

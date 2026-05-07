@@ -117,7 +117,13 @@ void PlanningTask::timer_irq_handler() {
   auto *self = s_instance.get();
 
   // 次回アラームを絶対時刻で設定 (ドリフトなし)
+  // flash write 等で Core1 が長時間停止した場合にリセット (sensing_task と同様)
   self->next_alarm_ += self->interval_us_;
+  {
+    uint32_t now32 = timer1_hw->timelr;
+    if ((int32_t)(now32 - self->next_alarm_) > (int32_t)self->interval_us_)
+      self->next_alarm_ = now32 + self->interval_us_;
+  }
   timer1_hw->alarm[0] = self->next_alarm_;
 
   uint64_t now = time_us_64();

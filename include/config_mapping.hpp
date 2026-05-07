@@ -632,7 +632,7 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
 inline void convertFromJson(JsonVariantConst src, system_t& dst) {
     from_json_vector(src, "goals", dst.goals);
     from_json_field(src, "maze_size", dst.maze_size);
-    from_json_field(src, "user_mode", dst.user_mode);
+    from_json_field(src, "mode", dst.user_mode);
     from_json_field(src, "circuit_mode", dst.circuit_mode);
     from_json_nested(src, "test", dst.test);
     from_json_field(src, "hf_cl", dst.hf_cl);
