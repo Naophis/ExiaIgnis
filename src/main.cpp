@@ -6,6 +6,7 @@
 #include "hardware/pio.h"
 #include "hardware/spi.h"
 #include "hardware/uart.h"
+#include "logging/logging_task.hpp"
 #include "main/main_task.hpp"
 #include "pico/flash.h"
 #include "pico/multicore.h"
@@ -71,8 +72,12 @@ int main() {
   planning->set_input_param_entity(param);
   planning->init(sensing);
 
+  // LoggingTask 生成 (PSRAM init は別途必要; なければログ無効で動作)
+  auto lt = LoggingTask::create();
+
   // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
-  MainTask::create(sensing, planning, param);
+  auto main_task = MainTask::create(sensing, planning, param);
+  main_task->set_logging_task(lt);
 
   // Core1 起動: sensing/planning IRQ を Core1 に登録して __wfi() ループへ
   s_rt_sensing = sensing.get();

@@ -59,8 +59,7 @@ static void print_sensing(const SensingTask::Data &d,
          (unsigned)sys.goals.size());
 }
 
-// ─── ボタン長押し待機ヘルパー ─────────────────────────────────────────────────
-// ボタンが押して離されるまで待つ (短押し/長押し問わず)。
+// ─── ボタン待機ヘルパー ───────────────────────────────────────────────────────
 static void wait_button(UserInterface &ui) {
   while (!ui.button_state_hold())
     sleep_ms(10);
@@ -68,27 +67,24 @@ static void wait_button(UserInterface &ui) {
 
 // ============================================================
 // 本走行サブモード選択 (Astraea の select_mode() 相当)
-// 短押し: 次のモードへ (LED 2進数更新)
-// 長押し (>= 1秒): 選択確定 → coin + return
+// 短押し: 次のモードへ / 長押し(>=1秒): 決定
 // ============================================================
 int MainTask::select_run_mode(int max_mode) {
   int mode = 0;
   show_mode_led(ui_, mode);
 
   while (true) {
-    if (!gpio_get(BTN_PIN)) { // ボタン押下検出 (active low)
+    if (!gpio_get(BTN_PIN)) {
       absolute_time_t press_t = get_absolute_time();
       while (!gpio_get(BTN_PIN))
-        tight_loop_contents(); // 離されるまで待つ
+        tight_loop_contents();
       int64_t held_ms =
           absolute_time_diff_us(press_t, get_absolute_time()) / 1000;
 
       if (held_ms >= 1000) {
-        // 長押し: 決定
         ui_.coin(100);
         return mode;
       } else {
-        // 短押し: 次のモードへ
         mode = (mode + 1) % max_mode;
         show_mode_led(ui_, mode);
       }
@@ -100,13 +96,12 @@ int MainTask::select_run_mode(int max_mode) {
 // ============================================================
 // 本走行モード (user_mode == 0)
 // Astraea task() の else ブロック相当。
-// select_run_mode() で走行種別を選択してループ。
 // ============================================================
 //
-// サブモード一覧:
-//   0: 探索走行    (stub: SearchController 実装後に有効化)
-//   1: 最速走行    (stub: PathCreator / path_run 実装後に有効化)
-//   2: 吸引テスト  (即実行可能)
+// サブモード:
+//   0: 探索走行    (stub)
+//   1: 最速走行    (stub)
+//   2: 吸引テスト  (インタラクティブ)
 //   3: センサーモニター
 //
 void MainTask::run_main_mode() {
@@ -120,27 +115,23 @@ void MainTask::run_main_mode() {
     printf("[main] sub_mode=%d\n", sub);
 
     if (sub == 0) {
-      // ── 探索走行 ─────────────────────────────────────────────────────────
-      // TODO: lgc/search_ctrl 実装後に有効化
-      printf("[main] 探索走行 (not yet implemented)\n");
+      printf("探索走行\n");
+      // TODO: search_ctrl->exec() 実装後に有効化
       ui_.coin(100);
       wait_button(ui_);
 
     } else if (sub == 1) {
-      // ── 最速走行 ─────────────────────────────────────────────────────────
-      // TODO: PathCreator / path_run 実装後に有効化
-      printf("[main] 最速走行 (not yet implemented)\n");
+      printf("最速走行\n");
+      // TODO: path_run() 実装後に有効化
       ui_.coin(100);
       wait_button(ui_);
 
     } else if (sub == 2) {
-      // ── 吸引テスト ───────────────────────────────────────────────────────
-      printf("[main] 吸引テスト\n");
+      printf("吸引テスト\n");
       mode_suction_test();
 
     } else if (sub == 3) {
-      // ── センサーモニター ─────────────────────────────────────────────────
-      printf("[main] センサーモニター\n");
+      printf("センサーモニター\n");
       mode_sensor_monitor();
     }
 
@@ -150,49 +141,155 @@ void MainTask::run_main_mode() {
 
 // ============================================================
 // テストモード dispatch (user_mode != 0)
-// Astraea task() の if(sys.user_mode != 0) ブロック相当。
-//
-// モード番号は Astraea に合わせた番号体系:
-//   1: センサーモニター  (dump1/dump2 相当, Astraea mode 14/15)
-//   2: 直進テスト        (test_run 相当)
-//   3: 旋回テスト        (test_turn / test_pivot_n 相当)
-//   4: 後退テスト        (test_back 相当)
-//   5: 吸引テスト        (Astraea mode 11 相当)
+// Astraea task() の if(sys.user_mode != 0) ブロックを踏襲。
 // ============================================================
 void MainTask::run_test_mode(int mode) {
-  printf("[main] test mode=%d\n", mode);
-
   if (mode == 1) {
-    printf("[main] test 1: sensor monitor\n");
-    mode_sensor_monitor();
+    printf("test_sla\n");
+    // TODO: test_sla() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
 
   } else if (mode == 2) {
-    printf("[main] test 2: straight\n");
+    printf("test_run\n");
     mode_straight_test();
 
   } else if (mode == 3) {
-    printf("[main] test 3: pivot\n");
+    printf("test_turn\n");
     mode_pivot_test();
 
   } else if (mode == 4) {
-    // TODO: 後退テスト (test_back 相当)
-    printf("[main] test 4: back (not yet implemented)\n");
+    printf("test_run_sla\n");
+    // TODO: test_run_sla() 実装後に有効化
     ui_.coin(100);
     wait_button(ui_);
 
   } else if (mode == 5) {
-    printf("[main] test 5: suction\n");
-    mode_suction_test();
+    printf("test_search_sla\n");
+    // TODO: test_search_sla() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
 
-  } else {
-    printf("[main] unknown test mode %d, sensor monitor\n", mode);
+  } else if (mode == 6) {
+    printf("test_front_wall_offset\n");
+    // TODO: test_front_wall_offset() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 7) {
+    printf("test_front_ctrl hold\n");
+    // TODO: test_front_ctrl(true) 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 8) {
+    printf("test_front_ctrl \n");
+    // TODO: test_front_ctrl(false) 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 9) {
+    printf("test_sla_walloff\n");
+    // TODO: test_sla_walloff() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 10) {
+    printf("back\n");
+    // TODO: test_back() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 11) {
+    printf("suction\n");
+    printf("suction_active = %d\n", sys_.test.suction_active);
+    if (sys_.test.suction_active == 1) {
+      printf("duty = %f, duty_low = %f\n", sys_.test.suction_duty,
+             sys_.test.suction_duty_low);
+      planning_->set_suction_test(sys_.test.suction_duty);
+    } else if (sys_.test.suction_active == 2) {
+      printf("duty = %f, duty_low = %f\n", sys_.test.suction_duty_burst,
+             sys_.test.suction_duty_burst_low);
+      planning_->set_suction_test(sys_.test.suction_duty_burst);
+    }
+    sleep_ms(1000 * 10);
+    planning_->set_suction_test(0.0f);
+
+  } else if (mode == 12) {
+    printf("hold\n");
+    if (lt_) lt_->start_slalom_log();
+    sleep_ms(1000 * 10);
+    if (lt_) lt_->stop_slalom_log();
+    if (lt_) lt_->save(slalom_log_file);
+    ui_.coin(120);
+    wait_button(ui_);
+    if (lt_) lt_->dump_log(slalom_log_file);
+    wait_button(ui_);
+
+  } else if (mode == 13) {
+    printf("keep_pivot\n");
+    // TODO: keep_pivot() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 14) {
+    printf("echo_sensor_csv\n");
     mode_sensor_monitor();
+
+  } else if (mode == 15) {
+    printf("echo_printf\n");
+    mode_sensor_csv();
+
+  } else if (mode == 16) {
+    printf("sys id para\n");
+    // TODO: test_system_identification(false) 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 17) {
+    printf("sys id roll\n");
+    // TODO: test_system_identification(true) 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 18) {
+    if (lt_) lt_->dump_log(slalom_log_file);
+    wait_button(ui_);
+
+  } else if (mode == 19) {
+    printf("test_dia_walloff\n");
+    // TODO: test_dia_walloff() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 20) {
+    printf("test_pivot_n\n");
+    // TODO: test_pivot_n() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 21) {
+    printf("test_pivot_n2\n");
+    // TODO: test_pivot_n2() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 22) {
+    // TODO: encoder_test() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
+
+  } else if (mode == 23) {
+    printf("load_circuit_path\n");
+    // TODO: test_search_pivot() 実装後に有効化
+    ui_.coin(100);
+    wait_button(ui_);
   }
 }
 
 // ============================================================
-// mode 1: センサーモニター
-// Astraea dump1/dump2 相当。USB 接続時にセンサーデータを表示し続ける。
+// mode 14: echo_sensor_csv (Astraea dump1 相当)
+// 詳細センサーデータを printf で表示し続ける。
 // ============================================================
 void MainTask::mode_sensor_monitor() {
   const auto se = get_sensing_entity();
@@ -209,9 +306,28 @@ void MainTask::mode_sensor_monitor() {
 }
 
 // ============================================================
-// mode 5: 吸引 PWM テスト (Astraea mode 11 相当)
-// sys_.test.suction_duty / suction_active を参照して吸引を制御する。
-// ボタン1回目長押し(3秒)で吸引 ON、2回目押下で吸引 OFF。
+// mode 15: echo_printf (Astraea dump2 相当)
+// センサー値をカンマ区切りで出力し続ける。
+// ============================================================
+void MainTask::mode_sensor_csv() {
+  const auto se = get_sensing_entity();
+
+  while (true) {
+    if (sensing_->data_ready) {
+      sensing_->data_ready = false;
+      printf("%d, %d, %d, %d, %d, %d, %d, %d\n",
+             se->led_sen.left90.raw, se->led_sen.left45_3.raw,
+             se->led_sen.left45_2.raw, se->led_sen.left45.raw,
+             se->led_sen.right45.raw, se->led_sen.right45_2.raw,
+             se->led_sen.right45_3.raw, se->led_sen.right90.raw);
+    }
+    sleep_ms(100);
+  }
+}
+
+// ============================================================
+// 本走行サブモード用: インタラクティブ吸引テスト
+// ボタン長押し(3秒)で ON / 再押下で OFF。
 // ============================================================
 static constexpr uint32_t SUCTION_DELAY_MS = 3000;
 
@@ -221,12 +337,12 @@ void MainTask::mode_suction_test() {
   const float duty =
       (sys_.test.suction_active == 2) ? sys_.test.suction_duty_burst
       : (sys_.test.suction_duty > 0)  ? sys_.test.suction_duty
-                                       : 15.0f; // フォールバック
+                                       : 15.0f;
 
   printf("[suction] duty=%.1f%%  active=%d\n", duty, sys_.test.suction_active);
 
   bool prev_btn = false;
-  bool suction_test_on = false;
+  bool suction_on = false;
   bool btn_held = false;
   absolute_time_t btn_press_time = nil_time;
 
@@ -235,15 +351,13 @@ void MainTask::mode_suction_test() {
 
     if (btn != prev_btn) {
       if (btn) {
-        if (suction_test_on) {
-          // 2 回目押下: 吸引 OFF
+        if (suction_on) {
           planning_->set_suction_test(0.0f);
-          suction_test_on = false;
+          suction_on = false;
           btn_held = false;
           ui_.stop_tone();
           ui_.LED_headlight();
         } else {
-          // 1 回目押下: 3 秒タイマー開始
           btn_held = true;
           btn_press_time = get_absolute_time();
           ui_.LED_on_all();
@@ -252,11 +366,11 @@ void MainTask::mode_suction_test() {
       prev_btn = btn;
     }
 
-    if (btn_held && !suction_test_on) {
+    if (btn_held && !suction_on) {
       if (absolute_time_diff_us(btn_press_time, get_absolute_time()) >=
           (int64_t)SUCTION_DELAY_MS * 1000LL) {
         planning_->set_suction_test(duty);
-        suction_test_on = true;
+        suction_on = true;
         btn_held = false;
         ui_.play_tone(BUZZER_FREQ_HZ);
       }
@@ -266,7 +380,7 @@ void MainTask::mode_suction_test() {
       SensingTask::Data d = sensing_->data;
       sensing_->data_ready = false;
       PlanningTask::State ps = planning_->state;
-      print_sensing(d, *se, ps, sys_, suction_test_on);
+      print_sensing(d, *se, ps, sys_, suction_on);
     }
 
     sleep_ms(25);
@@ -274,17 +388,14 @@ void MainTask::mode_suction_test() {
 }
 
 // ============================================================
-// mode 2: 直進テスト (Astraea test_run 相当)
+// mode 2: test_run 相当 (stub)
 // sys_.test.v_max / accl / decel / dist を使用。
-// MotionPlanning 実装後に有効化予定。
 // ============================================================
 void MainTask::mode_straight_test() {
   printf("[straight] v_max=%.1f  accl=%.1f  decel=%.1f  dist=%.1f\n",
          sys_.test.v_max, sys_.test.accl, sys_.test.decel, sys_.test.dist);
-  printf("[straight] not yet implemented. press button to exit.\n");
 
-  // TODO: MotionPlanning::go_straight() 呼び出しに置き換える
-  //
+  // TODO: MotionPlanning::go_straight() 呼び出し
   // param_straight_t ps;
   // ps.v_max = sys_.test.v_max;
   // ps.v_end = sys_.test.end_v;
@@ -292,9 +403,6 @@ void MainTask::mode_straight_test() {
   // ps.accl  = sys_.test.accl;
   // ps.decel = sys_.test.decel;
   // ps.motion_type = MotionType::STRAIGHT;
-  // mp_->reset_gyro_ref_with_check();
-  // mp_->reset_tgt_data();
-  // mp_->reset_ego_data();
   // mp_->go_straight(ps);
 
   ui_.coin(100);
@@ -302,17 +410,14 @@ void MainTask::mode_straight_test() {
 }
 
 // ============================================================
-// mode 3: 旋回テスト (Astraea test_turn / test_pivot_n 相当)
+// mode 3: test_turn 相当 (stub)
 // sys_.test.w_max / alpha / ang を使用。
-// MotionPlanning 実装後に有効化予定。
 // ============================================================
 void MainTask::mode_pivot_test() {
   printf("[pivot] w_max=%.3f  alpha=%.3f  ang=%.3f\n", sys_.test.w_max,
          sys_.test.alpha, sys_.test.ang);
-  printf("[pivot] not yet implemented. press button to exit.\n");
 
-  // TODO: MotionPlanning::pivot_turn() 呼び出しに置き換える
-  //
+  // TODO: MotionPlanning::pivot_turn() 呼び出し
   // param_roll_t pr;
   // pr.w_max  = sys_.test.w_max;
   // pr.alpha  = sys_.test.alpha;
