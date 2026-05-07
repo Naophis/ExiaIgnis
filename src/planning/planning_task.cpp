@@ -62,10 +62,7 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
   motor_.init();
   ctl_.init(&motor_, &sensor_, &trj_, &ego);
-  log_table.clear();
-  for (int i = 0; i < 4097; i++) {
-    log_table.emplace_back(std::log(i));
-  }
+  ego.init(sensing_result, param);
 }
 
 // ============================================================
@@ -197,8 +194,8 @@ void PlanningTask::tick(uint32_t dt_us) {
   float dt = dt_us * 1e-6f;
 
   {
-    ego.update(tgt_val, sensing_result, param, motor_en); // 30 usec
-    sensor_.calc_dist(tgt_val, sensing_result, param);    // 15 ~ 20 usec
+    ego.update(tgt_val, motor_en);                     // 30 usec
+    sensor_.calc_dist(tgt_val, sensing_result, param); // 15 ~ 20 usec
 
     if (trj_.first_req) {
       if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
@@ -331,11 +328,11 @@ float PlanningTask::adjust_b_to_target90(float data, float a) {
   int idx = static_cast<int>(data);
 
   // インデックス範囲チェック（※ここは index としての妥当性を見るのが自然）
-  if (idx < 0 || idx >= static_cast<int>(log_table.size())) {
+  if (idx < 0 || idx >= static_cast<int>(ego.log_table.size())) {
     return NAN; // 計算不能
   }
 
-  float L = log_table.at(idx);
+  float L = ego.log_table.at(idx);
   if (!isfinite(L) || L == 0.0f) {
     return NAN;
   }
@@ -349,11 +346,11 @@ float PlanningTask::adjust_b_to_target45(float data, float a) {
   int idx = static_cast<int>(data);
 
   // インデックス範囲チェック（※ここは index としての妥当性を見るのが自然）
-  if (idx < 0 || idx >= static_cast<int>(log_table.size())) {
+  if (idx < 0 || idx >= static_cast<int>(ego.log_table.size())) {
     return NAN; // 計算不能
   }
 
-  float L = log_table.at(idx);
+  float L = ego.log_table.at(idx);
   if (!isfinite(L) || L == 0.0f) {
     return NAN;
   }

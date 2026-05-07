@@ -8,17 +8,26 @@
 
 class EgoEstimator {
 public:
+  void init(std::shared_ptr<sensing_result_entity_t> sensing_result,
+            std::shared_ptr<input_param_t> param);
+
   // センサーデータから自己位置・速度を推定し sensing_result / tgt_val
   // を更新する。 PlanningTask::tick() から毎周期呼ぶ。
-  void update(std::shared_ptr<motion_tgt_val_t> tgt_val,
-              std::shared_ptr<sensing_result_entity_t> sensing_result,
-              std::shared_ptr<input_param_t> param, bool motor_en);
+  void update(std::shared_ptr<motion_tgt_val_t> tgt_val, bool motor_en);
 
   // KF を初期化・リセットする。
   // reset_battery=true のとき kf_batt と pos も再初期化する。
   void reset_kf_state(bool reset_battery,
                       std::shared_ptr<sensing_result_entity_t> sensing_result,
                       std::shared_ptr<input_param_t> param);
+
+  void calc_sensor_dist_all(std::shared_ptr<motion_tgt_val_t> tgt_val);
+
+  void calc_sensor_dist_diff(std::shared_ptr<motion_tgt_val_t> tgt_val);
+
+  float calc_sensor(float data, float a, float b);
+
+  std::vector<float> log_table;
 
   // 以下は公開状態 (PlanningTask の公開メンバーから移動)
   KalmanFilter kf_w, kf_w2;
@@ -27,4 +36,8 @@ public:
   KalmanFilterMatrix pos;
   kinematics_t odm{};
   kinematics_t kim{};
+
+private:
+  std::shared_ptr<sensing_result_entity_t> se;
+  std::shared_ptr<input_param_t> param;
 };

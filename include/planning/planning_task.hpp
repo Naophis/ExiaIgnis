@@ -209,5 +209,5 @@ private:
   int suction_req_timestamp = 0;
 
   unsigned char w_reset = 0;
-  std::vector<float> log_table;
+  
 };
