@@ -130,6 +130,8 @@ public:
 
   void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
 
+  void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tgt_val) { tgt_val = _tgt_val; }
+
   float adjust_b_to_target90(float data, float a);
   float adjust_b_to_target45(float data, float a);
   std::shared_ptr<motion_tgt_val_t> tgt_val;

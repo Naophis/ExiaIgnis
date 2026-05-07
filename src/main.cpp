@@ -26,6 +26,7 @@ static PlanningTask *s_rt_planning = nullptr;
 
 std::shared_ptr<sensing_result_entity_t> sensing_entity;
 std::shared_ptr<input_param_t> param;
+std::shared_ptr<motion_tgt_val_t> tgt_val;
 
 static void rt_core1_entry() {
   flash_safe_execute_core_init();
@@ -41,6 +42,7 @@ static void rt_core1_entry() {
 int main() {
   sensing_entity = std::make_shared<sensing_result_entity_t>();
   param          = std::make_shared<input_param_t>();
+  tgt_val        = std::make_shared<motion_tgt_val_t>();
 
   stdio_init_all();
   set_sys_clock_khz(150000, true);
@@ -61,6 +63,7 @@ int main() {
   sensing->set_sensing_entity(sensing_entity);
   sensing->set_planning_task(planning);
   sensing->set_input_param_entity(param);
+  sensing->set_tgt_val(tgt_val);
   sensing->init();
   sensing->configure(
       (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 12),
@@ -70,6 +73,7 @@ int main() {
   // で登録)
   planning->set_sensing_entity(sensing_entity);
   planning->set_input_param_entity(param);
+  planning->set_tgt_val(tgt_val);
   planning->init(sensing);
 
   // LoggingTask 生成 (PSRAM init は別途必要; なければログ無効で動作)
@@ -78,6 +82,7 @@ int main() {
   // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
   auto main_task = MainTask::create(sensing, planning, param);
   main_task->set_logging_task(lt);
+  main_task->set_tgt_val(tgt_val);
 
   // Core1 起動: sensing/planning IRQ を Core1 に登録して __wfi() ループへ
   s_rt_sensing = sensing.get();

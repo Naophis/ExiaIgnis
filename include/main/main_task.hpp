@@ -28,6 +28,7 @@ public:
 
   // create() 後・start() 前に呼ぶ。
   void set_logging_task(std::shared_ptr<LoggingTask> lt) { lt_ = lt; }
+  void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tgt_val) { tgt_val_ = _tgt_val; }
 
 private:
   MainTask() = default;
@@ -47,6 +48,7 @@ private:
   std::vector<exec_pram_t> exec_param_list;
 
   std::shared_ptr<input_param_t> param_;
+  std::shared_ptr<motion_tgt_val_t> tgt_val_;
   system_t sys_{};
   LED_bit lbit;
 
