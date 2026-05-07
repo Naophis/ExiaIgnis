@@ -48,7 +48,8 @@ private:
   UserInterface ui_;
 
   std::vector<exec_pram_t> exec_param_list;
-
+  turn_param_profile_t tpp;
+  std::unordered_map<TurnType, int> p_idx;
   std::shared_ptr<input_param_t> param_;
   std::shared_ptr<motion_tgt_val_t> tgt_val_;
   system_t sys_{};
@@ -60,14 +61,21 @@ private:
   void print_sensor_params();
 
   // ─── 共通ユーティリティ (main_task_util.cpp) ─────────────────────────────
-  // /exec.json を読み込んで exec_param_list を構築する。
   bool load_exec_params();
-  // 両モード共通の事前準備 (ジャイロリセット・センサーウォームアップ等)。
   void setup_before_run();
-  // mode+1 を 6bit 2進数で LED 表示する。
   void show_mode_led(int mode);
-  // ボタン長押しまで待機する。
   void wait_button();
+  void mount();
+  void umount();
+  void load_turn_param_profiles(bool const_mode, int const_index);
+  void load_slalom_param(int idx, int idx2, int idx3);
+  void load_slalom_param2(int idx);
+  void load_slas(int idx, std::vector<std::pair<TurnType, std::string>> &turn_list,
+                 std::unordered_map<TurnType, slalom_param2_t> &sla_map);
+  void load_straight(int idx,
+                     std::unordered_map<StraightType, straight_param_t> &str_map);
+
+  bool silent_load = false;
 
   // ─── モード dispatch ──────────────────────────────────────────────────────
   void run_main_mode();
@@ -97,13 +105,50 @@ private:
   void test_search_pivot();
   void test_system_identification(bool para);
 
-  // util
-  void load_turn_param_profiles(bool const_mode, int const_index);
-  void load_slalom_param(int idx, int idx2, int idx3);
-  void load_slalom_param2(int idx);
-  void load_slas(int idx, vector<pair<TurnType, string>> &turn_list,
-                 std::unordered_map<TurnType, slalom_param2_t> &turn_map);
-  void
-  load_straight(int idx,
-                std::unordered_map<StraightType, straight_param_t> &str_map);
+  std::unordered_map<unsigned char, std::vector<std::pair<TurnType, std::string>>> turn_map;
+  param_set_t p_set;
+  std::vector<param_set_t> paramset_list;
+  param_set_t param_set;
+  TurnType cast_turn_type(std::string str) {
+    if (str == "normal")
+      return TurnType::Normal;
+    if (str == "large")
+      return TurnType::Large;
+    if (str == "orval")
+      return TurnType::Orval;
+    if (str == "dia45")
+      return TurnType::Dia45;
+    if (str == "dia45_2")
+      return TurnType::Dia45_2;
+    if (str == "dia135")
+      return TurnType::Dia135;
+    if (str == "dia135_2")
+      return TurnType::Dia135_2;
+    if (str == "dia90")
+      return TurnType::Dia90;
+    return TurnType::None;
+  }
+  // stub
+  std::vector<std::pair<TurnType, std::string>> turn_name_list = {
+      {TurnType::None, "straight"},    //
+      {TurnType::Normal, "normal"},    //
+      {TurnType::Large, "large"},      //
+      {TurnType::Orval, "orval"},      //
+      {TurnType::Dia45, "dia45"},      //
+      {TurnType::Dia135, "dia135"},    //
+      {TurnType::Dia90, "dia90"},      //
+      {TurnType::Dia45_2, "dia45_2"},  //
+      {TurnType::Dia135_2, "dia135_2"} //
+  };
+
+  std::vector<std::pair<StraightType, std::string>> straight_name_list = {
+      {StraightType::Search, "search"}, //
+      {StraightType::FastRun, "fast"},  //
+      {StraightType::FastRunDia, "dia"} //
+  };
+  std::vector<std::pair<ExecParamType, std::string>> exec_param_name_list = {
+      {ExecParamType::Fast, "fast"},     //
+      {ExecParamType::Normal, "normal"}, //
+      {ExecParamType::Slow, "slow"},     //
+  };
 };
