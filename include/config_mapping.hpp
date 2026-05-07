@@ -787,18 +787,34 @@ inline void convertFromJson(JsonVariantConst src, slalom_offset_t& dst) {
  * root → <turn_type>
  */
 inline void convertFromJson(JsonVariantConst src, slalom_param2_t& dst) {
-    from_json_field(src, "v", dst.v);
+    from_json_field(src, "v",     dst.v);
     from_json_field(src, "end_v", dst.end_v);
-    from_json_field(src, "ang", dst.ang);
-    from_json_field(src, "ref_ang", dst.ref_ang);
-    from_json_field(src, "rad", dst.rad);
-    from_json_field(src, "rad2", dst.rad2);
-    from_json_nested(src, "front", dst.front);
-    from_json_nested(src, "back", dst.back);
     from_json_field(src, "pow_n", dst.pow_n);
-    from_json_field(src, "time", dst.time);
-    from_json_field(src, "time2", dst.time2);
-    from_json_field(src, "type", dst.type);
+    from_json_field(src, "rad",   dst.rad);
+    from_json_field(src, "rad2",  dst.rad2);
+    from_json_nested(src, "front", dst.front);
+    from_json_nested(src, "back",  dst.back);
+
+    // ang は JSON では度で格納されている → ラジアンに変換して保持
+    float ang_deg = 0.0f;
+    from_json_field(src, "ang", ang_deg);
+    dst.ang = dst.ref_ang = m_PI * ang_deg / 180.0f;
+
+    // Et は Clothoid 近似係数 (pow_n に依存)
+    static constexpr float Et_N2 = 0.6034501612189381f;
+    static constexpr float Et_N4 = 0.7632146181989743f;
+    static constexpr float Et_N6 = 0.8312737347682339f;
+    float Et = Et_N4;
+    if (dst.pow_n == 2)      Et = Et_N2;
+    else if (dst.pow_n == 6) Et = Et_N6;
+
+    // time = (rad * ang) / (2 * v * Et)
+    dst.time = (dst.rad * dst.ang) / (2.0f * dst.v * Et);
+
+    // Orval のみ rad2 を持つ → time2 を計算
+    if (dst.rad2 > 0.0f) {
+        dst.time2 = (dst.rad2 * dst.ang) / (2.0f * dst.v * Et);
+    }
 }
 
 /**
