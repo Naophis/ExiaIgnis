@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <ArduinoJson.h>
+#include "config_mapping.hpp"
 
 // ConfigLoader — LittleFS on flash + ArduinoJson による設定ファイル読み書き
 //
@@ -49,7 +50,9 @@ public:
     static bool load_as(const char* path, T& dst) {
         JsonDocument tmp;
         if (!load_file(path, tmp)) return false;
+        bind_log::file() = path;
         convertFromJson(tmp.as<JsonVariantConst>(), dst);
+        bind_log::file() = "";
         return true;
     }
 

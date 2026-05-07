@@ -1,10 +1,17 @@
 #pragma once
 #include <ArduinoJson.h>
 #include <cstring>
+#include <cstdio>
 #include <type_traits>
 #include <vector>
 #include "structs.hpp"
 #include "maze_solver.hpp"
+
+// バインドエラーログ用コンテキスト。
+// load_as がファイル名をセットし、convertFromJson 完了後にクリアする。
+namespace bind_log {
+    inline const char*& file() { static const char* v = ""; return v; }
+}
 
 // ─── テンプレートヘルパー ────────────────────────────────────────────────────
 // convertFromJson 内でフィールドを読み取る際に使用する。
@@ -13,6 +20,7 @@
 //    スカラー (float/int/bool) および enum class フィールドに対応。
 //    enum は JSON の int として格納し static_cast で変換する。
 //    volatile T& のオーバーロードでそのまま volatile フィールドにも使える。
+//    キーが存在するが型が一致しない場合はシリアルに警告を出力する。
 //
 //  from_json_nested(src, "key", dst.sub)
 //    入れ子の構造体を convertFromJson(ADL) に委譲する。
@@ -26,24 +34,41 @@
 
 template<typename T>
 inline void from_json_field(JsonVariantConst src, const char* key, T& dst) {
+    auto v = src[key];
     if constexpr (std::is_enum_v<T>) {
-        if (src[key].is<int>()) dst = static_cast<T>(src[key].as<int>());
+        if (v.is<int>()) dst = static_cast<T>(v.as<int>());
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch (want int/enum)\n", bind_log::file(), key);
     } else if constexpr (std::is_same_v<T, char>) {
-        if (src[key].is<int>()) dst = static_cast<char>(src[key].as<int>());
+        if (v.is<int>()) dst = static_cast<char>(v.as<int>());
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch (want int/char)\n", bind_log::file(), key);
+    } else if constexpr (std::is_same_v<T, bool>) {
+        // YAML の 0/1 も受け付ける (JSON に変換すると integer になるため)
+        if (v.is<bool>()) dst = v.as<bool>();
+        else if (v.is<int>()) dst = v.as<int>() != 0;
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch (want bool)\n", bind_log::file(), key);
     } else {
-        if (src[key].is<T>()) dst = src[key].as<T>();
+        if (v.is<T>()) dst = v.as<T>();
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch\n", bind_log::file(), key);
     }
 }
 
 // volatile スカラー / volatile enum
 template<typename T>
 inline void from_json_field(JsonVariantConst src, const char* key, volatile T& dst) {
+    auto v = src[key];
     if constexpr (std::is_enum_v<T>) {
-        if (src[key].is<int>()) dst = static_cast<T>(src[key].as<int>());
+        if (v.is<int>()) dst = static_cast<T>(v.as<int>());
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch (want int/enum)\n", bind_log::file(), key);
     } else if constexpr (std::is_same_v<T, char>) {
-        if (src[key].is<int>()) dst = static_cast<char>(src[key].as<int>());
+        if (v.is<int>()) dst = static_cast<char>(v.as<int>());
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch (want int/char)\n", bind_log::file(), key);
+    } else if constexpr (std::is_same_v<T, bool>) {
+        if (v.is<bool>()) dst = v.as<bool>();
+        else if (v.is<int>()) dst = v.as<int>() != 0;
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch (want bool)\n", bind_log::file(), key);
     } else {
-        if (src[key].is<T>()) dst = src[key].as<T>();
+        if (v.is<T>()) dst = v.as<T>();
+        else if (!v.isNull()) printf("[bind] %s: '%s' type mismatch\n", bind_log::file(), key);
     }
 }
 
@@ -242,7 +267,12 @@ inline void convertFromJson(JsonVariantConst src, sen_ref_param_t& dst) {
     from_json_nested(src, "normal",       dst.normal);
     from_json_nested(src, "normal2",      dst.normal2);
     from_json_nested(src, "dia",          dst.dia);
-    from_json_nested(src, "search",       dst.search_exist);
+    // sensor.yaml の "search" は {ref:{...}, exist:{...}} のネスト形式
+    if (!src["search"].isNull()) {
+        from_json_nested(src["search"], "ref",   dst.search_ref);
+        from_json_nested(src["search"], "exist", dst.search_exist);
+    }
+    // フラット形式の後方互換
     from_json_nested(src, "search_exist", dst.search_exist);
     from_json_nested(src, "search_ref",   dst.search_ref);
 }
