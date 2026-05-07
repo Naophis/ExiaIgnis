@@ -236,107 +236,169 @@ inline void convertFromJson(JsonVariantConst src, sen_ref_param2_t& dst) {
 /**
  * sensor.txt
  * root
+ * sensor.yaml では "search" キーが search_exist に対応する。
  */
 inline void convertFromJson(JsonVariantConst src, sen_ref_param_t& dst) {
-    from_json_nested(src, "normal", dst.normal);
-    from_json_nested(src, "normal2", dst.normal2);
-    from_json_nested(src, "dia", dst.dia);
+    from_json_nested(src, "normal",       dst.normal);
+    from_json_nested(src, "normal2",      dst.normal2);
+    from_json_nested(src, "dia",          dst.dia);
+    from_json_nested(src, "search",       dst.search_exist);
     from_json_nested(src, "search_exist", dst.search_exist);
-    from_json_nested(src, "search_ref", dst.search_ref);
+    from_json_nested(src, "search_ref",   dst.search_ref);
 }
 
 /**
- * sensor.txt
- * root → sensor_gain → l90 | l45 | front | r45 | r90 | ...
+ * sensor.yaml の gain セクションは [a, b] 配列形式。
+ * 旧来の {a:..., b:...} オブジェクト形式も引き続き受け付ける。
  */
 inline void convertFromJson(JsonVariantConst src, sensor_gain_param_t& dst) {
-    from_json_field(src, "a", dst.a);
-    from_json_field(src, "b", dst.b);
+    if (src.is<JsonArrayConst>()) {
+        auto arr = src.as<JsonArrayConst>();
+        if (arr.size() >= 1) dst.a = arr[0].as<float>();
+        if (arr.size() >= 2) dst.b = arr[1].as<float>();
+    } else {
+        from_json_field(src, "a", dst.a);
+        from_json_field(src, "b", dst.b);
+    }
 }
 
 /**
- * sensor.txt
- * root → sensor_gain
+ * sensor.yaml の gain セクション直下のキー名に対応。
+ *   L90_near → l90,  L45 → l45,  F → front,  F2 → front2 ...
+ * 旧来のキー名も引き続き受け付ける。
  */
 inline void convertFromJson(JsonVariantConst src, sensor_gain_t& dst) {
-    from_json_nested(src, "l90", dst.l90);
-    from_json_nested(src, "l45", dst.l45);
-    from_json_nested(src, "front", dst.front);
-    from_json_nested(src, "front2", dst.front2);
-    from_json_nested(src, "front3", dst.front3);
-    from_json_nested(src, "front4", dst.front4);
+    from_json_nested(src, "L90_near", dst.l90);
+    from_json_nested(src, "l90",      dst.l90);
+    from_json_nested(src, "L45",      dst.l45);
+    from_json_nested(src, "l45",      dst.l45);
+    from_json_nested(src, "F",        dst.front);
+    from_json_nested(src, "front",    dst.front);
+    from_json_nested(src, "F2",       dst.front2);
+    from_json_nested(src, "front2",   dst.front2);
+    from_json_nested(src, "F3",       dst.front3);
+    from_json_nested(src, "front3",   dst.front3);
+    from_json_nested(src, "F4",       dst.front4);
+    from_json_nested(src, "front4",   dst.front4);
     from_json_nested(src, "front_ctrl_th", dst.front_ctrl_th);
-    from_json_nested(src, "r45", dst.r45);
-    from_json_nested(src, "l45_2", dst.l45_2);
-    from_json_nested(src, "r45_2", dst.r45_2);
-    from_json_nested(src, "l45_3", dst.l45_3);
-    from_json_nested(src, "r45_3", dst.r45_3);
-    from_json_nested(src, "r90", dst.r90);
-    from_json_nested(src, "l90_far", dst.l90_far);
-    from_json_nested(src, "r90_far", dst.r90_far);
-    from_json_nested(src, "l90_mid", dst.l90_mid);
-    from_json_nested(src, "r90_mid", dst.r90_mid);
+    from_json_nested(src, "R45",      dst.r45);
+    from_json_nested(src, "r45",      dst.r45);
+    from_json_nested(src, "L45_2",    dst.l45_2);
+    from_json_nested(src, "l45_2",    dst.l45_2);
+    from_json_nested(src, "R45_2",    dst.r45_2);
+    from_json_nested(src, "r45_2",    dst.r45_2);
+    from_json_nested(src, "L45_3",    dst.l45_3);
+    from_json_nested(src, "l45_3",    dst.l45_3);
+    from_json_nested(src, "R45_3",    dst.r45_3);
+    from_json_nested(src, "r45_3",    dst.r45_3);
+    from_json_nested(src, "R90_near", dst.r90);
+    from_json_nested(src, "r90",      dst.r90);
+    from_json_nested(src, "L90_far",  dst.l90_far);
+    from_json_nested(src, "l90_far",  dst.l90_far);
+    from_json_nested(src, "R90_far",  dst.r90_far);
+    from_json_nested(src, "r90_far",  dst.r90_far);
+    from_json_nested(src, "L90_mid",  dst.l90_mid);
+    from_json_nested(src, "l90_mid",  dst.l90_mid);
+    from_json_nested(src, "R90_mid",  dst.r90_mid);
+    from_json_nested(src, "r90_mid",  dst.r90_mid);
 }
 
 /**
- * offset.txt
- * root → wall_off_dist
+ * offset.yaml では wall_off_dist の全フィールドがルート直下に
+ * "wall_off_hold_*" 等の長いキー名で存在する。
+ * 旧来の短いキー名 (left_str 等) も引き続き受け付ける。
  */
 inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
-    from_json_field(src, "left_str", dst.left_str);
-    from_json_field(src, "right_str", dst.right_str);
-    from_json_field(src, "left_diff_th", dst.left_diff_th);
-    from_json_field(src, "right_diff_th", dst.right_diff_th);
-    from_json_field(src, "left_str_exist", dst.left_str_exist);
-    from_json_field(src, "right_str_exist", dst.right_str_exist);
-    from_json_field(src, "left_dia", dst.left_dia);
-    from_json_field(src, "right_dia", dst.right_dia);
-    from_json_field(src, "left_dia_noexit", dst.left_dia_noexit);
-    from_json_field(src, "right_dia_noexit", dst.right_dia_noexit);
-    from_json_field(src, "left_dia_oppo", dst.left_dia_oppo);
-    from_json_field(src, "right_dia_oppo", dst.right_dia_oppo);
-    from_json_field(src, "left_dia2", dst.left_dia2);
-    from_json_field(src, "right_dia2", dst.right_dia2);
-    from_json_field(src, "exist_dist_l", dst.exist_dist_l);
-    from_json_field(src, "exist_dist_r", dst.exist_dist_r);
-    from_json_field(src, "exist_dist_l2", dst.exist_dist_l2);
-    from_json_field(src, "exist_dist_r2", dst.exist_dist_r2);
-    from_json_field(src, "noexist_th_l", dst.noexist_th_l);
-    from_json_field(src, "noexist_th_r", dst.noexist_th_r);
-    from_json_field(src, "noexist_th_l2", dst.noexist_th_l2);
-    from_json_field(src, "noexist_th_r2", dst.noexist_th_r2);
-    from_json_field(src, "div_th_l", dst.div_th_l);
-    from_json_field(src, "div_th_r", dst.div_th_r);
-    from_json_field(src, "div_th_l2", dst.div_th_l2);
-    from_json_field(src, "div_th_r2", dst.div_th_r2);
-    from_json_field(src, "div_th_l3", dst.div_th_l3);
-    from_json_field(src, "div_th_r3", dst.div_th_r3);
-    from_json_field(src, "div_th_dia_l", dst.div_th_dia_l);
-    from_json_field(src, "div_th_dia_r", dst.div_th_dia_r);
-    from_json_field(src, "exist_dia_th_l", dst.exist_dia_th_l);
-    from_json_field(src, "exist_dia_th_r", dst.exist_dia_th_r);
-    from_json_field(src, "exist_dia_th_l2", dst.exist_dia_th_l2);
-    from_json_field(src, "exist_dia_th_r2", dst.exist_dia_th_r2);
-    from_json_field(src, "noexist_dia_th_l", dst.noexist_dia_th_l);
-    from_json_field(src, "noexist_dia_th_r", dst.noexist_dia_th_r);
-    from_json_field(src, "noexist_dia_th_l2", dst.noexist_dia_th_l2);
-    from_json_field(src, "noexist_dia_th_r2", dst.noexist_dia_th_r2);
-    from_json_field(src, "wall_off_exist_wall_th_l", dst.wall_off_exist_wall_th_l);
-    from_json_field(src, "wall_off_exist_wall_th_r", dst.wall_off_exist_wall_th_r);
-    from_json_field(src, "wall_off_exist_dia_wall_th_l", dst.wall_off_exist_dia_wall_th_l);
-    from_json_field(src, "wall_off_exist_dia_wall_th_r", dst.wall_off_exist_dia_wall_th_r);
-    from_json_field(src, "search_wall_off_enable", dst.search_wall_off_enable);
-    from_json_field(src, "search_wall_off_l_dist_offset", dst.search_wall_off_l_dist_offset);
-    from_json_field(src, "search_wall_off_r_dist_offset", dst.search_wall_off_r_dist_offset);
-    from_json_field(src, "search_wall_off_offset_dist", dst.search_wall_off_offset_dist);
-    from_json_field(src, "ctrl_exist_wall_th_l", dst.ctrl_exist_wall_th_l);
-    from_json_field(src, "ctrl_exist_wall_th_r", dst.ctrl_exist_wall_th_r);
-    from_json_field(src, "go_straight_wide_ctrl_th", dst.go_straight_wide_ctrl_th);
-    from_json_field(src, "diff_check_dist", dst.diff_check_dist);
-    from_json_field(src, "diff_dist_th_l", dst.diff_dist_th_l);
-    from_json_field(src, "diff_dist_th_r", dst.diff_dist_th_r);
-    from_json_field(src, "diff_check_dist_dia", dst.diff_check_dist_dia);
-    from_json_field(src, "diff_check_dist_dia_2", dst.diff_check_dist_dia_2);
+    from_json_field(src, "left_str",                  dst.left_str);
+    from_json_field(src, "wall_off_hold_dist_str_l",  dst.left_str);
+    from_json_field(src, "right_str",                 dst.right_str);
+    from_json_field(src, "wall_off_hold_dist_str_r",  dst.right_str);
+    from_json_field(src, "left_diff_th",              dst.left_diff_th);
+    from_json_field(src, "wall_off_hold_div_th_l",    dst.left_diff_th);
+    from_json_field(src, "right_diff_th",             dst.right_diff_th);
+    from_json_field(src, "wall_off_hold_div_th_r",    dst.right_diff_th);
+    from_json_field(src, "left_str_exist",                 dst.left_str_exist);
+    from_json_field(src, "wall_off_hold_dist_str_l_exist", dst.left_str_exist);
+    from_json_field(src, "right_str_exist",                dst.right_str_exist);
+    from_json_field(src, "wall_off_hold_dist_str_r_exist", dst.right_str_exist);
+    from_json_field(src, "left_dia",                  dst.left_dia);
+    from_json_field(src, "wall_off_hold_dist_dia_l",  dst.left_dia);
+    from_json_field(src, "right_dia",                 dst.right_dia);
+    from_json_field(src, "wall_off_hold_dist_dia_r",  dst.right_dia);
+    from_json_field(src, "left_dia_noexit",           dst.left_dia_noexit);
+    from_json_field(src, "right_dia_noexit",          dst.right_dia_noexit);
+    from_json_field(src, "left_dia_oppo",                  dst.left_dia_oppo);
+    from_json_field(src, "wall_off_hold_dist_dia_l_oppo",  dst.left_dia_oppo);
+    from_json_field(src, "right_dia_oppo",                 dst.right_dia_oppo);
+    from_json_field(src, "wall_off_hold_dist_dia_r_oppo",  dst.right_dia_oppo);
+    from_json_field(src, "left_dia2",                 dst.left_dia2);
+    from_json_field(src, "wall_off_hold_dist_dia_l2", dst.left_dia2);
+    from_json_field(src, "right_dia2",                dst.right_dia2);
+    from_json_field(src, "wall_off_hold_dist_dia_r2", dst.right_dia2);
+    from_json_field(src, "exist_dist_l",               dst.exist_dist_l);
+    from_json_field(src, "wall_off_hold_exist_dist_l", dst.exist_dist_l);
+    from_json_field(src, "exist_dist_r",               dst.exist_dist_r);
+    from_json_field(src, "wall_off_hold_exist_dist_r", dst.exist_dist_r);
+    from_json_field(src, "exist_dist_l2",               dst.exist_dist_l2);
+    from_json_field(src, "wall_off_hold_exist_dist_l2", dst.exist_dist_l2);
+    from_json_field(src, "exist_dist_r2",               dst.exist_dist_r2);
+    from_json_field(src, "wall_off_hold_exist_dist_r2", dst.exist_dist_r2);
+    from_json_field(src, "noexist_th_l",               dst.noexist_th_l);
+    from_json_field(src, "wall_off_hold_noexist_th_l", dst.noexist_th_l);
+    from_json_field(src, "noexist_th_r",               dst.noexist_th_r);
+    from_json_field(src, "wall_off_hold_noexist_th_r", dst.noexist_th_r);
+    from_json_field(src, "noexist_th_l2",               dst.noexist_th_l2);
+    from_json_field(src, "wall_off_hold_noexist_th_l2", dst.noexist_th_l2);
+    from_json_field(src, "noexist_th_r2",               dst.noexist_th_r2);
+    from_json_field(src, "wall_off_hold_noexist_th_r2", dst.noexist_th_r2);
+    from_json_field(src, "div_th_l",                  dst.div_th_l);
+    from_json_field(src, "div_th_r",                  dst.div_th_r);
+    from_json_field(src, "div_th_l2",                 dst.div_th_l2);
+    from_json_field(src, "wall_off_hold_div_th_l2",   dst.div_th_l2);
+    from_json_field(src, "div_th_r2",                 dst.div_th_r2);
+    from_json_field(src, "wall_off_hold_div_th_r2",   dst.div_th_r2);
+    from_json_field(src, "div_th_l3",                 dst.div_th_l3);
+    from_json_field(src, "wall_off_hold_div_th_l3",   dst.div_th_l3);
+    from_json_field(src, "div_th_r3",                 dst.div_th_r3);
+    from_json_field(src, "wall_off_hold_div_th_r3",   dst.div_th_r3);
+    from_json_field(src, "div_th_dia_l",               dst.div_th_dia_l);
+    from_json_field(src, "wall_off_hold_div_th_dia_l", dst.div_th_dia_l);
+    from_json_field(src, "div_th_dia_r",               dst.div_th_dia_r);
+    from_json_field(src, "wall_off_hold_div_th_dia_r", dst.div_th_dia_r);
+    from_json_field(src, "exist_dia_th_l",                  dst.exist_dia_th_l);
+    from_json_field(src, "wall_off_hold_exist_dist_dia_l",  dst.exist_dia_th_l);
+    from_json_field(src, "exist_dia_th_r",                  dst.exist_dia_th_r);
+    from_json_field(src, "wall_off_hold_exist_dist_dia_r",  dst.exist_dia_th_r);
+    from_json_field(src, "exist_dia_th_l2",                 dst.exist_dia_th_l2);
+    from_json_field(src, "wall_off_hold_exist_dist_dia_l2", dst.exist_dia_th_l2);
+    from_json_field(src, "exist_dia_th_r2",                 dst.exist_dia_th_r2);
+    from_json_field(src, "wall_off_hold_exist_dist_dia_r2", dst.exist_dia_th_r2);
+    from_json_field(src, "noexist_dia_th_l",                  dst.noexist_dia_th_l);
+    from_json_field(src, "wall_off_hold_noexist_dia_th_l",    dst.noexist_dia_th_l);
+    from_json_field(src, "noexist_dia_th_r",                  dst.noexist_dia_th_r);
+    from_json_field(src, "wall_off_hold_noexist_dia_th_r",    dst.noexist_dia_th_r);
+    from_json_field(src, "noexist_dia_th_l2",                 dst.noexist_dia_th_l2);
+    from_json_field(src, "wall_off_hold_noexist_dia_th_l2",   dst.noexist_dia_th_l2);
+    from_json_field(src, "noexist_dia_th_r2",                 dst.noexist_dia_th_r2);
+    from_json_field(src, "wall_off_hold_noexist_dia_th_r2",   dst.noexist_dia_th_r2);
+    from_json_field(src, "wall_off_exist_wall_th_l",          dst.wall_off_exist_wall_th_l);
+    from_json_field(src, "wall_off_exist_wall_th_r",          dst.wall_off_exist_wall_th_r);
+    from_json_field(src, "wall_off_exist_dia_wall_th_l",      dst.wall_off_exist_dia_wall_th_l);
+    from_json_field(src, "wall_off_exist_dia_wall_th_r",      dst.wall_off_exist_dia_wall_th_r);
+    from_json_field(src, "search_wall_off_enable",            dst.search_wall_off_enable);
+    from_json_field(src, "search_wall_off_l_dist_offset",     dst.search_wall_off_l_dist_offset);
+    from_json_field(src, "search_wall_off_r_dist_offset",     dst.search_wall_off_r_dist_offset);
+    from_json_field(src, "search_wall_off_offset_dist",       dst.search_wall_off_offset_dist);
+    from_json_field(src, "ctrl_exist_wall_th_l",              dst.ctrl_exist_wall_th_l);
+    from_json_field(src, "ctrl_exist_wall_th_r",              dst.ctrl_exist_wall_th_r);
+    from_json_field(src, "go_straight_wide_ctrl_th",          dst.go_straight_wide_ctrl_th);
+    from_json_field(src, "diff_check_dist",                   dst.diff_check_dist);
+    from_json_field(src, "wall_off_diff_check_dist",          dst.diff_check_dist);
+    from_json_field(src, "diff_dist_th_l",                    dst.diff_dist_th_l);
+    from_json_field(src, "diff_dist_th_r",                    dst.diff_dist_th_r);
+    from_json_field(src, "diff_check_dist_dia",               dst.diff_check_dist_dia);
+    from_json_field(src, "wall_off_diff_check_dist_dia",      dst.diff_check_dist_dia);
+    from_json_field(src, "diff_check_dist_dia_2",             dst.diff_check_dist_dia_2);
 }
 
 /**
@@ -458,8 +520,15 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "battery_param", dst.battery_param);
     from_json_nested(src, "led_param", dst.led_param);
     from_json_field(src, "motion_dir", dst.motion_dir);
-    from_json_nested(src, "sen_ref_p", dst.sen_ref_p);
+    // sensor.yaml はルート直下に normal/normal2/dia/search/gain を持つ (ラッパーなし)
+    // 旧来の "sen_ref_p" / "sensor_gain" ラッパー形式も引き続き受け付ける
+    if (!src["sen_ref_p"].isNull()) {
+        convertFromJson(src["sen_ref_p"], dst.sen_ref_p);
+    } else {
+        convertFromJson(src, dst.sen_ref_p);
+    }
     from_json_nested(src, "sensor_gain", dst.sensor_gain);
+    from_json_nested(src, "gain", dst.sensor_gain);
     from_json_field(src, "sakiyomi_time", dst.sakiyomi_time);
     from_json_field(src, "search_sen_ctrl_limitter", dst.search_sen_ctrl_limitter);
     from_json_field(src, "clear_angle", dst.clear_angle);
@@ -496,7 +565,9 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_vector(src, "clear_dist_ragne_th_list", dst.clear_dist_ragne_th_list);
     from_json_vector(src, "clear_dist_ragne_dist_list_fast", dst.clear_dist_ragne_dist_list_fast);
     from_json_field(src, "wall_off_hold_dist", dst.wall_off_hold_dist);
+    // offset.yaml は wall_off_dist の各フィールドをルート直下に持つ
     from_json_nested(src, "wall_off_dist", dst.wall_off_dist);
+    if (src["wall_off_dist"].isNull()) convertFromJson(src, dst.wall_off_dist);
     from_json_field(src, "wall_off_diff_ref_th", dst.wall_off_diff_ref_th);
     from_json_field(src, "wall_off_diff_ref_front_th", dst.wall_off_diff_ref_front_th);
     from_json_field(src, "wall_off_wait_dist", dst.wall_off_wait_dist);

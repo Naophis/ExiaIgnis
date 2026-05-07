@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(chmod +x /home/naoto/Desktop/mouse/ExiaIgnis/serial_watch.sh)"
+      "Bash(chmod +x /home/naoto/Desktop/mouse/ExiaIgnis/serial_watch.sh)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
