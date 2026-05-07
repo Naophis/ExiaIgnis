@@ -319,7 +319,6 @@ void SensingTask::read_spi_sensors() {
   se->ego.v_r_old = se->ego.v_r;
   se->encoder.left_old = se->encoder.left;
   se->encoder.right_old = se->encoder.right;
-
   gyro_timestamp_old = gyro_timestamp_now;
   enc_r_timestamp_old = enc_r_timestamp_now;
   enc_l_timestamp_old = enc_l_timestamp_now;

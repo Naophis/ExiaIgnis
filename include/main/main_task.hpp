@@ -1,4 +1,5 @@
 #pragma once
+#include "defines.hpp"
 #include "logging/logging_task.hpp"
 #include "planning/planning_task.hpp"
 #include "sensing_task.hpp"

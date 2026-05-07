@@ -62,6 +62,10 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
   motor_.init();
   ctl_.init(&motor_, &sensor_, &trj_, &ego);
+  log_table.clear();
+  for (int i = 0; i < 4097; i++) {
+    log_table.emplace_back(std::log(i));
+  }
 }
 
 // ============================================================
@@ -153,8 +157,8 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (test_duty > 0.0f) {
     motor_.apply(0.0f, 0.0f, test_duty);
     state.duty_suction = test_duty;
-    state.duty_l       = 0.0f;
-    state.duty_r       = 0.0f;
+    state.duty_l = 0.0f;
+    state.duty_r = 0.0f;
     suction_test_was_on_ = true;
     return;
   }
@@ -321,4 +325,40 @@ void PlanningTask::update_trajectory(float dt) {
 
 std::shared_ptr<sensing_result_entity_t> PlanningTask::get_sensing_entity() {
   return sensing_result;
+}
+
+float PlanningTask::adjust_b_to_target90(float data, float a) {
+  int idx = static_cast<int>(data);
+
+  // インデックス範囲チェック（※ここは index としての妥当性を見るのが自然）
+  if (idx < 0 || idx >= static_cast<int>(log_table.size())) {
+    return NAN; // 計算不能
+  }
+
+  float L = log_table.at(idx);
+  if (!isfinite(L) || L == 0.0f) {
+    return NAN;
+  }
+
+  // 目標 90 に合う b'
+  float b_new = a / L - 90.0f;
+  return b_new;
+}
+
+float PlanningTask::adjust_b_to_target45(float data, float a) {
+  int idx = static_cast<int>(data);
+
+  // インデックス範囲チェック（※ここは index としての妥当性を見るのが自然）
+  if (idx < 0 || idx >= static_cast<int>(log_table.size())) {
+    return NAN; // 計算不能
+  }
+
+  float L = log_table.at(idx);
+  if (!isfinite(L) || L == 0.0f) {
+    return NAN;
+  }
+
+  // 目標 45 に合う b'
+  float b_new = a / L - 45.0f;
+  return b_new;
 }

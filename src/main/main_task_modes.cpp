@@ -91,7 +91,7 @@ int MainTask::select_run_mode(int max_mode) {
       ui_.coin(100);
       break;
     }
-    // vTaskDelay(xDelay1);
+    sleep_ms(1);
   }
   return mode_num;
 }
@@ -222,7 +222,129 @@ void MainTask::test_back() {}
 void MainTask::keep_pivot() {}
 
 void MainTask::dump1() {
-  
+  const auto se = get_sensing_entity();
+  // tgt_val->nmr.motion_type = MotionType::SENSING_DUMP;
+  // tgt_val->nmr.timstamp++;
+
+  const char ESC = '\033';
+  while (1) {
+
+    printf("%c[2J", ESC);   /* 画面消去 */
+    printf("%c[0;0H", ESC); /* 戦闘戻す*/
+
+    printf("SW1 %d \n", gpio_get(BTN_PIN));
+    printf("Temp %f \n", se->ego.temp);
+
+    printf("gyro: %d\t(%0.3f)\n", se->gyro.raw,
+           planning_->tgt_val->gyro_zero_p_offset);
+    printf("gyro2: %d\t(%0.3f)\n", se->gyro2.raw,
+           planning_->tgt_val->gyro2_zero_p_offset);
+    printf("accel_x: %f\t(%f)\n", se->ego.accel_x_raw,
+           se->ego.accel_x_raw / 9806.65 * param_->accel_x_param.gain);
+    // printf("accel_y: %d\n", se->accel_y.raw);
+    printf("battery: %0.3f (%d)\n", se->ego.battery_lp, se->battery.raw);
+    printf("encoder: %ld, %ld\n", (long)se->encoder.left,
+           (long)se->encoder.right);
+    printf("sensor: %4d, %4d, %4d, %4d, %4d, %4d, %4d\n",
+           se->led_sen.left90.raw, se->led_sen.left45.raw,
+           se->led_sen.left45_2.raw, se->led_sen.front.raw,
+           se->led_sen.right45_2.raw, se->led_sen.right45.raw,
+           se->led_sen.right90.raw);
+    printf("sensor_dist(near): %3.2f, %3.2f, %3.2f, %3.2f, %3.2f, %3.2f, "
+           "%3.2f, %3.2f, %3.2f\n",
+           se->ego.left90_dist,    //
+           se->ego.left45_3_dist,  //
+           se->ego.left45_2_dist,  //
+           se->ego.left45_dist,    //
+           se->ego.front_dist,     //
+           se->ego.right45_dist,   //
+           se->ego.right45_2_dist, //
+           se->ego.right45_3_dist, //
+           se->ego.right90_dist);
+
+    printf("sensor_dist(mid): %3.2f, %3.2f, %3.2f\n",
+           se->ego.left90_mid_dist, //
+           se->ego.front_mid_dist,  //
+           se->ego.right90_mid_dist);
+    printf("sensor_dist(far): %3.2f, %3.2f, %3.2f\n",
+           se->ego.left90_far_dist, //
+           se->ego.front_far_dist,  //
+           se->ego.right90_far_dist);
+
+    auto l90_b = planning_->adjust_b_to_target90(se->led_sen.left90.raw,
+                                                 param_->sensor_gain.l90.a);
+    auto l90_far_b = planning_->adjust_b_to_target90(
+        se->led_sen.left90.raw, param_->sensor_gain.l90_far.a);
+    auto l45_b = planning_->adjust_b_to_target45(se->led_sen.left45.raw,
+                                                 param_->sensor_gain.l45.a);
+    auto l45_2_b = planning_->adjust_b_to_target45(se->led_sen.left45_2.raw,
+                                                   param_->sensor_gain.l45_2.a);
+    auto l45_3_b = planning_->adjust_b_to_target45(se->led_sen.left45_3.raw,
+                                                   param_->sensor_gain.l45_3.a);
+    auto front_b = planning_->adjust_b_to_target90(se->led_sen.front.raw,
+                                                   param_->sensor_gain.front.a);
+    auto r45_3_b = planning_->adjust_b_to_target45(se->led_sen.right45_3.raw,
+                                                   param_->sensor_gain.r45_3.a);
+    auto r45_2_b = planning_->adjust_b_to_target45(se->led_sen.right45_2.raw,
+                                                   param_->sensor_gain.r45_2.a);
+    auto r45_b = planning_->adjust_b_to_target45(se->led_sen.right45.raw,
+                                                 param_->sensor_gain.r45.a);
+    auto r90_b = planning_->adjust_b_to_target90(se->led_sen.right90.raw,
+                                                 param_->sensor_gain.r90.a);
+    auto r90_far_b = planning_->adjust_b_to_target90(
+        se->led_sen.right90.raw, param_->sensor_gain.r90_far.a);
+    // printf("side_sensor_b: %f, %f, %f, %f, %f, %f\n", //
+    //        l45_3_b, l45_2_b, l45_b, r45_b, r45_2_b, r45_3_b);
+    printf("L45_3: [%f, %f]\n", param_->sensor_gain.l45_3.a, l45_3_b);
+    printf("L45_2: [%f, %f]\n", param_->sensor_gain.l45_2.a, l45_2_b);
+    printf("L45: [%f, %f]\n", param_->sensor_gain.l45.a, l45_b);
+    printf("R45: [%f, %f]\n", param_->sensor_gain.r45.a, r45_b);
+    printf("R45_2: [%f, %f]\n", param_->sensor_gain.r45_2.a, r45_2_b);
+    printf("R45_3: [%f, %f]\n", param_->sensor_gain.r45_3.a, r45_3_b);
+
+    printf("L90_near: [%f, %f]\n", param_->sensor_gain.l90.a, l90_b);
+    printf("R90_near: [%f, %f]\n", param_->sensor_gain.r90.a, r90_b);
+    printf("L90_mid: [%f, %f]\n", param_->sensor_gain.l90.a, l90_b);
+    printf("R90_mid: [%f, %f]\n", param_->sensor_gain.r90.a, r90_b);
+    printf("L90_far: [%f, %f]\n", param_->sensor_gain.l90_far.a, l90_far_b);
+    printf("R90_far: [%f, %f]\n", param_->sensor_gain.r90_far.a, r90_far_b);
+
+    printf("front_sensor_b: %f, %f, %f, %f\n", //
+           l90_b, l90_far_b, r90_b, r90_far_b);
+
+    printf("ego_v: %4.3f, %4.3f, %4.3f, %4.3f, (%4ld, %4ld)\n", se->ego.v_l,
+           se->ego.v_c, se->ego.v_r, planning_->tgt_val->ego_in.dist,
+           (long)se->encoder.left, (long)se->encoder.right);
+
+    printf("calc_v: %4.3f, %3.3f\n", planning_->tgt_val->ego_in.v,
+           planning_->tgt_val->ego_in.w);
+
+    printf("ego_w: %2.3f, %2.3f, %2.3f, %3.3f deg\n", se->ego.w_raw,
+           se->ego.w_lp, planning_->tgt_val->ego_in.ang,
+           planning_->tgt_val->ego_in.ang * 180 / m_PI);
+
+    printf("gyro_raw[]: %4d, %4d, %4d, %4d, %4d\n", se->gyro_list[0],
+           se->gyro_list[1], se->gyro_list[2], se->gyro_list[3],
+           se->gyro_list[4]);
+
+    const float tgt_gain =
+        1000.0 / (se->accel_x.raw - planning_->tgt_val->accel_x_zero_p_offset) *
+        9.8;
+    printf("accel: %3.3f, %6.6f\n", se->ego.accel_x_raw, tgt_gain);
+
+    // printf("duty: %3.3f, %3.3f\n", se->ego.duty.duty_l,
+    //        se->ego.duty.duty_r);
+
+    printf("planning_time: %d\n", planning_->tgt_val->calc_time);
+    printf("planning_time_diff: %d\n", planning_->tgt_val->calc_time_diff);
+    printf("sensing_time: %d\n", se->calc_time);
+
+    if (ui_.button_state()) {
+      planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;
+    }
+
+    sleep_ms(100);
+  }
 }
 
 void MainTask::dump2() {}

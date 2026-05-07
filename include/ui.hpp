@@ -1,6 +1,7 @@
 #pragma once
 #include "Music.hpp"
 #include "define.hpp"
+#include "defines.hpp"
 #include "structs.hpp"
 #include <memory>
 #include <stdint.h>

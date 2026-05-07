@@ -130,6 +130,10 @@ public:
 
   void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
 
+  float adjust_b_to_target90(float data, float a);
+  float adjust_b_to_target45(float data, float a);
+  std::shared_ptr<motion_tgt_val_t> tgt_val;
+
 private:
   PlanningTask() = default;
 
@@ -159,7 +163,7 @@ private:
   volatile bool cmd_pending_ = false;
 
   std::shared_ptr<motion_tgt_val_t> pending_tgt_;
-  std::shared_ptr<motion_tgt_val_t> tgt_val;
+
   volatile bool tgt_cmd_pending_ = false;
   int32_t last_nmr_timestamp_ = -1;
 
@@ -192,4 +196,5 @@ private:
   int suction_req_timestamp = 0;
 
   unsigned char w_reset = 0;
+  std::vector<float> log_table;
 };
