@@ -14,13 +14,13 @@
 std::shared_ptr<MainTask> MainTask::s_instance;
 
 std::shared_ptr<MainTask>
-MainTask::create(std::shared_ptr<SensingTask>   sensing,
-                 std::shared_ptr<PlanningTask>  planning,
+MainTask::create(std::shared_ptr<SensingTask> sensing,
+                 std::shared_ptr<PlanningTask> planning,
                  std::shared_ptr<input_param_t> param) {
   s_instance = std::shared_ptr<MainTask>(new MainTask());
-  s_instance->sensing_  = sensing;
+  s_instance->sensing_ = sensing;
   s_instance->planning_ = planning;
-  s_instance->param_    = param;
+  s_instance->param_ = param;
   return s_instance;
 }
 
@@ -32,111 +32,129 @@ std::shared_ptr<sensing_result_entity_t> MainTask::get_sensing_entity() {
 
 // ─── USB シリアル受信 ─────────────────────────────────────────────────────
 // idle_ms の無通信が続いたら返す。\n で終端された行を1つ読み込む。
-static int usb_read_with_timeout(char* buf, size_t max_size, uint32_t idle_ms) {
-    size_t len = 0;
-    absolute_time_t deadline = make_timeout_time_ms(idle_ms);
-    while (len < max_size - 1) {
-        if (absolute_time_diff_us(get_absolute_time(), deadline) <= 0) break;
-        int c = getchar_timeout_us(1000);
-        if (c == PICO_ERROR_TIMEOUT) continue;
-        buf[len++] = (char)c;
-        deadline = make_timeout_time_ms(idle_ms); // 文字受信ごとにリセット
-        if ((char)c == '\n') break;
-    }
-    buf[len] = '\0';
-    return (int)len;
+static int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms) {
+  size_t len = 0;
+  absolute_time_t deadline = make_timeout_time_ms(idle_ms);
+  while (len < max_size - 1) {
+    if (absolute_time_diff_us(get_absolute_time(), deadline) <= 0)
+      break;
+    int c = getchar_timeout_us(1000);
+    if (c == PICO_ERROR_TIMEOUT)
+      continue;
+    buf[len++] = (char)c;
+    deadline = make_timeout_time_ms(idle_ms); // 文字受信ごとにリセット
+    if ((char)c == '\n')
+      break;
+  }
+  buf[len] = '\0';
+  return (int)len;
 }
 
 // ─── USB コマンド処理 ─────────────────────────────────────────────────────
 // "filename@content" → ファイルを保存して true を返す (再ロード要)。
 // "LIST" / "DELETE:name" / "READ:name" も処理する (常に false を返す)。
-static bool rx_usb_cmd(char* buf, int len) {
-    while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r'))
-        buf[--len] = '\0';
-    if (len == 0) return false;
-
-    // ── filename@content ─────────────────────────────────────────────────
-    char* at = strchr(buf, '@');
-    if (at) {
-        *at = '\0';
-        const char* name    = buf;
-        const char* content = at + 1;
-
-        char path[68];
-        path[0] = '/';
-        strncpy(path + 1, name, sizeof(path) - 2);
-        path[sizeof(path) - 1] = '\0';
-
-        bool ok = ConfigLoader::write_file(
-            path, reinterpret_cast<const uint8_t*>(content), strlen(content));
-        printf(ok ? "OK\n" : "ERR:write failed\n");
-        fflush(stdout);
-        return ok;
-    }
-
-    // ── LIST ──────────────────────────────────────────────────────────────
-    if (strcmp(buf, "LIST") == 0) {
-        ConfigLoader::list_files(
-            [](void*, const char* name, int32_t size) {
-                printf("%s:%d\n", name, (int)size);
-            }, nullptr);
-        printf("OK\n"); fflush(stdout);
-        return false;
-    }
-
-    // ── DELETE:name ───────────────────────────────────────────────────────
-    if (strncmp(buf, "DELETE:", 7) == 0) {
-        char path[68];
-        path[0] = '/';
-        strncpy(path + 1, buf + 7, sizeof(path) - 2);
-        path[sizeof(path) - 1] = '\0';
-        printf(ConfigLoader::delete_file(path) ? "OK\n" : "ERR:not found\n");
-        fflush(stdout);
-        return false;
-    }
-
-    // ── READ:name ─────────────────────────────────────────────────────────
-    if (strncmp(buf, "READ:", 5) == 0) {
-        char path[68];
-        path[0] = '/';
-        strncpy(path + 1, buf + 5, sizeof(path) - 2);
-        path[sizeof(path) - 1] = '\0';
-
-        int32_t fsize = ConfigLoader::file_size(path);
-        if (fsize < 0) { printf("ERR:not found\n"); fflush(stdout); return false; }
-
-        uint8_t* fbuf = (uint8_t*)malloc((size_t)fsize);
-        if (!fbuf) { printf("ERR:no memory\n"); fflush(stdout); return false; }
-
-        size_t out_size = 0;
-        if (ConfigLoader::read_file_raw(path, fbuf, (size_t)fsize, out_size)) {
-            printf("%u\n", (unsigned)out_size); fflush(stdout);
-            fwrite(fbuf, 1, out_size, stdout);  fflush(stdout);
-            printf("OK\n");                      fflush(stdout);
-        } else {
-            printf("ERR:read failed\n"); fflush(stdout);
-        }
-        free(fbuf);
-        return false;
-    }
-
+static bool rx_usb_cmd(char *buf, int len) {
+  while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
+    buf[--len] = '\0';
+  if (len == 0)
     return false;
+
+  // ── filename@content ─────────────────────────────────────────────────
+  char *at = strchr(buf, '@');
+  if (at) {
+    *at = '\0';
+    const char *name = buf;
+    const char *content = at + 1;
+
+    char path[68];
+    path[0] = '/';
+    strncpy(path + 1, name, sizeof(path) - 2);
+    path[sizeof(path) - 1] = '\0';
+
+    bool ok = ConfigLoader::write_file(
+        path, reinterpret_cast<const uint8_t *>(content), strlen(content));
+    printf(ok ? "OK\n" : "ERR:write failed\n");
+    fflush(stdout);
+    return ok;
+  }
+
+  // ── LIST ──────────────────────────────────────────────────────────────
+  if (strcmp(buf, "LIST") == 0) {
+    ConfigLoader::list_files(
+        [](void *, const char *name, int32_t size) {
+          printf("%s:%d\n", name, (int)size);
+        },
+        nullptr);
+    printf("OK\n");
+    fflush(stdout);
+    return false;
+  }
+
+  // ── DELETE:name ───────────────────────────────────────────────────────
+  if (strncmp(buf, "DELETE:", 7) == 0) {
+    char path[68];
+    path[0] = '/';
+    strncpy(path + 1, buf + 7, sizeof(path) - 2);
+    path[sizeof(path) - 1] = '\0';
+    printf(ConfigLoader::delete_file(path) ? "OK\n" : "ERR:not found\n");
+    fflush(stdout);
+    return false;
+  }
+
+  // ── READ:name ─────────────────────────────────────────────────────────
+  if (strncmp(buf, "READ:", 5) == 0) {
+    char path[68];
+    path[0] = '/';
+    strncpy(path + 1, buf + 5, sizeof(path) - 2);
+    path[sizeof(path) - 1] = '\0';
+
+    int32_t fsize = ConfigLoader::file_size(path);
+    if (fsize < 0) {
+      printf("ERR:not found\n");
+      fflush(stdout);
+      return false;
+    }
+
+    uint8_t *fbuf = (uint8_t *)malloc((size_t)fsize);
+    if (!fbuf) {
+      printf("ERR:no memory\n");
+      fflush(stdout);
+      return false;
+    }
+
+    size_t out_size = 0;
+    if (ConfigLoader::read_file_raw(path, fbuf, (size_t)fsize, out_size)) {
+      printf("%u\n", (unsigned)out_size);
+      fflush(stdout);
+      fwrite(fbuf, 1, out_size, stdout);
+      fflush(stdout);
+      printf("OK\n");
+      fflush(stdout);
+    } else {
+      printf("ERR:read failed\n");
+      fflush(stdout);
+    }
+    free(fbuf);
+    return false;
+  }
+
+  return false;
 }
 
 bool MainTask::load_params() {
   bool any = false;
   // 各ファイルが存在しない場合は警告を出してスキップ (初回未転送でも動作継続)
   any |= ConfigLoader::load_as("/hardware.json", *param_);
-  any |= ConfigLoader::load_as("/sensor.json",   *param_);
-  any |= ConfigLoader::load_as("/offset.json",   *param_);
-  any |= ConfigLoader::load_as("/system.json",   sys_);
+  any |= ConfigLoader::load_as("/sensor.json", *param_);
+  any |= ConfigLoader::load_as("/offset.json", *param_);
+  any |= ConfigLoader::load_as("/system.json", sys_);
   return any;
 }
 
 void MainTask::run() {
   // ブザー PWM 設定 (GPIO はどのコアからでも設定可)
   gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
-  uint pwm_slice   = pwm_gpio_to_slice_num(BUZZER_PIN);
+  uint pwm_slice = pwm_gpio_to_slice_num(BUZZER_PIN);
   uint pwm_channel = pwm_gpio_to_channel(BUZZER_PIN);
   pwm_set_enabled(pwm_slice, false);
 
@@ -144,14 +162,16 @@ void MainTask::run() {
 
   ui_.init(pwm_slice, pwm_channel);
   ui_.LED_headlight();
-  ui_.hello_exia();
+  // ui_.hello_exia();
+  ui_.coin(60);
+  ui_.coin(60);
 
   // ─── パラメータ読み込み ───────────────────────────────────────────────────
   printf("[main] loading params from LittleFS...\n");
   if (load_params()) {
     ui_.coin(80);
-    printf("[main] params OK  mode=%d  maze=%d\n",
-           sys_.user_mode, sys_.maze_size);
+    printf("[main] params OK  mode=%d  maze=%d\n", sys_.user_mode,
+           sys_.maze_size);
   } else {
     printf("[main] no param files found, using defaults.\n");
   }
@@ -172,22 +192,24 @@ void MainTask::run() {
     if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
       updated = true;
       load_params();
-      printf("[main] params reloaded  mode=%d  maze=%d\n",
-             sys_.user_mode, sys_.maze_size);
+      printf("[main] params reloaded  mode=%d  maze=%d\n", sys_.user_mode,
+             sys_.maze_size);
     }
   }
-  if (updated) load_params();
+  if (updated)
+    load_params();
   printf("[main] starting.\n");
 
   // ─── 吸引 PWM テスト ─────────────────────────────────────────────────────
   // ボタン押下から 3 秒後に duty_suction を直接駆動する。
-  // ControlLaw・バッテリ補正・ランプを完全バイパスして motor_.apply() を直叩き。
-  static constexpr float    SUCTION_TEST_DUTY = 15.0f;  // [%] 要チューニング
-  static constexpr uint32_t SUCTION_DELAY_MS  = 3000;   // 押下から起動までの遅延
-  bool            prev_btn        = false;
-  bool            suction_test_on = false;
-  bool            btn_held        = false;
-  absolute_time_t btn_press_time  = nil_time;
+  // ControlLaw・バッテリ補正・ランプを完全バイパスして motor_.apply()
+  // を直叩き。
+  static constexpr float SUCTION_TEST_DUTY = 15.0f; // [%] 要チューニング
+  static constexpr uint32_t SUCTION_DELAY_MS = 3000; // 押下から起動までの遅延
+  bool prev_btn = false;
+  bool suction_test_on = false;
+  bool btn_held = false;
+  absolute_time_t btn_press_time = nil_time;
 
   while (true) {
     // ---- ボタン処理 (吸引 PWM 直接テスト) ----
@@ -199,12 +221,12 @@ void MainTask::run() {
           // 2 回目押下: 吸引 OFF
           planning_->set_suction_test(0.0f);
           suction_test_on = false;
-          btn_held        = false;
+          btn_held = false;
           ui_.stop_tone();
           ui_.LED_headlight();
         } else {
           // 1 回目押下: 3 秒タイマー開始
-          btn_held       = true;
+          btn_held = true;
           btn_press_time = get_absolute_time();
           ui_.LED_on_all();
         }
@@ -218,7 +240,7 @@ void MainTask::run() {
           (int64_t)SUCTION_DELAY_MS * 1000LL) {
         planning_->set_suction_test(SUCTION_TEST_DUTY);
         suction_test_on = true;
-        btn_held        = false;
+        btn_held = false;
         ui_.play_tone(BUZZER_FREQ_HZ);
       }
     }
@@ -269,9 +291,8 @@ void MainTask::run() {
              ps.duty_l, ps.duty_r, ps.duty_suction, ps.tick,
              suction_test_on ? "[SUCTION TEST]" : "");
 
-      printf("[sys]      mode=%d  maze=%d  goals=%u\n",
-             sys_.user_mode, sys_.maze_size,
-             (unsigned)sys_.goals.size());
+      printf("[sys]      mode=%d  maze=%d  goals=%u\n", sys_.user_mode,
+             sys_.maze_size, (unsigned)sys_.goals.size());
     }
 
     sleep_ms(25);
