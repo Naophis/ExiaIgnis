@@ -71,11 +71,15 @@ static bool rx_usb_cmd(char *buf, int len) {
     strncpy(path + 1, name, sizeof(path) - 2);
     path[sizeof(path) - 1] = '\0';
 
-    bool ok = ConfigLoader::write_file(
-        path, reinterpret_cast<const uint8_t *>(content), strlen(content));
-    printf(ok ? "OK\n" : "ERR:write failed\n");
+    // flash_range_erase/prog は割り込みを ~100ms 禁止するため USB CDC
+    // が切断される。 OK を先に送信し、USB が届けてから書き込む。
+    printf("OK\n");
     fflush(stdout);
-    return ok;
+    sleep_ms(80); // USB が OK を転送するまで待機
+
+    ConfigLoader::write_file(path, reinterpret_cast<const uint8_t *>(content),
+                             strlen(content));
+    return true;
   }
 
   // ── LIST ──────────────────────────────────────────────────────────────
@@ -210,6 +214,7 @@ void MainTask::run() {
   bool suction_test_on = false;
   bool btn_held = false;
   absolute_time_t btn_press_time = nil_time;
+  sleep_ms(500);
 
   while (true) {
     // ---- ボタン処理 (吸引 PWM 直接テスト) ----

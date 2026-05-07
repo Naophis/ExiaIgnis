@@ -3,28 +3,56 @@
 Pico へ USB CDC 経由でファイルを送受信するスクリプト。
 
 使い方:
-  python send_file.py <port> write <ローカルファイル> [<Pico上のファイル名>]
-  python send_file.py <port> read  <Pico上のファイル名> [<保存先ファイル名>]
-  python send_file.py <port> list
-  python send_file.py <port> delete <Pico上のファイル名>
+  python send_file.py [<port>] write <ローカルファイル> [<Pico上のファイル名>]
+  python send_file.py [<port>] read  <Pico上のファイル名> [<保存先ファイル名>]
+  python send_file.py [<port>] list
+  python send_file.py [<port>] delete <Pico上のファイル名>
+
+ポートを省略すると Raspberry Pi Pico (VID=0x2E8A) を自動検出します。
 
 例:
-  python send_file.py /dev/ttyACM0 write hardware.json
-  python send_file.py /dev/ttyACM0 list
-  python send_file.py /dev/ttyACM0 read hardware.json out.json
-  python send_file.py /dev/ttyACM0 delete hardware.json
+  python send_file.py write hardware.yaml        # ポート自動検出
+  python send_file.py /dev/ttyACM1 list          # ポート指定
 
 プロトコル (write):
-  "filename@minified_json\n" を送信し "OK\n" を受信する。
+  "filename@minified_json\\n" を送信し "OK\\n" を受信する。
 """
 
-import sys
-import os
-import time
 import json
-import serial
+import os
+import sys
+import time
 
-TIMEOUT_SEC = 10  # コマンド応答タイムアウト
+import serial
+from serial.tools import list_ports
+
+try:
+    import yaml as _yaml
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
+
+TIMEOUT_SEC = 10
+PICO_VID    = 0x2E8A  # Raspberry Pi
+COMMANDS    = {"write", "read", "list", "delete"}
+
+
+def find_pico_port() -> str | None:
+    """Raspberry Pi Pico (VID=0x2E8A) のポートを自動検出する。"""
+    ports = sorted(p.device for p in list_ports.comports() if p.vid == PICO_VID)
+    return ports[0] if ports else None
+
+
+def resolve_port(argv: list[str]) -> tuple[str, list[str]]:
+    """(port, remaining_args) を返す。先頭引数がコマンドなら自動検出。"""
+    if argv and argv[0] not in COMMANDS:
+        return argv[0], argv[1:]
+    port = find_pico_port()
+    if port is None:
+        print("エラー: Pico が見つかりません。ポートを引数で指定してください。",
+              file=sys.stderr)
+        sys.exit(1)
+    return port, argv
 
 
 def open_port(port: str) -> serial.Serial:
@@ -38,23 +66,29 @@ def readline_skip_sensor(ser: serial.Serial) -> str:
         if not raw:
             raise TimeoutError("応答タイムアウト")
         line = raw.decode("utf-8", errors="replace").strip()
-        # センサー出力行は無視
         if "ADC0:" in line or "Gx:" in line or "Enc0:" in line:
             continue
         return line
 
 
 def cmd_write(ser: serial.Serial, local_path: str, remote_name: str) -> None:
-    with open(local_path, "r", encoding="utf-8") as f:
-        text = f.read()
-    try:
-        content = json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
-    except json.JSONDecodeError:
-        # JSON でなければ改行を除いてそのまま使用
-        content = text.replace("\n", " ").replace("\r", "")
+    if local_path.endswith((".yaml", ".yml")):
+        if not _YAML_AVAILABLE:
+            print("エラー: pyyaml が必要です  pip install pyyaml", file=sys.stderr)
+            sys.exit(1)
+        with open(local_path, "r", encoding="utf-8") as f:
+            content = json.dumps(_yaml.safe_load(f), separators=(",", ":"),
+                                 ensure_ascii=False)
+    else:
+        with open(local_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        try:
+            content = json.dumps(json.loads(text), separators=(",", ":"),
+                                 ensure_ascii=False)
+        except json.JSONDecodeError:
+            content = text.replace("\n", " ").replace("\r", "")
 
-    message = f"{remote_name}@{content}\n"
-    ser.write(message.encode("utf-8"))
+    ser.write(f"{remote_name}@{content}\n".encode("utf-8"))
     ser.flush()
     response = readline_skip_sensor(ser)
     if response == "OK":
@@ -120,41 +154,51 @@ def cmd_delete(ser: serial.Serial, remote_name: str) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
 
-    port    = sys.argv[1]
-    command = sys.argv[2]
+    port, args = resolve_port(sys.argv[1:])
+    if not args:
+        print(__doc__)
+        sys.exit(1)
+
+    command = args[0]
+    print(f"ポート: {port}")
 
     with open_port(port) as ser:
-        time.sleep(0.1)          # ポート安定待ち
+        time.sleep(0.1)
         ser.reset_input_buffer()
 
         if command == "write":
-            if len(sys.argv) < 4:
+            if len(args) < 2:
                 print("Usage: write <local_file> [<remote_name>]", file=sys.stderr)
                 sys.exit(1)
-            local  = sys.argv[3]
-            remote = sys.argv[4] if len(sys.argv) > 4 else os.path.basename(local)
+            local = args[1]
+            if len(args) > 2:
+                remote = args[2]
+            else:
+                base = os.path.basename(local)
+                remote = (os.path.splitext(base)[0] + ".json"
+                          if base.endswith((".yaml", ".yml")) else base)
             cmd_write(ser, local, remote)
 
         elif command == "read":
-            if len(sys.argv) < 4:
+            if len(args) < 2:
                 print("Usage: read <remote_name> [<local_file>]", file=sys.stderr)
                 sys.exit(1)
-            remote = sys.argv[3]
-            local  = sys.argv[4] if len(sys.argv) > 4 else remote
+            remote = args[1]
+            local  = args[2] if len(args) > 2 else remote
             cmd_read(ser, remote, local)
 
         elif command == "list":
             cmd_list(ser)
 
         elif command == "delete":
-            if len(sys.argv) < 4:
+            if len(args) < 2:
                 print("Usage: delete <remote_name>", file=sys.stderr)
                 sys.exit(1)
-            cmd_delete(ser, sys.argv[3])
+            cmd_delete(ser, args[1])
 
         else:
             print(f"不明なコマンド: {command}")

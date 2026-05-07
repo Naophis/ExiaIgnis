@@ -2,8 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
+#include "pico/flash.h"
 #include "hardware/flash.h"
-#include "hardware/sync.h"
 #include "lfs.h"
 #include <string>
 #include "config_loader.hpp"
@@ -24,20 +24,37 @@ static int flash_read(const lfs_config *c, lfs_block_t block,
     return LFS_ERR_OK;
 }
 
+// flash_safe_execute コールバック: Core1 を安全に停止してから実行される
+struct lfs_erase_args { uint32_t addr; uint32_t size; };
+struct lfs_prog_args  { uint32_t addr; const uint8_t *buf; uint32_t size; };
+
+static void __no_inline_not_in_flash_func(do_lfs_erase)(void *varg) {
+    auto *a = static_cast<lfs_erase_args *>(varg);
+    flash_range_erase(a->addr, a->size);
+}
+
+static void __no_inline_not_in_flash_func(do_lfs_prog)(void *varg) {
+    auto *a = static_cast<lfs_prog_args *>(varg);
+    flash_range_program(a->addr, a->buf, a->size);
+}
+
 static int flash_prog(const lfs_config *c, lfs_block_t block,
                       lfs_off_t off, const void *buf, lfs_size_t size) {
-    uint32_t addr = LFS_FLASH_OFFSET + block * c->block_size + off;
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_program(addr, static_cast<const uint8_t*>(buf), size);
-    restore_interrupts(ints);
+    lfs_prog_args args = {
+        LFS_FLASH_OFFSET + (uint32_t)(block * c->block_size + off),
+        static_cast<const uint8_t *>(buf),
+        (uint32_t)size,
+    };
+    flash_safe_execute(do_lfs_prog, &args, UINT32_MAX);
     return LFS_ERR_OK;
 }
 
 static int flash_erase(const lfs_config *c, lfs_block_t block) {
-    uint32_t addr = LFS_FLASH_OFFSET + block * c->block_size;
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_erase(addr, c->block_size);
-    restore_interrupts(ints);
+    lfs_erase_args args = {
+        LFS_FLASH_OFFSET + (uint32_t)(block * c->block_size),
+        (uint32_t)c->block_size,
+    };
+    flash_safe_execute(do_lfs_erase, &args, UINT32_MAX);
     return LFS_ERR_OK;
 }
 
