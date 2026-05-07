@@ -6,130 +6,12 @@
 #include "pico/time.h"
 #include <stdio.h>
 
-// ─── LED ヘルパー
-// ────────────────────────────────────────────────────────────── mode_num+1 を
-// 6bit 2進数で表示。Astraea の lbit.byte = mode_num+1 と同等。
-static void show_mode_led(UserInterface &ui, int mode) {
-  int v = mode + 1;
-  ui.LED_bit((v >> 0) & 1, (v >> 1) & 1, (v >> 2) & 1, (v >> 3) & 1,
-             (v >> 4) & 1, (v >> 5) & 1);
-}
-
-// ─── 共通センサー表示
-// ─────────────────────────────────────────────────────────
-static void print_sensing(const SensingTask::Data &d,
-                          const sensing_result_entity_t &se,
-                          const PlanningTask::State &ps, const system_t &sys,
-                          bool suction_test_on) {
-  const char ESC = '\033';
-  printf("%c[2J", ESC);
-  printf("%c[0;0H", ESC);
-
-  printf("=== ExiaIgnis sensor monitor ===\n");
-
-  printf("[timing]  dt=%4lu us  |  sense=%4lu us"
-         "  |  gz->encR: %4llu us"
-         "  |  encR->encL: %4llu us\n",
-         d.dt_us, d.sense_duration_us, d.enc_r_ts - d.gz_ts,
-         d.enc_l_ts - d.enc_r_ts);
-
-  printf("[sensor]  %4u"
-         "  |  %4u\t%4u\t%4u"
-         "  |  %4u\t%4u\t%4u"
-         "  |  %4u\n",
-         se.led_sen.left90.raw, se.led_sen.left45_3.raw,
-         se.led_sen.left45_2.raw, se.led_sen.left45.raw, se.led_sen.right45.raw,
-         se.led_sen.right45_2.raw, se.led_sen.right45_3.raw,
-         se.led_sen.right90.raw);
-
-  printf("[motion]  gz=%6d (dt=%4llu us)"
-         "  |  encL=%5u (dt=%4llu us)"
-         "  |  encR=%5u (dt=%4llu us)\n",
-         se.gyro.raw, d.gz_dt, d.enc_l, d.enc_l_dt, d.enc_r, d.enc_r_dt);
-
-  printf("[power]   bat=%4u, %.4f\n", se.battery.raw, se.ego.batt_kf);
-
-  printf("[planning] mode=%u  v=%6.1f  w=%6.3f"
-         "  dist=%7.1f  ang=%6.3f\n",
-         (uint8_t)ps.mode, ps.img_v, ps.img_w, ps.img_dist, ps.img_ang);
-  printf("[control]  duty_l=%6.1f%%  duty_r=%6.1f%%"
-         "  suction=%5.1f%%  tick=%lu  %s\n",
-         ps.duty_l, ps.duty_r, ps.duty_suction, ps.tick,
-         suction_test_on ? "[SUCTION TEST]" : "");
-
-  printf("[sys]      mode=%d  maze=%d  goals=%u\n", sys.user_mode,
-         sys.maze_size, (unsigned)sys.goals.size());
-}
-
-// ─── ボタン待機ヘルパー
-// ───────────────────────────────────────────────────────
-static void wait_button(UserInterface &ui) {
-  while (!ui.button_state_hold())
-    sleep_ms(10);
-}
-
-// ============================================================
-// 本走行サブモード選択 (Astraea の select_mode() 相当)
-// 短押し: 次のモードへ / 長押し(>=1秒): 決定
-// ============================================================
-int MainTask::select_run_mode(int max_mode) {
-  int mode_num = 0;
-  lbit.byte = 0;
-
-  char max_mode_idx = 2 + exec_param_list.size() + 4;
-  while (1) {
-    int res = ui_.encoder_operation();
-    mode_num += res;
-    if (mode_num == -1) {
-      mode_num = max_mode_idx - 1;
-    } else if (mode_num == max_mode_idx) {
-      mode_num = 0;
-    }
-    lbit.byte = mode_num + 1;
-    ui_.LED_bit(lbit.b0, lbit.b1, lbit.b2, lbit.b3, lbit.b4, lbit.b5);
-    if (ui_.button_state_hold()) {
-      ui_.coin(100);
-      break;
-    }
-    sleep_ms(1);
-  }
-  return mode_num;
-}
-
-// ============================================================
-// 本走行モード (user_mode == 0)
-// Astraea task() の else ブロック相当。
-// ============================================================
-//
-// サブモード:
-//   0: 探索走行    (stub)
-//   1: 最速走行    (stub)
-//   2: 吸引テスト  (インタラクティブ)
-//   3: センサーモニター
-//
-void MainTask::run_main_mode() {
-  printf("[main] === MAIN RUN MODE ===\n");
-  ui_.coin(200);
-
-  static constexpr int SUB_MODE_COUNT = 4;
-
-  while (true) {
-    int sub = select_run_mode(SUB_MODE_COUNT);
-    printf("[main] sub_mode=%d\n", sub);
-
-    sleep_ms(10);
-  }
-}
-
 // ============================================================
 // テストモード dispatch (user_mode != 0)
 // Astraea task() の if(mode != 0) ブロックを踏襲。
 // ============================================================
 void MainTask::run_test_mode(int mode) {
   if (mode != 0) {
-    // mount();
-    // mock slalom();
-    // test_search_sla(false);
     if (mode == 1) {
       printf("test_sla\n");
       test_sla();
@@ -162,7 +44,6 @@ void MainTask::run_test_mode(int mode) {
       test_back();
     } else if (mode == 11) {
       printf("suction\n");
-      // mp->reset_gyro_ref_with_check();
     } else if (mode == 12) {
       printf("hold\n");
     } else if (mode == 13) {
@@ -223,14 +104,12 @@ void MainTask::keep_pivot() {}
 
 void MainTask::dump1() {
   const auto se = get_sensing_entity();
-  // tgt_val->nmr.motion_type = MotionType::SENSING_DUMP;
-  // tgt_val->nmr.timstamp++;
 
   const char ESC = '\033';
   while (1) {
 
-    printf("%c[2J", ESC);   /* 画面消去 */
-    printf("%c[0;0H", ESC); /* 戦闘戻す*/
+    printf("%c[2J", ESC);
+    printf("%c[0;0H", ESC);
 
     printf("SW1 %d \n", gpio_get(BTN_PIN));
     printf("Temp %f \n", se->ego.temp);
@@ -241,7 +120,6 @@ void MainTask::dump1() {
            planning_->tgt_val->gyro2_zero_p_offset);
     printf("accel_x: %f\t(%f)\n", se->ego.accel_x_raw,
            se->ego.accel_x_raw / 9806.65 * param_->accel_x_param.gain);
-    // printf("accel_y: %d\n", se->accel_y.raw);
     printf("battery: %0.3f (%d)\n", se->ego.battery_lp, se->battery.raw);
     printf("encoder: %ld, %ld\n", (long)se->encoder.left,
            (long)se->encoder.right);
@@ -304,8 +182,7 @@ void MainTask::dump1() {
                                                  param_->sensor_gain.r90.a);
     auto r90_far_b = planning_->adjust_b_to_target90(
         se->led_sen.right90.raw, param_->sensor_gain.r90_far.a);
-    // printf("side_sensor_b: %f, %f, %f, %f, %f, %f\n", //
-    //        l45_3_b, l45_2_b, l45_b, r45_b, r45_2_b, r45_3_b);
+
     printf("L45_3: [%f, %f]\n", param_->sensor_gain.l45_3.a, l45_3_b);
     printf("L45_2: [%f, %f]\n", param_->sensor_gain.l45_2.a, l45_2_b);
     printf("L45: [%f, %f]\n", param_->sensor_gain.l45.a, l45_b);
@@ -342,9 +219,6 @@ void MainTask::dump1() {
         1000.0 / (se->accel_x.raw - planning_->tgt_val->accel_x_zero_p_offset) *
         9.8;
     printf("accel: %3.3f, %6.6f\n", se->ego.accel_x_raw, tgt_gain);
-
-    // printf("duty: %3.3f, %3.3f\n", se->ego.duty.duty_l,
-    //        se->ego.duty.duty_r);
 
     printf("planning_time: %d\n", planning_->tgt_val->calc_time);
     printf("planning_time_diff: %d\n", planning_->tgt_val->calc_time_diff);

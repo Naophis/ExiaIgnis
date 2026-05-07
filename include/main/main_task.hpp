@@ -28,7 +28,9 @@ public:
 
   // create() 後・start() 前に呼ぶ。
   void set_logging_task(std::shared_ptr<LoggingTask> lt) { lt_ = lt; }
-  void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tgt_val) { tgt_val_ = _tgt_val; }
+  void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tgt_val) {
+    tgt_val_ = _tgt_val;
+  }
 
 private:
   MainTask() = default;
@@ -57,6 +59,16 @@ private:
   void print_offset_params();
   void print_sensor_params();
 
+  // ─── 共通ユーティリティ (main_task_util.cpp) ─────────────────────────────
+  // /exec.json を読み込んで exec_param_list を構築する。
+  bool load_exec_params();
+  // 両モード共通の事前準備 (ジャイロリセット・センサーウォームアップ等)。
+  void setup_before_run();
+  // mode+1 を 6bit 2進数で LED 表示する。
+  void show_mode_led(int mode);
+  // ボタン長押しまで待機する。
+  void wait_button();
+
   // ─── モード dispatch ──────────────────────────────────────────────────────
   void run_main_mode();
   void run_test_mode(int mode);
@@ -84,4 +96,14 @@ private:
   void encoder_test();
   void test_search_pivot();
   void test_system_identification(bool para);
+
+  // util
+  void load_turn_param_profiles(bool const_mode, int const_index);
+  void load_slalom_param(int idx, int idx2, int idx3);
+  void load_slalom_param2(int idx);
+  void load_slas(int idx, vector<pair<TurnType, string>> &turn_list,
+                 std::unordered_map<TurnType, slalom_param2_t> &turn_map);
+  void
+  load_straight(int idx,
+                std::unordered_map<StraightType, straight_param_t> &str_map);
 };
