@@ -194,7 +194,7 @@ void SensingTask::timer_b_irq_handler() {
   //     0;
 
   // se->battery.raw = self->battery_.read();
-  // se->battery.data = self->param->battery_gain * 4 * se->battery.raw / 4096;
+  se->battery.data = self->param->battery_gain * 4 * se->battery.raw / 4096;
   self->data.sense_duration_us = (uint32_t)(time_us_64() - sense_start);
   self->data_ready = true;
 }

@@ -15,7 +15,6 @@ void EgoEstimator::init(std::shared_ptr<sensing_result_entity_t> sensing_result,
 void EgoEstimator::update(std::shared_ptr<motion_tgt_val_t> tgt_val,
                           bool motor_en) {
   const float dt = param->dt;
-  (void)param->tire; // 未使用
   tgt_val->ego_in.ff_duty_low_th = param->ff_front_dury;
   tgt_val->ego_in.ff_duty_low_v_th = param->ff_v_th;
   if (!motor_en) {
@@ -157,7 +156,6 @@ void EgoEstimator::update(std::shared_ptr<motion_tgt_val_t> tgt_val,
   tgt_val->ego_in.slip_point.w = se->ego.w_lp;
 
   calc_sensor_dist_all(tgt_val);
-
 }
 
 void EgoEstimator::reset_kf_state(
@@ -203,8 +201,11 @@ void EgoEstimator::reset_kf_state(
 
 void EgoEstimator::calc_sensor_dist_all(
     std::shared_ptr<motion_tgt_val_t> tgt_val) {
-  if (!(tgt_val->motion_type == MotionType::NONE ||
-        tgt_val->motion_type == MotionType::PIVOT)) {
+  // if (!(tgt_val->motion_type == MotionType::NONE ||
+  //       tgt_val->motion_type == MotionType::PIVOT)) {
+
+  printf("check\n");
+  if (true) {
     se->ego.left90_dist_old = se->ego.left90_dist;
     se->ego.left45_dist_old = se->ego.left45_dist;
     se->ego.left45_2_dist_old = se->ego.left45_2_dist;
@@ -428,6 +429,8 @@ void EgoEstimator::calc_sensor_dist_diff(
 
 float EgoEstimator::calc_sensor(float data, float a, float b) {
   int idx = (int)data;
+  // return 0;
+  printf("calc_sensor: data=%f, a=%f, b=%f, idx=%d\n", data, a, b, idx);
   if (idx <= param->sensor_range_min || idx >= log_table.size()) {
     return param->sensor_range_max;
   }

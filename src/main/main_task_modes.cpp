@@ -250,6 +250,17 @@ void MainTask::dump1() {
            se->led_sen.left45_2.raw, se->led_sen.front.raw,
            se->led_sen.right45_2.raw, se->led_sen.right45.raw,
            se->led_sen.right90.raw);
+
+    printf("sensor_lp: %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f\n",
+           se->ego.left90_lp,    //
+           se->ego.left45_3_lp,  //
+           se->ego.left45_2_lp,  //
+           se->ego.left45_lp,    //
+           se->ego.right45_lp,   //
+           se->ego.right45_2_lp, //
+           se->ego.right45_3_lp, //
+           se->ego.right90_lp);
+
     printf("sensor_dist(near): %3.2f, %3.2f, %3.2f, %3.2f, %3.2f, %3.2f, "
            "%3.2f, %3.2f, %3.2f\n",
            se->ego.left90_dist,    //
@@ -262,14 +273,14 @@ void MainTask::dump1() {
            se->ego.right45_3_dist, //
            se->ego.right90_dist);
 
-    printf("sensor_dist(mid): %3.2f, %3.2f, %3.2f\n",
-           se->ego.left90_mid_dist, //
-           se->ego.front_mid_dist,  //
-           se->ego.right90_mid_dist);
-    printf("sensor_dist(far): %3.2f, %3.2f, %3.2f\n",
-           se->ego.left90_far_dist, //
-           se->ego.front_far_dist,  //
-           se->ego.right90_far_dist);
+    // printf("sensor_dist(mid): %3.2f, %3.2f, %3.2f\n",
+    //        se->ego.left90_mid_dist, //
+    //        se->ego.front_mid_dist,  //
+    //        se->ego.right90_mid_dist);
+    // printf("sensor_dist(far): %3.2f, %3.2f, %3.2f\n",
+    //        se->ego.left90_far_dist, //
+    //        se->ego.front_far_dist,  //
+    //        se->ego.right90_far_dist);
 
     auto l90_b = planning_->adjust_b_to_target90(se->led_sen.left90.raw,
                                                  param_->sensor_gain.l90.a);
