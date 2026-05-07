@@ -189,7 +189,7 @@ void MainTask::run() {
   static char rx_buf[16384];
   bool updated = false;
 
-  MainTask::dump_all_params();
+  // MainTask::dump_all_params();
 
   // print_system_params();
   // print_hardware_params();

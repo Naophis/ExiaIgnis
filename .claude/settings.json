@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(chmod +x /home/naoto/Desktop/mouse/ExiaIgnis/serial_watch.sh)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(find ~/.pico-sdk -name \"stdio_usb.c\" 2>/dev/null | head -5; find /usr -name \"stdio_usb.c\" 2>/dev/null | head -5)",
+      "Read(//usr/**)"
     ]
   }
 }

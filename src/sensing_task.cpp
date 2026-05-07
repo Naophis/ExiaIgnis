@@ -80,6 +80,8 @@ void SensingTask::timer_b_irq_handler() {
   const auto se = self->get_sensing_entity();
   const uint64_t sense_start = time_us_64();
 
+  // self->read_spi_sensors();
+
   // 1. 全LED消灯状態で ambient 読み取り
   adc_select_input(0);
   se->led_sen_before.right90.raw = adc_read();
@@ -176,7 +178,7 @@ void SensingTask::timer_b_irq_handler() {
 
   self->data.enc_r_ts_z = self->data.enc_r_ts;
   self->data.enc_r_ts = time_us_64();
-  self->data.enc_r = self->enc_r_.read_angle();
+  self->data.enc_r = se->encoder.right = self->enc_r_.read_angle();
   self->data.enc_r_dt =
       self->data.enc_r_ts_z ? (self->data.enc_r_ts - self->data.enc_r_ts_z) : 0;
   // enc_r は mode3(CPOL=1) でジャイロと同一設定のため SCK 状態変化なし。restore
@@ -184,7 +186,7 @@ void SensingTask::timer_b_irq_handler() {
 
   self->data.enc_l_ts_z = self->data.enc_l_ts;
   self->data.enc_l_ts = time_us_64();
-  self->data.enc_l = self->enc_l_.read_angle();
+  self->data.enc_l = se->encoder.left = self->enc_l_.read_angle();
   self->data.enc_l_dt =
       self->data.enc_l_ts_z ? (self->data.enc_l_ts - self->data.enc_l_ts_z) : 0;
 
@@ -202,7 +204,8 @@ void SensingTask::timer_a_irq_handler() {
 
   // 次回アラームをすぐに設定 (絶対時刻 → ドリフトなし)
   // flash write 等で Core1 が長時間停止した場合、next_alarm が過去値になると
-  // RP2350 タイマーの等値比較では ~71分後まで発火しない。1周期以上遅れたらリセット。
+  // RP2350 タイマーの等値比較では
+  // ~71分後まで発火しない。1周期以上遅れたらリセット。
   self->next_alarm_a_ += self->interval_us_;
   {
     uint32_t now32 = (uint32_t)time_us_64();
@@ -312,8 +315,8 @@ void SensingTask::read_spi_sensors() {
   const auto accl_l = (tgt_val->ego_in.v_l - vl_old) / dt;
   const auto accl_r = (tgt_val->ego_in.v_r - vr_old) / dt;
 
-  const float tire = 13.0; // pt->suction_en ? param->tire2 : param->tire;
-  const float tread = 39;  // param->tire_tread;
+  const float tire = param->tire;
+  const float tread = param->tire_tread;
 
   se->ego.v_l_old = se->ego.v_l;
   se->ego.v_r_old = se->ego.v_r;
@@ -323,7 +326,7 @@ void SensingTask::read_spi_sensors() {
   enc_r_timestamp_old = enc_r_timestamp_now;
   enc_l_timestamp_old = enc_l_timestamp_now;
 
-  self->read_spi_sensors();
+  // self->read_spi_sensors();
 
   //   if (!enc_if.initialized) {
   //     return;
@@ -364,6 +367,7 @@ void SensingTask::read_spi_sensors() {
     pt->ego.kf_v_l.predict(accl_l);
     pt->ego.kf_v_l.update(se->ego.v_l);
   }
+  // printf("enc_l: %d m/s, enc_r: %d \n", enc_l, enc_r);
   if (gyro_dt > 0) {
     if ((gyro - tgt_val->gyro_zero_p_offset) >= 0) {
       se->ego.w_raw = param->gyro_param.gyro_w_gain_left *
@@ -372,12 +376,12 @@ void SensingTask::read_spi_sensors() {
       se->ego.w_raw = param->gyro_param.gyro_w_gain_right *
                       (gyro - tgt_val->gyro_zero_p_offset);
     }
-    float alpha = 0.f;
-    pt->ego.kf_w.predict(alpha);
-    const float tread = param->tire_tread;
-    const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
-    pt->ego.kf_w.update(se->ego.w_raw);
   }
+  float alpha = 0.f;
+  pt->ego.kf_w.predict(alpha);
+  const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
+  pt->ego.kf_w.update(se->ego.w_raw);
+  // }
   if (param->enable_kalman_gyro == 1) {
     se->ego.w_raw = se->ego.w_kf = pt->ego.kf_w.get_state();
     // se->ego.w_raw2 = se->ego.w_kf2 = pt->ego.kf_w2.get_state();
@@ -395,7 +399,7 @@ void SensingTask::read_spi_sensors() {
 
 void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   const auto se = get_sensing_entity();
-  const float tire = 13.0; // pt->suction_en ? param->tire2 : param->tire;
+  const float tire = param->tire;
 
   // se->ego.v_l = pt->kf_v_l.get_state();
   // se->ego.v_r = pt->kf_v_r.get_state();
@@ -432,7 +436,7 @@ void SensingTask::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
 }
 
 float SensingTask::calc_enc_v(float now, float old, float dt) {
-  const float tire = 14; // pt->suction_en ? param->tire2 : param->tire;
+  const float tire = param->tire;
   const auto enc_delta = now - old;
   float enc_ang = 0.f;
   if (ABS(enc_delta) <

@@ -343,7 +343,7 @@ void MainTask::dump1() {
       planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;
     }
 
-    sleep_ms(100);
+    sleep_ms(200);
   }
 }
 
