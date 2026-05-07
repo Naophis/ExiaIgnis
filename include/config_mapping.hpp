@@ -86,8 +86,14 @@ inline void from_json_vector(JsonVariantConst src, const char* key, Container& d
  * root → goals[i]
  */
 inline void convertFromJson(JsonVariantConst src, point_t& dst) {
-    from_json_field(src, "x", dst.x);
-    from_json_field(src, "y", dst.y);
+    if (src.is<JsonArrayConst>()) {
+        auto arr = src.as<JsonArrayConst>();
+        if (arr.size() >= 1) dst.x = arr[0].as<int>();
+        if (arr.size() >= 2) dst.y = arr[1].as<int>();
+    } else {
+        from_json_field(src, "x", dst.x);
+        from_json_field(src, "y", dst.y);
+    }
 }
 
 /**
@@ -630,6 +636,7 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
  * root
  */
 inline void convertFromJson(JsonVariantConst src, system_t& dst) {
+    printf("system.txt\n");
     from_json_vector(src, "goals", dst.goals);
     from_json_field(src, "maze_size", dst.maze_size);
     from_json_field(src, "mode", dst.user_mode);

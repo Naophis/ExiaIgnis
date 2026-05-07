@@ -42,4 +42,7 @@ private:
     // 走行モード・ゴール設定など主タスク管理の系統パラメータ
     system_t sys_{};
     void print_system_params();
+    void print_hardware_params();
+    void print_offset_params();
+    void print_sensor_params();
 };
