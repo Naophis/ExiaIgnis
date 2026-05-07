@@ -1,4 +1,5 @@
 #include "main/main_task.hpp"
+#include "config_dump.hpp"
 #include "config_loader.hpp"
 #include "config_mapping.hpp"
 #include "define.hpp"
@@ -188,10 +189,12 @@ void MainTask::run() {
   static char rx_buf[16384];
   bool updated = false;
 
-  print_system_params();
-  print_hardware_params();
-  print_offset_params();
-  print_sensor_params();
+  MainTask::dump_all_params();
+
+  // print_system_params();
+  // print_hardware_params();
+  // print_offset_params();
+  // print_sensor_params();
 
   while (true) {
     if (ui_.button_state_hold()) {
@@ -325,7 +328,7 @@ void MainTask::print_system_params() {
   printf("test.decel: %.2f\n", sys_.test.decel);
   printf("test.dist: %.2f\n", sys_.test.dist);
 }
-void MainTask::print_hardware_params(){
+void MainTask::print_hardware_params() {
   printf("=== Hardware Parameters ===\n");
   printf("tire_tread: %f\n", param_->tire_tread);
   printf("tire: %f\n", param_->tire);
@@ -333,25 +336,77 @@ void MainTask::print_hardware_params(){
   printf("gear_a: %f\n", param_->gear_a);
   printf("gear_b: %f\n", param_->gear_b);
 }
-void MainTask::print_offset_params(){
+void MainTask::print_offset_params() {
   printf("=== Offset Parameters ===\n");
   printf("clear_angle: %f\n", param_->clear_angle);
 }
-void MainTask::print_sensor_params(){
+void MainTask::print_sensor_params() {
   printf("=== Sensor Parameters ===\n");
-  printf("sen_ref_p.normal.ref.left90: %d\n", param_->sen_ref_p.normal.ref.left90);
-  printf("sen_ref_p.normal.ref.left45: %d\n", param_->sen_ref_p.normal.ref.left45);
-  printf("sen_ref_p.normal.ref.right45: %d\n", param_->sen_ref_p.normal.ref.right45);
-  printf("sen_ref_p.normal.ref.right90: %d\n", param_->sen_ref_p.normal.ref.right90);
+  printf("sen_ref_p.normal.ref.left90: %d\n",
+         param_->sen_ref_p.normal.ref.left90);
+  printf("sen_ref_p.normal.ref.left45: %d\n",
+         param_->sen_ref_p.normal.ref.left45);
+  printf("sen_ref_p.normal.ref.right45: %d\n",
+         param_->sen_ref_p.normal.ref.right45);
+  printf("sen_ref_p.normal.ref.right90: %d\n",
+         param_->sen_ref_p.normal.ref.right90);
 
-  printf("sensor_gain.l90: %f, %f\n", param_->sensor_gain.l90.a, param_->sensor_gain.l90.b);
-  printf("sensor_gain.l45_3: %f, %f\n", param_->sensor_gain.l45_3.a, param_->sensor_gain.l45_3.b);
-  printf("sensor_gain.l45_2: %f, %f\n", param_->sensor_gain.l45_2.a, param_->sensor_gain.l45_2.b);
-  printf("sensor_gain.l45: %f, %f\n", param_->sensor_gain.l45.a, param_->sensor_gain.l45.b);
-  printf("sensor_gain.r45: %f, %f\n", param_->sensor_gain.r45.a, param_->sensor_gain.r45.b);
-  printf("sensor_gain.r45_2: %f, %f\n", param_->sensor_gain.r45_2.a, param_->sensor_gain.r45_2.b);
-  printf("sensor_gain.r45_3: %f, %f\n", param_->sensor_gain.r45_3.a, param_->sensor_gain.r45_3.b);
-  printf("sensor_gain.r90: %f, %f\n", param_->sensor_gain.r90.a, param_->sensor_gain.r90.b);
+  printf("sensor_gain.l90: %f, %f\n", param_->sensor_gain.l90.a,
+         param_->sensor_gain.l90.b);
+  printf("sensor_gain.l45_3: %f, %f\n", param_->sensor_gain.l45_3.a,
+         param_->sensor_gain.l45_3.b);
+  printf("sensor_gain.l45_2: %f, %f\n", param_->sensor_gain.l45_2.a,
+         param_->sensor_gain.l45_2.b);
+  printf("sensor_gain.l45: %f, %f\n", param_->sensor_gain.l45.a,
+         param_->sensor_gain.l45.b);
+  printf("sensor_gain.r45: %f, %f\n", param_->sensor_gain.r45.a,
+         param_->sensor_gain.r45.b);
+  printf("sensor_gain.r45_2: %f, %f\n", param_->sensor_gain.r45_2.a,
+         param_->sensor_gain.r45_2.b);
+  printf("sensor_gain.r45_3: %f, %f\n", param_->sensor_gain.r45_3.a,
+         param_->sensor_gain.r45_3.b);
+  printf("sensor_gain.r90: %f, %f\n", param_->sensor_gain.r90.a,
+         param_->sensor_gain.r90.b);
+}
 
+// シリアルコマンド "DUMP" で呼ばれる。
+// param_ / sys_ の全フィールドを JSON で stdout に出力する。
+// USB CDC バッファ溢れ防止のため 256 バイトごとにスリープを挟む。
+void MainTask::dump_all_params() {
+  if (!s_instance)
+    return;
 
+  auto dump_json = [](const char *label, const auto &obj) {
+    printf("=== DUMP:%s ===\n", label);
+    fflush(stdout);
+
+    JsonDocument doc;
+    doc.set(obj);
+
+    // measureJson で必要サイズを確認してからバッファ確保
+    size_t need = measureJson(doc) + 1;
+    char *buf = static_cast<char *>(malloc(need));
+    if (!buf) {
+      printf("ERR:no memory\n");
+      fflush(stdout);
+      return;
+    }
+    serializeJson(doc, buf, need);
+
+    // 256 バイトずつ送信して USB CDC バッファ溢れを防ぐ
+    size_t sent = 0;
+    while (sent < need - 1) {
+      size_t chunk = (need - 1 - sent) < 256 ? (need - 1 - sent) : 256;
+      fwrite(buf + sent, 1, chunk, stdout);
+      fflush(stdout);
+      sleep_ms(10);
+      sent += chunk;
+    }
+    printf("\n");
+    fflush(stdout);
+    free(buf);
+  };
+
+  dump_json("param", *s_instance->param_);
+  dump_json("sys", s_instance->sys_);
 }

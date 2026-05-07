@@ -20,6 +20,10 @@ public:
     // Core0 のメインループとして呼ぶ (ブロッキング)。
     static void start();
 
+    // param_ / sys_ の全フィールドを JSON でシリアルに出力する。
+    // シリアルコマンド "DUMP\n" から呼ばれる。
+    static void dump_all_params();
+
 private:
     MainTask() = default;
     void run();
