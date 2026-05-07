@@ -49,4 +49,20 @@ private:
     void print_hardware_params();
     void print_offset_params();
     void print_sensor_params();
+
+    // ─── モード dispatch ──────────────────────────────────────────────────────
+    // user_mode==0: 本走行モード / user_mode!=0: テストモード番号に応じて分岐
+    void run_main_mode();
+    void run_test_mode(int mode);
+
+    // ─── 本走行サブモード選択 ─────────────────────────────────────────────────
+    // 短押し: 次のモードへ(LED 2進表示更新) / 長押し(>=1秒): 決定
+    // Astraea の select_mode()+encoder_operation() に相当。
+    int select_run_mode(int max_mode);
+
+    // ─── 個別モード ───────────────────────────────────────────────────────────
+    void mode_sensor_monitor(); // センサーモニター / mode 1 (dump1/dump2 相当)
+    void mode_suction_test();   // 吸引 PWM テスト  / mode 5 (Astraea mode 11 相当)
+    void mode_straight_test();  // 直進テスト        / mode 2 (test_run 相当)
+    void mode_pivot_test();     // 旋回テスト        / mode 3 (test_turn 相当)
 };

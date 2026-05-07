@@ -72,6 +72,7 @@ add_executable(ExiaIgnis
     src/action/wall_off_controller.cpp
     src/action/trajectory_creator.cpp
     src/main/main_task.cpp
+    src/main/main_task_modes.cpp
     src/logging/logging_task.cpp
     src/ui.cpp
     src/driver/asm330lhh.cpp
