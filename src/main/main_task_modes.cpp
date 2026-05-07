@@ -73,27 +73,27 @@ static void wait_button(UserInterface &ui) {
 // 短押し: 次のモードへ / 長押し(>=1秒): 決定
 // ============================================================
 int MainTask::select_run_mode(int max_mode) {
-  int mode = 0;
-  show_mode_led(ui_, mode);
+  int mode_num = 0;
+  lbit.byte = 0;
 
-  while (true) {
-    if (!gpio_get(BTN_PIN)) {
-      absolute_time_t press_t = get_absolute_time();
-      while (!gpio_get(BTN_PIN))
-        tight_loop_contents();
-      int64_t held_ms =
-          absolute_time_diff_us(press_t, get_absolute_time()) / 1000;
-
-      if (held_ms >= 1000) {
-        ui_.coin(100);
-        return mode;
-      } else {
-        mode = (mode + 1) % max_mode;
-        show_mode_led(ui_, mode);
-      }
+  char max_mode_idx = 2 + exec_param_list.size() + 4;
+  while (1) {
+    int res = ui_.encoder_operation();
+    mode_num += res;
+    if (mode_num == -1) {
+      mode_num = max_mode_idx - 1;
+    } else if (mode_num == max_mode_idx) {
+      mode_num = 0;
     }
-    sleep_ms(10);
+    lbit.byte = mode_num + 1;
+    ui_.LED_bit(lbit.b0, lbit.b1, lbit.b2, lbit.b3, lbit.b4, lbit.b5);
+    if (ui_.button_state_hold()) {
+      ui_.coin(100);
+      break;
+    }
+    // vTaskDelay(xDelay1);
   }
+  return mode_num;
 }
 
 // ============================================================
@@ -221,7 +221,9 @@ void MainTask::test_back() {}
 
 void MainTask::keep_pivot() {}
 
-void MainTask::dump1() {}
+void MainTask::dump1() {
+  
+}
 
 void MainTask::dump2() {}
 

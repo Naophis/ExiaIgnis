@@ -43,8 +43,11 @@ private:
   std::shared_ptr<LoggingTask> lt_;
   UserInterface ui_;
 
+  std::vector<exec_pram_t> exec_param_list;
+
   std::shared_ptr<input_param_t> param_;
   system_t sys_{};
+  LED_bit lbit;
 
   void print_system_params();
   void print_hardware_params();

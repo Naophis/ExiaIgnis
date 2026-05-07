@@ -165,7 +165,7 @@ void MainTask::run() {
 
   const auto se = get_sensing_entity();
 
-  ui_.init(pwm_slice, pwm_channel);
+  ui_.init(pwm_slice, pwm_channel, se);
   ui_.LED_headlight();
   // ui_.hello_exia();
   ui_.coin(60);

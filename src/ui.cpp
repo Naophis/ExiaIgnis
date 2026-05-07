@@ -8,9 +8,11 @@
 // ============================================================
 // 初期化
 // ============================================================
-void UserInterface::init(uint pwm_slice, uint pwm_channel) {
+void UserInterface::init(uint pwm_slice, uint pwm_channel,
+                         std::shared_ptr<sensing_result_entity_t> sensing_result) {
     pwm_slice_   = pwm_slice;
     pwm_channel_ = pwm_channel;
+    this->sensing_result = sensing_result;
 
     // I2C1: 400kHz, GPIO19=SCL / GPIO22=SDA
     i2c_init(I2C1_PORT, 400 * 1000);
@@ -153,4 +155,17 @@ void UserInterface::hello_exia() {
 void UserInterface::error() {
     const int t = 120;
     for (int i = 0; i < 4; ++i) music_sync(MUSIC::C4_, t);
+}
+
+int UserInterface::encoder_operation() {
+  float v_r = sensing_result->ego.v_r;
+  if (v_r > ENC_OPE_V_R_TH) {
+    music_sync(MUSIC::G6_, 75);
+    return 1;
+  }
+  if (v_r < -ENC_OPE_V_R_TH) {
+    music_sync(MUSIC::C6_, 75);
+    return -1;
+  }
+  return 0;
 }
