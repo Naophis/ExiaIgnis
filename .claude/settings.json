@@ -4,7 +4,10 @@
       "Bash(chmod +x /home/naoto/Desktop/mouse/ExiaIgnis/serial_watch.sh)",
       "Bash(python3 -c ' *)",
       "Bash(find ~/.pico-sdk -name \"stdio_usb.c\" 2>/dev/null | head -5; find /usr -name \"stdio_usb.c\" 2>/dev/null | head -5)",
-      "Read(//usr/**)"
+      "Read(//usr/**)",
+      "Bash(touch src/sensing_task.cpp)",
+      "Bash(ninja -C build -v)",
+      "Bash(arm-none-eabi-g++ -dM -E src/sensing_task.cpp -Iinclude -Ibuild/_deps/cjson-src -Ibuild/pioasm/tmp/PioasmBuild-src/src)"
     ]
   }
 }

@@ -21,14 +21,6 @@ public:
                       std::shared_ptr<sensing_result_entity_t> sensing_result,
                       std::shared_ptr<input_param_t> param);
 
-  void calc_sensor_dist_all(std::shared_ptr<motion_tgt_val_t> tgt_val);
-
-  void calc_sensor_dist_diff(std::shared_ptr<motion_tgt_val_t> tgt_val);
-
-  float calc_sensor(float data, float a, float b);
-
-  std::vector<float> log_table;
-
   // 以下は公開状態 (PlanningTask の公開メンバーから移動)
   KalmanFilter kf_w, kf_w2;
   KalmanFilter kf_v, kf_v_r, kf_v_l;

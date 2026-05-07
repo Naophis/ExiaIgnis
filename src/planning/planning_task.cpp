@@ -61,6 +61,7 @@ void PlanningTask::set_input_param_entity(
 void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
   motor_.init();
+  sensor_.init(sensing_result, param);
   ctl_.init(&motor_, &sensor_, &trj_, &ego);
   ego.init(sensing_result, param);
 }
@@ -150,20 +151,20 @@ void PlanningTask::tick(uint32_t dt_us) {
     return;
 
   // 吸引テストモード: ControlLaw/Trajectory を完全バイパスして直接 PWM 出力
-  float test_duty = suction_test_duty_;
-  if (test_duty > 0.0f) {
-    motor_.apply(0.0f, 0.0f, test_duty);
-    state.duty_suction = test_duty;
-    state.duty_l = 0.0f;
-    state.duty_r = 0.0f;
-    suction_test_was_on_ = true;
-    return;
-  }
-  if (suction_test_was_on_) {
-    motor_.apply(0.0f, 0.0f, 0.0f); // テストモード終了: 確実に停止
-    state.duty_suction = 0.0f;
-    suction_test_was_on_ = false;
-  }
+  // float test_duty = suction_test_duty_;
+  // if (test_duty > 0.0f) {
+  //   motor_.apply(0.0f, 0.0f, test_duty);
+  //   state.duty_suction = test_duty;
+  //   state.duty_l = 0.0f;
+  //   state.duty_r = 0.0f;
+  //   suction_test_was_on_ = true;
+  //   return;
+  // }
+  // if (suction_test_was_on_) {
+  //   motor_.apply(0.0f, 0.0f, 0.0f); // テストモード終了: 確実に停止
+  //   state.duty_suction = 0.0f;
+  //   suction_test_was_on_ = false;
+  // }
 
   // --- コマンド受け取り (Core1 からの cross-core 書き込みを安全に読む) ---
   if (cmd_pending_) {
@@ -184,18 +185,18 @@ void PlanningTask::tick(uint32_t dt_us) {
   SensingTask::Data d = sensing_->data;
 
   // --- 初回 tick: エンコーダ初期値を記録してスキップ ---
-  if (first_tick_) {
-    enc_r_prev_ = d.enc_r;
-    enc_l_prev_ = d.enc_l;
-    first_tick_ = false;
-    return;
-  }
+  // if (first_tick_) {
+  //   enc_r_prev_ = d.enc_r;
+  //   enc_l_prev_ = d.enc_l;
+  //   first_tick_ = false;
+  //   return;
+  // }
 
   float dt = dt_us * 1e-6f;
 
   {
     ego.update(tgt_val, motor_en);                     // 30 usec
-    sensor_.calc_dist(tgt_val, sensing_result, param); // 15 ~ 20 usec
+    sensor_.calc_dist(tgt_val); // 15 ~ 20 usec
 
     if (trj_.first_req) {
       if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
@@ -328,11 +329,11 @@ float PlanningTask::adjust_b_to_target90(float data, float a) {
   int idx = static_cast<int>(data);
 
   // インデックス範囲チェック（※ここは index としての妥当性を見るのが自然）
-  if (idx < 0 || idx >= static_cast<int>(ego.log_table.size())) {
+  if (idx < 0 || idx >= static_cast<int>(sensor_.log_table.size())) {
     return NAN; // 計算不能
   }
 
-  float L = ego.log_table.at(idx);
+  float L = sensor_.log_table.at(idx);
   if (!isfinite(L) || L == 0.0f) {
     return NAN;
   }
@@ -346,11 +347,11 @@ float PlanningTask::adjust_b_to_target45(float data, float a) {
   int idx = static_cast<int>(data);
 
   // インデックス範囲チェック（※ここは index としての妥当性を見るのが自然）
-  if (idx < 0 || idx >= static_cast<int>(ego.log_table.size())) {
+  if (idx < 0 || idx >= static_cast<int>(sensor_.log_table.size())) {
     return NAN; // 計算不能
   }
 
-  float L = ego.log_table.at(idx);
+  float L = sensor_.log_table.at(idx);
   if (!isfinite(L) || L == 0.0f) {
     return NAN;
   }
