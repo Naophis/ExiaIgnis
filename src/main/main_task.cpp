@@ -90,27 +90,27 @@ void MainTask::run() {
   // ・ファイル受信後は即座にパラメータを再ロードする
   // ・ボタンを押して離したら (button_state_hold) ループを抜ける
   printf("[main] ready. send files or press button to start.\n");
-  static char rx_buf[16384];
   bool updated = false;
-
-  // MainTask::dump_all_params();
-
-  // print_system_params();
-  // print_hardware_params();
-  // print_offset_params();
-  // print_sensor_params();
-
-  while (true) {
-    if (ui_.button_state_hold()) {
-      ui_.coin(100);
-      break;
-    }
-    int rlen = usb_read_with_timeout(rx_buf, sizeof(rx_buf), 50);
-    if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
-      updated = true;
-      load_params();
-      printf("[main] params reloaded  mode=%d  maze=%d\n", sys_.user_mode,
-             sys_.maze_size);
+  {
+    constexpr size_t RX_BUF_SIZE = 16384;
+    char *rx_buf = static_cast<char *>(malloc(RX_BUF_SIZE));
+    if (!rx_buf) {
+      printf("[main] ERR: failed to allocate rx_buf\n");
+    } else {
+      while (true) {
+        if (ui_.button_state_hold()) {
+          ui_.coin(100);
+          break;
+        }
+        int rlen = usb_read_with_timeout(rx_buf, RX_BUF_SIZE, 50);
+        if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
+          updated = true;
+          load_params();
+          printf("[main] params reloaded  mode=%d  maze=%d\n", sys_.user_mode,
+                 sys_.maze_size);
+        }
+      }
+      free(rx_buf);
     }
   }
   if (updated)
