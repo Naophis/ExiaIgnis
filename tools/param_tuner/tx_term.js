@@ -15,7 +15,11 @@ function sendViaPython(localPath, remoteName) {
 
 const convert = (filename) => filename.split(".")[0];
 
-const callerFun = (mode) => {
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const callerFun = async (mode) => {
   while (true) {
     const files = fs.readdirSync(path.join(__dirname, `profile/${mode}/`));
     const list = ["system.yaml", "hardware.yaml"].concat(
@@ -42,12 +46,14 @@ const callerFun = (mode) => {
         if (file.match(/.yaml$/)) {
           const remoteName = file.replace("yaml", mode);
           sendViaPython(path.join(__dirname, `profile/${mode}/${file}`), remoteName);
+          await sleep(250);
           console.log(`${file}, ${remoteName}: finish!!`);
         }
       }
       for (const file of ["system.yaml", "hardware.yaml"]) {
         const remoteName = file.replace("yaml", "txt");
         sendViaPython(path.join(__dirname, "profile", file), remoteName);
+        await sleep(250);
         console.log(`${file}, ${remoteName}: finish!!`);
       }
     } else {
@@ -64,6 +70,7 @@ const callerFun = (mode) => {
         const file = list[idx];
         const remoteName = file.replace("yaml", "txt");
         sendViaPython(path.join(__dirname, "profile", file), remoteName);
+        await sleep(800);
         console.log(`${file}, ${remoteName}: finish!!`);
       } else {
         const file = list[idx];
@@ -87,11 +94,13 @@ const callerFun = (mode) => {
           fs.writeFileSync(tmpFile, maze_list.join(","));
           sendViaPython(tmpFile, "maze.txt");
           fs.unlinkSync(tmpFile);
+          await sleep(800);
           console.log(`maze.txt: finish!!`);
         } else if (file.match(/.yaml$/)) {
           const remoteName = file.replace("yaml", mode);
           console.log(remoteName);
           sendViaPython(filePath, remoteName);
+          await sleep(600);
           console.log(`${file}, ${remoteName}: finish!!`);
         }
       }
