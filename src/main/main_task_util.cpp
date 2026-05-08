@@ -262,3 +262,8 @@ void MainTask::load_straight(
     }
   }
 }
+
+void MainTask::reset_tgt_data() { mp->reset_tgt_data(); }
+
+void MainTask::reset_ego_data() { mp->reset_ego_data(); }
+

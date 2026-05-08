@@ -22,6 +22,7 @@ MainTask::create(std::shared_ptr<SensingTask> sensing,
   s_instance->sensing_ = sensing;
   s_instance->planning_ = planning;
   s_instance->param_ = param;
+  s_instance->mp = std::make_shared<MotionPlanning>();
   return s_instance;
 }
 
@@ -32,7 +33,7 @@ std::shared_ptr<sensing_result_entity_t> MainTask::get_sensing_entity() {
 }
 
 // ─── USB シリアル通信 (main_task_usb.cpp) ────────────────────────────────
-int  usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms);
+int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms);
 bool rx_usb_cmd(char *buf, int len);
 
 bool MainTask::load_params() {
@@ -53,6 +54,9 @@ void MainTask::run() {
   pwm_set_enabled(pwm_slice, false);
 
   const auto se = get_sensing_entity();
+
+  reset_tgt_data();
+  reset_ego_data();
 
   ui_.init(pwm_slice, pwm_channel, se);
   ui_.LED_headlight();
@@ -80,9 +84,8 @@ void MainTask::run() {
   {
     uint32_t used, total;
     ConfigLoader::storage_info(used, total);
-    printf("[main] storage: %u / %u KB used (%u KB free, %u%%)\n",
-           used / 1024, total / 1024, (total - used) / 1024,
-           used * 100 / total);
+    printf("[main] storage: %u / %u KB used (%u KB free, %u%%)\n", used / 1024,
+           total / 1024, (total - used) / 1024, used * 100 / total);
   }
 
   // ─── ボタン待機ループ ────────────────────────────────────────────────────
