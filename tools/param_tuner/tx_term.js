@@ -46,14 +46,14 @@ const callerFun = async (mode) => {
         if (file.match(/.yaml$/)) {
           const remoteName = file.replace("yaml", mode);
           sendViaPython(path.join(__dirname, `profile/${mode}/${file}`), remoteName);
-          await sleep(250);
+          await sleep(350);
           console.log(`${file}, ${remoteName}: finish!!`);
         }
       }
       for (const file of ["system.yaml", "hardware.yaml"]) {
         const remoteName = file.replace("yaml", "txt");
         sendViaPython(path.join(__dirname, "profile", file), remoteName);
-        await sleep(250);
+        await sleep(350);
         console.log(`${file}, ${remoteName}: finish!!`);
       }
     } else {
@@ -70,7 +70,7 @@ const callerFun = async (mode) => {
         const file = list[idx];
         const remoteName = file.replace("yaml", "txt");
         sendViaPython(path.join(__dirname, "profile", file), remoteName);
-        await sleep(800);
+        await sleep(350);
         console.log(`${file}, ${remoteName}: finish!!`);
       } else {
         const file = list[idx];

@@ -34,7 +34,7 @@ except ImportError:
 
 TIMEOUT_SEC = 10
 PICO_VID    = 0x2E8A  # Raspberry Pi
-COMMANDS    = {"write", "read", "list", "delete"}
+COMMANDS    = {"write", "read", "list", "delete", "deleteall"}
 
 
 def find_pico_port() -> str | None:
@@ -153,6 +153,17 @@ def cmd_delete(ser: serial.Serial, remote_name: str) -> None:
         sys.exit(1)
 
 
+def cmd_deleteall(ser: serial.Serial) -> None:
+    ser.write(b"DELETEALL\n")
+    ser.flush()
+    response = readline_skip_sensor(ser)
+    if response == "OK":
+        print("OK: 全ファイルを消去しました")
+    else:
+        print(f"失敗: {response}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -199,6 +210,9 @@ def main() -> None:
                 print("Usage: delete <remote_name>", file=sys.stderr)
                 sys.exit(1)
             cmd_delete(ser, args[1])
+
+        elif command == "deleteall":
+            cmd_deleteall(ser)
 
         else:
             print(f"不明なコマンド: {command}")

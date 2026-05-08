@@ -248,6 +248,21 @@ bool ConfigLoader::delete_file(const char* path) {
     return lfs_remove(&lfs, path) == LFS_ERR_OK;
 }
 
+bool ConfigLoader::format_all() {
+    lfs_unmount(&lfs);
+    printf("[config] formatting LittleFS...\n");
+    if (lfs_format(&lfs, &lfs_cfg) < 0) {
+        printf("[config] format failed\n");
+        return false;
+    }
+    if (lfs_mount(&lfs, &lfs_cfg) != 0) {
+        printf("[config] remount failed\n");
+        return false;
+    }
+    printf("[config] format OK\n");
+    return true;
+}
+
 void ConfigLoader::list_files(void (*cb)(void* ctx, const char* name, int32_t size),
                                void* ctx) {
     lfs_dir_t dir;

@@ -71,6 +71,9 @@ public:
     // ファイルを削除する
     static bool delete_file(const char* path);
 
+    // LittleFS を再フォーマットして全ファイルを消去し、マウントし直す
+    static bool format_all();
+
     // ルートディレクトリのファイル一覧を列挙する
     // cb(ctx, name, size) がファイルごとに呼ばれる
     static void list_files(void (*cb)(void* ctx, const char* name, int32_t size),

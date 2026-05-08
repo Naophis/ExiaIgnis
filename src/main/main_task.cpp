@@ -95,6 +95,15 @@ static bool rx_usb_cmd(char *buf, int len) {
     return false;
   }
 
+  // ── DELETEALL ─────────────────────────────────────────────────────────
+  if (strcmp(buf, "DELETEALL") == 0) {
+    printf("OK\n");
+    fflush(stdout);
+    sleep_ms(80);
+    ConfigLoader::format_all();
+    return false;
+  }
+
   // ── DELETE:name ───────────────────────────────────────────────────────
   if (strncmp(buf, "DELETE:", 7) == 0) {
     char path[68];
@@ -149,10 +158,10 @@ static bool rx_usb_cmd(char *buf, int len) {
 bool MainTask::load_params() {
   bool any = false;
   // 各ファイルが存在しない場合は警告を出してスキップ (初回未転送でも動作継続)
-  any |= ConfigLoader::load_as("/hardware.json", *param_);
-  any |= ConfigLoader::load_as("/sensor.json", *param_);
-  any |= ConfigLoader::load_as("/offset.json", *param_);
-  any |= ConfigLoader::load_as("/system.json", sys_);
+  any |= ConfigLoader::load_as("/hardware.txt", *param_);
+  any |= ConfigLoader::load_as("/sensor.hf", *param_);
+  any |= ConfigLoader::load_as("/offset.hf", *param_);
+  any |= ConfigLoader::load_as("/system.txt", sys_);
   return any;
 }
 
@@ -180,6 +189,14 @@ void MainTask::run() {
   } else {
     printf("[main] no param files found, using defaults.\n");
   }
+
+  // ─── LittleFS ファイル一覧 ───────────────────────────────────────────────
+  printf("[main] LittleFS files:\n");
+  ConfigLoader::list_files(
+      [](void *, const char *name, int32_t size) {
+        printf("  %-32s %d bytes\n", name, (int)size);
+      },
+      nullptr);
 
   // ─── ボタン待機ループ ────────────────────────────────────────────────────
   // ・"filename@json_content\n" 形式でファイルを受信・保存する
