@@ -115,6 +115,49 @@ static bool rx_usb_cmd(char *buf, int len) {
     return false;
   }
 
+  // ── SHOW:name ─────────────────────────────────────────────────────────
+  if (strncmp(buf, "SHOW:", 5) == 0) {
+    char path[68];
+    path[0] = '/';
+    strncpy(path + 1, buf + 5, sizeof(path) - 2);
+    path[sizeof(path) - 1] = '\0';
+
+    int32_t fsize = ConfigLoader::file_size(path);
+    if (fsize < 0) {
+      printf("ERR:not found\n");
+      fflush(stdout);
+      return false;
+    }
+
+    uint8_t *fbuf = (uint8_t *)malloc((size_t)fsize + 1);
+    if (!fbuf) {
+      printf("ERR:no memory\n");
+      fflush(stdout);
+      return false;
+    }
+
+    size_t out_size = 0;
+    if (ConfigLoader::read_file_raw(path, fbuf, (size_t)fsize, out_size)) {
+      fbuf[out_size] = '\0';
+      printf("=== %s (%u bytes) ===\n", path, (unsigned)out_size);
+      fflush(stdout);
+      // USB CDC バッファ溢れ防止のため 256 バイトずつ出力
+      for (size_t i = 0; i < out_size; i += 256) {
+        size_t chunk = (out_size - i) < 256 ? (out_size - i) : 256;
+        fwrite(fbuf + i, 1, chunk, stdout);
+        fflush(stdout);
+        sleep_ms(10);
+      }
+      printf("\n===\n");
+      fflush(stdout);
+    } else {
+      printf("ERR:read failed\n");
+      fflush(stdout);
+    }
+    free(fbuf);
+    return false;
+  }
+
   // ── READ:name ─────────────────────────────────────────────────────────
   if (strncmp(buf, "READ:", 5) == 0) {
     char path[68];

@@ -1,21 +1,38 @@
 #!/usr/bin/env python3
 """
-Pico へ USB CDC 経由でファイルを送受信するスクリプト。
+Pico へ USB CDC 経由でファイルを操作するスクリプト。
 
 使い方:
-  python send_file.py [<port>] write <ローカルファイル> [<Pico上のファイル名>]
-  python send_file.py [<port>] read  <Pico上のファイル名> [<保存先ファイル名>]
-  python send_file.py [<port>] list
-  python send_file.py [<port>] delete <Pico上のファイル名>
+  python send_file.py [<port>] <command> [args...]
 
 ポートを省略すると Raspberry Pi Pico (VID=0x2E8A) を自動検出します。
 
-例:
-  python send_file.py write hardware.yaml        # ポート自動検出
-  python send_file.py /dev/ttyACM1 list          # ポート指定
+コマンド一覧:
+  write <ローカルファイル> [<Pico上のファイル名>]
+      YAML/JSON をマイコンへ転送して LittleFS に書き込む。
+      ファイル名省略時は拡張子を .json に変換した名前を使用。
+      例: python send_file.py write hardware.yaml
+          python send_file.py write profiles.yaml profiles.hf
 
-プロトコル (write):
-  "filename@minified_json\\n" を送信し "OK\\n" を受信する。
+  read <Pico上のファイル名> [<保存先ファイル名>]
+      LittleFS のファイルをローカルに保存する。
+      例: python send_file.py read hardware.json
+
+  show <Pico上のファイル名>
+      LittleFS のファイル内容をターミナルに表示する (保存なし)。
+      例: python send_file.py show hardware.json
+
+  list
+      LittleFS に保存されているファイルの一覧を表示する。
+      例: python send_file.py list
+
+  delete <Pico上のファイル名>
+      指定したファイルを LittleFS から削除する。
+      例: python send_file.py delete hardware.json
+
+  deleteall
+      LittleFS を再フォーマットして全ファイルを消去する。
+      例: python send_file.py deleteall
 """
 
 import json
@@ -34,7 +51,7 @@ except ImportError:
 
 TIMEOUT_SEC = 10
 PICO_VID    = 0x2E8A  # Raspberry Pi
-COMMANDS    = {"write", "read", "list", "delete", "deleteall"}
+COMMANDS    = {"write", "read", "list", "delete", "deleteall", "show"}
 
 
 def find_pico_port() -> str | None:
@@ -153,6 +170,29 @@ def cmd_delete(ser: serial.Serial, remote_name: str) -> None:
         sys.exit(1)
 
 
+def cmd_show(ser: serial.Serial, remote_name: str) -> None:
+    ser.write(f"READ:{remote_name}\n".encode())
+    ser.flush()
+    size_line = readline_skip_sensor(ser)
+    if size_line.startswith("ERR"):
+        print(f"失敗: {size_line}", file=sys.stderr)
+        sys.exit(1)
+    size = int(size_line)
+    data = ser.read(size)
+    if len(data) != size:
+        print(f"失敗: データ受信不完全 ({len(data)}/{size} バイト)", file=sys.stderr)
+        sys.exit(1)
+    ok = readline_skip_sensor(ser)
+    if ok != "OK":
+        print(f"失敗: {ok}", file=sys.stderr)
+        sys.exit(1)
+    text = data.decode("utf-8", errors="replace")
+    try:
+        print(json.dumps(json.loads(text), indent=2, ensure_ascii=False))
+    except json.JSONDecodeError:
+        print(text)
+
+
 def cmd_deleteall(ser: serial.Serial) -> None:
     ser.write(b"DELETEALL\n")
     ser.flush()
@@ -211,11 +251,17 @@ def main() -> None:
                 sys.exit(1)
             cmd_delete(ser, args[1])
 
+        elif command == "show":
+            if len(args) < 2:
+                print("Usage: show <remote_name>", file=sys.stderr)
+                sys.exit(1)
+            cmd_show(ser, args[1])
+
         elif command == "deleteall":
             cmd_deleteall(ser)
 
         else:
-            print(f"不明なコマンド: {command}")
+            print(f"不明なコマンド: {command}\n", file=sys.stderr)
             print(__doc__)
             sys.exit(1)
 
