@@ -72,6 +72,7 @@ add_executable(ExiaIgnis
     src/action/wall_off_controller.cpp
     src/action/trajectory_creator.cpp
     src/main/main_task.cpp
+    src/main/main_task_usb.cpp
     src/main/main_task_util.cpp
     src/main/main_task_run.cpp
     src/main/main_task_test.cpp
