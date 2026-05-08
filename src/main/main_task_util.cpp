@@ -267,3 +267,35 @@ void MainTask::reset_tgt_data() { mp->reset_tgt_data(); }
 
 void MainTask::reset_ego_data() { mp->reset_ego_data(); }
 
+// ─── コンポーネント間配線 ─────────────────────────────────────────────────────
+// params ロード後・mode 実行前に呼ぶ。
+// shared_ptr に格納済みの各コンポーネントに依存オブジェクトを注入する。
+void MainTask::setup_components() {
+  auto sensing_entity = sensing_->get_sensing_entity();
+
+  // UserInterface は値メンバーのため no-op deleter で shared_ptr 化
+  auto ui_ptr = std::shared_ptr<UserInterface>(&ui_, [](UserInterface *) {});
+
+  // MotionPlanning
+  mp->set_tgt_val(tgt_val_);
+  mp->set_sensing_entity(sensing_entity);
+  mp->set_input_param_entity(param_);
+  mp->set_userinterface(ui_ptr);
+  mp->set_planning_task(planning_);
+  mp->set_logging_task(lt_);
+
+  // MazeSolverBaseLgc: maze_size と max_step_val で初期化
+  const int msize = (sys_.maze_size > 0) ? sys_.maze_size : 16;
+  lgc->init(msize, msize * msize - 1);
+  lgc->set_goal_pos(sys_.goals);
+
+  // SearchController
+  search_ctrl->set_lgc(lgc);
+  search_ctrl->set_motion_plannning(mp);
+  search_ctrl->set_planning_task(planning_);
+  search_ctrl->set_sensing_entity(sensing_entity);
+  search_ctrl->set_logging_task(lt_);
+  search_ctrl->set_userinterface(ui_ptr);
+  search_ctrl->set_input_param_entity(param_);
+}
+

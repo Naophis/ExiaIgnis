@@ -2,10 +2,10 @@
 #define SEARCH_CONTROLLER_HPP
 
 #include "defines.hpp"
-#include "include/adachi.hpp"
-#include "include/logging_task.hpp"
+#include "adachi.hpp"
+#include "logging/logging_task.hpp"
 #include "action/motion_planning.hpp"
-#include "include/planning_task.hpp"
+#include "planning/planning_task.hpp"
 
 class SearchController {
 public:

@@ -96,6 +96,8 @@ public:
 
   EgoEstimator ego;
 
+  void set_search_mode(bool v) { search_mode = v; }
+
   void motor_enable() {} // TODO: モーター有効化
   void motor_disable() { // IDLE コマンドでモーター停止
     Command cmd;

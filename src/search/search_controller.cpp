@@ -1,4 +1,9 @@
-#include "include/search_controller.hpp"
+#include "search_controller.hpp"
+#include "pico/time.h"
+
+static const std::string maze_log_file("/maze.txt");
+static inline void mount() {}
+static inline void umount() {}
 
 SearchController::SearchController() {
   adachi = std::make_shared<Adachi>();
@@ -47,7 +52,7 @@ MotionResult SearchController::go_straight_wrapper(param_set_t &p_set,
                                                    StraightType st) {
   // param_straight_t p;
   p.v_max = p_set.str_map[st].v_max;
-  if (p.v_max + 10 < pt->mpc_next_ego.v) {
+  if (p.v_max + 10 < pt->state.v_est) {
     p.v_max = p_set.str_map[StraightType::FastRun].v_max;
   }
   p.v_end = p_set.str_map[st].v_max;
@@ -141,7 +146,7 @@ void SearchController::front_wall_ctrl() {
   // vTaskDelay(25.0 / portTICK_RATE_MS);
   pt->motor_enable();
   mp->front_ctrl(false);
-  vTaskDelay(5.0 / portTICK_RATE_MS);
+  sleep_ms(5);
   pt->motor_disable();
   mp->reset_tgt_data();
   mp->reset_ego_data();
@@ -231,13 +236,13 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
 
   if (adachi != nullptr) {
     if (adachi->goal_step && !saved) {
-      vTaskDelay(1.0 / portTICK_RATE_MS);
+      sleep_ms(1);
       save_maze_data();
-      vTaskDelay(1.0 / portTICK_RATE_MS);
+      sleep_ms(1);
       saved = true;
     }
   }
-  vTaskDelay(5.0 / portTICK_RATE_MS);
+  sleep_ms(5);
 
   mp->reset_tgt_data();
   mp->reset_ego_data();
@@ -258,15 +263,15 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     // pr.ang = m_PI / 2;
     pr.ang = param->pivot_angle_90;
     res = mp->pivot_turn(pr);
-    vTaskDelay(1.0 / portTICK_RATE_MS);
+    sleep_ms(1);
     front_ctrl = (sensing_result->ego.front_dist < param->search_front_ctrl_th);
     pt->motor_disable();
-    vTaskDelay(1.0 / portTICK_RATE_MS);
+    sleep_ms(1);
 
     if (front_ctrl2) {
       front_wall_ctrl();
     }
-    vTaskDelay(1.0 / portTICK_RATE_MS);
+    sleep_ms(1);
 
     // mp->reset_tgt_data();
     pt->motor_enable();
@@ -279,7 +284,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     pt->motor_disable();
     mp->reset_tgt_data();
     mp->reset_ego_data();
-    vTaskDelay(5.0 / portTICK_RATE_MS);
+    sleep_ms(5);
     mp->reset_tgt_data();
     mp->reset_ego_data();
     pt->motor_enable();
@@ -289,7 +294,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     pt->motor_disable();
     mp->reset_tgt_data();
     mp->reset_ego_data();
-    vTaskDelay(1.0 / portTICK_RATE_MS);
+    sleep_ms(1);
   } else {
     // pr.ang = m_PI;
     pr.ang = param->pivot_angle_180;
@@ -297,7 +302,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     pt->motor_disable();
     mp->reset_tgt_data();
     mp->reset_ego_data();
-    vTaskDelay(1.0 / portTICK_RATE_MS);
+    sleep_ms(1);
   }
 
   // if (res == MotionResult::ERROR)
@@ -305,7 +310,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
 
   if (back_enable) {
     // ui->coin(100);
-    vTaskDelay(5.0 / portTICK_RATE_MS);
+    sleep_ms(5);
     pt->motor_enable();
     mp->reset_tgt_data();
     mp->reset_ego_data();
@@ -320,11 +325,11 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     res = mp->go_straight(p);
     mp->reset_tgt_data();
     mp->reset_ego_data();
-    vTaskDelay(5.0 / portTICK_RATE_MS);
+    sleep_ms(5);
     pt->motor_disable();
-    vTaskDelay(5.0 / portTICK_RATE_MS);
+    sleep_ms(5);
   } else {
-    vTaskDelay(5.0 / portTICK_RATE_MS);
+    sleep_ms(5);
     pt->motor_enable();
     mp->reset_tgt_data();
     mp->reset_ego_data();
@@ -339,9 +344,9 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     res = mp->go_straight(p);
     mp->reset_tgt_data();
     mp->reset_ego_data();
-    vTaskDelay(5.0 / portTICK_RATE_MS);
+    sleep_ms(5);
     pt->motor_disable();
-    vTaskDelay(5.0 / portTICK_RATE_MS);
+    sleep_ms(5);
   }
 
   // mp->reset_gyro_ref();
@@ -351,7 +356,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     adachi->update();
   }
 
-  vTaskDelay(5.0 / portTICK_RATE_MS);
+  sleep_ms(5);
   mp->reset_tgt_data();
   mp->reset_ego_data();
   pt->motor_enable();
@@ -464,7 +469,7 @@ MotionResult SearchController::pivot90(param_set_t &p_set,
 
   if (adachi != nullptr) {
     adachi->update();
-    vTaskDelay(10.0 / portTICK_RATE_MS);
+    sleep_ms(10);
   }
 
   // mp->reset_tgt_data();
@@ -534,12 +539,12 @@ MotionResult SearchController::finish(param_set_t &p_set) {
 }
 
 SearchResult SearchController::exec(param_set_t &p_set, SearchMode sm) {
-  unsigned long long start_time = pt->global_msec_timer;
-  unsigned long long end_time = pt->global_msec_timer;
+  unsigned long long start_time = time_us_64() / 1000ULL;
+  unsigned long long end_time = start_time;
 
   adachi->lgc->reset_dist_map();
   mp->reset_gyro_ref_with_check();
-  pt->search_mode = true;
+  pt->set_search_mode(true);
   if (param->search_log_enable > 0)
     lt->start_slalom_log();
   reset();
@@ -683,7 +688,7 @@ SearchResult SearchController::exec(param_set_t &p_set, SearchMode sm) {
         }
       }
     }
-    end_time = pt->global_msec_timer;
+    end_time = time_us_64() / 1000ULL;
     if (ABS((end_time - start_time) / 1000) > param->seach_timer) {
       timeup = true;
       break;
@@ -702,11 +707,11 @@ SearchResult SearchController::exec(param_set_t &p_set, SearchMode sm) {
   }
   lt->save(slalom_log_file);
   mp->coin();
-  pt->search_mode = false;
+  pt->set_search_mode(false);
   while (1) {
     if (ui->button_state_hold())
       break;
-    vTaskDelay(10.0 / portTICK_RATE_MS);
+    sleep_ms(10);
   }
   if (param->search_log_enable > 0) {
     lt->dump_log(slalom_log_file);
@@ -732,7 +737,7 @@ MotionResult SearchController::straight_offset(param_set_t &p_set,
   pt->motor_disable();
   mp->reset_tgt_data();
   mp->reset_ego_data();
-  vTaskDelay(25.0 / portTICK_RATE_MS);
+  sleep_ms(25);
 
   pr.w_max = p_set.str_map[StraightType::Search].w_max;
   pr.alpha = p_set.str_map[StraightType::Search].alpha;
@@ -749,7 +754,7 @@ MotionResult SearchController::straight_offset(param_set_t &p_set,
   mp->reset_tgt_data();
   mp->reset_ego_data();
   front_wall_ctrl();
-  vTaskDelay(25.0 / portTICK_RATE_MS);
+  sleep_ms(25);
 
   pr.RorL =
       (td == TurnDirection::Right) ? TurnDirection::Left : TurnDirection::Right;

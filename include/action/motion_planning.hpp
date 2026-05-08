@@ -2,7 +2,7 @@
 #define MotionPlanning_HPP
 
 #include "pico/stdlib.h"
-#include "action/adachi.hpp"
+#include "search/adachi.hpp"
 #include "action/path_creator.hpp"
 #include "action/trajectory_creator.hpp"
 #include "action/wall_off_controller.hpp"

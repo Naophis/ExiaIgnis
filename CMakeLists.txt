@@ -93,9 +93,9 @@ add_executable(ExiaIgnis
     gen_code_simple_pid/simple_pid_controller_data.cpp
     gen_code_simple_pid/simple_pid_controller.cpp
 
-    search/adachi.cpp
-    search/logic.cpp
-    search/search_controller.cpp
+    src/search/adachi.cpp
+    src/search/logic.cpp
+    src/search/search_controller.cpp
 )
 
 pico_set_program_name(ExiaIgnis "ExiaIgnis")
@@ -118,6 +118,7 @@ target_link_libraries(ExiaIgnis
 target_include_directories(ExiaIgnis PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/include/search
         ${CMAKE_CURRENT_LIST_DIR}/gen_code_conv_single2half
         ${CMAKE_CURRENT_LIST_DIR}/gen_code_mpc
 )

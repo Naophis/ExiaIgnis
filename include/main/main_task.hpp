@@ -75,6 +75,7 @@ private:
                      std::unordered_map<StraightType, straight_param_t> &str_map);
 
   bool silent_load = false;
+  void setup_components();
   // 走行用関数
   std::shared_ptr<MotionPlanning> mp;
   std::shared_ptr<MazeSolverBaseLgc> lgc;

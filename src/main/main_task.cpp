@@ -23,6 +23,10 @@ MainTask::create(std::shared_ptr<SensingTask> sensing,
   s_instance->planning_ = planning;
   s_instance->param_ = param;
   s_instance->mp = std::make_shared<MotionPlanning>();
+  s_instance->lgc = std::make_shared<MazeSolverBaseLgc>();
+  s_instance->pc = std::make_shared<PathCreator>();
+  s_instance->search_ctrl = std::make_shared<SearchController>();
+  s_instance->mp->set_path_creator(s_instance->pc);
   return s_instance;
 }
 
@@ -124,6 +128,7 @@ void MainTask::run() {
   sleep_ms(500);
 
   printf("[main] user_mode=%d\n", sys_.user_mode);
+  setup_components();
   if (sys_.user_mode != 0) {
     run_test_mode(sys_.user_mode);
   } else {
