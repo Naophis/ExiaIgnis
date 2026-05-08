@@ -105,7 +105,8 @@ void MainTask::run() {
         int rlen = usb_read_with_timeout(rx_buf, RX_BUF_SIZE, 50);
         if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
           updated = true;
-          load_params();
+          // load_params();
+          ui_.coin(40);
           printf("[main] params reloaded  mode=%d  maze=%d\n", sys_.user_mode,
                  sys_.maze_size);
         }
