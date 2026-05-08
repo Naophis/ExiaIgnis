@@ -79,6 +79,9 @@ public:
     static void list_files(void (*cb)(void* ctx, const char* name, int32_t size),
                            void* ctx);
 
+    // ストレージ使用量を返す (bytes)。used / total に書き込む。
+    static void storage_info(uint32_t &used, uint32_t &total);
+
 private:
     static JsonDocument doc_;
 

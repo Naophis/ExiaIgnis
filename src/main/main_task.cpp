@@ -70,13 +70,20 @@ void MainTask::run() {
     printf("[main] no param files found, using defaults.\n");
   }
 
-  // ─── LittleFS ファイル一覧 ───────────────────────────────────────────────
+  // ─── LittleFS ファイル一覧 + 残量 ──────────────────────────────────────
   printf("[main] LittleFS files:\n");
   ConfigLoader::list_files(
       [](void *, const char *name, int32_t size) {
         printf("  %-32s %d bytes\n", name, (int)size);
       },
       nullptr);
+  {
+    uint32_t used, total;
+    ConfigLoader::storage_info(used, total);
+    printf("[main] storage: %u / %u KB used (%u KB free, %u%%)\n",
+           used / 1024, total / 1024, (total - used) / 1024,
+           used * 100 / total);
+  }
 
   // ─── ボタン待機ループ ────────────────────────────────────────────────────
   // ・"filename@json_content\n" 形式でファイルを受信・保存する

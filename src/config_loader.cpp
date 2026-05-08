@@ -248,6 +248,14 @@ bool ConfigLoader::delete_file(const char* path) {
     return lfs_remove(&lfs, path) == LFS_ERR_OK;
 }
 
+void ConfigLoader::storage_info(uint32_t &used, uint32_t &total) {
+    total = (uint32_t)lfs_cfg.block_count * (uint32_t)lfs_cfg.block_size;
+    lfs_ssize_t used_blocks = lfs_fs_size(&lfs);
+    used = (used_blocks >= 0)
+               ? (uint32_t)used_blocks * (uint32_t)lfs_cfg.block_size
+               : 0;
+}
+
 bool ConfigLoader::format_all() {
     lfs_unmount(&lfs);
     printf("[config] formatting LittleFS...\n");
