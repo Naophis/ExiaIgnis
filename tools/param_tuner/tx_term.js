@@ -1,284 +1,107 @@
 var fs = require("fs");
-const yaml = require("js-yaml");
-const { SerialPort } = require("serialport");
-const { ReadlineParser } = require("@serialport/parser-readline");
-const { argv } = require("process");
-const { type } = require("os");
-let comport;
-let port;
+const { spawnSync } = require("child_process");
+const path = require("path");
+const os = require("os");
 
-let parser;
+const SEND_FILE_PY = path.join(__dirname, "../../send_file.py");
 
-function resolveAfter2Seconds(str) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(str);
-      // console.log(str); // 10
-    }, 500);
+function sendViaPython(localPath, remoteName) {
+  const result = spawnSync("python3", [SEND_FILE_PY, "write", localPath, remoteName], {
+    stdio: "inherit",
   });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`send_file.py exited with ${result.status}`);
 }
 
-async function f1(str) {
-  var x = await resolveAfter2Seconds(str);
-}
+const convert = (filename) => filename.split(".")[0];
 
-const callerFun = async (mode) => {
-  async function write(str, result) {
-    return new Promise((resolve) => {
-      port.write(`${str}`, function () {
-        resolve(result);
-      });
-    });
-  }
-
-  async function sleep2(delay, result) {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(result), delay);
-    });
-  }
-  const convert = (filename) => {
-    return filename.split(".")[0];
-  }
+const callerFun = (mode) => {
   while (true) {
-    const files = fs.readdirSync(__dirname + `/profile/${mode}/`);
-    var list = ["system.yaml", "hardware.yaml"].concat(files.filter((file) => {
-      return file.match(/.yaml$/) || file.match(/.maze$/);
-    }));
-    let col = 5;
-    for (var i = 0; list.length;) {
+    const files = fs.readdirSync(path.join(__dirname, `profile/${mode}/`));
+    const list = ["system.yaml", "hardware.yaml"].concat(
+      files.filter((f) => f.match(/.yaml$/) || f.match(/.maze$/))
+    );
+
+    const col = 5;
+    for (let i = 0; i < list.length; ) {
       let str = "";
-      if (list[i] === undefined) {
-        break
-      }
-      for (var j = 0; j < col; j++) {
-        if (list[i + j] === undefined) {
-          break;
-        }
+      for (let j = 0; j < col && list[i + j] !== undefined; j++) {
         str += `[${i + j}]: ${convert(list[i + j])}\t`;
       }
       i += col;
       console.log(str);
     }
     console.log(">");
-    var str = fs.readFileSync("/dev/stdin").toString().trim();
 
-    var idx = parseInt(str);
+    const str = fs.readFileSync("/dev/stdin").toString().trim();
+    const idx = parseInt(str);
+
     if (str === "all") {
-      console.log("all")
+      console.log("all");
       for (const file of files) {
         if (file.match(/.yaml$/)) {
-          let txt = fs.readFileSync(`${__dirname}/profile/${mode}/${file}`, {
-            encoding: "utf-8",
-          });
-          let file_name = "";
-          if (file.match(/.maze$/)) {
-            file_name = "maze.txt";
-            console.log(txt)
-          } else if (file.match(/.yaml$/)) {
-            file_name = file.replace("yaml", mode);
-          }
-          if (file === "maze.yaml") {
-            // var str = `${file_name}@${txt}`;
-            // write(str);
-            // await sleep2(800);
-            // console.log(`${file}: finish22!!`);
-          } else {
-            var saveData = yaml.load(txt);
-            // console.log(saveData)
-            var str = `${file_name}@${JSON.stringify(saveData)}`;
-            write(str);
-            // console.log(saveData)
-            await sleep2(800);
-            console.log(`${file}, ${file_name}: finish!!`);
-          }
+          const remoteName = file.replace("yaml", mode);
+          sendViaPython(path.join(__dirname, `profile/${mode}/${file}`), remoteName);
+          console.log(`${file}, ${remoteName}: finish!!`);
         }
       }
       for (const file of ["system.yaml", "hardware.yaml"]) {
-        let txt = fs.readFileSync(`${__dirname}/profile/${file}`, {
-          encoding: "utf-8",
-        });
-
-        let file_name = "";
-        if (file.match(/.maze$/)) {
-          file_name = "maze.txt";
-          console.log(txt)
-        } else if (file.match(/.yaml$/)) {
-          file_name = file.replace("yaml", "txt");
-        }
-
-        var saveData = yaml.load(txt);
-        // console.log(saveData)
-        var str = `${file_name}@${JSON.stringify(saveData)}`;
-        write(str);
-        await sleep2(800);
-        console.log(`${file}, ${file_name}: finish!!`);
+        const remoteName = file.replace("yaml", "txt");
+        sendViaPython(path.join(__dirname, "profile", file), remoteName);
+        console.log(`${file}, ${remoteName}: finish!!`);
       }
     } else {
-      if (idx > list.length) {
-        console.log("out of index");
-        continue;
-      }
-      if(typeof idx !== "number" || isNaN(idx)){
+      if (typeof idx !== "number" || isNaN(idx)) {
         console.log("invalid input");
         continue;
       }
+      if (idx >= list.length) {
+        console.log("out of index");
+        continue;
+      }
+
       if (idx === 0 || idx === 1) {
-        let file = "system.yaml";
-        if (idx === 1) {
-          file = "hardware.yaml";
-        }
-        let txt = fs.readFileSync(`${__dirname}/profile/${list[idx]}`, {
-          encoding: "utf-8",
-        });
-        var file_name = file.replace("yaml", "txt");
-        var saveData = yaml.load(txt);
-        // console.log(saveData)
-        var str = `${file_name}@${JSON.stringify(saveData)}`;
-        write(str);
-        await sleep2(800);
-        console.log(`${file}, ${file_name}: finish!!`);
+        const file = list[idx];
+        const remoteName = file.replace("yaml", "txt");
+        sendViaPython(path.join(__dirname, "profile", file), remoteName);
+        console.log(`${file}, ${remoteName}: finish!!`);
       } else {
-        let txt = fs.readFileSync(`${__dirname}/profile/${mode}/${list[idx]}`, {
-          encoding: "utf-8",
-        });
+        const file = list[idx];
+        const filePath = path.join(__dirname, `profile/${mode}/${file}`);
 
-        let file_name = "";
-        if (list[idx].match(/.maze$/)) {
-          file_name = `maze.${mode}`;
-        } else if (list[idx].match(/.yaml$/)) {
-          file_name = list[idx].replace("yaml", mode);
-        }
-
-        console.log(file_name)
-
-        if (file_name === "maze.hf") {
-          file_name = "maze.txt";
-          let maze_list = txt.split(",").map((e) => { return e.trim(); }).map((e) => { return (parseInt(e) | 0xf0); });
-          let size = 16;
-          if (maze_list.length > 300) {
-            size = 32;
-          }
+        if (file.match(/.maze$/)) {
+          const txt = fs.readFileSync(filePath, { encoding: "utf-8" });
+          let maze_list = txt
+            .split(",")
+            .map((e) => parseInt(e.trim()) | 0xf0);
+          const size = maze_list.length > 300 ? 32 : 16;
           for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
-              // skip excahnged point
-              if (x >= y) {
-                continue;
-              }
-              let idx = y * size + x;
-              let idx2 = x * size + y;
-              let tmp = maze_list[idx];
-              maze_list[idx] = maze_list[idx2];
-              maze_list[idx2] = tmp;
+              if (x >= y) continue;
+              const i1 = y * size + x;
+              const i2 = x * size + y;
+              [maze_list[i1], maze_list[i2]] = [maze_list[i2], maze_list[i1]];
             }
           }
-          // console.log(maze_list.join(","));
-          txt = maze_list.join(",");
-          var str = `${file_name}@${txt}`;
-          write(str);
-          // console.log(txt)
-          await sleep2(800);
-          console.log(`${file_name}: finish!!`);
-        } else {
-          var saveData = yaml.load(txt);
-          var str = `${file_name}@${JSON.stringify(saveData)}`;
-          write(str);
-          // console.log(saveData)
-          await sleep2(600);
-          console.log(`${list[idx]}, ${file_name}: finish!!`);
+          const tmpFile = path.join(os.tmpdir(), `maze_${Date.now()}.txt`);
+          fs.writeFileSync(tmpFile, maze_list.join(","));
+          sendViaPython(tmpFile, "maze.txt");
+          fs.unlinkSync(tmpFile);
+          console.log(`maze.txt: finish!!`);
+        } else if (file.match(/.yaml$/)) {
+          const remoteName = file.replace("yaml", mode);
+          console.log(remoteName);
+          sendViaPython(filePath, remoteName);
+          console.log(`${file}, ${remoteName}: finish!!`);
         }
       }
     }
   }
-};
-
-let ready = function (mode) {
-  port = new SerialPort(
-    {
-      path: comport,
-      baudRate: 3000000,
-      // baudRate: 115200,
-    },
-    (e) => {
-      if (e) {
-        console.log("comport access dinied");
-      } else {
-        console.log("connect");
-        callerFun(mode);
-      }
-    }
-  );
-  parser = port.pipe(new ReadlineParser({ delimiter: "\r\n" }));
-  function getNowYMD() {
-    var dt = new Date();
-    var y = dt.getFullYear();
-    var m = ("00" + (dt.getMonth() + 1)).slice(-2);
-    var d = ("00" + dt.getDate()).slice(-2);
-    var h = ("00" + dt.getHours()).slice(-2);
-    var M = ("00" + dt.getMinutes()).slice(-2);
-    var s = ("00" + dt.getSeconds()).slice(-2);
-    return `${y}${m}${d}_${h}${M}_${s}.csv`;
-  }
-  let obj = {
-    dump_to_csv: false,
-    file_name: getNowYMD(),
-    record: "",
-  };
-
-  parser.on("data", function (data) {
-    console.log(data);
-
-    if (data.match(/^end___/)) {
-      obj.dump_to_csv = false;
-
-      console.log(`${__dirname}/logs/${obj.file_name}`);
-
-      fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
-        flag: "w+",
-      });
-
-      fs.copyFileSync(
-        `${__dirname}/logs/${obj.file_name}`,
-        `${__dirname}/logs/latest.csv`
-      );
-    }
-    if (obj.dump_to_csv) {
-      obj.record += `${data}\n`;
-    }
-
-    if (data.match(/^start___/)) {
-      obj.dump_to_csv = true;
-      obj.file_name = getNowYMD();
-      obj.record = "";
-      console.log(obj);
-    }
-  });
 };
 
 const main = (argv) => {
-
-  const mode = argv.length > 2 ? argv[2] : "_hf";
-
-  SerialPort.list().then(
-    (ports) => {
-      for (let i in ports) {
-        const p = ports[i];
-        console.log(p.path, p.serialNumber);
-        if (
-          p.path.match(/usbserial/) ||
-          p.path.match(/COM/) ||
-          p.path.match(/ttyUSB/) ||
-          p.path.match(/ttyACM/)
-        ) {
-          if (p.serialNumber) {
-            comport = p.path;
-            console.log(`select: ${comport}`);
-            ready(mode);
-            break;
-          }
-        }
-      }
-    },
-    (err) => console.error(err)
-  );
+  const mode = argv.length > 2 ? argv[2] : "hf";
+  callerFun(mode);
 };
-main(argv);
+
+main(process.argv);

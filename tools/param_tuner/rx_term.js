@@ -1,30 +1,25 @@
 var fs = require("fs");
 const yaml = require("js-yaml");
-let SerialPort = require("serialport");
-const Readline = require("@serialport/parser-readline");
+const { decode } = require("punycode");
+const { SerialPort } = require("serialport");
+const { ReadlineParser } = require("@serialport/parser-readline");
+const { ByteLengthParser } = require("@serialport/parser-byte-length");
+const path = require("path");
 
 let comport;
 let port;
 
 let parser;
+let binaryMode = false;
 
-function resolveAfter2Seconds(str) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(str);
-      console.log(str); // 10
-    }, 500);
-  });
-}
 
-async function f1(str) {
-  var x = await resolveAfter2Seconds(str);
-}
 let ready = function () {
+  console.log(comport)
   port = new SerialPort(
-    comport,
     {
       baudRate: 3000000,
+      path: comport,
+      highWaterMark: 256 * 1024,  // 256KB buffer (default: 64KB)
       // baudRate: 115200,
     },
     (e) => {
@@ -35,57 +30,59 @@ let ready = function () {
       }
     }
   );
-  parser = port.pipe(
-    new Readline({
-      delimiter: "\r\n",
-    })
-  );
-  function getNowYMD() {
-    var dt = new Date();
-    var y = dt.getFullYear();
-    var m = ("00" + (dt.getMonth() + 1)).slice(-2);
-    var d = ("00" + dt.getDate()).slice(-2);
-    var h = ("00" + dt.getHours()).slice(-2);
-    var M = ("00" + dt.getMinutes()).slice(-2);
-    var s = ("00" + dt.getSeconds()).slice(-2);
-    return `${y}${m}${d}_${h}${M}_${s}.csv`;
-  }
-  function getNowYMD_maze() {
-    var dt = new Date();
-    var y = dt.getFullYear();
-    var m = ("00" + (dt.getMonth() + 1)).slice(-2);
-    var d = ("00" + dt.getDate()).slice(-2);
-    var h = ("00" + dt.getHours()).slice(-2);
-    var M = ("00" + dt.getMinutes()).slice(-2);
-    var s = ("00" + dt.getSeconds()).slice(-2);
-    return `${y}${m}${d}_${h}${M}_${s}.maze`;
-  }
+  // switchToBinaryMode(336);
+
   let obj = {
-    dump_to_csv: false,
+    dump_to_csv_ready: false,
     dump_to_map: false,
+    data_struct: [],
     file_name: getNowYMD(),
     record: "",
   };
 
+  switchLineMode(obj, parser);
+};
+
+const getNowYMD = () => {
+  var dt = new Date();
+  var y = dt.getFullYear();
+  var m = ("00" + (dt.getMonth() + 1)).slice(-2);
+  var d = ("00" + dt.getDate()).slice(-2);
+  var h = ("00" + dt.getHours()).slice(-2);
+  var M = ("00" + dt.getMinutes()).slice(-2);
+  var s = ("00" + dt.getSeconds()).slice(-2);
+  return `${y}${m}${d}_${h}${M}_${s}.csv`;
+}
+const getNowYMD_maze = () => {
+  var dt = new Date();
+  var y = dt.getFullYear();
+  var m = ("00" + (dt.getMonth() + 1)).slice(-2);
+  var d = ("00" + dt.getDate()).slice(-2);
+  var h = ("00" + dt.getHours()).slice(-2);
+  var M = ("00" + dt.getMinutes()).slice(-2);
+  var s = ("00" + dt.getSeconds()).slice(-2);
+  return `${y}${m}${d}_${h}${M}_${s}.maze`;
+}
+
+const switchLineMode = (obj) => {
+  port.unpipe(parser);
+  parser = port.pipe(new ReadlineParser({ delimiter: "\r\n" }));
   parser.on("data", function (data) {
     console.log(data);
-    if (obj.dump_to_csv) {
-      if (data.match(/^end___/)) {
-        obj.dump_to_csv = false;
-        console.log(`${__dirname}/logs/${obj.file_name}`);
-        fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
-          flag: "w+",
+    if (obj.dump_to_csv_ready) {
+      const d = data.split(":");
+      console.log(d);
+      if (d.length == 3) {
+        const name = d[0];
+        const type = d[1];
+        const size = parseInt(d[2]);
+        obj.data_struct.push({
+          name: name,
+          type: type,
+          size: size
         });
-        fs.copyFileSync(
-          `${__dirname}/logs/${obj.file_name}`,
-          `${__dirname}/logs/latest.csv`
-        );
       }
-      if (obj.dump_to_csv) {
-        obj.record += `${data}\n`;
-      }
-    }
-    if (obj.dump_to_map) {
+    } else if (obj.dump_to_map) {
       if (data.match(/^end___/)) {
         obj.dump_to_map = false;
         console.log(`${__dirname}/maze_logs/${obj.file_name}`);
@@ -118,12 +115,28 @@ let ready = function () {
       }
     }
 
-    if (data.match(/^start___/)) {
-      obj.dump_to_csv = true;
+    if (data.match(/^ready___/)) {
+      obj.dump_to_csv_ready = true;
       obj.file_name = getNowYMD();
       obj.record = "";
+      obj.data_struct = [];
+      obj.byte_size = parseInt(data.split(":")[1]);
+
       console.log(obj);
     }
+
+    if (data.match(/^start/)) {
+      obj.file_name = getNowYMD();
+      obj.record = "";
+
+      // デバッグ: 最初の20カラムの型定義を出力
+      console.log('First 20 columns:');
+      for (let i = 0; i < 20 && i < obj.data_struct.length; i++) {
+        console.log(`  [${i}] ${obj.data_struct[i].name}: ${obj.data_struct[i].type}`);
+      }
+      switchToBinaryMode(obj);
+    }
+
     if (data.match(/^map___/)) {
       obj.dump_to_map = true;
       obj.file_name = getNowYMD_maze();
@@ -131,7 +144,313 @@ let ready = function () {
       console.log(obj);
     }
   });
-};
+}
+
+let LOG_STRUCT_SIZE = 12; // 12 bytes per record
+
+const switchToBinaryMode = (obj) => {
+  let last_ang_sum = 0;
+  const dataSize = 48;//obj.byte_size
+  const dataSize2 = obj.data_struct.reduce((prev, cur) => {
+    return prev + cur.size;
+  }, 0);
+  console.log('size1: ', dataSize, 'bytes');
+  console.log('size2: ', dataSize2, 'bytes');
+  console.log('header count:', obj.data_struct.length, '(expected: 120)');
+
+  LOG_STRUCT_SIZE = dataSize2 / (4 * 12); // 4 * 12 bytes per struct
+
+  binaryMode = true;
+
+  // パイプラインをクリア
+  port.unpipe(parser);
+
+  // ByteLength パーサに切り替え
+  parser = port.pipe(new ByteLengthParser({ length: dataSize, highWaterMark: 256 * 1024 }));
+
+  const header = obj.data_struct.map((data) => {
+    return data.name
+  }).join(',');
+  obj.record += `${header}\n`;
+  console.log('header:', header);
+  let cnt = 0;
+  let record = [];
+  let finish = false;
+  let index = 0;
+  let last_index = 0;
+  let last_recived = new Date().getTime();
+  let now = new Date().getTime();
+  let force_save = false;
+
+  let last_idx = 0;
+
+  let interval = setInterval(() => {
+    console.log("force save");
+    if ((now - last_recived > 1000) || force_save) {
+      console.log('timeout');
+      fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
+        flag: "w+",
+      });
+      fs.copyFileSync(
+        `${__dirname}/logs/${obj.file_name}`,
+        `${__dirname}/logs/latest.csv`
+      );
+      finish = true;
+      // port.unpipe(parser);
+      clearInterval(interval);
+      switchLineMode({
+        dump_to_csv_ready: false,
+        dump_to_map: false,
+        data_struct: [],
+        file_name: getNowYMD(),
+        record: "",
+      });
+    }
+    now = new Date().getTime();
+  }, 1000);
+
+
+  parser.on('data', (binaryData) => {
+    let offset = 0;
+    cnt++;
+    index++;
+
+    // デバッグ: 最初の4バイト(index)を監視
+    if (cnt === 1) {
+      const rawIndex = binaryData.readInt32LE(0);
+      if (rawIndex < 0 || rawIndex > 100000) {
+        console.log(`[WARN] index=${index}, rawIndex=${rawIndex}, first8bytes=${binaryData.slice(0, 8).toString('hex')}`);
+        // 異常なindexを検出したらこのレコードをスキップ
+        cnt = 0;
+        record = [];
+        return;
+      }
+    }
+
+    let bind = false;
+    const start_idx = (cnt - 1) * 12;
+    const end_idx = start_idx + 12;
+
+    for (let i = start_idx; i < end_idx; i++) {
+
+      const data = obj.data_struct[i];
+      if (data === undefined) {
+        continue;
+      }
+      const tmp_data = offset;
+      switch (data.type) {
+        case 'float':
+          record.push(binaryData.readFloatLE(tmp_data));
+          offset += data.size;
+          bind = true;
+          break;
+        case 'int':
+          record.push(binaryData.readInt32LE(tmp_data));
+          offset += data.size;
+          bind = true;
+          break;
+        case 'short':
+          record.push(binaryData.readInt16LE(tmp_data));
+          offset += data.size;
+          bind = true;
+          break;
+        default:
+          throw new Error(`Unsupported data type: ${data.type}`);
+      }
+      if (data.name === 'index') {
+        const idx = parseInt(binaryData.readInt32LE(tmp_data));
+        console.log(last_idx, idx);
+        if (idx < last_idx) {
+          force_save = true;
+        }
+        last_idx = idx;
+      }
+    }
+    if (bind) {
+      last_recived = new Date().getTime();
+    }
+
+    if (cnt === LOG_STRUCT_SIZE) {
+      cnt = 0;
+      if (!finish) {
+        let valid = obj.data_struct.every((data, i) => {
+          let res = true;
+          // return true
+          if (record[i] < -100000 || record[i] > 100000)
+            res = false;
+          if (data.name === "index") {
+            if (record[i] < 0 || record[i] > 100000)
+              res = false;
+            if (Math.abs(record[0] - last_index) > 100)
+              res = false;
+          }
+          if (data.name.match(/_pid_/) !== null)
+            if (record[i] > 100000 || record[i] < -100000) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name.match(/ff_/) !== null)
+            if (record[i] > 100000 || record[i] < -100000) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name === "motion_state")
+            if (record[i] > 1000 || record[i] < -1000) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name === "timestamp")
+            if (record[i] > 10000 || record[i] < 0) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name === "duty_roll")
+            if (record[i] > 0.05 || record[i] < -0.05) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name === "duty_roll_before")
+            if (record[i] > 70 || record[i] < -70) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name === "x")
+            if (record[i] > 100000 || record[i] < -100000) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name === "y")
+            if (record[i] > 100000 || record[i] < -100000) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          if (data.name === "ang_kf_sum") {
+            if (record[i] > 1000 || record[i] < -1000) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+            if (Math.abs(Math.abs(record[i]) - last_ang_sum) > 40) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+            last_ang_sum = Math.abs(record[i]);
+          }
+          if (data.name === "pln_time_diff")
+            if (record[i] > 3000 || record[i] < 0) {
+              console.log(data.name, 'error:', record[i]);
+              res = false;
+            }
+          return res;
+          if (data.name === "battery")
+            if (record[i] > 15 || record[i] < 0)
+              res = false;
+          if (data.name === "alpha")
+            if (record[i] > 100000 || record[i] < -100000)
+              res = false;
+          if (data.name === "m_pid_i_v")
+            if (record[i] > 0.1 || record[i] < -0.1)
+              res = false;
+          if (data.name === "dist")
+            if (record[i] > 180 * 64 || record[i] < 0)
+              res = false;
+          if (data.name === "dideal_ang")
+            if (record[i] > 180 * 64 || record[i] < 0)
+              res = false;
+          if (data.name === "v_c")
+            if (record[i] > 10000 || record[i] < -10000)
+              res = false;
+          if (data.name === "right45_2_d")
+            if (record[i] > 200 || record[i] < -200)
+              res = false;
+          if (data.name === "right45_3_d")
+            if (record[i] > 200 || record[i] < -200)
+              res = false;
+          if (data.name === "left45_2_d")
+            if (record[i] > 200 || record[i] < -200)
+              res = false;
+          if (data.name === "left45_3_d")
+            if (record[i] > 200 || record[i] < -200)
+              res = false;
+          if (data.name === "ff_duty_front")
+            if (record[i] > 100 || record[i] < -100)
+              res = false;
+          if (data.name === "odm_y")
+            if (record[i] > 1000 || record[i] < -1000)
+              res = false;
+          if (data.name === "kim_theta")
+            if (record[i] > 400 || record[i] < -400)
+              res = false;
+          if (data.name === "odm_theta")
+            if (record[i] > 400 || record[i] < -400)
+              res = false;
+          if (data.name === "knym_v")
+            if (record[i] > 20000 || record[i] < -20000)
+              res = false;
+          if (data.name === "knym_w")
+            if (record[i] > 2000 || record[i] < -2000)
+              res = false;
+          if (data.name === "ang_i_bias")
+            if (record[i] > 3 || record[i] < -3)
+              res = false;
+          if (data.name === "ang_i_bias_val")
+            if (record[i] > 200 || record[i] < -200)
+              res = false;
+          if (data.name === "left45_d_diff")
+            if (record[i] > 50 || record[i] < -50)
+              res = false;
+          if (data.name === "left45_2_d_diff")
+            if (record[i] > 50 || record[i] < -50)
+              res = false;
+          if (data.name === "left45_3_d_diff")
+            if (record[i] > 50 || record[i] < -50)
+              res = false;
+          if (data.name === "right45_d_diff")
+            if (record[i] > 50 || record[i] < -50)
+              res = false;
+          if (data.name === "right45_2_d_diff")
+            if (record[i] > 50 || record[i] < -50)
+              res = false;
+          if (data.name === "right45_3_d_diff")
+            if (record[i] > 50 || record[i] < -50)
+              res = false;
+          if (data.name === "duty_roll")
+            if (record[i] > 0.1 || record[i] < -0.1)
+              res = false;
+          if (data.name === "duty_roll_before")
+            if (record[i] > 0.1 || record[i] < -0.1)
+              res = false;
+          return res;
+        });
+        if (valid) {
+          last_index = record[0];
+          const str = record.join(',');
+          console.log(str)
+          obj.record += `${str}\n`;
+        }
+        record = [];
+      } else if (finish) {
+        clearInterval(interval);
+        fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
+          flag: "w+",
+        });
+        fs.copyFileSync(
+          `${__dirname}/logs/${obj.file_name}`,
+          `${__dirname}/logs/latest.csv`
+        );
+        finish = true;
+        console.log("end");
+        clearInterval(interval);
+        switchLineMode({
+          dump_to_csv_ready: false,
+          dump_to_map: false,
+          data_struct: [],
+          file_name: getNowYMD(),
+          record: "",
+        });
+      }
+    }
+  });
+}
 
 SerialPort.list().then(
   (ports) => {
