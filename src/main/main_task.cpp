@@ -106,7 +106,7 @@ void MainTask::run() {
         if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
           updated = true;
           // load_params();
-          ui_.coin(40);
+          ui_.coin(25);
           printf("[main] params reloaded  mode=%d  maze=%d\n", sys_.user_mode,
                  sys_.maze_size);
         }
@@ -126,61 +126,6 @@ void MainTask::run() {
   } else {
     run_main_mode();
   }
-}
-void MainTask::print_system_params() {
-  printf("=== System Parameters ===\n");
-  printf("User Mode: %d\n", sys_.user_mode);
-  printf("Maze Size: %d\n", sys_.maze_size);
-  printf("Circuit Mode: %d\n", sys_.circuit_mode);
-  printf("HF CL: %d\n", sys_.hf_cl);
-  printf("Goals:\n");
-  for (const auto &goal : sys_.goals) {
-    printf("  - (x: %d, y: %d)\n", goal.x, goal.y);
-  }
-  printf("test.v_max: %.2f\n", sys_.test.v_max);
-  printf("test.accl: %.2f\n", sys_.test.accl);
-  printf("test.decel: %.2f\n", sys_.test.decel);
-  printf("test.dist: %.2f\n", sys_.test.dist);
-}
-void MainTask::print_hardware_params() {
-  printf("=== Hardware Parameters ===\n");
-  printf("tire_tread: %f\n", param_->tire_tread);
-  printf("tire: %f\n", param_->tire);
-  printf("battery_gain: %f\n", param_->battery_gain);
-  printf("gear_a: %f\n", param_->gear_a);
-  printf("gear_b: %f\n", param_->gear_b);
-}
-void MainTask::print_offset_params() {
-  printf("=== Offset Parameters ===\n");
-  printf("clear_angle: %f\n", param_->clear_angle);
-}
-void MainTask::print_sensor_params() {
-  printf("=== Sensor Parameters ===\n");
-  printf("sen_ref_p.normal.ref.left90: %d\n",
-         param_->sen_ref_p.normal.ref.left90);
-  printf("sen_ref_p.normal.ref.left45: %d\n",
-         param_->sen_ref_p.normal.ref.left45);
-  printf("sen_ref_p.normal.ref.right45: %d\n",
-         param_->sen_ref_p.normal.ref.right45);
-  printf("sen_ref_p.normal.ref.right90: %d\n",
-         param_->sen_ref_p.normal.ref.right90);
-
-  printf("sensor_gain.l90: %f, %f\n", param_->sensor_gain.l90.a,
-         param_->sensor_gain.l90.b);
-  printf("sensor_gain.l45_3: %f, %f\n", param_->sensor_gain.l45_3.a,
-         param_->sensor_gain.l45_3.b);
-  printf("sensor_gain.l45_2: %f, %f\n", param_->sensor_gain.l45_2.a,
-         param_->sensor_gain.l45_2.b);
-  printf("sensor_gain.l45: %f, %f\n", param_->sensor_gain.l45.a,
-         param_->sensor_gain.l45.b);
-  printf("sensor_gain.r45: %f, %f\n", param_->sensor_gain.r45.a,
-         param_->sensor_gain.r45.b);
-  printf("sensor_gain.r45_2: %f, %f\n", param_->sensor_gain.r45_2.a,
-         param_->sensor_gain.r45_2.b);
-  printf("sensor_gain.r45_3: %f, %f\n", param_->sensor_gain.r45_3.a,
-         param_->sensor_gain.r45_3.b);
-  printf("sensor_gain.r90: %f, %f\n", param_->sensor_gain.r90.a,
-         param_->sensor_gain.r90.b);
 }
 
 // シリアルコマンド "DUMP" で呼ばれる。

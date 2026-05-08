@@ -55,11 +55,6 @@ private:
   system_t sys_{};
   LED_bit lbit;
 
-  void print_system_params();
-  void print_hardware_params();
-  void print_offset_params();
-  void print_sensor_params();
-
   // ─── 共通ユーティリティ (main_task_util.cpp) ─────────────────────────────
   bool load_exec_params();
   void setup_before_run();
