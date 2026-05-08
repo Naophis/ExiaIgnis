@@ -77,13 +77,19 @@ def open_port(port: str) -> serial.Serial:
 
 
 def readline_skip_sensor(ser: serial.Serial) -> str:
-    """センサーデータ行をスキップしてコマンド応答を返す。"""
+    """センサーデータ行・デバイスデバッグ出力をスキップしてコマンド応答を返す。"""
     while True:
         raw = ser.readline()
         if not raw:
             raise TimeoutError("応答タイムアウト")
         line = raw.decode("utf-8", errors="replace").strip()
+        if not line:
+            continue
+        # センサーデータ行をスキップ
         if "ADC0:" in line or "Gx:" in line or "Enc0:" in line:
+            continue
+        # "[main]" "[config]" 等デバイス側デバッグ出力をスキップ
+        if line.startswith("["):
             continue
         return line
 

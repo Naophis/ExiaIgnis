@@ -8,7 +8,11 @@
       "Bash(touch src/sensing_task.cpp)",
       "Bash(ninja -C build -v)",
       "Bash(arm-none-eabi-g++ -dM -E src/sensing_task.cpp -Iinclude -Ibuild/_deps/cjson-src -Ibuild/pioasm/tmp/PioasmBuild-src/src)",
-      "Bash(cmake --build /home/naoto/Desktop/mouse/ExiaIgnis/build)"
+      "Bash(cmake --build /home/naoto/Desktop/mouse/ExiaIgnis/build)",
+      "Bash(arm-none-eabi-size /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
+      "Bash(size /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
+      "Bash(arm-none-eabi-objdump -t /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
+      "Bash(arm-none-eabi-nm /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)"
     ]
   }
 }
