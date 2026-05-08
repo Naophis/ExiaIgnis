@@ -24,12 +24,22 @@ let ready = function () {
     },
     (e) => {
       if (e) {
-        console.log("comport access dinied");
+        console.log("comport access denied, retrying...");
+        setTimeout(waitForPico, 200);
       } else {
         console.log("connect");
       }
     }
   );
+
+  port.on("close", () => {
+    console.log(`\n[${new Date().toLocaleTimeString()}] 切断。再接続を待機中...`);
+    setTimeout(waitForPico, 200);
+  });
+  port.on("error", (err) => {
+    console.error("ポートエラー:", err.message);
+  });
+
   // switchToBinaryMode(336);
 
   let obj = {
@@ -452,25 +462,31 @@ const switchToBinaryMode = (obj) => {
   });
 }
 
-SerialPort.list().then(
-  (ports) => {
-    for (let i in ports) {
-      const p = ports[i];
-      console.log(p.path, p.serialNumber);
-      if (
-        p.path.match(/usbserial/) ||
-        p.path.match(/COM/) ||
-        p.path.match(/ttyUSB/) ||
-        p.path.match(/ttyACM/)
-      ) {
-        if (p.serialNumber) {
-          comport = p.path;
-          console.log(`select: ${comport}`);
+function waitForPico() {
+  console.log("Pico を待機中... (終了: Ctrl+C)");
+  const poll = () => {
+    SerialPort.list().then(
+      (ports) => {
+        const found = ports.find(
+          (p) =>
+            (p.path.match(/usbserial/) ||
+              p.path.match(/COM/) ||
+              p.path.match(/ttyUSB/) ||
+              p.path.match(/ttyACM/)) &&
+            p.serialNumber
+        );
+        if (found) {
+          comport = found.path;
+          console.log(`[${new Date().toLocaleTimeString()}] 接続: ${comport}`);
           ready();
-          break;
+        } else {
+          setTimeout(poll, 200);
         }
-      }
-    }
-  },
-  (err) => console.error(err)
-);
+      },
+      () => setTimeout(poll, 200)
+    );
+  };
+  poll();
+}
+
+waitForPico();
