@@ -2,6 +2,10 @@
 #include "defines.hpp"
 #include "logging/logging_task.hpp"
 #include "planning/planning_task.hpp"
+#include "action/motion_planning.hpp"
+#include "search/logic.hpp"
+#include "search/search_controller.hpp"
+
 #include "sensing_task.hpp"
 #include "structs.hpp"
 #include "ui.hpp"
@@ -71,6 +75,14 @@ private:
                      std::unordered_map<StraightType, straight_param_t> &str_map);
 
   bool silent_load = false;
+  // 走行用関数
+  std::shared_ptr<MotionPlanning> mp;
+  std::shared_ptr<MazeSolverBaseLgc> lgc;
+  std::shared_ptr<SearchController> search_ctrl;
+  std::shared_ptr<PathCreator> pc;
+  void reset_tgt_data();
+  void reset_ego_data();
+
 
   // ─── モード dispatch ──────────────────────────────────────────────────────
   void run_main_mode();

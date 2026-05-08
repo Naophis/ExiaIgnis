@@ -93,8 +93,9 @@ add_executable(ExiaIgnis
     gen_code_simple_pid/simple_pid_controller_data.cpp
     gen_code_simple_pid/simple_pid_controller.cpp
 
-
-
+    search/adachi.cpp
+    search/logic.cpp
+    search/search_controller.cpp
 )
 
 pico_set_program_name(ExiaIgnis "ExiaIgnis")
