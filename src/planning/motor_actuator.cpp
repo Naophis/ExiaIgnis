@@ -54,34 +54,3 @@ void MotorActuator::apply_suction(float duty_suction) {
   pwm_set_chan_level(slice_S_, PWM_CHAN_B, 0);
 }
 
-void MotorActuator::suction() {
-  if (suction_en && target_v > 0.0f) {
-    float duty_suction_in = 0;
-    const bool high_suction_cond =
-        tgt_val->tgt_in.tgt_dist > 60 &&
-        (tgt_val->ego_in.state == 0 || tgt_val->ego_in.state == 1) &&
-        tgt_val->motion_type == MotionType::STRAIGHT;
-    const float selected_v =
-        high_suction_cond ? suction_test_duty_ : suction_test_duty_low_;
-    duty_suction_in = 100.0f * selected_v / sensing_result->ego.batt_kf;
-    if (duty_suction_in > 100) {
-      duty_suction_in = 100.0f;
-    }
-    gain_cnt += 1.0f;
-    if (gain_cnt > suction_gain) {
-      gain_cnt = suction_gain;
-    }
-    duty_suction_in = duty_suction_in * gain_cnt / suction_gain;
-    if (duty_suction_in > 100) {
-      duty_suction_in = 100.0f;
-    }
-    // is Numerical?
-    if (!isfinite(duty_suction_in)) {
-      duty_suction_in = 0;
-    }
-
-    motor_.apply(0.0f, 0.0f, duty_suction_in);
-    suction_test_was_on_ = true;
-    tgt_val->duty_suction = duty_suction_in;
-  }
-}

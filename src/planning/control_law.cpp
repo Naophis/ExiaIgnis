@@ -1224,20 +1224,21 @@ void ControlLaw::limitter(float &kp, float &ki, float &kb, float &kd,
 }
 
 void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
-  if (motor_en_) {
-    // change_pwm_freq(duty_l, duty_r);  // TODO: motor apply via motor_
+  float duty_suction_in = 0.0f;
+
+  if (!motor_en_) {
+    duty_l = 0.0f;
+    duty_r = 0.0f;
   }
   if (suction_en_) {
-    float duty_suction_in = 0;
-    if (tgt_val_->tgt_in.tgt_dist > 60 &&
+    const bool high_suction =
+        tgt_val_->tgt_in.tgt_dist > 60 &&
         (tgt_val_->ego_in.state == 0 || tgt_val_->ego_in.state == 1) &&
-        tgt_val_->motion_type == MotionType::STRAIGHT) {
-      duty_suction_in =
-          100.0f * tgt_duty.duty_suction_low / sensing_result_->ego.batt_kf;
-    } else {
-      duty_suction_in =
-          100.0f * tgt_duty.duty_suction / sensing_result_->ego.batt_kf;
-    }
+        tgt_val_->motion_type == MotionType::STRAIGHT;
+    duty_suction_in =
+        100.0f *
+        (high_suction ? tgt_duty.duty_suction_low : tgt_duty.duty_suction) /
+        sensing_result_->ego.batt_kf;
     if (duty_suction_in > 100.0f)
       duty_suction_in = 100.0f;
 
@@ -1248,13 +1249,13 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
     if (duty_suction_in > 100.0f)
       duty_suction_in = 100.0f;
     if (!isfinite(duty_suction_in))
-      duty_suction_in = 0;
-
-    tgt_val_->duty_suction = duty_suction_in;
+      duty_suction_in = 0.0f;
   } else {
-    tgt_val_->duty_suction = 0;
+    gain_cnt = 0.0f;
   }
-  // motor_ctrl_->set_duty(duty_l, duty_r);
+
+  tgt_val_->duty_suction = duty_suction_in;
+  motor_->apply(duty_l, duty_r, duty_suction_in);
 }
 
 void ControlLaw::pl_req_activate(motion_tgt_val_t &receive_req) {

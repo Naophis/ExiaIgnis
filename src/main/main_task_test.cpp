@@ -180,7 +180,7 @@ void MainTask::test_suction() {
 
   mp->reset_gyro_ref_with_check();
   sleep_ms(250);
-  planning_->set_suction_test(sys_.test.suction_duty, sys_.test.suction_duty_low);
+  planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
 
   while (!ui_.button_state()) {
     printf("suction target=%.2fV battery=%.3fV duty=%.1f%%\n",
@@ -188,7 +188,7 @@ void MainTask::test_suction() {
     sleep_ms(200);
   }
 
-  planning_->set_suction_test(0.0f, 0.0f);
+  planning_->suction_disable();
   printf("suction stopped\n");
 }
 

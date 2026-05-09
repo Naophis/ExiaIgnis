@@ -136,15 +136,6 @@ void PlanningTask::timer_irq_handler() {
 }
 
 // ============================================================
-// 吸引 PWM 直接テスト (ControlLaw バイパス, IRQ 安全)
-// ============================================================
-void PlanningTask::set_suction_test(float duty, float duty_low) {
-  suction_test_duty_low_ = duty_low;
-  suction_test_duty_ = duty;
-  __dmb();
-}
-
-// ============================================================
 // 1tick 処理 (IRQ ハンドラから呼ばれる)
 // ============================================================
 void PlanningTask::tick(uint32_t dt_us) {
@@ -154,12 +145,6 @@ void PlanningTask::tick(uint32_t dt_us) {
   // 吸引テストモード: ControlLaw/Trajectory を完全バイパスして直接 PWM 出力
   float target_v = suction_test_duty_;
   
-  if (suction_test_was_on_) {
-    motor_.apply(0.0f, 0.0f, 0.0f); // テストモード終了: 確実に停止
-    state.duty_suction = 0.0f;
-    suction_test_was_on_ = false;
-  }
-
   // --- コマンド受け取り (Core1 からの cross-core 書き込みを安全に読む) ---
   if (cmd_pending_) {
     __dmb(); // load barrier: cmd_pending_ を読んだ後、pending_cmd_

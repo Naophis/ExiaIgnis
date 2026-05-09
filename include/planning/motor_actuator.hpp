@@ -11,7 +11,6 @@ public:
   // duty_l/r/suction [%] を PWM ハードウェアに書き込む。
   void apply(float duty_l, float duty_r, float duty_suction);
   void apply_suction(float duty_suction);
-  void suction();
 
   void motor_enable() { motor_en = true; }
   void motor_disable() { motor_en = false; }

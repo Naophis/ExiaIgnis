@@ -125,9 +125,6 @@ public:
     suction_en = false;
   }
 
-  // ControlLaw を通さず吸引 PWM を直接制御するテスト用。
-  // duty=0 でテストモード終了、>0 で吸引 ON。IRQ 安全 (__dmb() 使用)。
-  void set_suction_test(float duty, float duty_low);
   void reset_kf_state(bool full) {
     if (sensing_result && param)
       ego.reset_kf_state(full, sensing_result, param);
@@ -186,7 +183,6 @@ private:
 
   volatile float suction_test_duty_ = 0.0f; // 0=通常, >0=高吸引目標電圧[V]
   volatile float suction_test_duty_low_ = 0.0f; // 低吸引目標電圧[V]
-  bool suction_test_was_on_ = false; // テストモード終了検知用
 
   volatile Command pending_cmd_{};
   volatile bool cmd_pending_ = false;
