@@ -136,12 +136,12 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
     cnt++;
     auto now_dist = (cnt == 1) ? 0.0f : tgt_val->ego_in.dist;
 
-    // if (cnt % 10 == 0) {
-    //   printf("v=%.1f accl=%.1f dist=%.1f dist=%.1f\n", tgt_val->ego_in.v,
-    //          tgt_val->ego_in.accl, tgt_val->ego_in.img_dist, now_dist);
-    //   printf("v=%.1f accl=%.1f dist=%.1f state=%d\n", tgt_val->tgt_in.v_max,
-    //          tgt_val->tgt_in.accl, tgt_val->tgt_in.tgt_dist, tgt_val->ego_in.state);
-    // }
+    if (cnt % 10 == 0) {
+      printf("v=%.1f accl=%.1f dist=%.1f dist=%.1f\n", tgt_val->ego_in.v,
+             tgt_val->ego_in.accl, tgt_val->ego_in.img_dist, now_dist);
+      printf("v=%.1f accl=%.1f v_l=%.1f v_r=%.1f\n", tgt_val->tgt_in.v_max,
+             tgt_val->tgt_in.accl, se->ego.v_l, se->ego.v_r);
+    }
 
     if (std ::abs(now_dist) >= std::abs(p.dist)) {
       break;
