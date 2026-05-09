@@ -40,6 +40,11 @@ std::shared_ptr<sensing_result_entity_t> MainTask::get_sensing_entity() {
 int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms);
 bool rx_usb_cmd(char *buf, int len);
 
+void MainTask::load_param_after() {
+  planning_->suction_gain = sys_.test.suction_gain;
+  printf("[param] suction_gain = %f\n", planning_->suction_gain);
+}
+
 bool MainTask::load_params() {
   bool any = false;
   // 各ファイルが存在しない場合は警告を出してスキップ (初回未転送でも動作継続)
@@ -47,6 +52,7 @@ bool MainTask::load_params() {
   any |= ConfigLoader::load_as("/sensor.hf", *param_);
   any |= ConfigLoader::load_as("/offset.hf", *param_);
   any |= ConfigLoader::load_as("/system.txt", sys_);
+  load_param_after();
   return any;
 }
 

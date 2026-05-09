@@ -119,7 +119,7 @@ public:
 
   // ControlLaw を通さず吸引 PWM を直接制御するテスト用。
   // duty=0 でテストモード終了、>0 で吸引 ON。IRQ 安全 (__dmb() 使用)。
-  void set_suction_test(float duty);
+  void set_suction_test(float duty, float duty_low);
   void reset_kf_state(bool full) {
     if (sensing_result && param)
       ego.reset_kf_state(full, sensing_result, param);
@@ -150,7 +150,7 @@ public:
   KalmanFilterMatrix pos;
   kinematics_t odm = {0};
   kinematics_t kim = {0};
-
+  float suction_gain = 200;
 private:
   PlanningTask() = default;
 
@@ -173,8 +173,9 @@ private:
   uint32_t next_alarm_ = 0;
   uint64_t prev_ts_ = 0;
 
-  volatile float suction_test_duty_ = 0.0f; // 0=通常, >0=吸引テスト目標電圧[V]
-  bool suction_test_was_on_ = false;        // テストモード終了検知用
+  volatile float suction_test_duty_ = 0.0f;     // 0=通常, >0=高吸引目標電圧[V]
+  volatile float suction_test_duty_low_ = 0.0f; // 低吸引目標電圧[V]
+  bool suction_test_was_on_ = false;            // テストモード終了検知用
 
   volatile Command pending_cmd_{};
   volatile bool cmd_pending_ = false;
@@ -220,4 +221,5 @@ private:
   slip_t slip_param;
   motion_tgt_val_t *receive_req = nullptr;
   std::shared_ptr<motion_tgt_val_t> active_tgt_;
+  float gain_cnt = 0;
 };

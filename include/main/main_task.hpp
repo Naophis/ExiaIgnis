@@ -41,6 +41,7 @@ private:
   void run();
 
   bool load_params();
+  void load_param_after();
 
   std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
 

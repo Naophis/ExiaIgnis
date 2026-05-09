@@ -138,7 +138,8 @@ void PlanningTask::timer_irq_handler() {
 // ============================================================
 // 吸引 PWM 直接テスト (ControlLaw バイパス, IRQ 安全)
 // ============================================================
-void PlanningTask::set_suction_test(float duty) {
+void PlanningTask::set_suction_test(float duty, float duty_low) {
+  suction_test_duty_low_ = duty_low;
   suction_test_duty_ = duty;
   __dmb();
 }
@@ -153,15 +154,36 @@ void PlanningTask::tick(uint32_t dt_us) {
   // 吸引テストモード: ControlLaw/Trajectory を完全バイパスして直接 PWM 出力
   float target_v = suction_test_duty_;
   if (target_v > 0.0f) {
-    const float battery_v = sensing_result->ego.battery_lp;
-    float duty = (battery_v > 0.0f) ? (target_v / battery_v * 100.0f) : 0.0f;
-    if (duty > 100.0f)
-      duty = 100.0f;
-    motor_.apply(0.0f, 0.0f, duty);
-    state.duty_suction = duty;
+    float duty_suction_in = 0;
+    const bool high_suction_cond =
+        tgt_val->tgt_in.tgt_dist > 60 &&
+        (tgt_val->ego_in.state == 0 || tgt_val->ego_in.state == 1) &&
+        tgt_val->motion_type == MotionType::STRAIGHT;
+    const float selected_v =
+        high_suction_cond ? suction_test_duty_ : suction_test_duty_low_;
+    duty_suction_in = 100.0f * selected_v / sensing_result->ego.batt_kf;
+    if (duty_suction_in > 100) {
+      duty_suction_in = 100.0f;
+    }
+    gain_cnt += 1.0f;
+    if (gain_cnt > suction_gain) {
+      gain_cnt = suction_gain;
+    }
+    duty_suction_in = duty_suction_in * gain_cnt / suction_gain;
+    if (duty_suction_in > 100) {
+      duty_suction_in = 100.0f;
+    }
+    // is Numerical?
+    if (!isfinite(duty_suction_in)) {
+      duty_suction_in = 0;
+    }
+
+    motor_.apply(0.0f, 0.0f, duty_suction_in);
+    state.duty_suction = duty_suction_in;
     state.duty_l = 0.0f;
     state.duty_r = 0.0f;
     suction_test_was_on_ = true;
+    tgt_val->duty_suction = duty_suction_in;
     return;
   }
   if (suction_test_was_on_) {
