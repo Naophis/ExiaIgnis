@@ -100,7 +100,7 @@ MotionResult MotionPlanning::go_straight(
   tgt_val->nmr.timstamp++;
 
   pt->send_command(tgt_val);
-  sleep_ms(1);
+  pt->wait_tick();
   if (search_mode && adachi != nullptr) {
     adachi->update();
   }
@@ -111,7 +111,7 @@ MotionResult MotionPlanning::go_straight(
       p.motion_type == MotionType::SLA_BACK_STR ||
       p.motion_type == MotionType::BACK_STRAIGHT) {
     if (std::abs(p.dist) > 5) {
-      sleep_ms(1);
+      pt->wait_tick();
     }
   }
 
@@ -299,12 +299,12 @@ MotionResult MotionPlanning::go_straight(
         tgt_val->nmr.timstamp += 10;
 
         pt->send_command(tgt_val);
-        sleep_ms(1);
+        pt->wait_tick();
 
         return MotionResult::ERROR;
       }
     }
-    sleep_ms(1);
+    pt->wait_tick();
   }
   param->sen_ref_p.normal.exist.left45 = left;
   param->sen_ref_p.normal.exist.right45 = right;

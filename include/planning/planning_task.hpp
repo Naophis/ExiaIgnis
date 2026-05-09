@@ -1,5 +1,6 @@
 #pragma once
 
+#include "pico/sync.h"
 #include "pico/types.h"
 #include "planning/astraea_types.hpp"
 #include "planning/control_law.hpp"
@@ -29,6 +30,9 @@ public:
 
   // ---- Core0 → Core1 コマンド ----
   void send_command(std::shared_ptr<motion_tgt_val_t> tgt);
+
+  // ---- tick 同期 (Core0 から呼ぶ) ----
+  void wait_tick() { sem_acquire_blocking(&tick_sem_); }
 
   // ---- 設定セッター ----
   void set_search_mode(bool v) { search_mode = v; }
@@ -89,6 +93,7 @@ private:
   uint32_t interval_us_ = 1000;
   uint32_t next_alarm_  = 0;
   uint64_t prev_ts_     = 0;
+  semaphore_t tick_sem_;
 
   // ---- コマンドパイプライン ----
   std::shared_ptr<motion_tgt_val_t> pending_tgt_;

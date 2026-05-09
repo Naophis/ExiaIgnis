@@ -1,11 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(chmod +x /home/naoto/Desktop/mouse/ExiaIgnis/serial_watch.sh)",
       "Bash(python3 -c ' *)",
       "Bash(find ~/.pico-sdk -name \"stdio_usb.c\" 2>/dev/null | head -5; find /usr -name \"stdio_usb.c\" 2>/dev/null | head -5)",
       "Read(//usr/**)",
-      "Bash(touch src/sensing_task.cpp)",
       "Bash(ninja -C build -v)",
       "Bash(arm-none-eabi-g++ -dM -E src/sensing_task.cpp -Iinclude -Ibuild/_deps/cjson-src -Ibuild/pioasm/tmp/PioasmBuild-src/src)",
       "Bash(cmake --build /home/naoto/Desktop/mouse/ExiaIgnis/build)",
@@ -15,8 +13,8 @@
       "Bash(arm-none-eabi-nm /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
       "Bash(awk 'NR>=70 && NR<=90' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
       "Bash(awk 'NR>=941 && NR<=1010' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
-      "Bash(git rm *)",
-      "Bash(git add *)"
+      "Bash(find /home/naoto -name \"sem.h\" -path \"*/pico*\" 2>/dev/null | head -5)",
+      "Read(//home/naoto/**)"
     ]
   }
 }

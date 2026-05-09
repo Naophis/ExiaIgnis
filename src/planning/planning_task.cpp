@@ -41,6 +41,7 @@ void PlanningTask::set_input_param_entity(
 // ============================================================
 void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
+  sem_init(&tick_sem_, 0, 1);
   motor_.init();
   sensor_.init(sensing_result, param);
   ctl_.init(&motor_, &sensor_, &trj_, &ego);
@@ -89,6 +90,7 @@ void PlanningTask::timer_irq_handler() {
   self->prev_ts_ = now;
 
   self->tick(dt_us);
+  sem_release(&self->tick_sem_);
 }
 
 // ============================================================
