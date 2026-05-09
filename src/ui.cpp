@@ -4,6 +4,7 @@
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 #include "ui.hpp"
+#include "planning/planning_task.hpp"
 
 // ============================================================
 // 初期化
@@ -172,9 +173,10 @@ int UserInterface::encoder_operation() {
 
 void UserInterface::motion_check() {
   int c = 0;
-  if (tgt_val_) {
+  if (tgt_val_ && pt_) {
     tgt_val_->nmr.motion_type = MotionType::READY;
     tgt_val_->nmr.timstamp++;
+    pt_->send_command(tgt_val_);
   }
 
   sleep_ms(1);

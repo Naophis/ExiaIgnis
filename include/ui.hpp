@@ -7,6 +7,9 @@
 #include <stdint.h>
 #include <vector>
 
+// 前方宣言: planning_task.hpp の循環インクルードを避ける
+class PlanningTask;
+
 class UserInterface {
 public:
   UserInterface() = default;
@@ -40,6 +43,7 @@ public:
   void motion_check();
 
   void set_tgt_val(std::shared_ptr<motion_tgt_val_t> t) { tgt_val_ = t; }
+  void set_planning(std::shared_ptr<PlanningTask> p) { pt_ = p; }
 
   std::vector<uint8_t> blight_level_list; // インデックスごとの輝度値
 
@@ -52,5 +56,6 @@ private:
   uint pwm_channel_ = 0;
   std::shared_ptr<sensing_result_entity_t> sensing_result;
   std::shared_ptr<motion_tgt_val_t> tgt_val_;
+  std::shared_ptr<PlanningTask> pt_;
   static constexpr uint16_t ENC_OPE_V_R_TH = 90 * 1;
 };
