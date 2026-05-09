@@ -34,6 +34,8 @@ public:
     tgt_duty.duty_suction     = duty;
     tgt_duty.duty_suction_low = duty_low;
   }
+  void set_suction_gain(float gain) { suction_gain = gain; }
+
 private:
   // 他サブシステムへの参照 (init() で設定)
   MotorActuator       *motor_  = nullptr;
@@ -55,7 +57,6 @@ private:
   // PID コントローラ
   Simple_PID_Controller vel_pid;
   Simple_PID_Controller gyro_pid;
-  Simple_PID_Controller ang_pid;
 
   // 内部状態
   float suction_gain               = 200.0f;
@@ -71,12 +72,6 @@ private:
   duty_t tgt_duty{};
   int   fail_check_ang       = 0;
   int   keep_wall_off_cnt    = 0;
-  int   buzzer_time_cnt      = 0;
-  int   buzzer_timestamp     = 0;
-  int   motion_req_timestamp = 0;
-  int   pid_req_timestamp    = 0;
-  int   motor_req_timestamp  = 0;
-  int   suction_req_timestamp = 0;
   bool  enable_expand_right  = false;
   bool  enable_expand_left   = false;
   float last_accl            = 0.0f;
@@ -84,7 +79,6 @@ private:
   float diff                 = 0.0f;
 
   float duty_c                  = 0.0f;
-  float duty_c2                 = 0.0f;
   float duty_roll               = 0.0f;
   float duty_roll_ang           = 0.0f;
   float duty_front_ctrl_roll    = 0.0f;

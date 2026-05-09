@@ -41,7 +41,7 @@ int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms);
 bool rx_usb_cmd(char *buf, int len);
 
 void MainTask::load_param_after() {
-  planning_->motor_.set_suction_gain(sys_.test.suction_gain);
+  planning_->ctl_.set_suction_gain(sys_.test.suction_gain);
   printf("[param] suction_gain = %f\n", sys_.test.suction_gain);
 }
 

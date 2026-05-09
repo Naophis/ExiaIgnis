@@ -111,7 +111,6 @@ void ControlLaw::calc_tgt_duty() {
   calc_pid_val_front_ctrl();
 
   duty_c = 0;
-  duty_c2 = 0;
   duty_roll = 0;
   duty_front_ctrl_roll_keep = 0;
   duty_roll_ang = 0;
@@ -1178,7 +1177,7 @@ void ControlLaw::apply_duty_limitter() {
 }
 
 void ControlLaw::clear_ctrl_val() {
-  duty_c = duty_c2 = duty_roll = duty_front_ctrl_roll_keep = duty_roll_ang = 0;
+  duty_c = duty_roll = duty_front_ctrl_roll_keep = duty_roll_ang = 0;
   ee->v.error_i = ee->v.error_d = ee->v.error_dd = 0;
   ee->dist.error_i = ee->dist.error_d = ee->dist.error_dd = 0;
   ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;

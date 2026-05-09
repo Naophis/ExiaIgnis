@@ -16,7 +16,6 @@ public:
   void motor_disable() { motor_en = false; }
   void suction_enable() { suction_en = true; }
   void suction_disable() { suction_en = false; }
-  void set_suction_gain(float gain) { suction_gain = gain; }
 
 private:
   uint slice_L_ = 0;
@@ -25,6 +24,4 @@ private:
   uint32_t motor_wrap_ = 2999;
   bool motor_en = false;
   bool suction_en = false;
-  float gain_cnt = 0;
-  float suction_gain = 200;
 };

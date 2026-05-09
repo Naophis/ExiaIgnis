@@ -10,25 +10,6 @@
 #include <cmath>
 
 // ============================================================
-// 機体パラメータ (要チューニング)
-// ============================================================
-static constexpr float TIRE_DIAM_MM = 12.0f;      // 車輪直径 [mm]
-static constexpr float GEAR_RATIO = 37.0f / 8.0f; // モーター:車輪 ギア比
-static constexpr float TREAD_MM = 38.0f;          // 左右車輪間距離 [mm]
-static constexpr float ENC_STEPS = 16384.0f; // 14-bit エンコーダ分解能
-static constexpr float MM_PER_STEP =
-    (float)(M_PI)*TIRE_DIAM_MM / (ENC_STEPS * GEAR_RATIO);
-
-// ============================================================
-// PID ゲイン (初期値: 実機で要チューニング)
-// ============================================================
-static constexpr float VEL_KP = 0.5f;
-static constexpr float VEL_KI = 0.1f;
-static constexpr float GYRO_KP = 0.3f;
-static constexpr float GYRO_KI = 0.05f;
-static constexpr float DUTY_MAX = 90.0f; // デューティ上限 [%]
-
-// ============================================================
 // static メンバの定義
 // ============================================================
 std::shared_ptr<PlanningTask> PlanningTask::s_instance;
@@ -126,14 +107,6 @@ void PlanningTask::tick(uint32_t dt_us) {
     cp_request();
   }
 
-  // --- 初回 tick: エンコーダ初期値を記録してスキップ ---
-  // if (first_tick_) {
-  //   enc_r_prev_ = d.enc_r;
-  //   enc_l_prev_ = d.enc_l;
-  //   first_tick_ = false;
-  //   return;
-  // }
-
   float dt = dt_us * 1e-6f;
 
   {
@@ -180,86 +153,6 @@ void PlanningTask::tick(uint32_t dt_us) {
   {
     PlanningTask::State snap(state); // volatile → non-volatile コピー
     // LoggingTask::append_from_irq(d, snap);
-  }
-}
-
-// ============================================================
-// 軌道生成 (台形速度プロファイル)
-// ============================================================
-void PlanningTask::update_trajectory(float dt) {
-  const Command &cmd = active_cmd_;
-
-  switch (cmd.mode) {
-  case MotionMode::IDLE:
-    img_v_ = 0.0f;
-    img_w_ = 0.0f;
-    break;
-
-  case MotionMode::STOP: {
-    float dv = (cmd.decel > 0.0f ? cmd.decel : 3000.0f) * dt;
-    if (img_v_ > 0.0f) {
-      img_v_ = std::max(0.0f, img_v_ - dv);
-    } else if (img_v_ < 0.0f) {
-      img_v_ = std::min(0.0f, img_v_ + dv);
-    }
-    img_w_ = 0.0f;
-    if (img_v_ == 0.0f) {
-      active_cmd_.mode = MotionMode::IDLE;
-    }
-    break;
-  }
-
-  case MotionMode::STRAIGHT: {
-    float remaining = cmd.dist - img_dist_;
-    if (remaining <= 0.0f) {
-      img_v_ = cmd.v_end;
-      active_cmd_.mode = MotionMode::STOP;
-      break;
-    }
-    float decel = cmd.decel > 0.0f ? cmd.decel : cmd.accl;
-    float decel_d = std::max(0.0f, (img_v_ * img_v_ - cmd.v_end * cmd.v_end) /
-                                       (2.0f * decel));
-
-    if (remaining <= decel_d) {
-      img_v_ -= decel * dt;
-      if (img_v_ < cmd.v_end)
-        img_v_ = cmd.v_end;
-    } else {
-      if (img_v_ < cmd.v_max) {
-        img_v_ = std::min(cmd.v_max, img_v_ + cmd.accl * dt);
-      }
-    }
-    img_dist_ += img_v_ * dt;
-    img_w_ = 0.0f;
-    break;
-  }
-
-  case MotionMode::PIVOT: {
-    float sign = cmd.ang >= 0.0f ? 1.0f : -1.0f;
-    float remaining = std::fabs(cmd.ang) - std::fabs(img_ang_);
-    if (remaining <= 0.0f) {
-      img_w_ = 0.0f;
-      active_cmd_.mode = MotionMode::IDLE;
-      break;
-    }
-    float alpha = cmd.alpha > 0.0f ? cmd.alpha : 30.0f;
-    float decel_a = (img_w_ * img_w_) / (2.0f * alpha);
-    if (remaining <= decel_a) {
-      img_w_ -= sign * alpha * dt;
-      if ((sign > 0.0f && img_w_ < 0.0f) || (sign < 0.0f && img_w_ > 0.0f)) {
-        img_w_ = 0.0f;
-      }
-    } else {
-      if (std::fabs(img_w_) < cmd.w_max) {
-        img_w_ += sign * alpha * dt;
-        if (std::fabs(img_w_) > cmd.w_max)
-          img_w_ = sign * cmd.w_max;
-      }
-    }
-    img_ang_ += img_w_ * dt;
-    img_v_ = 0.0f;
-    break;
-  }
   }
 }
 

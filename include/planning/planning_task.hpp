@@ -135,11 +135,9 @@ private:
   bool motor_en = false;
   bool suction_en = false;
   bool search_mode = false;
-  bool mode_select = false;
   static void timer_irq_handler();
 
   void tick(uint32_t dt_us);
-  void update_trajectory(float dt);
   std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
 
   static std::shared_ptr<PlanningTask> s_instance;
@@ -151,36 +149,13 @@ private:
   uint32_t next_alarm_ = 0;
   uint64_t prev_ts_ = 0;
 
-  volatile Command pending_cmd_{};
-  volatile bool cmd_pending_ = false;
-
   std::shared_ptr<motion_tgt_val_t> pending_tgt_;
 
   volatile bool tgt_cmd_pending_ = false;
   int32_t last_nmr_timestamp_ = -1;
 
-  Command active_cmd_{};
-
-  float img_v_ = 0.0f;
-  float img_w_ = 0.0f;
-  float img_dist_ = 0.0f;
-  float img_ang_ = 0.0f;
-
-  float v_est_ = 0.0f;
-  float w_est_ = 0.0f;
-  uint16_t enc_r_prev_ = 0;
-  uint16_t enc_l_prev_ = 0;
-  bool first_tick_ = true;
-
-  float vel_err_i_ = 0.0f;
-  float gyro_err_i_ = 0.0f;
-
-  int buzzer_time_cnt = 0;
-  int buzzer_timestamp = 0;
   int motion_req_timestamp = 0;
   int pid_req_timestamp = 0;
-  int motor_req_timestamp = 0;
-  int suction_req_timestamp = 0;
 
   unsigned char w_reset = 0;
   void cp_request();
@@ -190,5 +165,4 @@ private:
   slip_t slip_param;
   motion_tgt_val_t *receive_req = nullptr;
   std::shared_ptr<motion_tgt_val_t> active_tgt_;
-  float gain_cnt = 0;
 };
