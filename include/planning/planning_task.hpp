@@ -70,6 +70,7 @@ private:
   PlanningTask() = default;
 
   static std::shared_ptr<PlanningTask> s_instance;
+  bool  first_req = false;
 
   // ---- IRQ ハンドラ・内部処理 ----
   static void timer_irq_handler();

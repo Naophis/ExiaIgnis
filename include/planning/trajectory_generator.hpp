@@ -36,8 +36,6 @@ public:
   float ideal_v_r = 0.0f;
   float ideal_v_l = 0.0f;
 
-  bool  first_req = false;
-
   // 外部から設定するルックアップテーブル
   std::vector<int> trj_idx_v;
   std::vector<int> trj_idx_val;

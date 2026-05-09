@@ -64,6 +64,7 @@ void PlanningTask::start_irq() {
 void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
   pending_tgt_ = tgt;
   __dmb();
+  first_req = true;
   tgt_cmd_pending_ = true;
 }
 
@@ -115,7 +116,7 @@ void PlanningTask::tick(uint32_t dt_us) {
     ego.update(tgt_val, motor_en); // 30 usec
     sensor_.calc_dist(tgt_val);    // 15 ~ 20 usec
 
-    if (trj_.first_req) {
+    if (first_req) {
       if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
         tgt_val->tgt_in.enable_slip_decel = 1;
       } else {
@@ -206,8 +207,6 @@ void PlanningTask::pl_req_activate() {
 }
 
 void PlanningTask::cp_request() {
-  // tgt_val->tgt_in.mass = param->Mass;
-
   const auto se = get_sensing_entity();
   pl_req_activate();
   if (motion_req_timestamp == receive_req->nmr.timstamp) {

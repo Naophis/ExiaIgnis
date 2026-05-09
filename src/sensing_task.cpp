@@ -350,9 +350,9 @@ void SensingTask::read_spi_sensors() {
   auto enc_r_dt = (float)(enc_r_timestamp_now - enc_r_timestamp_old) / 1000000;
   auto enc_l_dt = (float)(enc_l_timestamp_now - enc_l_timestamp_old) / 1000000;
 
-  // printf("gyro: %d (dt: %.3f s), enc_r: %d (dt: %.3f s), enc_l: %d (dt: %.3f
-  // s)\n",
-  //        gyro, gyro_dt, enc_r, enc_r_dt, enc_l, enc_l_dt);
+  // printf(
+  //     "gyro: %d (dt: %.3f s), enc_r: %d (dt: %.3f s), enc_l: %d (dt: %.3fs)\n",
+  //     gyro, gyro_dt, enc_r, enc_r_dt, enc_l, enc_l_dt);
 
   pt->ego.kf_w.dt = gyro_dt;
   pt->ego.kf_v_r.dt = enc_r_dt;
