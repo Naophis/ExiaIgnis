@@ -100,20 +100,20 @@ MotionResult MotionPlanning::go_straight(
   tgt_val->nmr.timstamp++;
 
   pt->send_command(tgt_val);
-  pt->wait_tick();
+  
   if (search_mode && adachi != nullptr) {
     adachi->update();
   }
 
-  if (p.motion_type == MotionType::PIVOT_PRE ||
-      p.motion_type == MotionType::PIVOT_PRE2 ||
-      p.motion_type == MotionType::SLA_FRONT_STR ||
-      p.motion_type == MotionType::SLA_BACK_STR ||
-      p.motion_type == MotionType::BACK_STRAIGHT) {
-    if (std::abs(p.dist) > 5) {
-      pt->wait_tick();
-    }
-  }
+  // if (p.motion_type == MotionType::PIVOT_PRE ||
+  //     p.motion_type == MotionType::PIVOT_PRE2 ||
+  //     p.motion_type == MotionType::SLA_FRONT_STR ||
+  //     p.motion_type == MotionType::SLA_BACK_STR ||
+  //     p.motion_type == MotionType::BACK_STRAIGHT) {
+  //   if (std::abs(p.dist) > 5) {
+      
+  //   }
+  // }
 
   unsigned int cnt = 0;
 
@@ -132,6 +132,7 @@ MotionResult MotionPlanning::go_straight(
   }
 
   while (1) {
+    pt->wait_tick();
     cnt++;
     auto now_dist = (cnt == 1) ? 0.0f : tgt_val->ego_in.dist;
     if (std ::abs(now_dist) >= std::abs(p.dist)) {
@@ -299,12 +300,12 @@ MotionResult MotionPlanning::go_straight(
         tgt_val->nmr.timstamp += 10;
 
         pt->send_command(tgt_val);
-        pt->wait_tick();
+        // pt->wait_tick();
 
         return MotionResult::ERROR;
       }
     }
-    pt->wait_tick();
+    // pt->wait_tick();
   }
   param->sen_ref_p.normal.exist.left45 = left;
   param->sen_ref_p.normal.exist.right45 = right;
@@ -326,7 +327,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   tgt_val->nmr.timstamp++;
 
   pt->send_command(tgt_val);
-  sleep_ms(1);
+  pt->wait_tick();
 
   tgt_val->nmr.v_max = 0;
   tgt_val->nmr.v_end = 0;
@@ -356,7 +357,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   const auto sr = sensing_result;
   int c = 0;
   while (1) {
-    sleep_ms(1);
+    pt->wait_tick();
     c++;
     if (std::abs(tgt_val->ego_in.ang) >= std::abs(p.ang) &&
         std::abs(tgt_val->ego_in.ang * 180 / m_PI) > 10) {
@@ -374,7 +375,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
         tgt_val->nmr.timstamp++;
 
         pt->send_command(tgt_val);
-        sleep_ms(1);
+        pt->wait_tick();
 
         tgt_val->nmr.v_max = 0;
         tgt_val->nmr.v_end = 0;
@@ -773,9 +774,8 @@ MotionResult MotionPlanning::slalom(
   tgt_val->nmr.ang = (td == TurnDirection::Left) ? sp.ref_ang : -sp.ref_ang;
 
   pt->send_command(tgt_val);
-  sleep_ms(1);
+  pt->wait_tick();
   if (search_mode) {
-    sleep_ms(1);
     adachi->update();
   }
   bool find_in = false;
@@ -784,6 +784,7 @@ MotionResult MotionPlanning::slalom(
   int count_save = 0;
   int limit_count = tgt_val->ego_in.sla_param.limit_time_count;
   while (1) {
+    pt->wait_tick();
     count++;
     if (tgt_val->nmr.motion_mode == RUN_MODE2::SLALOM_RUN2) {
       if (tgt_val->ego_in.pivot_state == 3 &&
@@ -840,7 +841,6 @@ MotionResult MotionPlanning::slalom(
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return MotionResult::ERROR;
     }
-    sleep_ms(1);
   }
   if (sp.type == TurnType::Normal && find_in && find_out && count_save > 0
       // &&     !(offset_l || offset_r)
@@ -935,7 +935,7 @@ void MotionPlanning::reset_tgt_data() {
   pt->last_tgt_angle = 0;
   // TODO
   pt->send_command(tgt_val);
-  sleep_ms(1);
+  pt->wait_tick();
   tgt_val->nmr.tgt_reset_req = false;
 }
 
@@ -971,11 +971,11 @@ void MotionPlanning::reset_ego_data() {
   tgt_val->nmr.timstamp++;
 
   pt->send_command(tgt_val);
-  sleep_ms(1);
+  pt->wait_tick();
   tgt_val->nmr.ego_reset_req = false;
 
   req_error_reset();
-  sleep_ms(1);
+  pt->wait_tick();
 }
 struct YawBiasResultF {
   float bias_dps;     // 推定バイアス [deg/s]（Tukey加重平均）
@@ -1136,7 +1136,7 @@ void MotionPlanning::reset_gyro_ref() {
       accel_y_raw_data_sum += sensing_result->accel_y.raw;
       temp_data_sum += sensing_result->ego.temp;
       yaw_val.push_back(sensing_result->gyro.raw);
-      sleep_ms(1); //他モジュールの起動待ち
+      pt->wait_tick();
     }
 
     auto gyro_bias = calibrateYawBiasF(yaw_val, 3.0f, 4.685f); // Tukey c=4.685
@@ -1218,7 +1218,7 @@ MotionResult MotionPlanning::front_ctrl(bool limit) {
   unsigned int cnt = 0;
   unsigned int max_cnt = 0;
   while (1) {
-    sleep_ms(1);
+    pt->wait_tick();
     if (ui->button_state_hold()) {
       break;
     }
@@ -1274,7 +1274,7 @@ void MotionPlanning::keep() {
   pt->send_command(tgt_val);
 
   while (1) {
-    sleep_ms(1);
+    pt->wait_tick();
     if (ui->button_state_hold()) {
       break;
     }
