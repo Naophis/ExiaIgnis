@@ -363,3 +363,192 @@ float PlanningTask::adjust_b_to_target45(float data, float a) {
   float b_new = a / L - 45.0f;
   return b_new;
 }
+
+void PlanningTask::pl_req_activate() {
+  control_law_.pl_req_activate();
+}
+
+void PlanningTask::cp_request() {
+  // tgt_val->tgt_in.mass = param->Mass;
+
+  const auto se = get_sensing_entity();
+  pl_req_activate();
+  if (motion_req_timestamp == receive_req->nmr.timstamp) {
+    return;
+  }
+  const float dt = param->dt;
+  slip_param.K = param->slip_param_K;
+  slip_param.k = param->slip_param_k2;
+  motion_req_timestamp = receive_req->nmr.timstamp;
+
+  tgt_val->tgt_in.v_max = receive_req->nmr.v_max;
+  // printf("v_max: %f\n", tgt_val->tgt_in.v_max);
+
+  tgt_val->td = TurnDirection::None;
+  tgt_val->tt = TurnType::None;
+  if (receive_req->nmr.motion_type == MotionType::STRAIGHT ||
+      receive_req->nmr.motion_type == MotionType::SLA_FRONT_STR) {
+    if (tgt_val->ego_in.v > receive_req->nmr.v_max) {
+      tgt_val->tgt_in.v_max = tgt_val->ego_in.v;
+    }
+  } else if (receive_req->nmr.motion_type == MotionType::SLALOM) {
+    tgt_val->td = receive_req->nmr.td;
+    tgt_val->tt = receive_req->nmr.tt;
+  }
+  if (receive_req->nmr.motion_type == MotionType::SLA_BACK_STR) {
+    left_keep.star_dist = right_keep.star_dist = tgt_val->global_pos.dist;
+  }
+  tgt_val->tgt_in.end_v = receive_req->nmr.v_end;
+  tgt_val->tgt_in.accl = receive_req->nmr.accl;
+  tgt_val->tgt_in.decel = receive_req->nmr.decel;
+  tgt_val->tgt_in.w_max = receive_req->nmr.w_max;
+  tgt_val->tgt_in.end_w = receive_req->nmr.w_end;
+  tgt_val->tgt_in.alpha = receive_req->nmr.alpha;
+
+  tgt_val->tgt_in.tgt_dist = receive_req->nmr.dist;
+  last_tgt_angle = tgt_val->tgt_in.tgt_angle;
+  tgt_val->tgt_in.tgt_angle = receive_req->nmr.ang;
+
+  tgt_val->motion_mode = (int)(receive_req->nmr.motion_mode);
+  tgt_val->motion_type = receive_req->nmr.motion_type;
+
+  tgt_val->ego_in.sla_param.base_alpha = receive_req->nmr.sla_alpha;
+  tgt_val->ego_in.sla_param.base_time = receive_req->nmr.sla_time;
+  tgt_val->ego_in.sla_param.limit_time_count =
+      receive_req->nmr.sla_time * 2 / dt;
+  tgt_val->ego_in.sla_param.pow_n = receive_req->nmr.sla_pow_n;
+
+  tgt_val->ego_in.state = 0;
+  tgt_val->ego_in.pivot_state = 0;
+
+  tgt_val->dia_state.left_save = receive_req->dia_state.right_save = false;
+  tgt_val->dia_state.left_old = receive_req->dia_state.right_old = 0;
+
+  tgt_val->dia_state.left_save = false;
+  tgt_val->dia_state.right_save = false;
+  tgt_val->dia_state.left_old = tgt_val->dia_state.right_old = 0;
+
+  // if (!(tgt_val->motion_type == MotionType::NONE ||
+  //       tgt_val->motion_type == MotionType::STRAIGHT ||
+  //       tgt_val->motion_type == MotionType::PIVOT_PRE ||
+  //       tgt_val->motion_type == MotionType::PIVOT_AFTER ||
+  //       tgt_val->motion_type == MotionType::READY ||
+  //       tgt_val->motion_type == MotionType::SENSING_DUMP ||
+  //       tgt_val->motion_type == MotionType::WALL_OFF ||
+  //       tgt_val->motion_type == MotionType::WALL_OFF_DIA ||
+  //       tgt_val->motion_type == MotionType::BACK_STRAIGHT)) {
+  //   tgt_val->ego_in.ang -= last_tgt_angle;
+  //   tgt_val->ego_in.img_ang = 0;
+  //   kf_ang.offset(-last_tgt_angle);
+  // } else if (tgt_val->motion_type == MotionType::NONE) {
+  //   tgt_val->ego_in.ang = tgt_val->ego_in.img_ang = last_tgt_angle = 0;
+  //   kf_ang.reset(0);
+  //   tgt_val->ego_in.img_dist = tgt_val->ego_in.dist = 0;
+  //   kf_dist.reset(0);
+  // }
+
+  if (tgt_val->motion_type == MotionType::NONE ||
+      tgt_val->motion_type == MotionType::PIVOT ||
+      tgt_val->motion_type == MotionType::FRONT_CTRL ||
+      tgt_val->motion_type == MotionType::BACK_STRAIGHT ||
+      tgt_val->motion_type == MotionType::PIVOT_AFTER) {
+    tgt_val->ego_in.ang = tgt_val->ego_in.img_ang = last_tgt_angle = 0;
+    kf_ang.reset(0);
+    tgt_val->ego_in.img_dist = tgt_val->ego_in.dist = 0;
+    kf_dist.reset(0);
+  } else {
+    tgt_val->ego_in.ang -= last_tgt_angle;
+    kim.theta -= last_tgt_angle;
+    tgt_val->ego_in.img_ang = 0;
+    kf_ang.offset(-last_tgt_angle);
+  }
+
+  if (tgt_val->motion_type == MotionType::NONE ||
+      tgt_val->motion_type == MotionType::READY) {
+    last_tgt_angle = 0;
+    tgt_val->global_pos.ang -= tgt_val->global_pos.img_ang;
+    tgt_val->global_pos.img_ang = 0;
+
+    tgt_val->global_pos.dist -= tgt_val->global_pos.img_dist;
+    tgt_val->global_pos.img_dist = 0;
+    tgt_val->tgt_in.end_v = 0;
+    tgt_val->tgt_in.v_max = 0;
+  }
+
+  // right_keep.star_dist = tgt_val->global_pos.dist;
+  // left_keep.star_dist = tgt_val->global_pos.dist;
+
+  if (tgt_val->tgt_in.tgt_angle != 0) {
+    const auto tmp_ang = tgt_val->ego_in.ang;
+    tgt_val->ego_in.img_ang -= last_tgt_angle;
+    kf_ang.offset(-last_tgt_angle);
+    tgt_val->ego_in.ang -= last_tgt_angle;
+    // } else {
+    //   kf_ang.reset(0);
+  }
+  if (tgt_val->tgt_in.tgt_dist != 0) {
+    const auto tmp_dist = tgt_val->ego_in.dist;
+    tgt_val->ego_in.img_dist -= tmp_dist;
+    kf_dist.offset(-tmp_dist);
+    tgt_val->ego_in.dist = 0;
+    // } else {
+    //   kf_dist.reset(0);
+  }
+
+  sensing_result->ego.dist_kf = kf_dist.get_state();
+  // sensing_result->ego.ang_kf = kf_ang.get_state();
+
+  if (param->enable_kalman_gyro == 1) {
+    se->ego.ang_kf = kf_ang.get_state();
+  } else if (param->enable_kalman_gyro == 2) {
+    se->ego.ang_kf = tgt_val->ego_in.ang;
+  } else {
+    se->ego.ang_kf = tgt_val->ego_in.ang;
+  }
+
+  tgt_val->ego_in.sla_param.counter = 1;
+  tgt_val->ego_in.sla_param.state = 0;
+
+  tgt_val->motion_dir = receive_req->nmr.motion_dir;
+  tgt_val->dia_mode = receive_req->nmr.dia_mode;
+
+  tgt_val->tgt_in.accl_param.limit = 5500;
+  tgt_val->tgt_in.accl_param.n = 4;
+
+  tgt_val->tgt_in.slip_gain_K1 = param->slip_param_K;
+  tgt_val->tgt_in.slip_gain_K2 = param->slip_param_k2;
+  if (receive_req->nmr.motion_type == MotionType::SLALOM) {
+    tgt_val->ego_in.v = receive_req->nmr.v_max;
+  }
+
+  if (receive_req->nmr.motion_type == MotionType::STRAIGHT) {
+    // if (se->sen.r45.sensor_dist == 0 || se->sen.r45.sensor_dist == 180) {
+    //   se->sen.r45.sensor_dist = param->sen_ref_p.normal.ref.right45;
+    //   se->sen.r45.global_run_dist =
+    //       tgt_val->global_pos.dist - param->wall_off_hold_dist;
+    // }
+    // if (se->sen.l45.sensor_dist == 0 || se->sen.l45.sensor_dist == 180) {
+    //   se->sen.l45.sensor_dist = param->sen_ref_p.normal.ref.left45;
+    //   se->sen.l45.global_run_dist =
+    //       tgt_val->global_pos.dist - param->wall_off_hold_dist;
+    // }
+  }
+
+  if (receive_req->nmr.motion_type == MotionType::STRAIGHT ||
+      receive_req->nmr.motion_type == MotionType::SLA_FRONT_STR) {
+    kim.x = kim.y = 0;
+    tgt_val->ego_in.ideal_px = tgt_val->ego_in.ideal_py =
+        tgt_val->ego_in.img_ang = 0;
+  } else if (receive_req->nmr.motion_type == MotionType::WALL_OFF ||
+             receive_req->nmr.motion_type == MotionType::WALL_OFF_DIA) {
+  }
+  if (tgt_val->motion_type == MotionType::WALL_OFF ||
+      tgt_val->motion_type == MotionType::WALL_OFF_DIA) {
+    se->sen.r45.sensor_dist = se->ego.right45_dist;
+    se->sen.l45.sensor_dist = se->ego.left45_dist;
+  }
+  if (search_mode && tgt_val->motion_type == MotionType::STRAIGHT) {
+    se->sen.r45.sensor_dist = se->ego.right45_dist;
+    se->sen.l45.sensor_dist = se->ego.left45_dist;
+  }
+}

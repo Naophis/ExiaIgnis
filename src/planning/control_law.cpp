@@ -1211,3 +1211,33 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
     tgt_val_->duty_suction = 0;
   }
 }
+
+void ControlLaw::pl_req_activate() {
+  if (receive_req->pl_req.time_stamp != pid_req_timestamp) {
+    if (receive_req->pl_req.error_gyro_reset == 1) {
+      ee->v.error_i = 0;
+    }
+    if (receive_req->pl_req.error_vel_reset == 1) {
+      ee->dist.error_i = 0;
+    }
+    if (receive_req->pl_req.error_dist_reset == 1) {
+      ee->w.error_i = 0;
+      ee->w_kf.error_i = 0;
+    }
+    if (receive_req->pl_req.error_ang_reset == 1) {
+      ee->ang.error_i = 0;
+      ee->ang.i_slow = 0;
+      ee->ang.i_bias = 0;
+    }
+    if (receive_req->pl_req.error_led_reset == 1) {
+      // ee->led.error_i = 0;
+    }
+    // if (tgt_val->pl_req.log_start == 1) {
+    //   log_active = true;
+    // }
+    // if (tgt_val->pl_req.log_end == 1) {
+    //   log_active = false;
+    // }
+    pid_req_timestamp = receive_req->pl_req.time_stamp;
+  }
+}

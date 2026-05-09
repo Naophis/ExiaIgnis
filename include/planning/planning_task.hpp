@@ -213,5 +213,10 @@ private:
   int suction_req_timestamp = 0;
 
   unsigned char w_reset = 0;
-  
+  void cp_request();
+  void pl_req_activate();
+  sensor_ctrl_keep_dist_t right_keep;
+  sensor_ctrl_keep_dist_t left_keep;
+  slip_t slip_param;
+  motion_tgt_val_t *receive_req;
 };
