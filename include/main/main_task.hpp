@@ -82,8 +82,10 @@ private:
   std::shared_ptr<MazeSolverBaseLgc> lgc;
   std::shared_ptr<SearchController> search_ctrl;
   std::shared_ptr<PathCreator> pc;
+  param_straight_t ps;
   void reset_tgt_data();
   void reset_ego_data();
+  void req_error_reset();
 
 
   // ─── モード dispatch ──────────────────────────────────────────────────────
@@ -95,6 +97,8 @@ private:
   int select_run_mode(int max_mode);
 
   // ─── 個別モード ───────────────────────────────────────────────────────────
+
+  int test_search_mode = 0;
   void test_sla();
   void test_run();
   void test_turn();

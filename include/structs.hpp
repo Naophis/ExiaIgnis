@@ -1,7 +1,7 @@
 #ifndef STRUCTS_HPP
 #define STRUCTS_HPP
 
-#include "gen_code_conv_single2half/bus.h"
+#include "gen_code_mpc/bus.h"
 #include "include/defines.hpp"
 #include "include/enums.hpp"
 #include "include/maze_solver.hpp"

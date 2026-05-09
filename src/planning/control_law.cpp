@@ -1254,6 +1254,7 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
   } else {
     tgt_val_->duty_suction = 0;
   }
+  // motor_ctrl_->set_duty(duty_l, duty_r);
 }
 
 void ControlLaw::pl_req_activate(motion_tgt_val_t &receive_req) {

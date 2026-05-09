@@ -98,23 +98,31 @@ public:
 
   void set_search_mode(bool v) { search_mode = v; }
 
-  void motor_enable() {} // TODO: モーター有効化
+  void motor_enable() {
+    kf_dist.reset(0);
+    kf_ang.reset(0);
+    kf_v.reset(0);
+    kf_w.reset(0);
+    kf_w2.reset(0);
+    kf_v_l.reset(0);
+    kf_v_r.reset(0);
+    motor_en = true;
+  }
   void motor_disable() { // IDLE コマンドでモーター停止
     Command cmd;
     cmd.mode = MotionMode::IDLE;
     // send_command(cmd);
+    motor_en = false;
   }
-  void suction_enable(float duty, float /*duty_low*/) {
-    Command cmd;
-    cmd.mode = MotionMode::IDLE;
-    cmd.duty_suction = duty;
-    // send_command(cmd);
+  void suction_enable(float duty, float duty_low) {
+    suction_test_duty_low_ = duty_low;
+    suction_test_duty_ = duty;
+    suction_en = true;
   }
   void suction_disable() {
-    Command cmd;
-    cmd.mode = MotionMode::IDLE;
-    cmd.duty_suction = 0.0f;
-    // send_command(cmd);
+    suction_test_duty_low_ = 0.0f;
+    suction_test_duty_ = 0.0f;
+    suction_en = false;
   }
 
   // ControlLaw を通さず吸引 PWM を直接制御するテスト用。
@@ -132,7 +140,9 @@ public:
 
   void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
 
-  void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tgt_val) { tgt_val = _tgt_val; }
+  void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tgt_val) {
+    tgt_val = _tgt_val;
+  }
 
   float adjust_b_to_target90(float data, float a);
   float adjust_b_to_target45(float data, float a);
@@ -151,6 +161,7 @@ public:
   kinematics_t odm = {0};
   kinematics_t kim = {0};
   float suction_gain = 200;
+
 private:
   PlanningTask() = default;
 
@@ -173,9 +184,9 @@ private:
   uint32_t next_alarm_ = 0;
   uint64_t prev_ts_ = 0;
 
-  volatile float suction_test_duty_ = 0.0f;     // 0=通常, >0=高吸引目標電圧[V]
+  volatile float suction_test_duty_ = 0.0f; // 0=通常, >0=高吸引目標電圧[V]
   volatile float suction_test_duty_low_ = 0.0f; // 低吸引目標電圧[V]
-  bool suction_test_was_on_ = false;            // テストモード終了検知用
+  bool suction_test_was_on_ = false; // テストモード終了検知用
 
   volatile Command pending_cmd_{};
   volatile bool cmd_pending_ = false;

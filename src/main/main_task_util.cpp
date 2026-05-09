@@ -302,3 +302,34 @@ void MainTask::setup_components() {
   search_ctrl->set_input_param_entity(param_);
 }
 
+
+void MainTask::req_error_reset() {
+
+  // printf("kf_batt:\n");
+  // pt->kf_batt.print_state();
+
+  // printf("kf_v:\n");
+  // pt->kf_v.print_state();
+
+  // printf("kf_enc_r:\n");
+  // pt->kf_v_r.print_state();
+
+  // printf("kf_enc_l:\n");
+  // pt->kf_v_l.print_state();
+
+  // printf("kf_dist:\n");
+  // pt->kf_dist.print_state();
+
+  // printf("kf_w:\n");
+  // pt->kf_w.print_state();
+
+  // printf("kf_ang:\n");
+  // pt->kf_ang.print_state();
+
+  tgt_val_->pl_req.error_vel_reset = 1;
+  tgt_val_->pl_req.error_gyro_reset = 1;
+  tgt_val_->pl_req.error_ang_reset = 1;
+  tgt_val_->pl_req.error_dist_reset = 1;
+  tgt_val_->pl_req.time_stamp++;
+  planning_->send_command(tgt_val_);
+}

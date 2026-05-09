@@ -85,7 +85,80 @@ void MainTask::run_test_mode(int mode) {
 
 void MainTask::test_sla() {}
 
-void MainTask::test_run() {}
+void MainTask::test_run() {
+  mp->reset_gyro_ref_with_check();
+  reset_tgt_data();
+  reset_ego_data();
+  planning_->motor_enable();
+
+  if (sys_.test.suction_active == 1) {
+    planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
+    sleep_ms(500);
+  } else if (sys_.test.suction_active == 2) {
+    planning_->suction_enable(sys_.test.suction_duty_burst,
+                              sys_.test.suction_duty_burst_low);
+    sleep_ms(500);
+  }
+
+  reset_tgt_data();
+  reset_ego_data();
+  planning_->motor_enable();
+
+  req_error_reset();
+  if (param_->test_log_enable > 0) {
+    // lt->start_slalom_log();
+  }
+  planning_->set_search_mode(test_search_mode > 0);
+
+  ps.v_max = sys_.test.v_max;
+  ps.v_end = 20;
+  ps.dist = sys_.test.dist - 5;
+  // + param_->offset_start_dist;
+  ps.accl = sys_.test.accl;
+  ps.decel = sys_.test.decel;
+  ps.sct = SensorCtrlType::Straight;
+  if (sys_.test.dia == 1) {
+    ps.sct = SensorCtrlType::Dia;
+  }
+  ps.motion_type = MotionType::STRAIGHT;
+  ps.dia_mode = false;
+
+  mp->go_straight(ps);
+  ps.v_max = 20;
+  ps.v_end = sys_.test.end_v;
+  ps.dist = 5;
+  ps.accl = sys_.test.accl;
+  ps.decel = sys_.test.decel;
+  mp->go_straight(ps);
+  // lt->stop_slalom_log();
+  // bool front_ctrl = (sensing_result->ego.front_dist < 60);
+  // vTaskDelay(50.0 / portTICK_RATE_MS);
+  sleep_ms(50);
+  planning_->motor_disable();
+  reset_tgt_data();
+  reset_ego_data();
+  req_error_reset();
+  planning_->suction_disable();
+
+  reset_tgt_data();
+  reset_ego_data();
+  req_error_reset();
+  mp->coin();
+  // lt->save(slalom_log_file);
+  ui_.coin(120);
+  planning_->set_search_mode(false);
+  while (1) {
+    if (ui_.button_state_hold())
+      break;
+    sleep_ms(10);
+  }
+  // lt->dump_log(slalom_log_file);
+  while (1) {
+    if (ui_.button_state_hold())
+      break;
+    sleep_ms(10);
+  }
+}
 
 void MainTask::test_turn() {}
 
