@@ -98,29 +98,11 @@ public:
 
   void set_search_mode(bool v) { search_mode = v; }
 
-  void motor_enable() {
-    kf_dist.reset(0);
-    kf_ang.reset(0);
-    kf_v.reset(0);
-    kf_w.reset(0);
-    kf_w2.reset(0);
-    kf_v_l.reset(0);
-    kf_v_r.reset(0);
-    motor_en = true;
-  }
-  void motor_disable() { // IDLE コマンドでモーター停止
-    Command cmd;
-    cmd.mode = MotionMode::IDLE;
-    // send_command(cmd);
-    motor_en = false;
-  }
-  void suction_enable(float duty, float duty_low) {
-    suction_en = true;
-    ctl_.set_suction_target(duty, duty_low);
-  }
-  void suction_disable() {
-    suction_en = false;
-  }
+  void motor_enable();
+  void motor_disable();
+
+  void suction_enable(float duty, float duty_low);
+  void suction_disable() { suction_en = false; }
 
   void reset_kf_state(bool full) {
     if (sensing_result && param)

@@ -117,21 +117,6 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (dt_us == 0)
     return;
 
-  // --- コマンド受け取り (Core1 からの cross-core 書き込みを安全に読む) ---
-  if (cmd_pending_) {
-    __dmb(); // load barrier: cmd_pending_ を読んだ後、pending_cmd_
-             // フィールドを確実に読む
-    active_cmd_ = Command(pending_cmd_);
-    cmd_pending_ = false;
-    // 新コマンド受信: 積分項・軌道をリセット
-    vel_err_i_ = 0.0f;
-    gyro_err_i_ = 0.0f;
-    img_v_ = 0.0f;
-    img_w_ = 0.0f;
-    img_dist_ = 0.0f;
-    img_ang_ = 0.0f;
-  }
-
   // --- motion_tgt_val_t コマンド受け取り (send_command 経由) ---
   if (tgt_cmd_pending_) {
     __dmb(); // pending_tgt_ の書き込みが見えることを保証
@@ -508,4 +493,24 @@ void PlanningTask::cp_request() {
     se->sen.r45.sensor_dist = se->ego.right45_dist;
     se->sen.l45.sensor_dist = se->ego.left45_dist;
   }
+}
+
+void PlanningTask::motor_enable() {
+  kf_dist.reset(0);
+  kf_ang.reset(0);
+  kf_v.reset(0);
+  kf_w.reset(0);
+  kf_w2.reset(0);
+  kf_v_l.reset(0);
+  kf_v_r.reset(0);
+  motor_en = true;
+}
+void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
+  Command cmd;
+  cmd.mode = MotionMode::IDLE;
+  motor_en = false;
+}
+void PlanningTask::suction_enable(float duty, float duty_low) {
+  suction_en = true;
+  ctl_.set_suction_target(duty, duty_low);
 }
