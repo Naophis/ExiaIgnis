@@ -37,6 +37,9 @@ public:
   void error();
 
   int encoder_operation();
+  void motion_check();
+
+  void set_tgt_val(std::shared_ptr<motion_tgt_val_t> t) { tgt_val_ = t; }
 
   std::vector<uint8_t> blight_level_list; // インデックスごとの輝度値
 
@@ -48,5 +51,6 @@ private:
   uint pwm_slice_ = 0;
   uint pwm_channel_ = 0;
   std::shared_ptr<sensing_result_entity_t> sensing_result;
+  std::shared_ptr<motion_tgt_val_t> tgt_val_;
   static constexpr uint16_t ENC_OPE_V_R_TH = 90 * 1;
 };

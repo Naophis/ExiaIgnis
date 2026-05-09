@@ -1184,8 +1184,7 @@ void MotionPlanning::reset_gyro_ref() {
   pt->reset_kf_state(true);
 }
 void MotionPlanning::reset_gyro_ref_with_check() {
-  // return;
-  while (!ui->button_state_hold()) { sleep_ms(10); }
+  ui->motion_check();
   reset_gyro_ref();
   pt->reset_kf_state(true);
   pt->reset_pos(-param->offset_start_dist, 0, 0);

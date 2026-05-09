@@ -169,3 +169,38 @@ int UserInterface::encoder_operation() {
   }
   return 0;
 }
+
+void UserInterface::motion_check() {
+  int c = 0;
+  if (tgt_val_) {
+    tgt_val_->nmr.motion_type = MotionType::READY;
+    tgt_val_->nmr.timstamp++;
+  }
+
+  sleep_ms(1);
+  while (1) {
+    c++;
+    if (c % 2 == 0) {
+      LED_on_all();
+    } else {
+      LED_off_all();
+    }
+    if (button_state_hold()) {
+      LED_off_all();
+      break;
+    }
+    if (sensing_result->ego.left90_mid_dist < 90 &&
+        sensing_result->ego.right90_mid_dist < 90 &&
+        sensing_result->ego.left90_mid_dist > 10 &&
+        sensing_result->ego.right90_mid_dist > 10) {
+      LED_off_all();
+      LED_off_all();
+      for (int i = 0; i < 2; i++) {
+        music_sync(MUSIC::C6_, 100);
+        sleep_ms(50);
+      }
+      break;
+    }
+    sleep_ms(50);
+  }
+}

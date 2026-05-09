@@ -44,6 +44,7 @@ void MainTask::run_test_mode(int mode) {
       test_back();
     } else if (mode == 11) {
       printf("suction\n");
+      test_suction();
     } else if (mode == 12) {
       printf("hold\n");
     } else if (mode == 13) {
@@ -99,6 +100,24 @@ void MainTask::test_front_ctrl(bool enable) {}
 void MainTask::test_sla_walloff() {}
 
 void MainTask::test_back() {}
+
+void MainTask::test_suction() {
+  const auto se = get_sensing_entity();
+  const float target_v = sys_.test.suction_duty;
+
+  mp->reset_gyro_ref_with_check();
+  sleep_ms(250);
+  planning_->set_suction_test(target_v);
+
+  while (!ui_.button_state()) {
+    printf("suction target=%.2fV battery=%.3fV duty=%.1f%%\n",
+           target_v, se->ego.battery_lp, planning_->tgt_val->duty_suction);
+    sleep_ms(200);
+  }
+
+  planning_->set_suction_test(0.0f);
+  printf("suction stopped\n");
+}
 
 void MainTask::keep_pivot() {}
 

@@ -103,6 +103,7 @@ private:
   void test_front_ctrl(bool enable);
   void test_sla_walloff();
   void test_back();
+  void test_suction();
   void keep_pivot();
   void dump1();
   void dump2();

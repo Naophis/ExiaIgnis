@@ -68,10 +68,10 @@ hf_cl: 0 # half(0) or classic(1)
 # mode: 5 # 探索スラローム sla_wall_ref_l/r
 # mode: 7 # front ctrl
 # mode: 9 # wall off, search_mode(1)->search_wall_off, 0->fast_run_wall_off
-# mode: 11 # vacume/suction test
+mode: 11 # vacume/suction test
 # mode: 12 # silent_keep
 # mode: 13 # keep_pos
-mode: 14 # sensing
+# mode: 14 # sensing
 # mode: 15 # sensor calib
 # mode: 16 # system identification (para)
 # mode: 17 # system identification (roll)
@@ -115,8 +115,8 @@ test: # テスト走行時に使用するパラメータ群
   ang: 3600
   search_mode: 0
   
-  suction_duty: 4.6
-  suction_duty_low: 4.35
+  suction_duty: 2.6
+  suction_duty_low: 2.35
   # Alter
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.750

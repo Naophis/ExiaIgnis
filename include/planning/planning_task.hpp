@@ -173,7 +173,7 @@ private:
   uint32_t next_alarm_ = 0;
   uint64_t prev_ts_ = 0;
 
-  volatile float suction_test_duty_ = 0.0f; // 0=通常, >0=吸引テストモード
+  volatile float suction_test_duty_ = 0.0f; // 0=通常, >0=吸引テスト目標電圧[V]
   bool suction_test_was_on_ = false;        // テストモード終了検知用
 
   volatile Command pending_cmd_{};

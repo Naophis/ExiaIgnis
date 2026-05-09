@@ -151,20 +151,23 @@ void PlanningTask::tick(uint32_t dt_us) {
     return;
 
   // 吸引テストモード: ControlLaw/Trajectory を完全バイパスして直接 PWM 出力
-  // float test_duty = suction_test_duty_;
-  // if (test_duty > 0.0f) {
-  //   motor_.apply(0.0f, 0.0f, test_duty);
-  //   state.duty_suction = test_duty;
-  //   state.duty_l = 0.0f;
-  //   state.duty_r = 0.0f;
-  //   suction_test_was_on_ = true;
-  //   return;
-  // }
-  // if (suction_test_was_on_) {
-  //   motor_.apply(0.0f, 0.0f, 0.0f); // テストモード終了: 確実に停止
-  //   state.duty_suction = 0.0f;
-  //   suction_test_was_on_ = false;
-  // }
+  float target_v = suction_test_duty_;
+  if (target_v > 0.0f) {
+    const float battery_v = sensing_result->ego.battery_lp;
+    float duty = (battery_v > 0.0f) ? (target_v / battery_v * 100.0f) : 0.0f;
+    if (duty > 100.0f) duty = 100.0f;
+    motor_.apply(0.0f, 0.0f, duty);
+    state.duty_suction = duty;
+    state.duty_l = 0.0f;
+    state.duty_r = 0.0f;
+    suction_test_was_on_ = true;
+    return;
+  }
+  if (suction_test_was_on_) {
+    motor_.apply(0.0f, 0.0f, 0.0f); // テストモード終了: 確実に停止
+    state.duty_suction = 0.0f;
+    suction_test_was_on_ = false;
+  }
 
   // --- コマンド受け取り (Core1 からの cross-core 書き込みを安全に読む) ---
   if (cmd_pending_) {

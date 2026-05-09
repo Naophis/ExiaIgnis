@@ -62,6 +62,7 @@ void MainTask::run() {
 
   printf("[run] B: ui init\n");
   ui_.init(pwm_slice, pwm_channel, se);
+  ui_.set_tgt_val(tgt_val_);
   ui_.LED_headlight();
   // ui_.hello_exia();
   printf("[run] C: coin\n");
