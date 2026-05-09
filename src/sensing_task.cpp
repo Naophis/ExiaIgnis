@@ -350,9 +350,14 @@ void SensingTask::read_spi_sensors() {
   float enc_r_dt = (float)(enc_r_timestamp_now - enc_r_timestamp_old) / 1000000;
   float enc_l_dt = (float)(enc_l_timestamp_now - enc_l_timestamp_old) / 1000000;
 
-  // printf(
-  //     "gyro: %d (dt: %.3f s), enc_r: %d (dt: %.3f s), enc_l: %d (dt:
-  //     %.3fs)\n", gyro, gyro_dt, enc_r, enc_r_dt, enc_l, enc_l_dt);
+  // if (se->ego.v_l > 100) {
+  //   printf("v_l: %.1f v_r: %.1f,vc: %.1f x_dt: %.1f dist: %.1f\n",
+  //   se->ego.v_l,
+  //          se->ego.v_r, se->ego.v_c, se->ego.v_c * dt, tgt_val->ego_in.dist);
+  //   printf("gyro: %d (dt: %.3f s), enc_r: %d (dt: %.3f s), enc_l: %d (dt: % "
+  //          ".3fs)\n ",
+  //          gyro, gyro_dt, enc_r, enc_r_dt, enc_l, enc_l_dt);
+  // }
 
   pt->ego.kf_w.dt = gyro_dt;
   pt->ego.kf_v_r.dt = enc_r_dt;
@@ -370,7 +375,7 @@ void SensingTask::read_spi_sensors() {
     se->encoder.left = enc_l;
     se->ego.v_l =
         calc_enc_v(se->encoder.left, se->encoder.left_old, pt->ego.kf_v_l.dt);
-    pt->ego.kf_v_l.dt = enc_l_dt;
+    pt->ego.kf_v_l.dt = enc_l_dt; 
     pt->ego.kf_v_l.predict(accl_l);
     pt->ego.kf_v_l.update(se->ego.v_l);
   }
@@ -423,10 +428,6 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
 
   const auto dt = (enc_l_dt + enc_r_dt) / 2;
   tgt_val->ego_in.dist += se->ego.v_c * dt;
-  if (se->ego.v_l > 100) {
-    printf("v_l: %.1f v_r: %.1f,vc: %.1f x_dt: %.1f dist: %.1f\n", se->ego.v_l,
-           se->ego.v_r, se->ego.v_c, se->ego.v_c * dt, tgt_val->ego_in.dist);
-  }
   tgt_val->global_pos.dist += se->ego.v_c * dt;
 
   //   if (param->enable_kalman_gyro == 1) {
