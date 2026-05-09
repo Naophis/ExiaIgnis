@@ -24,7 +24,6 @@ void MotionPlanning::set_sensing_entity(
   wall_off_controller->set_sensing_entity(_entity);
 }
 
-
 void MotionPlanning::set_userinterface(std::shared_ptr<UserInterface> &_ui) {
   ui = _ui;
 }
@@ -38,8 +37,9 @@ void MotionPlanning::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
 void MotionPlanning::set_logging_task(std::shared_ptr<LoggingTask> &_lt) {
   lt = _lt; //
 }
-MotionResult MotionPlanning::go_straight(
-    param_straight_t &p, std::shared_ptr<Adachi> &adachi, bool search_mode) {
+MotionResult MotionPlanning::go_straight(param_straight_t &p,
+                                         std::shared_ptr<Adachi> &adachi,
+                                         bool search_mode) {
   const auto se = get_sensing_entity();
   const static float ang32 = 32.0f / 180.0f * M_PI;
   const static float cos32 = std::cos(ang32);
@@ -100,7 +100,7 @@ MotionResult MotionPlanning::go_straight(
   tgt_val->nmr.timstamp++;
 
   pt->send_command(tgt_val);
-  
+
   if (search_mode && adachi != nullptr) {
     adachi->update();
   }
@@ -111,7 +111,7 @@ MotionResult MotionPlanning::go_straight(
   //     p.motion_type == MotionType::SLA_BACK_STR ||
   //     p.motion_type == MotionType::BACK_STRAIGHT) {
   //   if (std::abs(p.dist) > 5) {
-      
+
   //   }
   // }
 
@@ -135,6 +135,12 @@ MotionResult MotionPlanning::go_straight(
     pt->wait_tick();
     cnt++;
     auto now_dist = (cnt == 1) ? 0.0f : tgt_val->ego_in.dist;
+
+    // if (cnt % 10 == 0) {
+    //   printf("v=%.1f accl=%.1f dist=%.1f dist=%.1f\n", tgt_val->ego_in.v,
+    //          tgt_val->ego_in.accl, tgt_val->ego_in.img_dist, now_dist);
+    // }
+
     if (std ::abs(now_dist) >= std::abs(p.dist)) {
       break;
     }
@@ -283,28 +289,28 @@ MotionResult MotionPlanning::go_straight(
       }
     }
 
-    if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
-      if (p.motion_type == MotionType::STRAIGHT &&
-          p.wall_ctrl_mode == WallCtrlMode::LEFT_ONLY && p.dist < 90) {
-      } else if (p.motion_type == MotionType::SLA_FRONT_STR ||
-                 p.motion_type == MotionType::SLA_BACK_STR) {
-      } else {
-        param->sen_ref_p.normal.exist.left45 = left;
-        param->sen_ref_p.normal.exist.right45 = right;
-        req_error_reset();
-        tgt_val->nmr.v_max = 0.1;
-        tgt_val->nmr.v_end = 0.1;
-        tgt_val->nmr.accl = 1000;
-        tgt_val->nmr.decel = p.decel;
-        tgt_val->nmr.dist = 10;
-        tgt_val->nmr.timstamp += 10;
+    // if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
+    //   if (p.motion_type == MotionType::STRAIGHT &&
+    //       p.wall_ctrl_mode == WallCtrlMode::LEFT_ONLY && p.dist < 90) {
+    //   } else if (p.motion_type == MotionType::SLA_FRONT_STR ||
+    //              p.motion_type == MotionType::SLA_BACK_STR) {
+    //   } else {
+    //     param->sen_ref_p.normal.exist.left45 = left;
+    //     param->sen_ref_p.normal.exist.right45 = right;
+    //     req_error_reset();
+    //     tgt_val->nmr.v_max = 0.1;
+    //     tgt_val->nmr.v_end = 0.1;
+    //     tgt_val->nmr.accl = 1000;
+    //     tgt_val->nmr.decel = p.decel;
+    //     tgt_val->nmr.dist = 10;
+    //     tgt_val->nmr.timstamp += 10;
 
-        pt->send_command(tgt_val);
-        // pt->wait_tick();
+    //     pt->send_command(tgt_val);
+    //     // pt->wait_tick();
 
-        return MotionResult::ERROR;
-      }
-    }
+    //     return MotionResult::ERROR;
+    //   }
+    // }
     // pt->wait_tick();
   }
   param->sen_ref_p.normal.exist.left45 = left;
@@ -363,7 +369,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
         std::abs(tgt_val->ego_in.ang * 180 / m_PI) > 10) {
       break;
     }
-    if (c == 250) { //動き出さないとき
+    if (c == 250) { // 動き出さないとき
       if (std::abs(tgt_val->ego_in.ang * 180 / m_PI) < 10) {
         pt->motor_disable();
         sleep_ms(10);
@@ -420,21 +426,19 @@ void MotionPlanning::req_error_reset() {
 
   pt->send_command(tgt_val);
 }
-MotionResult MotionPlanning::slalom(slalom_param2_t &sp,
-                                              TurnDirection td,
-                                              next_motion_t &next_motion) {
+MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
+                                    next_motion_t &next_motion) {
   return slalom(sp, td, next_motion, false);
 }
 
-MotionResult MotionPlanning::slalom(slalom_param2_t &sp,
-                                              TurnDirection td,
-                                              next_motion_t &next_motion,
-                                              bool dia) {
+MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
+                                    next_motion_t &next_motion, bool dia) {
   return slalom(sp, td, next_motion, dia, fake_adachi, false);
 }
-MotionResult MotionPlanning::slalom(
-    slalom_param2_t &sp, TurnDirection td, next_motion_t &next_motion, bool dia,
-    std::shared_ptr<Adachi> &adachi, bool search_mode) {
+MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
+                                    next_motion_t &next_motion, bool dia,
+                                    std::shared_ptr<Adachi> &adachi,
+                                    bool search_mode) {
   bool find = false;
   bool find_r = false;
   bool find_l = false;
@@ -910,7 +914,7 @@ MotionResult MotionPlanning::slalom(
   return MotionResult::NONE;
 }
 void MotionPlanning::normal_slalom(param_normal_slalom_t &p,
-                                             param_straight_t &p_str) {}
+                                   param_straight_t &p_str) {}
 
 void MotionPlanning::reset_tgt_data() {
   tgt_val->tgt_in.v_max = 0;
@@ -1106,7 +1110,7 @@ void MotionPlanning::reset_gyro_ref() {
   tgt_val->gyro_retry = 0;
   tgt_val->calibration_mode = CalibrationMode::DOING;
   tgt_val->nmr.timstamp++;
-  sleep_ms(10); //他モジュールの起動待ち
+  sleep_ms(10); // 他モジュールの起動待ち
 
   auto print = [=]() -> void {
     printf("gyro bias: %f\n", tgt_val->gyro_zero_p_offset);
@@ -1143,7 +1147,7 @@ void MotionPlanning::reset_gyro_ref() {
 
     if (!check && min_robust_dps2 > gyro_bias.var_robust_dps2) {
       min_robust_dps2 = gyro_bias.var_robust_dps2;
-      set_val(gyro_bias, j); //初回は許容
+      set_val(gyro_bias, j); // 初回は許容
     }
 
     if (param->gyro_param.retry_min_th < gyro_bias.bias_dps &&
@@ -1177,7 +1181,7 @@ void MotionPlanning::reset_gyro_ref() {
 
   tgt_val->calibration_mode = CalibrationMode::NONE;
   tgt_val->nmr.timstamp++;
-  sleep_ms(10); //他モジュールの起動待ち
+  sleep_ms(10); // 他モジュールの起動待ち
 
   print();
 
@@ -1333,7 +1337,7 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
       ps.v_max = p_set.str_map[st].v_max;
       ps.v_end =
           fast_mode ? p_set.map[turn_type].v : p_set.map_slow[turn_type].v;
-      bool exist_next_idx = (i + 1) < path_size; //絶対true
+      bool exist_next_idx = (i + 1) < path_size; // 絶対true
       if (exist_next_idx) {
         float next_dist = 0.5 * pc->path_s[i + 1] - 1;
         auto next_turn_type = tc.get_turn_type(pc->path_t[i + 1]);
@@ -1408,7 +1412,7 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
 
     if (!((turn_type == TurnType::None) || (turn_type == TurnType::Finish))) {
       auto st = !dia ? StraightType::FastRun : StraightType::FastRunDia;
-      bool exist_next_idx = (i + 1) < path_size; //絶対true
+      bool exist_next_idx = (i + 1) < path_size; // 絶対true
       float dist3 = 0;
       float dist4 = 0;
       if (exist_next_idx) {
@@ -1431,7 +1435,7 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
       nm.skip_wall_off = start_turn;
 
       if (exist_next_idx && !(dist3 > 0 && dist4 > 0)) {
-        //連続スラロームのとき、次のスラロームの速度になるように加速
+        // 連続スラロームのとき、次のスラロームの速度になるように加速
         auto next_turn_type = tc.get_turn_type(pc->path_t[i + 1]);
         nm.is_turn = true;
         nm.v_max = MAX(p_set.map[next_turn_type].v, p_set.str_map[st].v_max);
@@ -1510,23 +1514,19 @@ MotionResult MotionPlanning::wall_off(param_straight_t &p, bool dia) {
   return MotionResult::NONE;
 }
 
-bool MotionPlanning::wall_off(TurnDirection td,
-                                        param_straight_t &ps_front) {
+bool MotionPlanning::wall_off(TurnDirection td, param_straight_t &ps_front) {
   return wall_off_controller->execute_wall_off(td, ps_front);
 }
 
-bool MotionPlanning::wall_off_dia(TurnDirection td,
-                                            param_straight_t &ps_front,
-                                            bool &use_oppo_wall,
-                                            bool &exist_wall) {
+bool MotionPlanning::wall_off_dia(TurnDirection td, param_straight_t &ps_front,
+                                  bool &use_oppo_wall, bool &exist_wall) {
   return wall_off_controller->execute_wall_off_dia(td, ps_front, use_oppo_wall,
                                                    exist_wall);
 }
 
 void MotionPlanning::calc_dia135_offset(param_straight_t &front,
-                                                  param_straight_t &back,
-                                                  TurnDirection dir,
-                                                  bool exec_wall_off) {
+                                        param_straight_t &back,
+                                        TurnDirection dir, bool exec_wall_off) {
   const auto se = get_sensing_entity();
   float offset_l = 0;
   float offset_r = 0;
@@ -1692,9 +1692,8 @@ float MotionPlanning::calc_orval_offset(TurnDirection dir) {
 }
 
 void MotionPlanning::calc_large_offset(param_straight_t &front,
-                                                 param_straight_t &back,
-                                                 TurnDirection dir,
-                                                 bool exec_wall_off) {
+                                       param_straight_t &back,
+                                       TurnDirection dir, bool exec_wall_off) {
   const auto se = get_sensing_entity();
   float offset_l = 0;
   float offset_r = 0;
@@ -1780,9 +1779,8 @@ void MotionPlanning::calc_large_offset(param_straight_t &front,
 }
 
 void MotionPlanning::calc_dia45_offset(param_straight_t &front,
-                                                 param_straight_t &back,
-                                                 TurnDirection dir,
-                                                 bool exec_wall_off) {
+                                       param_straight_t &back,
+                                       TurnDirection dir, bool exec_wall_off) {
   const auto se = get_sensing_entity();
   float offset_l = 0;
   float offset_r = 0;
@@ -1868,9 +1866,8 @@ void MotionPlanning::calc_dia45_offset(param_straight_t &front,
   }
   // back.dist += offset * ROOT2;
 }
-void MotionPlanning::system_identification(MotionType mt,
-                                                     float volt_l, float volt_r,
-                                                     float time) {
+void MotionPlanning::system_identification(MotionType mt, float volt_l,
+                                           float volt_r, float time) {
   req_error_reset();
   sleep_ms(2);
   tgt_val->nmr.v_max = 0;

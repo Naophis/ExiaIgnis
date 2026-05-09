@@ -5,6 +5,7 @@
 #include "pico/stdlib.h"
 #include <algorithm>
 #include <cmath>
+#include <stdio.h>
 
 void MotorActuator::init() {
   const uint motor_pins[] = {M_PWM_L1, M_PWM_L2, M_PWM_R1, M_PWM_R2,
@@ -53,4 +54,3 @@ void MotorActuator::apply_suction(float duty_suction) {
   pwm_set_chan_level(slice_S_, PWM_CHAN_A, suction_level);
   pwm_set_chan_level(slice_S_, PWM_CHAN_B, 0);
 }
-

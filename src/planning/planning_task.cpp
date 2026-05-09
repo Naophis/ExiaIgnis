@@ -109,7 +109,7 @@ void PlanningTask::tick(uint32_t dt_us) {
     cp_request();
   }
 
-  float dt = dt_us * 1e-6f;
+  const float dt = param ? param->dt : 0.001f; // param がまだセットされてない場合は dt=10ms 固定
 
   {
     ego.update(tgt_val, motor_en); // 30 usec

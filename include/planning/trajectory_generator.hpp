@@ -43,7 +43,7 @@ public:
   std::vector<int> trj_idx_val;
 
 private:
-  int32_t    mpc_step = 0;
+  int32_t    mpc_step = 1;
   t_dynamics dynamics{};
   t_ego      mpc_next_ego2{};
   t_ego      mpc_next_ego_prev{};

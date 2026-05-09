@@ -83,7 +83,9 @@ void MainTask::run_test_mode(int mode) {
 
 // ============================================================
 
-void MainTask::test_sla() {}
+void MainTask::test_sla() {
+  //
+}
 
 void MainTask::test_run() {
   mp->reset_gyro_ref_with_check();
@@ -92,7 +94,8 @@ void MainTask::test_run() {
   planning_->motor_enable();
 
   if (sys_.test.suction_active == 1) {
-    planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
+    planning_->suction_enable(sys_.test.suction_duty,
+                              sys_.test.suction_duty_low);
     sleep_ms(500);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
@@ -122,6 +125,9 @@ void MainTask::test_run() {
   }
   ps.motion_type = MotionType::STRAIGHT;
   ps.dia_mode = false;
+
+  printf("v_max=%.1f v_end=%.1f dist=%.1f accl=%.1f decel=%.1f\n", ps.v_max,
+         ps.v_end, ps.dist, ps.accl, ps.decel);
 
   mp->go_straight(ps);
   ps.v_max = 20;
@@ -183,8 +189,8 @@ void MainTask::test_suction() {
   planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
 
   while (!ui_.button_state()) {
-    printf("suction target=%.2fV battery=%.3fV duty=%.1f%%\n",
-           target_v, se->ego.batt_kf, planning_->tgt_val->duty_suction);
+    printf("suction target=%.2fV battery=%.3fV duty=%.1f%%\n", target_v,
+           se->ego.batt_kf, planning_->tgt_val->duty_suction);
     sleep_ms(200);
   }
 
@@ -221,15 +227,16 @@ void MainTask::dump1() {
            se->led_sen.right45_2.raw, se->led_sen.right45.raw,
            se->led_sen.right90.raw);
 
-    printf("sensor_lp: %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f\n",
-           se->ego.left90_lp,    //
-           se->ego.left45_3_lp,  //
-           se->ego.left45_2_lp,  //
-           se->ego.left45_lp,    //
-           se->ego.right45_lp,   //
-           se->ego.right45_2_lp, //
-           se->ego.right45_3_lp, //
-           se->ego.right90_lp);
+    printf(
+        "sensor_lp: %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f\n",
+        se->ego.left90_lp,    //
+        se->ego.left45_3_lp,  //
+        se->ego.left45_2_lp,  //
+        se->ego.left45_lp,    //
+        se->ego.right45_lp,   //
+        se->ego.right45_2_lp, //
+        se->ego.right45_3_lp, //
+        se->ego.right90_lp);
 
     printf("sensor_dist(near): %3.2f, %3.2f, %3.2f, %3.2f, %3.2f, %3.2f, "
            "%3.2f, %3.2f, %3.2f\n",

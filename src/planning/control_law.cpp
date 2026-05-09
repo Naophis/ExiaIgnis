@@ -1225,7 +1225,12 @@ void ControlLaw::limitter(float &kp, float &ki, float &kb, float &kd,
 void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
   float duty_suction_in = 0.0f;
 
-  if (!motor_en_) {
+  if (motor_en_) {
+    if (param_->motor_debug_mode > 0) {
+      duty_l = param_->motor_debug_mode_duty_l;
+      duty_r = param_->motor_debug_mode_duty_r;
+    }
+  } else {
     duty_l = 0.0f;
     duty_r = 0.0f;
   }
