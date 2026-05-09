@@ -79,31 +79,6 @@ void PlanningTask::start_irq() {
   timer1_hw->alarm[0] = next_alarm_;
 }
 
-// ============================================================
-// コマンド投入 (Core0 main ループから呼ぶ, IRQ-safe)
-// ============================================================
-// Core1 (MainTask) から Core0 (Planning IRQ) へ cross-core 安全に投入する。
-// __dmb() で全フィールドの書き込みが cmd_pending_
-// より前に完了することを保証する。 void PlanningTask::send_command(const
-// Command &cmd) {
-//     pending_cmd_.mode          = cmd.mode;
-//     pending_cmd_.v_max         = cmd.v_max;
-//     pending_cmd_.v_end         = cmd.v_end;
-//     pending_cmd_.accl          = cmd.accl;
-//     pending_cmd_.decel         = cmd.decel;
-//     pending_cmd_.dist          = cmd.dist;
-//     pending_cmd_.w_max         = cmd.w_max;
-//     pending_cmd_.alpha         = cmd.alpha;
-//     pending_cmd_.ang           = cmd.ang;
-//     pending_cmd_.duty_suction  = cmd.duty_suction;
-//     pending_cmd_.timestamp     = cmd.timestamp;
-//     __dmb();
-//     cmd_pending_ = true;
-// }
-
-// Astraea 互換: motion_tgt_val_t ベースのコマンド。
-// Astraea の xTaskNotify(*th, (uint32_t)tgt_val.get(), eSetValueWithOverwrite)
-// に相当。 IRQ が次の tick で cp_request() 相当の処理を実行する。
 void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
   pending_tgt_ = tgt;
   __dmb();
@@ -142,9 +117,6 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (dt_us == 0)
     return;
 
-  // 吸引テストモード: ControlLaw/Trajectory を完全バイパスして直接 PWM 出力
-  float target_v = suction_test_duty_;
-  
   // --- コマンド受け取り (Core1 からの cross-core 書き込みを安全に読む) ---
   if (cmd_pending_) {
     __dmb(); // load barrier: cmd_pending_ を読んだ後、pending_cmd_

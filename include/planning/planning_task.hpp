@@ -115,13 +115,10 @@ public:
     motor_en = false;
   }
   void suction_enable(float duty, float duty_low) {
-    suction_test_duty_low_ = duty_low;
-    suction_test_duty_ = duty;
     suction_en = true;
+    ctl_.set_suction_target(duty, duty_low);
   }
   void suction_disable() {
-    suction_test_duty_low_ = 0.0f;
-    suction_test_duty_ = 0.0f;
     suction_en = false;
   }
 
@@ -180,9 +177,6 @@ private:
   uint32_t interval_us_ = 1000;
   uint32_t next_alarm_ = 0;
   uint64_t prev_ts_ = 0;
-
-  volatile float suction_test_duty_ = 0.0f; // 0=通常, >0=高吸引目標電圧[V]
-  volatile float suction_test_duty_low_ = 0.0f; // 低吸引目標電圧[V]
 
   volatile Command pending_cmd_{};
   volatile bool cmd_pending_ = false;
