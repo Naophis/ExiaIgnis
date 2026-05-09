@@ -14,7 +14,9 @@
       "Bash(arm-none-eabi-objdump -t /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
       "Bash(arm-none-eabi-nm /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
       "Bash(awk 'NR>=70 && NR<=90' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
-      "Bash(awk 'NR>=941 && NR<=1010' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)"
+      "Bash(awk 'NR>=941 && NR<=1010' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
+      "Bash(git rm *)",
+      "Bash(git add *)"
     ]
   }
 }

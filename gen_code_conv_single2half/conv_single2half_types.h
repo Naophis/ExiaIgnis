@@ -1,7 +1,0 @@
-#ifndef RTW_HEADER_conv_single2half_types_h_
-#define RTW_HEADER_conv_single2half_types_h_
-
-typedef struct tag_RTM_conv_single2half_T RT_MODEL_conv_single2half_T;
-
-#endif
-
