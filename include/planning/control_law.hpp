@@ -29,7 +29,7 @@ public:
             float         dt);
 
   std::shared_ptr<pid_error_entity_t> ee;
-  void pl_req_activate();
+  void pl_req_activate(motion_tgt_val_t &receive_req);
 private:
   // 他サブシステムへの参照 (init() で設定)
   MotorActuator       *motor_  = nullptr;

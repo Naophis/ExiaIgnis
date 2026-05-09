@@ -155,7 +155,8 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (target_v > 0.0f) {
     const float battery_v = sensing_result->ego.battery_lp;
     float duty = (battery_v > 0.0f) ? (target_v / battery_v * 100.0f) : 0.0f;
-    if (duty > 100.0f) duty = 100.0f;
+    if (duty > 100.0f)
+      duty = 100.0f;
     motor_.apply(0.0f, 0.0f, duty);
     state.duty_suction = duty;
     state.duty_l = 0.0f;
@@ -184,6 +185,15 @@ void PlanningTask::tick(uint32_t dt_us) {
     img_ang_ = 0.0f;
   }
 
+  // --- motion_tgt_val_t コマンド受け取り (send_command 経由) ---
+  if (tgt_cmd_pending_) {
+    __dmb(); // pending_tgt_ の書き込みが見えることを保証
+    active_tgt_ = pending_tgt_;
+    receive_req = active_tgt_.get();
+    tgt_cmd_pending_ = false;
+    cp_request();
+  }
+
   // --- センシングデータをスナップショット ---
   SensingTask::Data d = sensing_->data;
 
@@ -198,8 +208,8 @@ void PlanningTask::tick(uint32_t dt_us) {
   float dt = dt_us * 1e-6f;
 
   {
-    ego.update(tgt_val, motor_en);                     // 30 usec
-    sensor_.calc_dist(tgt_val); // 15 ~ 20 usec
+    ego.update(tgt_val, motor_en); // 30 usec
+    sensor_.calc_dist(tgt_val);    // 15 ~ 20 usec
 
     if (trj_.first_req) {
       if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
@@ -365,7 +375,10 @@ float PlanningTask::adjust_b_to_target45(float data, float a) {
 }
 
 void PlanningTask::pl_req_activate() {
-  control_law_.pl_req_activate();
+  if (receive_req->pl_req.time_stamp != pid_req_timestamp) {
+    ctl_.pl_req_activate(*receive_req);
+    pid_req_timestamp = receive_req->pl_req.time_stamp;
+  }
 }
 
 void PlanningTask::cp_request() {

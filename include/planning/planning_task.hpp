@@ -218,5 +218,6 @@ private:
   sensor_ctrl_keep_dist_t right_keep;
   sensor_ctrl_keep_dist_t left_keep;
   slip_t slip_param;
-  motion_tgt_val_t *receive_req;
+  motion_tgt_val_t *receive_req = nullptr;
+  std::shared_ptr<motion_tgt_val_t> active_tgt_;
 };
