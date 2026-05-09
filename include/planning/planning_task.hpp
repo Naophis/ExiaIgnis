@@ -21,55 +21,6 @@ class SensingTask;
 // IRQ 内で軌道生成・PID 制御・モーター出力を行う。
 class PlanningTask {
 public:
-  // ---- 型定義 ----
-  enum class MotionMode : uint8_t {
-    IDLE     = 0,
-    STRAIGHT = 1,
-    PIVOT    = 2,
-    STOP     = 3,
-  };
-
-  struct Command {
-    MotionMode mode         = MotionMode::IDLE;
-    float      v_max        = 0.0f;
-    float      v_end        = 0.0f;
-    float      accl         = 0.0f;
-    float      decel        = 0.0f;
-    float      dist         = 0.0f;
-    float      w_max        = 0.0f;
-    float      alpha        = 0.0f;
-    float      ang          = 0.0f;
-    float      duty_suction = 0.0f;
-    uint32_t   timestamp    = 0;
-
-    Command() = default;
-    Command(const volatile Command &o)
-        : mode(o.mode), v_max(o.v_max), v_end(o.v_end), accl(o.accl),
-          decel(o.decel), dist(o.dist), w_max(o.w_max), alpha(o.alpha),
-          ang(o.ang), duty_suction(o.duty_suction), timestamp(o.timestamp) {}
-  };
-
-  // IRQ が毎 tick 更新する状態。Core0 から読み取り可能。
-  struct State {
-    float      img_v        = 0.0f;
-    float      img_w        = 0.0f;
-    float      img_dist     = 0.0f;
-    float      img_ang      = 0.0f;
-    float      v_est        = 0.0f;
-    float      w_est        = 0.0f;
-    float      duty_l       = 0.0f;
-    float      duty_r       = 0.0f;
-    float      duty_suction = 0.0f;
-    MotionMode mode         = MotionMode::IDLE;
-    uint32_t   tick         = 0;
-
-    State() = default;
-    State(const volatile State &o)
-        : img_v(o.img_v), img_w(o.img_w), img_dist(o.img_dist),
-          img_ang(o.img_ang), v_est(o.v_est), w_est(o.w_est), duty_l(o.duty_l),
-          duty_r(o.duty_r), duty_suction(o.duty_suction), mode(o.mode),
-          tick(o.tick) {}
-  };
 
   // ---- ライフサイクル ----
   static std::shared_ptr<PlanningTask> create();
@@ -103,7 +54,6 @@ public:
   float adjust_b_to_target45(float data, float a);
 
   // ---- 公開データ ----
-  volatile State                    state{};
   float                             last_tgt_angle = 0.0f;
   std::shared_ptr<motion_tgt_val_t> tgt_val;
   EgoEstimator                      ego;

@@ -67,8 +67,7 @@ void LoggingTask::stop() {
 // ============================================================
 // Core1 (planning IRQ) から呼ぶ高速パス
 // ============================================================
-void LoggingTask::append_from_irq(const SensingTask::Data &d,
-                                  const PlanningTask::State &ps) {
+void LoggingTask::append_from_irq(const SensingTask::Data &d) {
   auto *self = s_instance.get();
   if (!self || !self->active_)
     return;
@@ -96,16 +95,16 @@ void LoggingTask::append_from_irq(const SensingTask::Data &d,
   e.enc_r = d.enc_r;
   e.battery = d.battery;
 
-  e.img_v = ps.img_v;
-  e.img_w = ps.img_w;
-  e.img_dist = ps.img_dist;
-  e.img_ang = ps.img_ang;
-  e.v_est = ps.v_est;
-  e.w_est = ps.w_est;
-  e.duty_l = ps.duty_l;
-  e.duty_r = ps.duty_r;
-  e.duty_suction = ps.duty_suction;
-  e.mode = static_cast<uint8_t>(ps.mode);
+  // e.img_v = ps.img_v;
+  // e.img_w = ps.img_w;
+  // e.img_dist = ps.img_dist;
+  // e.img_ang = ps.img_ang;
+  // e.v_est = ps.v_est;
+  // e.w_est = ps.w_est;
+  // e.duty_l = ps.duty_l;
+  // e.duty_r = ps.duty_r;
+  // e.duty_suction = ps.duty_suction;
+  // e.mode = static_cast<uint8_t>(ps.mode);
   e._pad[0] = e._pad[1] = e._pad[2] = 0;
 
   self->log_vec_.push_back(e);

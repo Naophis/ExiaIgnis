@@ -151,7 +151,7 @@ void PlanningTask::tick(uint32_t dt_us) {
 
   // --- ログ記録 (LoggingTask が active な場合のみ実行) ---
   {
-    PlanningTask::State snap(state); // volatile → non-volatile コピー
+    // PlanningTask::State snap(state); // volatile → non-volatile コピー
     // LoggingTask::append_from_irq(d, snap);
   }
 }
@@ -399,8 +399,6 @@ void PlanningTask::motor_enable() {
   motor_en = true;
 }
 void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
-  Command cmd;
-  cmd.mode = MotionMode::IDLE;
   motor_en = false;
 }
 void PlanningTask::suction_enable(float duty, float duty_low) {

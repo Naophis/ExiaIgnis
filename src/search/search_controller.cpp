@@ -52,7 +52,7 @@ MotionResult SearchController::go_straight_wrapper(param_set_t &p_set,
                                                    StraightType st) {
   // param_straight_t p;
   p.v_max = p_set.str_map[st].v_max;
-  if (p.v_max + 10 < pt->state.v_est) {
+  if (p.v_max + 10 < pt->trj_.mpc_next_ego.v) {
     p.v_max = p_set.str_map[StraightType::FastRun].v_max;
   }
   p.v_end = p_set.str_map[st].v_max;

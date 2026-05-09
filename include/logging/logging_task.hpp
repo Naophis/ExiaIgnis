@@ -87,8 +87,7 @@ public:
     size_t count()      const { return log_vec_.size(); }
 
     // Core1 (planning IRQ) から呼ぶ — active_ が false ならほぼ no-op
-    static void append_from_irq(const SensingTask::Data&  d,
-                                 const PlanningTask::State& ps);
+    static void append_from_irq(const SensingTask::Data&  d);
 
     // Core0 (MainTask) から stop() 後に呼ぶ
     void dump_csv()    const;   // USB CDC に CSV 出力
