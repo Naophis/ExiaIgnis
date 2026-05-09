@@ -41,8 +41,8 @@ static void rt_core1_entry() {
 // ============================================================
 int main() {
   sensing_entity = std::make_shared<sensing_result_entity_t>();
-  param          = std::make_shared<input_param_t>();
-  tgt_val        = std::make_shared<motion_tgt_val_t>();
+  param = std::make_shared<input_param_t>();
+  tgt_val = std::make_shared<motion_tgt_val_t>();
 
   stdio_init_all();
   set_sys_clock_khz(150000, true);
@@ -54,42 +54,40 @@ int main() {
 
   // 設定ファイル読み込み (multicore 起動前に実施)
   ConfigLoader::init();
+  sleep_ms(500);
 
-  // SensingTask 初期化 (SPI / ADC / GPIO ハードウェア設定のみ; IRQ は Core1
-  // で登録)
+  printf("[boot] step1: SensingTask create\n");
   auto sensing = SensingTask::create();
   auto planning = PlanningTask::create();
-  
+  printf("[boot] step2: sensing set_*\n");
+
   sensing->set_sensing_entity(sensing_entity);
   sensing->set_planning_task(planning);
   sensing->set_input_param_entity(param);
   sensing->set_tgt_val(tgt_val);
+  printf("[boot] step3: sensing init\n");
   sensing->init();
   sensing->configure(
-      (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 12),
+      (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 18),
       (uint32_t)ConfigLoader::get_int("sensing.interval_us", 1000));
 
-  // PlanningTask 初期化 (モーター/吸引 PWM ハードウェア設定のみ; IRQ は Core1
-  // で登録)
+  printf("[boot] step4: planning init\n");
   planning->set_sensing_entity(sensing_entity);
   planning->set_input_param_entity(param);
   planning->set_tgt_val(tgt_val);
   planning->init(sensing);
 
-  // LoggingTask 生成 (PSRAM init は別途必要; なければログ無効で動作)
+  printf("[boot] step5: LoggingTask + MainTask create\n");
   auto lt = LoggingTask::create();
-
-  // MainTask 生成 (Core0 で実行: printf / ボタン / planning 指示)
   auto main_task = MainTask::create(sensing, planning, param);
   main_task->set_logging_task(lt);
   main_task->set_tgt_val(tgt_val);
 
-  // Core1 起動: sensing/planning IRQ を Core1 に登録して __wfi() ループへ
+  printf("[boot] step6: multicore_launch_core1\n");
   s_rt_sensing = sensing.get();
   s_rt_planning = planning.get();
   multicore_launch_core1(rt_core1_entry);
 
-  // Core0: MainTask を直接実行 (TinyUSB が Core0 固定のため printf
-  // を直接呼べる)
+  printf("[boot] step7: MainTask start\n");
   MainTask::start();
 }

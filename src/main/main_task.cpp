@@ -51,6 +51,7 @@ bool MainTask::load_params() {
 }
 
 void MainTask::run() {
+  printf("[run] A: PWM init\n");
   // ブザー PWM 設定 (GPIO はどのコアからでも設定可)
   gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
   uint pwm_slice = pwm_gpio_to_slice_num(BUZZER_PIN);
@@ -59,12 +60,11 @@ void MainTask::run() {
 
   const auto se = get_sensing_entity();
 
-  reset_tgt_data();
-  reset_ego_data();
-
+  printf("[run] B: ui init\n");
   ui_.init(pwm_slice, pwm_channel, se);
   ui_.LED_headlight();
   // ui_.hello_exia();
+  printf("[run] C: coin\n");
   ui_.coin(60);
   ui_.coin(60);
 
@@ -104,6 +104,7 @@ void MainTask::run() {
     if (!rx_buf) {
       printf("[main] ERR: failed to allocate rx_buf\n");
     } else {
+      uint32_t hb_tick = 0;
       while (true) {
         if (ui_.button_state_hold()) {
           ui_.coin(100);
@@ -112,9 +113,13 @@ void MainTask::run() {
         int rlen = usb_read_with_timeout(rx_buf, RX_BUF_SIZE, 50);
         if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
           updated = true;
-          // load_params();
           ui_.coin(25);
-          printf("[main] params reloaded  mode=%d  maze=%d\n", sys_.user_mode,
+        }
+        // 2秒ごとにハートビートを出力してシリアル接続を確認できるようにする
+        // send_file.py の "[" スキップフィルタで無視されるので通信に影響なし
+        if (++hb_tick >= 40) {
+          hb_tick = 0;
+          printf("[main] waiting... mode=%d maze=%d\n", sys_.user_mode,
                  sys_.maze_size);
         }
       }
@@ -129,6 +134,8 @@ void MainTask::run() {
 
   printf("[main] user_mode=%d\n", sys_.user_mode);
   setup_components();
+  reset_tgt_data();
+  reset_ego_data();
   if (sys_.user_mode != 0) {
     run_test_mode(sys_.user_mode);
   } else {

@@ -277,6 +277,7 @@ void MainTask::setup_components() {
   auto ui_ptr = std::shared_ptr<UserInterface>(&ui_, [](UserInterface *) {});
 
   // MotionPlanning
+  printf("[main] wiring MotionPlanning\n");
   mp->set_tgt_val(tgt_val_);
   mp->set_sensing_entity(sensing_entity);
   mp->set_input_param_entity(param_);
@@ -286,10 +287,12 @@ void MainTask::setup_components() {
 
   // MazeSolverBaseLgc: maze_size と max_step_val で初期化
   const int msize = (sys_.maze_size > 0) ? sys_.maze_size : 16;
+  printf("[main] lgc init msize=%d\n", msize);
   lgc->init(msize, msize * msize - 1);
   lgc->set_goal_pos(sys_.goals);
 
   // SearchController
+  printf("[main] wiring SearchController\n");
   search_ctrl->set_lgc(lgc);
   search_ctrl->set_motion_plannning(mp);
   search_ctrl->set_planning_task(planning_);
