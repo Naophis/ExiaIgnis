@@ -395,14 +395,14 @@ void PlanningTask::cp_request() {
       tgt_val->motion_type == MotionType::BACK_STRAIGHT ||
       tgt_val->motion_type == MotionType::PIVOT_AFTER) {
     tgt_val->ego_in.ang = tgt_val->ego_in.img_ang = last_tgt_angle = 0;
-    kf_ang.reset(0);
+    ego.kf_ang.reset(0);
     tgt_val->ego_in.img_dist = tgt_val->ego_in.dist = 0;
-    kf_dist.reset(0);
+    ego.kf_dist.reset(0);
   } else {
     tgt_val->ego_in.ang -= last_tgt_angle;
-    kim.theta -= last_tgt_angle;
+    ego.kim.theta -= last_tgt_angle;
     tgt_val->ego_in.img_ang = 0;
-    kf_ang.offset(-last_tgt_angle);
+    ego.kf_ang.offset(-last_tgt_angle);
   }
 
   if (tgt_val->motion_type == MotionType::NONE ||
@@ -423,25 +423,25 @@ void PlanningTask::cp_request() {
   if (tgt_val->tgt_in.tgt_angle != 0) {
     const auto tmp_ang = tgt_val->ego_in.ang;
     tgt_val->ego_in.img_ang -= last_tgt_angle;
-    kf_ang.offset(-last_tgt_angle);
+    ego.kf_ang.offset(-last_tgt_angle);
     tgt_val->ego_in.ang -= last_tgt_angle;
     // } else {
-    //   kf_ang.reset(0);
+    //   ego.kf_ang.reset(0);
   }
   if (tgt_val->tgt_in.tgt_dist != 0) {
     const auto tmp_dist = tgt_val->ego_in.dist;
     tgt_val->ego_in.img_dist -= tmp_dist;
-    kf_dist.offset(-tmp_dist);
+    ego.kf_dist.offset(-tmp_dist);
     tgt_val->ego_in.dist = 0;
     // } else {
-    //   kf_dist.reset(0);
+    //   ego.kf_dist.reset(0);
   }
 
-  sensing_result->ego.dist_kf = kf_dist.get_state();
-  // sensing_result->ego.ang_kf = kf_ang.get_state();
+  sensing_result->ego.dist_kf = ego.kf_dist.get_state();
+  // sensing_result->ego.ang_kf = ego.kf_ang.get_state();
 
   if (param->enable_kalman_gyro == 1) {
-    se->ego.ang_kf = kf_ang.get_state();
+    se->ego.ang_kf = ego.kf_ang.get_state();
   } else if (param->enable_kalman_gyro == 2) {
     se->ego.ang_kf = tgt_val->ego_in.ang;
   } else {
@@ -478,7 +478,7 @@ void PlanningTask::cp_request() {
 
   if (receive_req->nmr.motion_type == MotionType::STRAIGHT ||
       receive_req->nmr.motion_type == MotionType::SLA_FRONT_STR) {
-    kim.x = kim.y = 0;
+    ego.kim.x = ego.kim.y = 0;
     tgt_val->ego_in.ideal_px = tgt_val->ego_in.ideal_py =
         tgt_val->ego_in.img_ang = 0;
   } else if (receive_req->nmr.motion_type == MotionType::WALL_OFF ||
@@ -496,13 +496,13 @@ void PlanningTask::cp_request() {
 }
 
 void PlanningTask::motor_enable() {
-  kf_dist.reset(0);
-  kf_ang.reset(0);
-  kf_v.reset(0);
-  kf_w.reset(0);
-  kf_w2.reset(0);
-  kf_v_l.reset(0);
-  kf_v_r.reset(0);
+  ego.kf_dist.reset(0);
+  ego.kf_ang.reset(0);
+  ego.kf_v.reset(0);
+  ego.kf_w.reset(0);
+  ego.kf_w2.reset(0);
+  ego.kf_v_l.reset(0);
+  ego.kf_v_r.reset(0);
   motor_en = true;
 }
 void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止

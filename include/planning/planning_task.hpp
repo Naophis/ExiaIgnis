@@ -124,19 +124,10 @@ public:
   float adjust_b_to_target45(float data, float a);
   std::shared_ptr<motion_tgt_val_t> tgt_val;
 
-  KalmanFilter kf_w;
-  KalmanFilter kf_w2;
-  KalmanFilter kf_v;
-  KalmanFilter kf_v_r;
-  KalmanFilter kf_v_l;
-  KalmanFilter kf_dist;
-  KalmanFilter kf_ang;
-  KalmanFilter kf_ang2;
-  KalmanFilter kf_batt;
-  KalmanFilterMatrix pos;
-  kinematics_t odm = {0};
-  kinematics_t kim = {0};
-  float suction_gain = 200;
+  MotorActuator motor_;
+  SensorProcessor sensor_;
+  TrajectoryGenerator trj_;
+  ControlLaw ctl_;
 
 private:
   PlanningTask() = default;
@@ -183,11 +174,6 @@ private:
 
   float vel_err_i_ = 0.0f;
   float gyro_err_i_ = 0.0f;
-
-  MotorActuator motor_;
-  SensorProcessor sensor_;
-  TrajectoryGenerator trj_;
-  ControlLaw ctl_;
 
   int buzzer_time_cnt = 0;
   int buzzer_timestamp = 0;

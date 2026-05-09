@@ -385,10 +385,10 @@ void SensingTask::read_spi_sensors() {
                       (gyro - tgt_val->gyro_zero_p_offset);
     }
     const auto alpha = (tgt_val->ego_in.w - w_old) / dt;
-    pt->kf_w.predict(alpha);
+    pt->ego.kf_w.predict(alpha);
     const float tread = param->tire_tread;
     const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
-    pt->kf_w.update(se->ego.w_raw);
+    pt->ego.kf_w.update(se->ego.w_raw);
   }
   float alpha = 0.f;
   pt->ego.kf_w.predict(alpha);
