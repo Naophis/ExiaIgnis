@@ -85,6 +85,8 @@ add_executable(ExiaIgnis
 
     src/utils/kalman_filter.cpp
     src/utils/kalman_filter_matrix.cpp
+    gen_code_conv_single2half/half_type.c
+
     gen_code_mpc/mpc_tgt_calc_data.cpp
     gen_code_mpc/mpc_tgt_calc.cpp
     gen_code_mpc/rtGetInf.cpp

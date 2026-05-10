@@ -48,7 +48,7 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
   log_vec_.reserve(max_entries); // PSRAM に一括確保 (以降 realloc なし)
   printf("[LoggingTask] PSRAM %zu KB, cap=%zu entries (%zu KB), entry=%zu B\n",
          psram_size / 1024, max_entries,
-         (max_entries * sizeof(LogEntry)) / 1024, sizeof(LogEntry));
+         (max_entries * sizeof(log_data_t2)) / 1024, sizeof(log_data_t2));
 }
 
 void LoggingTask::start() {
@@ -67,47 +67,98 @@ void LoggingTask::stop() {
 // ============================================================
 // Core1 (planning IRQ) から呼ぶ高速パス
 // ============================================================
-void LoggingTask::append_from_irq(const SensingTask::Data &d) {
+void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
+                                   const motion_tgt_val_t &tv) {
   auto *self = s_instance.get();
   if (!self || !self->active_)
     return;
 
+  if (tv.calc_time_diff > 3000)
+    return;
+
   if (self->log_vec_.size() >= self->log_cap_) {
-    self->active_ = false; // 満杯: 自動停止
+    self->active_ = false;
     return;
   }
 
-  LogEntry e;
-  e.timestamp_us = static_cast<uint32_t>(d.gz_ts);
-  e.dt_us = d.dt_us;
+  log_data_t2 ld{};
 
-  e.l90 = d.diff.l90;
-  e.l45_1 = d.diff.l45_1;
-  e.l45_both = d.diff.l45_both;
-  e.l45_2 = d.diff.l45_2;
-  e.r45_1 = d.diff.r45_1;
-  e.r45_both = d.diff.r45_both;
-  e.r45_2 = d.diff.r45_2;
-  e.r90 = d.diff.r90;
+  ld.img_v    = floatToHalf(tv.ego_in.v);
+  ld.v_l      = floatToHalf(sr.ego.v_l);
+  ld.v_c      = floatToHalf(sr.ego.v_c);
+  ld.v_c2     = floatToHalf(sr.ego.v_kf);
+  ld.v_r      = floatToHalf(sr.ego.v_r);
+  ld.v_r_enc  = static_cast<int16_t>(sr.encoder.right);
+  ld.v_l_enc  = static_cast<int16_t>(sr.encoder.left);
+  ld.accl     = floatToHalf(tv.ego_in.accl / 1000);
+  ld.accl_x   = floatToHalf(sr.ego.w_kf);
+  ld.dist_kf  = floatToHalf(sr.ego.dist_kf);
 
-  e.gz = d.gz;
-  e.enc_l = d.enc_l;
-  e.enc_r = d.enc_r;
-  e.battery = d.battery;
+  ld.img_w  = floatToHalf(tv.ego_in.w);
+  ld.w_lp   = floatToHalf(sr.ego.w_lp);
+  ld.alpha  = floatToHalf(tv.ego_in.alpha);
 
-  // e.img_v = ps.img_v;
-  // e.img_w = ps.img_w;
-  // e.img_dist = ps.img_dist;
-  // e.img_ang = ps.img_ang;
-  // e.v_est = ps.v_est;
-  // e.w_est = ps.w_est;
-  // e.duty_l = ps.duty_l;
-  // e.duty_r = ps.duty_r;
-  // e.duty_suction = ps.duty_suction;
-  // e.mode = static_cast<uint8_t>(ps.mode);
-  e._pad[0] = e._pad[1] = e._pad[2] = 0;
+  ld.img_dist = floatToHalf(tv.ego_in.img_dist);
+  ld.dist     = floatToHalf(tv.ego_in.dist);
 
-  self->log_vec_.push_back(e);
+  ld.img_ang = floatToHalf(tv.ego_in.img_ang * 180.0f / m_PI);
+  ld.ang     = floatToHalf(tv.ego_in.ang     * 180.0f / m_PI);
+  ld.ang_kf  = floatToHalf(sr.ego.ang_kf     * 180.0f / m_PI);
+
+  ld.left90_lp   = static_cast<int16_t>(sr.led_sen.left90.raw);
+  ld.left45_lp   = static_cast<int16_t>(sr.led_sen.left45.raw);
+  ld.right45_lp  = static_cast<int16_t>(sr.led_sen.right45.raw);
+  ld.right90_lp  = static_cast<int16_t>(sr.led_sen.right90.raw);
+  ld.left45_2_lp  = static_cast<int16_t>(sr.led_sen.left45_2.raw);
+  ld.right45_2_lp = static_cast<int16_t>(sr.led_sen.right45_2.raw);
+  ld.left45_3_lp  = static_cast<int16_t>(sr.led_sen.left45_3.raw);
+  ld.right45_3_lp = static_cast<int16_t>(sr.led_sen.right45_3.raw);
+
+  ld.battery_lp = floatToHalf(sr.ego.battery_raw);
+
+  ld.duty_l = floatToHalf(sr.ego.duty.duty_l);
+  ld.duty_r = floatToHalf(sr.ego.duty.duty_r);
+
+  ld.ff_duty_front = floatToHalf(sr.ego.duty.ff_duty_front);
+  ld.ff_duty_roll  = floatToHalf(sr.ego.duty.ff_duty_roll);
+  ld.ff_duty_rpm_r = floatToHalf(sr.ego.duty.ff_duty_rpm_r);
+  ld.ff_duty_rpm_l = floatToHalf(sr.ego.duty.ff_duty_rpm_l);
+
+  ld.motion_type     = static_cast<uint8_t>(tv.motion_type);
+  ld.duty_sensor_ctrl = floatToHalf(sr.ego.duty.sen);
+
+  ld.sen_log_l45   = floatToHalf(sr.sen.l45.sensor_dist);
+  ld.sen_log_r45   = floatToHalf(sr.sen.r45.sensor_dist);
+  ld.sen_log_l45_2 = floatToHalf(sr.sen.l45_2.sensor_dist);
+  ld.sen_log_r45_2 = floatToHalf(sr.sen.r45_2.sensor_dist);
+  ld.sen_log_l45_3 = floatToHalf(sr.sen.l45_3.sensor_dist);
+  ld.sen_log_r45_3 = floatToHalf(sr.sen.r45_3.sensor_dist);
+
+  ld.motion_timestamp = static_cast<int16_t>(tv.nmr.timstamp);
+  ld.sen_calc_time    = sr.calc_time;
+  ld.sen_calc_time2   = sr.calc_time2;
+  ld.pln_calc_time    = tv.calc_time;
+  ld.pln_time_diff    = tv.calc_time_diff;
+
+  ld.pos_x = floatToHalf(sr.ego.pos_x);
+  ld.pos_y = floatToHalf(sr.ego.pos_y);
+
+  ld.knym_v    = floatToHalf(sr.ego.knym_v);
+  ld.knym_w    = floatToHalf(sr.ego.knym_w);
+  ld.odm_x     = floatToHalf(sr.ego.odm_x);
+  ld.odm_y     = floatToHalf(sr.ego.odm_y);
+  ld.odm_theta = floatToHalf(sr.ego.odm_theta);
+  ld.kim_x     = floatToHalf(sr.ego.kim_x);
+  ld.kim_y     = floatToHalf(sr.ego.kim_y);
+  ld.kim_theta = floatToHalf(sr.ego.kim_theta);
+
+  ld.duty_suction  = floatToHalf(tv.duty_suction);
+  ld.ang_kf_sum    = floatToHalf(sr.ang_kf_sum);
+  ld.img_ang_sum   = floatToHalf(sr.img_ang_sum);
+
+  // error_entity (pid_error_entity_t) は引数外のため 0 のまま
+
+  self->log_vec_.push_back(ld);
 }
 
 // ============================================================
@@ -115,29 +166,67 @@ void LoggingTask::append_from_irq(const SensingTask::Data &d) {
 // ============================================================
 void LoggingTask::dump_csv() const {
   const size_t n = log_vec_.size();
-  printf("ready___:%zu\n", sizeof(LogEntry));
+  printf("ready___:%zu\n", sizeof(log_data_t2));
   sleep_ms(50);
 
-  printf("index,timestamp_us,dt_us,"
-         "l90,l45_1,l45_both,l45_2,r45_1,r45_both,r45_2,r90,"
-         "gz,enc_l,enc_r,battery,"
-         "img_v,img_w,img_dist,img_ang,"
-         "v_est,w_est,duty_l,duty_r,duty_suction,mode\n");
+  printf("index,"
+         "img_v,v_c,v_c2,v_l,v_r,v_l_enc,v_r_enc,accl,accl_x,"
+         "img_w,w_lp,alpha,img_dist,dist,img_ang,ang,ang_kf,"
+         "left90,left45,right45,right90,"
+         "left45_2,right45_2,left45_3,right45_3,"
+         "battery,duty_l,duty_r,duty_sen,duty_suction,"
+         "sen_l45,sen_r45,sen_l45_2,sen_r45_2,sen_l45_3,sen_r45_3,"
+         "motion_type,timestamp,"
+         "sen_calc_time,sen_calc_time2,pln_calc_time,pln_time_diff,"
+         "ff_front,ff_roll,ff_rpm_r,ff_rpm_l,"
+         "pos_x,pos_y,odm_x,odm_y,odm_theta,kim_x,kim_y,kim_theta,"
+         "knym_v,knym_w,ang_kf_sum,img_ang_sum\n");
 
   int flush_cnt = 0;
   for (size_t i = 0; i < n; ++i) {
     const auto &e = log_vec_[i];
-    printf("%zu,%lu,%lu,"
-           "%u,%u,%u,%u,%u,%u,%u,%u,"
-           "%d,%u,%u,%u,"
-           "%.3f,%.4f,%.2f,%.4f,"
-           "%.3f,%.4f,%.2f,%.2f,%.2f,%u\n",
-           i, static_cast<unsigned long>(e.timestamp_us),
-           static_cast<unsigned long>(e.dt_us), e.l90, e.l45_1, e.l45_both,
-           e.l45_2, e.r45_1, e.r45_both, e.r45_2, e.r90, static_cast<int>(e.gz),
-           e.enc_l, e.enc_r, e.battery, e.img_v, e.img_w, e.img_dist, e.img_ang,
-           e.v_est, e.w_est, e.duty_l, e.duty_r, e.duty_suction,
-           static_cast<unsigned>(e.mode));
+    printf("%zu,"
+           "%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.3f,%.3f,"
+           "%.4f,%.4f,%.4f,%.2f,%.2f,%.4f,%.4f,%.4f,"
+           "%d,%d,%d,%d,"
+           "%d,%d,%d,%d,"
+           "%.3f,%.3f,%.3f,%.3f,%.3f,"
+           "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
+           "%u,%d,"
+           "%d,%d,%d,%d,"
+           "%.3f,%.3f,%.3f,%.3f,"
+           "%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.4f,"
+           "%.3f,%.3f,%.4f,%.4f\n",
+           i,
+           halfToFloat(e.img_v), halfToFloat(e.v_c), halfToFloat(e.v_c2),
+           halfToFloat(e.v_l), halfToFloat(e.v_r),
+           (int)e.v_l_enc, (int)e.v_r_enc,
+           halfToFloat(e.accl), halfToFloat(e.accl_x),
+           halfToFloat(e.img_w), halfToFloat(e.w_lp), halfToFloat(e.alpha),
+           halfToFloat(e.img_dist), halfToFloat(e.dist),
+           halfToFloat(e.img_ang), halfToFloat(e.ang), halfToFloat(e.ang_kf),
+           (int)e.left90_lp, (int)e.left45_lp,
+           (int)e.right45_lp, (int)e.right90_lp,
+           (int)e.left45_2_lp, (int)e.right45_2_lp,
+           (int)e.left45_3_lp, (int)e.right45_3_lp,
+           halfToFloat(e.battery_lp),
+           halfToFloat(e.duty_l), halfToFloat(e.duty_r),
+           halfToFloat(e.duty_sensor_ctrl), halfToFloat(e.duty_suction),
+           halfToFloat(e.sen_log_l45), halfToFloat(e.sen_log_r45),
+           halfToFloat(e.sen_log_l45_2), halfToFloat(e.sen_log_r45_2),
+           halfToFloat(e.sen_log_l45_3), halfToFloat(e.sen_log_r45_3),
+           (unsigned)e.motion_type, (int)e.motion_timestamp,
+           (int)e.sen_calc_time, (int)e.sen_calc_time2,
+           (int)e.pln_calc_time, (int)e.pln_time_diff,
+           halfToFloat(e.ff_duty_front), halfToFloat(e.ff_duty_roll),
+           halfToFloat(e.ff_duty_rpm_r), halfToFloat(e.ff_duty_rpm_l),
+           halfToFloat(e.pos_x), halfToFloat(e.pos_y),
+           halfToFloat(e.odm_x), halfToFloat(e.odm_y),
+           halfToFloat(e.odm_theta),
+           halfToFloat(e.kim_x), halfToFloat(e.kim_y),
+           halfToFloat(e.kim_theta),
+           halfToFloat(e.knym_v), halfToFloat(e.knym_w),
+           halfToFloat(e.ang_kf_sum), halfToFloat(e.img_ang_sum));
 
     // USB CDC バッファあふれ防止: 50行ごとに 1ms 待つ
     if (++flush_cnt >= 50) {
@@ -158,13 +247,13 @@ void LoggingTask::dump_binary() const {
 
   const uint32_t magic = 0x4C4F4700u; // "LOG\0"
   const uint32_t count = static_cast<uint32_t>(log_vec_.size());
-  const uint32_t entry_sz = static_cast<uint32_t>(sizeof(LogEntry));
+  const uint32_t entry_sz = static_cast<uint32_t>(sizeof(log_data_t2));
 
   uart_write_blocking(u, reinterpret_cast<const uint8_t *>(&magic), 4);
   uart_write_blocking(u, reinterpret_cast<const uint8_t *>(&count), 4);
   uart_write_blocking(u, reinterpret_cast<const uint8_t *>(&entry_sz), 4);
   uart_write_blocking(u, reinterpret_cast<const uint8_t *>(log_vec_.data()),
-                      log_vec_.size() * sizeof(LogEntry));
+                      log_vec_.size() * sizeof(log_data_t2));
   uart_write_blocking(u, reinterpret_cast<const uint8_t *>(&magic), 4);
 
   printf("[LoggingTask] binary dump done: %zu entries\n", log_vec_.size());

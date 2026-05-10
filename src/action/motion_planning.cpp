@@ -138,9 +138,10 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
 
     // if (cnt % 10 == 0) {
     //   printf(
-    //       "v=%.1f accl=%.1f dist=%.1f dist=%.1f v_l=%.1f v_r=%.1f, v_c=%.1f\n",
-    //       tgt_val->ego_in.v, tgt_val->ego_in.accl, tgt_val->ego_in.img_dist,
-    //       now_dist, se->ego.v_l, se->ego.v_r, se->ego.v_c);
+    //       "v=%.1f accl=%.1f dist=%.1f dist=%.1f v_l=%.1f v_r=%.1f,
+    //       v_c=%.1f\n", tgt_val->ego_in.v, tgt_val->ego_in.accl,
+    //       tgt_val->ego_in.img_dist, now_dist, se->ego.v_l, se->ego.v_r,
+    //       se->ego.v_c);
     // }
 
     if (std ::abs(now_dist) >= std::abs(p.dist)) {
@@ -290,29 +291,30 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
         break;
       }
     }
+    if (cnt > 2000) {
+      if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
+        if (p.motion_type == MotionType::STRAIGHT &&
+            p.wall_ctrl_mode == WallCtrlMode::LEFT_ONLY && p.dist < 90) {
+        } else if (p.motion_type == MotionType::SLA_FRONT_STR ||
+                   p.motion_type == MotionType::SLA_BACK_STR) {
+        } else {
+          param->sen_ref_p.normal.exist.left45 = left;
+          param->sen_ref_p.normal.exist.right45 = right;
+          req_error_reset();
+          tgt_val->nmr.v_max = 0.1;
+          tgt_val->nmr.v_end = 0.1;
+          tgt_val->nmr.accl = 1000;
+          tgt_val->nmr.decel = p.decel;
+          tgt_val->nmr.dist = 10;
+          tgt_val->nmr.timstamp += 10;
 
-    // if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
-    //   if (p.motion_type == MotionType::STRAIGHT &&
-    //       p.wall_ctrl_mode == WallCtrlMode::LEFT_ONLY && p.dist < 90) {
-    //   } else if (p.motion_type == MotionType::SLA_FRONT_STR ||
-    //              p.motion_type == MotionType::SLA_BACK_STR) {
-    //   } else {
-    //     param->sen_ref_p.normal.exist.left45 = left;
-    //     param->sen_ref_p.normal.exist.right45 = right;
-    //     req_error_reset();
-    //     tgt_val->nmr.v_max = 0.1;
-    //     tgt_val->nmr.v_end = 0.1;
-    //     tgt_val->nmr.accl = 1000;
-    //     tgt_val->nmr.decel = p.decel;
-    //     tgt_val->nmr.dist = 10;
-    //     tgt_val->nmr.timstamp += 10;
+          pt->send_command(tgt_val);
+          // pt->wait_tick();
 
-    //     pt->send_command(tgt_val);
-    //     // pt->wait_tick();
-
-    //     return MotionResult::ERROR;
-    //   }
-    // }
+          return MotionResult::ERROR;
+        }
+      }
+    }
     // pt->wait_tick();
   }
   param->sen_ref_p.normal.exist.left45 = left;

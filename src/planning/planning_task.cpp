@@ -153,9 +153,8 @@ void PlanningTask::tick(uint32_t dt_us) {
   }
 
   // --- ログ記録 (LoggingTask が active な場合のみ実行) ---
-  {
-    // PlanningTask::State snap(state); // volatile → non-volatile コピー
-    // LoggingTask::append_from_irq(d, snap);
+  if (sensing_result && tgt_val) {
+    LoggingTask::append_from_irq(*sensing_result, *tgt_val);
   }
 }
 

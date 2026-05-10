@@ -109,7 +109,7 @@ void MainTask::test_run() {
 
   req_error_reset();
   if (param_->test_log_enable > 0) {
-    // lt->start_slalom_log();
+    lt_->start();
   }
   planning_->set_search_mode(test_search_mode > 0);
 
@@ -150,7 +150,9 @@ void MainTask::test_run() {
   reset_ego_data();
   req_error_reset();
   mp->coin();
-  // lt->save(slalom_log_file);
+  if (param_->test_log_enable > 0) {
+    lt_->stop();
+  }
   ui_.coin(120);
   planning_->set_search_mode(false);
   while (1) {
@@ -158,7 +160,7 @@ void MainTask::test_run() {
       break;
     sleep_ms(10);
   }
-  // lt->dump_log(slalom_log_file);
+  lt_->dump_csv();
   while (1) {
     if (ui_.button_state_hold())
       break;

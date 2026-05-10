@@ -138,6 +138,10 @@ void MainTask::run() {
     load_params();
   printf("[main] starting.\n");
 
+  lt_->init(reinterpret_cast<void *>(0x11000000u),
+            8u * 1024u * 1024u,
+            static_cast<size_t>(param_->log_size));
+
   sleep_ms(500);
 
   printf("[main] user_mode=%d\n", sys_.user_mode);

@@ -14,7 +14,10 @@
       "Bash(awk 'NR>=70 && NR<=90' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
       "Bash(awk 'NR>=941 && NR<=1010' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
       "Bash(find /home/naoto -name \"sem.h\" -path \"*/pico*\" 2>/dev/null | head -5)",
-      "Read(//home/naoto/**)"
+      "Read(//home/naoto/**)",
+      "Bash(xargs ls -la)",
+      "Bash(chmod +x /home/naoto/Desktop/mouse/ExiaIgnis/capture_log.py)",
+      "Bash(python3 -c \"import ast, sys; ast.parse\\(open\\('capture_log.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")"
     ]
   }
 }

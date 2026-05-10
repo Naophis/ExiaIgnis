@@ -36,33 +36,6 @@ struct PsramAllocator {
     bool operator!=(const PsramAllocator&) const noexcept { return false; }
 };
 
-// ============================================================
-// ログ 1 サンプル: sensing + planning の主要値
-// ============================================================
-struct LogEntry {
-    // タイミング
-    uint32_t timestamp_us;          // gz_ts 下位 32bit [us]
-    uint32_t dt_us;                 // 前回 sensing からの経過時間 [us]
-
-    // センサー差分 (SensorDiff: lit - dark)
-    uint16_t l90, l45_1, l45_both, l45_2;
-    uint16_t r45_1, r45_both, r45_2, r90;
-
-    // モーション
-    int16_t  gz;                    // ジャイロ Z [raw]
-    uint16_t enc_l, enc_r;         // エンコーダ [0-16383]
-    uint16_t battery;               // バッテリ ADC 値
-
-    // Planning
-    float    img_v,    img_w;       // 指令速度・角速度 [mm/s, rad/s]
-    float    img_dist, img_ang;     // 累積距離・角度   [mm, rad]
-    float    v_est,    w_est;       // 推定速度・角速度
-    float    duty_l,   duty_r;      // モーター duty    [%]
-    float    duty_suction;          // 吸引 duty        [%]
-    uint8_t  mode;                  // MotionMode
-    uint8_t  _pad[3];
-};
-static_assert(sizeof(LogEntry) % 4 == 0, "LogEntry must be 4-byte aligned");
 
 // ============================================================
 // LoggingTask
@@ -87,7 +60,8 @@ public:
     size_t count()      const { return log_vec_.size(); }
 
     // Core1 (planning IRQ) から呼ぶ — active_ が false ならほぼ no-op
-    static void append_from_irq(const SensingTask::Data&  d);
+    static void append_from_irq(const sensing_result_entity_t& sr,
+                                 const motion_tgt_val_t& tv);
 
     // Core0 (MainTask) から stop() 後に呼ぶ
     void dump_csv()    const;   // USB CDC に CSV 出力
@@ -110,7 +84,7 @@ private:
     volatile bool active_  = false;
     size_t        log_cap_ = 0;
 
-    using LogVec = std::vector<LogEntry, PsramAllocator<LogEntry>>;
+    using LogVec = std::vector<log_data_t2, PsramAllocator<log_data_t2>>;
     LogVec log_vec_;
     std::shared_ptr<sensing_result_entity_t> sensing_result;
     std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
