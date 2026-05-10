@@ -2,6 +2,7 @@
 #include "define.hpp"
 #include "hardware/sync.h"
 #include "hardware/uart.h"
+#include "hardware/xip_cache.h"
 #include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
@@ -46,6 +47,19 @@ std::shared_ptr<LoggingTask> LoggingTask::create() {
 void LoggingTask::init(void *psram_base, size_t psram_size,
                        size_t max_entries) {
   psram_heap::init(psram_base, psram_size);
+
+  // PSRAM 疎通確認 (uncached エイリアス 0x15000000 経由で直接 read-write)
+  // 0x11000000 (cached) → 0x15000000 (no-cache/no-alloc) へのオフセット = 0x04000000
+  constexpr uintptr_t XIP_NOCACHE_OFFSET = 0x04000000u;
+  volatile uint32_t *p_nc = reinterpret_cast<volatile uint32_t *>(
+      reinterpret_cast<uintptr_t>(psram_base) + XIP_NOCACHE_OFFSET);
+  p_nc[0] = 0xDEADBEEFu;
+  p_nc[1] = 0x12345678u;
+  __dmb();
+  const bool psram_ok = (p_nc[0] == 0xDEADBEEFu && p_nc[1] == 0x12345678u);
+  printf("[LoggingTask] PSRAM %s (0x%08X, 0x%08X)\n",
+         psram_ok ? "OK" : "FAIL", (unsigned)p_nc[0], (unsigned)p_nc[1]);
+
   log_cap_ = max_entries;
   log_vec_.reserve(max_entries); // PSRAM に一括確保 (以降 realloc なし)
   printf("[LoggingTask] PSRAM %zu KB, cap=%zu entries (%zu KB), entry=%zu B\n",
@@ -63,6 +77,9 @@ void LoggingTask::start() {
 void LoggingTask::stop() {
   active_ = false;
   __dmb(); // Core1 の最後の push_back が Core0 から見えるようにバリア
+  // RP2350 の XIP キャッシュは write-back のため、Core1 の PSRAM 書き込みが
+  // キャッシュに留まっている可能性がある。clean_all() で物理 PSRAM に flush する。
+  xip_cache_clean_all();
   printf("[LoggingTask] stop: %zu entries\n", log_vec_.size());
 }
 
@@ -160,7 +177,7 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
 
   // error_entity (pid_error_entity_t) は引数外のため 0 のまま
 
-  self->log_vec_.push_back(ld);
+  self->log_vec_.emplace_back(ld);
 }
 
 // ============================================================

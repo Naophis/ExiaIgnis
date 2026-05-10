@@ -57,3 +57,10 @@
 
 #define MOTOR_PWM_FREQ_HZ  50000u
 #define MOTOR_DUTY_PCT     5u     // duty (%) applied to active channel
+
+// ============================================================
+// PSRAM (QMI M1 / XIP_CS1)
+// RP2350B の GPIO47 (QSPI_SS1_N) を XIP_CS1 として使用。
+// ボードの配線に応じて変更すること。
+// ============================================================
+#define PSRAM_CS_PIN  47u

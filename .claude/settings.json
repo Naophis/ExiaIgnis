@@ -17,7 +17,9 @@
       "Read(//home/naoto/**)",
       "Bash(xargs ls -la)",
       "Bash(chmod +x /home/naoto/Desktop/mouse/ExiaIgnis/capture_log.py)",
-      "Bash(python3 -c \"import ast, sys; ast.parse\\(open\\('capture_log.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")"
+      "Bash(python3 -c \"import ast, sys; ast.parse\\(open\\('capture_log.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(find ~/.pico-sdk -name \"psram.h\" 2>/dev/null; find ~/pico-sdk -name \"psram.h\" 2>/dev/null; find /opt -name \"psram.h\" 2>/dev/null; find /usr -name \"psram.h\" 2>/dev/null | head -5)",
+      "Read(//opt/**)"
     ]
   }
 }

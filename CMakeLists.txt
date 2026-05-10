@@ -139,6 +139,7 @@ target_link_libraries(ExiaIgnis
         hardware_timer
         hardware_flash
         hardware_sync
+        hardware_xip_cache
         pico_multicore
         pico_flash
         ArduinoJson

@@ -291,6 +291,11 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
         break;
       }
     }
+    if (!gpio_get(BTN_PIN)) {
+      while (!gpio_get(BTN_PIN))
+        tight_loop_contents();
+      return MotionResult::ERROR;
+    }
     if (cnt > 2000) {
       if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
         if (p.motion_type == MotionType::STRAIGHT &&

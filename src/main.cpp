@@ -1,10 +1,12 @@
 #include "config_loader.hpp"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
+#include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "hardware/interp.h"
 #include "hardware/pio.h"
 #include "hardware/spi.h"
+#include "hardware/structs/qmi.h"
 #include "hardware/uart.h"
 #include "logging/logging_task.hpp"
 #include "main/main_task.hpp"
@@ -17,6 +19,41 @@
 
 #include "blink.pio.h"
 #include "define.hpp"
+
+// ============================================================
+// PSRAM 初期化 (QMI M1 / APS6404L 想定)
+// multicore_launch_core1() より前、かつ LoggingTask::init() より前に呼ぶ。
+// ============================================================
+static void psram_init(uint cs_pin) {
+  // GPIO を XIP CS1 (QMI M1 チップセレクト) として設定
+  gpio_set_function(cs_pin, GPIO_FUNC_XIP_CS1);
+
+  // TIMING: CLKDIV=2 (37.5 MHz), RXDELAY=2, COOLDOWN=1
+  qmi_hw->m[1].timing = (1u << 30) | (2u << 8) | (2u << 0); // 0x40000202
+
+  // APS6404L Quad I/O Read (0xEB):
+  //   prefix=SPI, addr=Quad, suffix(mode)=Quad(0xA0), dummy=4clk Quad, data=Quad
+  qmi_hw->m[1].rfmt =
+      (0u << 0) |   // PREFIX_WIDTH = S
+      (2u << 2) |   // ADDR_WIDTH   = Q
+      (2u << 4) |   // SUFFIX_WIDTH = Q (mode byte 0xA0)
+      (2u << 6) |   // DUMMY_WIDTH  = Q
+      (2u << 8) |   // DATA_WIDTH   = Q
+      (1u << 16) |  // DUMMY_LEN    = 4 clocks
+      (1u << 12);   // PREFIX_LEN   = 8-bit
+  qmi_hw->m[1].rcmd = (0xA0u << 8) | 0xEBu; // suffix=0xA0, prefix=0xEB
+
+  // APS6404L Quad I/O Write (0x38):
+  //   prefix=SPI, addr=Quad, data=Quad, no suffix/dummy
+  qmi_hw->m[1].wfmt =
+      (0u << 0) |  // PREFIX_WIDTH = S
+      (2u << 2) |  // ADDR_WIDTH   = Q
+      (2u << 8) |  // DATA_WIDTH   = Q
+      (1u << 12);  // PREFIX_LEN   = 8-bit
+  qmi_hw->m[1].wcmd = 0x38u; // prefix=0x38
+
+  sleep_us(200); // PSRAM power-on / mode-change settle time
+}
 
 // ============================================================
 // Core1 RT エントリ: sensing + planning IRQ を Core1 に登録
@@ -83,11 +120,14 @@ int main() {
   main_task->set_logging_task(lt);
   main_task->set_tgt_val(tgt_val);
 
-  printf("[boot] step6: multicore_launch_core1\n");
+  printf("[boot] step6: PSRAM init (GPIO%u → XIP_CS1)\n", PSRAM_CS_PIN);
+  psram_init(PSRAM_CS_PIN);
+
+  printf("[boot] step7: multicore_launch_core1\n");
   s_rt_sensing = sensing.get();
   s_rt_planning = planning.get();
   multicore_launch_core1(rt_core1_entry);
 
-  printf("[boot] step7: MainTask start\n");
+  printf("[boot] step8: MainTask start\n");
   MainTask::start();
 }
