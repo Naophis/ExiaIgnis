@@ -2,8 +2,10 @@
 #include "define.hpp"
 #include "hardware/sync.h"
 #include "hardware/uart.h"
+#include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
+#include <string.h>
 
 // ============================================================
 // psram_heap: バンプアロケータ実装
@@ -162,79 +164,373 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
 }
 
 // ============================================================
-// USB CDC に CSV 出力 (Core0 から stop() 後に呼ぶ)
+// USB CDC にバイナリ出力 (console.sh / rx_term.js 互換プロトコル)
+// Core0 から stop() 後に呼ぶ。
+//
+// Astraea の print_header() + dump_log() と同じ方式:
+//   ready___:<record_bytes>\n   … dump_to_csv_ready フラグ
+//   name:type:sizeof(field)\n × 120 フィールド
+//   start___\n
+//   LogStruct1〜10 を memcpy した 480 byte × n エントリ
+//   終端レコード (index=-1)
 // ============================================================
 void LoggingTask::dump_csv() const {
   const size_t n = log_vec_.size();
-  printf("ready___:%zu\n", sizeof(log_data_t2));
+
+  LogStruct1  ls1{};
+  LogStruct2  ls2{};
+  LogStruct3  ls3{};
+  LogStruct4  ls4{};
+  LogStruct5  ls5{};
+  LogStruct6  ls6{};
+  LogStruct7  ls7{};
+  LogStruct8  ls8{};
+  LogStruct9  ls9{};
+  LogStruct10 ls10{};
+
+  const int size = sizeof(LogStruct1) + sizeof(LogStruct2) +
+                   sizeof(LogStruct3) + sizeof(LogStruct4) +
+                   sizeof(LogStruct5) + sizeof(LogStruct6) +
+                   sizeof(LogStruct7) + sizeof(LogStruct8) +
+                   sizeof(LogStruct9) + sizeof(LogStruct10);
+
+  printf("ready___:%d\n", size);
+  fflush(stdout);
   sleep_ms(50);
 
-  printf("index,"
-         "img_v,v_c,v_c2,v_l,v_r,v_l_enc,v_r_enc,accl,accl_x,"
-         "img_w,w_lp,alpha,img_dist,dist,img_ang,ang,ang_kf,"
-         "left90,left45,right45,right90,"
-         "left45_2,right45_2,left45_3,right45_3,"
-         "battery,duty_l,duty_r,duty_sen,duty_suction,"
-         "sen_l45,sen_r45,sen_l45_2,sen_r45_2,sen_l45_3,sen_r45_3,"
-         "motion_type,timestamp,"
-         "sen_calc_time,sen_calc_time2,pln_calc_time,pln_time_diff,"
-         "ff_front,ff_roll,ff_rpm_r,ff_rpm_l,"
-         "pos_x,pos_y,odm_x,odm_y,odm_theta,kim_x,kim_y,kim_theta,"
-         "knym_v,knym_w,ang_kf_sum,img_ang_sum\n");
+  // LogStruct1
+  printf("index:int:%d\n",        (int)sizeof(ls1.index));
+  printf("ideal_v:float:%d\n",    (int)sizeof(ls1.ideal_v));
+  printf("v_c:float:%d\n",        (int)sizeof(ls1.v_c));
+  printf("v_c2:float:%d\n",       (int)sizeof(ls1.v_c2));
+  printf("v_l:float:%d\n",        (int)sizeof(ls1.v_l));
+  printf("v_r:float:%d\n",        (int)sizeof(ls1.v_r));
+  printf("v_l_enc:int:%d\n",      (int)sizeof(ls1.v_l_enc));
+  printf("v_r_enc:int:%d\n",      (int)sizeof(ls1.v_r_enc));
+  printf("v_l_enc_sin:float:%d\n",(int)sizeof(ls1.v_l_enc_sin));
+  printf("v_r_enc_sin:float:%d\n",(int)sizeof(ls1.v_r_enc_sin));
+  printf("accl:float:%d\n",       (int)sizeof(ls1.accl));
+  printf("accl_x:float:%d\n",     (int)sizeof(ls1.accl_x));
+  // LogStruct2
+  printf("ideal_w:float:%d\n",    (int)sizeof(ls2.ideal_w));
+  printf("w_lp:float:%d\n",       (int)sizeof(ls2.w_lp));
+  printf("alpha:float:%d\n",      (int)sizeof(ls2.alpha));
+  printf("ideal_dist:float:%d\n", (int)sizeof(ls2.ideal_dist));
+  printf("dist:float:%d\n",       (int)sizeof(ls2.dist));
+  printf("dist_kf:float:%d\n",    (int)sizeof(ls2.dist_kf));
+  printf("ideal_ang:float:%d\n",  (int)sizeof(ls2.ideal_ang));
+  printf("ang:float:%d\n",        (int)sizeof(ls2.ang));
+  printf("ang_kf:float:%d\n",     (int)sizeof(ls2.ang_kf));
+  printf("left90:int:%d\n",       (int)sizeof(ls2.left90));
+  printf("left45:int:%d\n",       (int)sizeof(ls2.left45));
+  printf("front:int:%d\n",        (int)sizeof(ls2.front));
+  // LogStruct3
+  printf("right45:int:%d\n",      (int)sizeof(ls3.right45));
+  printf("right90:int:%d\n",      (int)sizeof(ls3.right90));
+  printf("left90_d:float:%d\n",   (int)sizeof(ls3.left90_d));
+  printf("left45_d:float:%d\n",   (int)sizeof(ls3.left45_d));
+  printf("front_d:float:%d\n",    (int)sizeof(ls3.front_d));
+  printf("right45_d:float:%d\n",  (int)sizeof(ls3.right45_d));
+  printf("right90_d:float:%d\n",  (int)sizeof(ls3.right90_d));
+  printf("left90_far_d:float:%d\n",(int)sizeof(ls3.left90_far_d));
+  printf("front_far_d:float:%d\n",(int)sizeof(ls3.front_far_d));
+  printf("right90_far_d:float:%d\n",(int)sizeof(ls3.right90_far_d));
+  printf("battery:float:%d\n",    (int)sizeof(ls3.battery));
+  printf("duty_l:float:%d\n",     (int)sizeof(ls3.duty_l));
+  // LogStruct4
+  printf("duty_r:float:%d\n",         (int)sizeof(ls4.duty_r));
+  printf("motion_state:int:%d\n",     (int)sizeof(ls4.motion_state));
+  printf("duty_sen:float:%d\n",       (int)sizeof(ls4.duty_sen));
+  printf("dist_mod90:float:%d\n",     (int)sizeof(ls4.dist_mod90));
+  printf("sen_dist_l45:float:%d\n",   (int)sizeof(ls4.sen_dist_l45));
+  printf("sen_dist_r45:float:%d\n",   (int)sizeof(ls4.sen_dist_r45));
+  printf("timestamp:int:%d\n",        (int)sizeof(ls4.timestamp));
+  printf("sen_calc_time:int:%d\n",    (int)sizeof(ls4.sen_calc_time));
+  printf("sen_calc_time2:int:%d\n",   (int)sizeof(ls4.sen_calc_time2));
+  printf("pln_calc_time:int:%d\n",    (int)sizeof(ls4.pln_calc_time));
+  printf("pln_calc_time2:int:%d\n",   (int)sizeof(ls4.pln_calc_time2));
+  printf("pln_time_diff:int:%d\n",    (int)sizeof(ls4.pln_time_diff));
+  // LogStruct5
+  printf("m_pid_p:float:%d\n",   (int)sizeof(ls5.m_pid_p));
+  printf("m_pid_i:float:%d\n",   (int)sizeof(ls5.m_pid_i));
+  printf("m_pid_i2:float:%d\n",  (int)sizeof(ls5.m_pid_i2));
+  printf("m_pid_d:float:%d\n",   (int)sizeof(ls5.m_pid_d));
+  printf("m_pid_p_v:float:%d\n", (int)sizeof(ls5.m_pid_p_v));
+  printf("m_pid_i_v:float:%d\n", (int)sizeof(ls5.m_pid_i_v));
+  printf("m_pid_i2_v:float:%d\n",(int)sizeof(ls5.m_pid_i2_v));
+  printf("m_pid_d_v:float:%d\n", (int)sizeof(ls5.m_pid_d_v));
+  printf("g_pid_p:float:%d\n",   (int)sizeof(ls5.g_pid_p));
+  printf("g_pid_i:float:%d\n",   (int)sizeof(ls5.g_pid_i));
+  printf("g_pid_i2:float:%d\n",  (int)sizeof(ls5.g_pid_i2));
+  printf("g_pid_d:float:%d\n",   (int)sizeof(ls5.g_pid_d));
+  // LogStruct6
+  printf("g_pid_p_v:float:%d\n",  (int)sizeof(ls6.g_pid_p_v));
+  printf("g_pid_i_v:float:%d\n",  (int)sizeof(ls6.g_pid_i_v));
+  printf("g_pid_i2_v:float:%d\n", (int)sizeof(ls6.g_pid_i2_v));
+  printf("g_pid_d_v:float:%d\n",  (int)sizeof(ls6.g_pid_d_v));
+  printf("s_pid_p:float:%d\n",    (int)sizeof(ls6.s_pid_p));
+  printf("s_pid_i:float:%d\n",    (int)sizeof(ls6.s_pid_i));
+  printf("s_pid_i2:float:%d\n",   (int)sizeof(ls6.s_pid_i2));
+  printf("s_pid_d:float:%d\n",    (int)sizeof(ls6.s_pid_d));
+  printf("s_pid_p_v:float:%d\n",  (int)sizeof(ls6.s_pid_p_v));
+  printf("s_pid_i_v:float:%d\n",  (int)sizeof(ls6.s_pid_i_v));
+  printf("s_pid_i2_v:float:%d\n", (int)sizeof(ls6.s_pid_i2_v));
+  printf("s_pid_d_v:float:%d\n",  (int)sizeof(ls6.s_pid_d_v));
+  // LogStruct7
+  printf("ang_pid_p:float:%d\n",    (int)sizeof(ls7.ang_pid_p));
+  printf("ang_pid_i:float:%d\n",    (int)sizeof(ls7.ang_pid_i));
+  printf("ang_pid_d:float:%d\n",    (int)sizeof(ls7.ang_pid_d));
+  printf("ang_pid_p_v:float:%d\n",  (int)sizeof(ls7.ang_pid_p_v));
+  printf("ang_pid_i_v:float:%d\n",  (int)sizeof(ls7.ang_pid_i_v));
+  printf("ang_pid_d_v:float:%d\n",  (int)sizeof(ls7.ang_pid_d_v));
+  printf("ff_duty_front:float:%d\n",(int)sizeof(ls7.ff_duty_front));
+  printf("ff_duty_roll:float:%d\n", (int)sizeof(ls7.ff_duty_roll));
+  printf("ff_duty_rpm_r:float:%d\n",(int)sizeof(ls7.ff_duty_rpm_r));
+  printf("ff_duty_rpm_l:float:%d\n",(int)sizeof(ls7.ff_duty_rpm_l));
+  printf("x:float:%d\n",            (int)sizeof(ls7.x));
+  printf("y:float:%d\n",            (int)sizeof(ls7.y));
+  // LogStruct8
+  printf("right45_2:int:%d\n",       (int)sizeof(ls8.right45_2));
+  printf("right45_3:int:%d\n",       (int)sizeof(ls8.right45_3));
+  printf("left45_2:int:%d\n",        (int)sizeof(ls8.left45_2));
+  printf("left45_3:int:%d\n",        (int)sizeof(ls8.left45_3));
+  printf("right45_2_d:float:%d\n",   (int)sizeof(ls8.right45_2_d));
+  printf("right45_3_d:float:%d\n",   (int)sizeof(ls8.right45_3_d));
+  printf("left45_2_d:float:%d\n",    (int)sizeof(ls8.left45_2_d));
+  printf("left45_3_d:float:%d\n",    (int)sizeof(ls8.left45_3_d));
+  printf("sen_dist_l45_2:float:%d\n",(int)sizeof(ls8.sen_dist_l45_2));
+  printf("sen_dist_r45_2:float:%d\n",(int)sizeof(ls8.sen_dist_r45_2));
+  printf("sen_dist_l45_3:float:%d\n",(int)sizeof(ls8.sen_dist_l45_3));
+  printf("sen_dist_r45_3:float:%d\n",(int)sizeof(ls8.sen_dist_r45_3));
+  // LogStruct9
+  printf("knym_v:float:%d\n",       (int)sizeof(ls9.knym_v));
+  printf("knym_w:float:%d\n",       (int)sizeof(ls9.knym_w));
+  printf("odm_x:float:%d\n",        (int)sizeof(ls9.odm_x));
+  printf("odm_y:float:%d\n",        (int)sizeof(ls9.odm_y));
+  printf("odm_theta:float:%d\n",    (int)sizeof(ls9.odm_theta));
+  printf("kim_x:float:%d\n",        (int)sizeof(ls9.kim_x));
+  printf("kim_y:float:%d\n",        (int)sizeof(ls9.kim_y));
+  printf("kim_theta:float:%d\n",    (int)sizeof(ls9.kim_theta));
+  printf("ang_i_bias:float:%d\n",   (int)sizeof(ls9.ang_i_bias));
+  printf("ang_i_bias_val:float:%d\n",(int)sizeof(ls9.ang_i_bias_val));
+  printf("left90_d_diff:float:%d\n", (int)sizeof(ls9.left90_d_diff));
+  printf("right90_d_diff:float:%d\n",(int)sizeof(ls9.right90_d_diff));
+  // LogStruct10
+  printf("right45_3_d_diff:float:%d\n",(int)sizeof(ls10.right45_3_d_diff));
+  printf("right45_2_d_diff:float:%d\n",(int)sizeof(ls10.right45_2_d_diff));
+  printf("right45_d_diff:float:%d\n",  (int)sizeof(ls10.right45_d_diff));
+  printf("left45_d_diff:float:%d\n",   (int)sizeof(ls10.left45_d_diff));
+  printf("left45_2_d_diff:float:%d\n", (int)sizeof(ls10.left45_2_d_diff));
+  printf("left45_3_d_diff:float:%d\n", (int)sizeof(ls10.left45_3_d_diff));
+  printf("duty_suction:float:%d\n",    (int)sizeof(ls10.duty_suction));
+  printf("duty_roll:float:%d\n",       (int)sizeof(ls10.duty_roll));
+  printf("ang_kf_sum:float:%d\n",      (int)sizeof(ls10.ang_kf_sum));
+  printf("img_ang_sum:float:%d\n",     (int)sizeof(ls10.img_ang_sum));
+  printf("duty_roll_before:float:%d\n",(int)sizeof(ls10.duty_roll_before));
+  printf("reserve5:int:%d\n",          (int)sizeof(ls10.reserve5));
+
+  fflush(stdout);
+  sleep_ms(50);
+  printf("start___\n");
+  fflush(stdout);
+  sleep_ms(100);
+
+  // CRLF 変換を無効化してバイナリデータを送信 (\n バイトが壊れるのを防ぐ)
+  stdio_set_translate_crlf(&stdio_usb, false);
+
+  uint8_t send_buf[size];
+  ls1.index = 0;
+  float left45_d_z = 0, right45_d_z = 0;
+  float left45_2_d_z = 0, right45_2_d_z = 0;
+  float left45_3_d_z = 0, right45_3_d_z = 0;
+  constexpr float th = 10.0f;
 
   int flush_cnt = 0;
-  for (size_t i = 0; i < n; ++i) {
-    const auto &e = log_vec_[i];
-    printf("%zu,"
-           "%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.3f,%.3f,"
-           "%.4f,%.4f,%.4f,%.2f,%.2f,%.4f,%.4f,%.4f,"
-           "%d,%d,%d,%d,"
-           "%d,%d,%d,%d,"
-           "%.3f,%.3f,%.3f,%.3f,%.3f,"
-           "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
-           "%u,%d,"
-           "%d,%d,%d,%d,"
-           "%.3f,%.3f,%.3f,%.3f,"
-           "%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.4f,"
-           "%.3f,%.3f,%.4f,%.4f\n",
-           i,
-           halfToFloat(e.img_v), halfToFloat(e.v_c), halfToFloat(e.v_c2),
-           halfToFloat(e.v_l), halfToFloat(e.v_r),
-           (int)e.v_l_enc, (int)e.v_r_enc,
-           halfToFloat(e.accl), halfToFloat(e.accl_x),
-           halfToFloat(e.img_w), halfToFloat(e.w_lp), halfToFloat(e.alpha),
-           halfToFloat(e.img_dist), halfToFloat(e.dist),
-           halfToFloat(e.img_ang), halfToFloat(e.ang), halfToFloat(e.ang_kf),
-           (int)e.left90_lp, (int)e.left45_lp,
-           (int)e.right45_lp, (int)e.right90_lp,
-           (int)e.left45_2_lp, (int)e.right45_2_lp,
-           (int)e.left45_3_lp, (int)e.right45_3_lp,
-           halfToFloat(e.battery_lp),
-           halfToFloat(e.duty_l), halfToFloat(e.duty_r),
-           halfToFloat(e.duty_sensor_ctrl), halfToFloat(e.duty_suction),
-           halfToFloat(e.sen_log_l45), halfToFloat(e.sen_log_r45),
-           halfToFloat(e.sen_log_l45_2), halfToFloat(e.sen_log_r45_2),
-           halfToFloat(e.sen_log_l45_3), halfToFloat(e.sen_log_r45_3),
-           (unsigned)e.motion_type, (int)e.motion_timestamp,
-           (int)e.sen_calc_time, (int)e.sen_calc_time2,
-           (int)e.pln_calc_time, (int)e.pln_time_diff,
-           halfToFloat(e.ff_duty_front), halfToFloat(e.ff_duty_roll),
-           halfToFloat(e.ff_duty_rpm_r), halfToFloat(e.ff_duty_rpm_l),
-           halfToFloat(e.pos_x), halfToFloat(e.pos_y),
-           halfToFloat(e.odm_x), halfToFloat(e.odm_y),
-           halfToFloat(e.odm_theta),
-           halfToFloat(e.kim_x), halfToFloat(e.kim_y),
-           halfToFloat(e.kim_theta),
-           halfToFloat(e.knym_v), halfToFloat(e.knym_w),
-           halfToFloat(e.ang_kf_sum), halfToFloat(e.img_ang_sum));
+  for (const auto &e : log_vec_) {
+    ls1.index++;
+    if (ls1.index >= (int32_t)n) break;
 
-    // USB CDC バッファあふれ防止: 50行ごとに 1ms 待つ
+    // --- ls1 ---
+    ls1.ideal_v     = halfToFloat(e.img_v);
+    ls1.v_c         = halfToFloat(e.v_c);
+    ls1.v_c2        = halfToFloat(e.v_c2);
+    ls1.v_l         = halfToFloat(e.v_l);
+    ls1.v_r         = halfToFloat(e.v_r);
+    ls1.v_l_enc     = e.v_l_enc;
+    ls1.v_r_enc     = e.v_r_enc;
+    ls1.v_l_enc_sin = 0.0f;
+    ls1.v_r_enc_sin = 0.0f;
+    ls1.accl        = halfToFloat(e.accl) * 1000.0f;
+    ls1.accl_x      = halfToFloat(e.accl_x);
+    // --- ls2 ---
+    ls2.ideal_w   = halfToFloat(e.img_w);
+    ls2.w_lp      = halfToFloat(e.w_lp);
+    ls2.alpha     = halfToFloat(e.alpha);
+    ls2.ideal_dist= halfToFloat(e.img_dist);
+    ls2.dist      = halfToFloat(e.dist);
+    ls2.dist_kf   = halfToFloat(e.dist_kf);
+    ls2.ideal_ang = halfToFloat(e.img_ang);
+    ls2.ang       = halfToFloat(e.ang);
+    ls2.ang_kf    = halfToFloat(e.ang_kf);
+    ls2.left90    = e.left90_lp;
+    ls2.left45    = e.left45_lp;
+    ls2.front     = (e.left90_lp + e.right90_lp) / 2;
+    // --- ls3 ---
+    ls3.right45       = e.right45_lp;
+    ls3.right90       = e.right90_lp;
+    ls3.left90_d      = 0.0f;
+    ls3.left45_d      = halfToFloat(e.sen_log_l45);
+    ls3.front_d       = 0.0f;
+    ls3.right45_d     = halfToFloat(e.sen_log_r45);
+    ls3.right90_d     = 0.0f;
+    ls3.left90_far_d  = 0.0f;
+    ls3.front_far_d   = 0.0f;
+    ls3.right90_far_d = 0.0f;
+    ls3.battery       = halfToFloat(e.battery_lp);
+    ls3.duty_l        = halfToFloat(e.duty_l);
+    // --- ls4 ---
+    ls4.duty_r         = halfToFloat(e.duty_r);
+    ls4.motion_state   = e.motion_type;
+    ls4.duty_sen       = halfToFloat(e.duty_sensor_ctrl);
+    ls4.dist_mod90     = 0.0f;
+    ls4.sen_dist_l45   = halfToFloat(e.sen_log_l45);
+    ls4.sen_dist_r45   = halfToFloat(e.sen_log_r45);
+    ls4.timestamp      = e.motion_timestamp;
+    ls4.sen_calc_time  = e.sen_calc_time;
+    ls4.sen_calc_time2 = e.sen_calc_time2;
+    ls4.pln_calc_time  = e.pln_calc_time;
+    ls4.pln_calc_time2 = 0;
+    ls4.pln_time_diff  = e.pln_time_diff;
+    // --- ls5 ---
+    ls5.m_pid_p   = halfToFloat(e.m_pid_p);
+    ls5.m_pid_i   = halfToFloat(e.m_pid_i);
+    ls5.m_pid_i2  = halfToFloat(e.m_pid_i2);
+    ls5.m_pid_d   = halfToFloat(e.m_pid_d);
+    ls5.m_pid_p_v = halfToFloat(e.m_pid_p_v);
+    ls5.m_pid_i_v = halfToFloat(e.m_pid_i_v);
+    ls5.m_pid_i2_v= halfToFloat(e.m_pid_i2_v);
+    ls5.m_pid_d_v = halfToFloat(e.m_pid_d_v);
+    ls5.g_pid_p   = halfToFloat(e.g_pid_p);
+    ls5.g_pid_i   = halfToFloat(e.g_pid_i);
+    ls5.g_pid_i2  = halfToFloat(e.g_pid_i2);
+    ls5.g_pid_d   = halfToFloat(e.g_pid_d);
+    // --- ls6 ---
+    ls6.g_pid_p_v  = halfToFloat(e.g_pid_p_v);
+    ls6.g_pid_i_v  = halfToFloat(e.g_pid_i_v);
+    ls6.g_pid_i2_v = halfToFloat(e.g_pid_i2_v);
+    ls6.g_pid_d_v  = halfToFloat(e.g_pid_d_v);
+    ls6.s_pid_p    = halfToFloat(e.s_pid_p);
+    ls6.s_pid_i    = halfToFloat(e.s_pid_i);
+    ls6.s_pid_i2   = halfToFloat(e.s_pid_i2);
+    ls6.s_pid_d    = halfToFloat(e.s_pid_d);
+    ls6.s_pid_p_v  = halfToFloat(e.s_pid_p_v);
+    ls6.s_pid_i_v  = halfToFloat(e.s_pid_i_v);
+    ls6.s_pid_i2_v = halfToFloat(e.s_pid_i2_v);
+    ls6.s_pid_d_v  = halfToFloat(e.s_pid_d_v);
+    // --- ls7 ---
+    ls7.ang_pid_p    = halfToFloat(e.ang_pid_p);
+    ls7.ang_pid_i    = halfToFloat(e.ang_pid_i);
+    ls7.ang_pid_d    = halfToFloat(e.ang_pid_d);
+    ls7.ang_pid_p_v  = halfToFloat(e.ang_pid_p_v);
+    ls7.ang_pid_i_v  = halfToFloat(e.ang_pid_i_v);
+    ls7.ang_pid_d_v  = halfToFloat(e.ang_pid_d_v);
+    ls7.ff_duty_front= halfToFloat(e.ff_duty_front);
+    ls7.ff_duty_roll = halfToFloat(e.ff_duty_roll);
+    ls7.ff_duty_rpm_r= halfToFloat(e.ff_duty_rpm_r);
+    ls7.ff_duty_rpm_l= halfToFloat(e.ff_duty_rpm_l);
+    ls7.x            = halfToFloat(e.pos_x);
+    ls7.y            = halfToFloat(e.pos_y);
+    // --- ls8 ---
+    ls8.right45_2      = e.right45_2_lp;
+    ls8.right45_3      = e.right45_3_lp;
+    ls8.left45_2       = e.left45_2_lp;
+    ls8.left45_3       = e.left45_3_lp;
+    ls8.right45_2_d    = halfToFloat(e.sen_log_r45_2);
+    ls8.right45_3_d    = halfToFloat(e.sen_log_r45_3);
+    ls8.left45_2_d     = halfToFloat(e.sen_log_l45_2);
+    ls8.left45_3_d     = halfToFloat(e.sen_log_l45_3);
+    ls8.sen_dist_l45_2 = halfToFloat(e.sen_log_l45_2);
+    ls8.sen_dist_r45_2 = halfToFloat(e.sen_log_r45_2);
+    ls8.sen_dist_l45_3 = halfToFloat(e.sen_log_l45_3);
+    ls8.sen_dist_r45_3 = halfToFloat(e.sen_log_r45_3);
+    // --- ls9 ---
+    ls9.knym_v       = halfToFloat(e.knym_v);
+    ls9.knym_w       = halfToFloat(e.knym_w);
+    ls9.odm_x        = halfToFloat(e.odm_x);
+    ls9.odm_y        = halfToFloat(e.odm_y);
+    ls9.odm_theta    = halfToFloat(e.odm_theta) * 180.0f / m_PI;
+    ls9.kim_x        = halfToFloat(e.kim_x);
+    ls9.kim_y        = halfToFloat(e.kim_y);
+    ls9.kim_theta    = halfToFloat(e.kim_theta) * 180.0f / m_PI;
+    ls9.ang_i_bias   = halfToFloat(e.ang_i_bias);
+    ls9.ang_i_bias_val = halfToFloat(e.ang_i_bias_val);
+    ls9.left90_d_diff  = 0.0f;
+    ls9.right90_d_diff = 0.0f;
+    // --- ls10 ---
+    {
+      float l45  = ls3.left45_d,  r45  = ls3.right45_d;
+      float l45_2= ls8.left45_2_d, r45_2= ls8.right45_2_d;
+      float l45_3= ls8.left45_3_d, r45_3= ls8.right45_3_d;
+      auto clamp = [](float v, float lo, float hi) {
+        return v < lo ? lo : (v > hi ? hi : v);
+      };
+      ls10.right45_3_d_diff = clamp(r45_3 - right45_3_d_z, -th, th);
+      ls10.right45_2_d_diff = clamp(r45_2 - right45_2_d_z, -th, th);
+      ls10.right45_d_diff   = clamp(r45   - right45_d_z,   -th, th);
+      ls10.left45_d_diff    = clamp(l45   - left45_d_z,    -th, th);
+      ls10.left45_2_d_diff  = clamp(l45_2 - left45_2_d_z,  -th, th);
+      ls10.left45_3_d_diff  = clamp(l45_3 - left45_3_d_z,  -th, th);
+      left45_d_z   = l45;  right45_d_z   = r45;
+      left45_2_d_z = l45_2; right45_2_d_z = r45_2;
+      left45_3_d_z = l45_3; right45_3_d_z = r45_3;
+    }
+    ls10.duty_suction    = halfToFloat(e.duty_suction);
+    ls10.duty_roll       = halfToFloat(e.duty_roll);
+    ls10.ang_kf_sum      = halfToFloat(e.ang_kf_sum)   * 180.0f / m_PI;
+    ls10.img_ang_sum     = halfToFloat(e.img_ang_sum)  * 180.0f / m_PI;
+    ls10.duty_roll_before= halfToFloat(e.duty_roll_before);
+    ls10.reserve5        = 0;
+
+    size_t off = 0;
+    memcpy(send_buf + off, &ls1,  sizeof(ls1));  off += sizeof(ls1);
+    memcpy(send_buf + off, &ls2,  sizeof(ls2));  off += sizeof(ls2);
+    memcpy(send_buf + off, &ls3,  sizeof(ls3));  off += sizeof(ls3);
+    memcpy(send_buf + off, &ls4,  sizeof(ls4));  off += sizeof(ls4);
+    memcpy(send_buf + off, &ls5,  sizeof(ls5));  off += sizeof(ls5);
+    memcpy(send_buf + off, &ls6,  sizeof(ls6));  off += sizeof(ls6);
+    memcpy(send_buf + off, &ls7,  sizeof(ls7));  off += sizeof(ls7);
+    memcpy(send_buf + off, &ls8,  sizeof(ls8));  off += sizeof(ls8);
+    memcpy(send_buf + off, &ls9,  sizeof(ls9));  off += sizeof(ls9);
+    memcpy(send_buf + off, &ls10, sizeof(ls10));
+    fwrite(send_buf, 1, size, stdout);
+
     if (++flush_cnt >= 50) {
       flush_cnt = 0;
+      fflush(stdout);
       sleep_ms(1);
     }
   }
-  printf("end___\n");
+
+  // 終端レコード (index = -1)
+  ls1.index = -1;
+  {
+    size_t off = 0;
+    memcpy(send_buf + off, &ls1,  sizeof(ls1));  off += sizeof(ls1);
+    memcpy(send_buf + off, &ls2,  sizeof(ls2));  off += sizeof(ls2);
+    memcpy(send_buf + off, &ls3,  sizeof(ls3));  off += sizeof(ls3);
+    memcpy(send_buf + off, &ls4,  sizeof(ls4));  off += sizeof(ls4);
+    memcpy(send_buf + off, &ls5,  sizeof(ls5));  off += sizeof(ls5);
+    memcpy(send_buf + off, &ls6,  sizeof(ls6));  off += sizeof(ls6);
+    memcpy(send_buf + off, &ls7,  sizeof(ls7));  off += sizeof(ls7);
+    memcpy(send_buf + off, &ls8,  sizeof(ls8));  off += sizeof(ls8);
+    memcpy(send_buf + off, &ls9,  sizeof(ls9));  off += sizeof(ls9);
+    memcpy(send_buf + off, &ls10, sizeof(ls10));
+    fwrite(send_buf, 1, size, stdout);
+  }
+  fflush(stdout);
+
+  stdio_set_translate_crlf(&stdio_usb, true);
+  printf("[LoggingTask] dump done: %zu entries\n", n);
 }
 
 // ============================================================
