@@ -65,8 +65,9 @@ public:
                                  const motion_tgt_val_t& tv);
 
     // Core0 (MainTask) から stop() 後に呼ぶ
-    void dump_csv()    const;   // USB CDC に CSV 出力
-    void dump_binary() const;   // UART にバイナリ出力
+    void dump_csv()      const;  // USB CDC にバイナリ出力 (rx_term.js バイナリプロトコル)
+    void dump_csv_text() const;  // USB CDC にテキスト CSV 出力 (rx_term.js テキストプロトコル)
+    void dump_binary()   const;  // UART にバイナリ出力
 
     // Astraea MotionPlanning 互換インターフェース
     void start_slalom_log()              { start(); }

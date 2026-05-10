@@ -534,6 +534,89 @@ void LoggingTask::dump_csv() const {
 }
 
 // ============================================================
+// USB CDC にテキスト CSV 出力 (rx_term.js テキストプロトコル)
+// プロトコル:
+//   csv___\n     … テキスト CSV モード開始
+//   header\n     … カンマ区切りフィールド名
+//   row\n × n   … データ行
+//   end___\n     … 終了 → rx_term.js が logs/ に保存
+// ============================================================
+void LoggingTask::dump_csv_text() const {
+  const size_t n = log_vec_.size();
+
+  printf("csv___\n");
+  fflush(stdout);
+  sleep_ms(50);
+
+  printf("index,"
+         "img_v,v_c,v_c2,v_l,v_r,v_l_enc,v_r_enc,accl,accl_x,"
+         "img_w,w_lp,alpha,img_dist,dist,img_ang,ang,ang_kf,"
+         "left90,left45,right45,right90,"
+         "left45_2,right45_2,left45_3,right45_3,"
+         "battery,duty_l,duty_r,duty_sen,duty_suction,"
+         "sen_l45,sen_r45,sen_l45_2,sen_r45_2,sen_l45_3,sen_r45_3,"
+         "motion_type,timestamp,"
+         "sen_calc_time,sen_calc_time2,pln_calc_time,pln_time_diff,"
+         "ff_front,ff_roll,ff_rpm_r,ff_rpm_l,"
+         "pos_x,pos_y,odm_x,odm_y,odm_theta,kim_x,kim_y,kim_theta,"
+         "knym_v,knym_w,ang_kf_sum,img_ang_sum\n");
+
+  int flush_cnt = 0;
+  for (size_t i = 0; i < n; ++i) {
+    const auto &e = log_vec_[i];
+    printf("%zu,"
+           "%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.3f,%.3f,"
+           "%.4f,%.4f,%.4f,%.2f,%.2f,%.4f,%.4f,%.4f,"
+           "%d,%d,%d,%d,"
+           "%d,%d,%d,%d,"
+           "%.3f,%.3f,%.3f,%.3f,%.3f,"
+           "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
+           "%u,%d,"
+           "%d,%d,%d,%d,"
+           "%.3f,%.3f,%.3f,%.3f,"
+           "%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.4f,"
+           "%.3f,%.3f,%.4f,%.4f\n",
+           i,
+           halfToFloat(e.img_v), halfToFloat(e.v_c), halfToFloat(e.v_c2),
+           halfToFloat(e.v_l),   halfToFloat(e.v_r),
+           (int)e.v_l_enc, (int)e.v_r_enc,
+           halfToFloat(e.accl),  halfToFloat(e.accl_x),
+           halfToFloat(e.img_w), halfToFloat(e.w_lp), halfToFloat(e.alpha),
+           halfToFloat(e.img_dist), halfToFloat(e.dist),
+           halfToFloat(e.img_ang),  halfToFloat(e.ang), halfToFloat(e.ang_kf),
+           (int)e.left90_lp,  (int)e.left45_lp,
+           (int)e.right45_lp, (int)e.right90_lp,
+           (int)e.left45_2_lp, (int)e.right45_2_lp,
+           (int)e.left45_3_lp, (int)e.right45_3_lp,
+           halfToFloat(e.battery_lp),
+           halfToFloat(e.duty_l), halfToFloat(e.duty_r),
+           halfToFloat(e.duty_sensor_ctrl), halfToFloat(e.duty_suction),
+           halfToFloat(e.sen_log_l45),   halfToFloat(e.sen_log_r45),
+           halfToFloat(e.sen_log_l45_2), halfToFloat(e.sen_log_r45_2),
+           halfToFloat(e.sen_log_l45_3), halfToFloat(e.sen_log_r45_3),
+           (unsigned)e.motion_type, (int)e.motion_timestamp,
+           (int)e.sen_calc_time, (int)e.sen_calc_time2,
+           (int)e.pln_calc_time, (int)e.pln_time_diff,
+           halfToFloat(e.ff_duty_front), halfToFloat(e.ff_duty_roll),
+           halfToFloat(e.ff_duty_rpm_r), halfToFloat(e.ff_duty_rpm_l),
+           halfToFloat(e.pos_x), halfToFloat(e.pos_y),
+           halfToFloat(e.odm_x), halfToFloat(e.odm_y),
+           halfToFloat(e.odm_theta),
+           halfToFloat(e.kim_x), halfToFloat(e.kim_y), halfToFloat(e.kim_theta),
+           halfToFloat(e.knym_v),    halfToFloat(e.knym_w),
+           halfToFloat(e.ang_kf_sum), halfToFloat(e.img_ang_sum));
+
+    if (++flush_cnt >= 50) {
+      flush_cnt = 0;
+      sleep_ms(1);
+    }
+  }
+
+  printf("end___\n");
+  printf("[LoggingTask] text dump done: %zu entries\n", n);
+}
+
+// ============================================================
 // UART にバイナリ出力 (Core0 から stop() 後に呼ぶ)
 // プロトコル: [magic:4][count:4][entry_sz:4][data:count*entry_sz][magic:4]
 // ※ uart_init() は呼び出し元で実施すること

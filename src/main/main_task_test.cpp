@@ -155,12 +155,20 @@ void MainTask::test_run() {
   }
   ui_.coin(120);
   planning_->set_search_mode(false);
+  // 1回目: バイナリ dump (rx_term.js バイナリプロトコル)
   while (1) {
     if (ui_.button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_csv();
+  // 2回目: テキスト dump (rx_term.js テキストプロトコル)
+  while (1) {
+    if (ui_.button_state_hold())
+      break;
+    sleep_ms(10);
+  }
+  lt_->dump_csv_text();
   while (1) {
     if (ui_.button_state_hold())
       break;

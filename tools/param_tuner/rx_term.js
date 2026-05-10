@@ -45,6 +45,7 @@ let ready = function () {
   let obj = {
     dump_to_csv_ready: false,
     dump_to_map: false,
+    dump_to_csv_text: false,
     data_struct: [],
     file_name: getNowYMD(),
     record: "",
@@ -79,6 +80,20 @@ const switchLineMode = (obj) => {
   parser = port.pipe(new ReadlineParser({ delimiter: "\r\n" }));
   parser.on("data", function (data) {
     console.log(data);
+
+    // ---- テキスト CSV モード (csv___ 〜 end___) ----
+    if (obj.dump_to_csv_text) {
+      if (data.match(/^end___/)) {
+        obj.dump_to_csv_text = false;
+        fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, obj.record, { flag: "w+" });
+        fs.copyFileSync(`${__dirname}/logs/${obj.file_name}`, `${__dirname}/logs/latest.csv`);
+        console.log(`[text CSV] saved: ${obj.file_name}`);
+      } else {
+        obj.record += `${data}\n`;
+      }
+      return;
+    }
+
     if (obj.dump_to_csv_ready) {
       const d = data.split(":");
       console.log(d);
@@ -123,6 +138,13 @@ const switchLineMode = (obj) => {
       if (obj.dump_to_map) {
         obj.record += `${data}\n`;
       }
+    }
+
+    if (data.match(/^csv___/)) {
+      obj.dump_to_csv_text = true;
+      obj.file_name = getNowYMD();
+      obj.record = "";
+      console.log(`[text CSV] start: ${obj.file_name}`);
     }
 
     if (data.match(/^ready___/)) {
@@ -211,6 +233,7 @@ const switchToBinaryMode = (obj) => {
       switchLineMode({
         dump_to_csv_ready: false,
         dump_to_map: false,
+        dump_to_csv_text: false,
         data_struct: [],
         file_name: getNowYMD(),
         record: "",
@@ -453,6 +476,7 @@ const switchToBinaryMode = (obj) => {
         switchLineMode({
           dump_to_csv_ready: false,
           dump_to_map: false,
+          dump_to_csv_text: false,
           data_struct: [],
           file_name: getNowYMD(),
           record: "",
