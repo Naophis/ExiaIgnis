@@ -45,16 +45,16 @@ static int32_t spi_transfer16(spi_inst_t *spi, uint cs, uint16_t tx_word) {
 
     uint16_t raw = ((uint16_t)rx[0] << 8) | rx[1];
 
-    if (cs == 9) {
-        printf("cs=%u tx=0x%04X raw=0x%04X parity=%u ef=%u data=0x%04X %u\n",
-               cs,
-               tx_word,
-               raw,
-               (raw >> 15) & 1,
-               (raw >> 14) & 1,
-               raw & 0x3FFF,
-               raw & 0x3FFF);
-    }
+    // if (cs == 9) {
+    //     printf("cs=%u tx=0x%04X raw=0x%04X parity=%u ef=%u data=0x%04X %u\n",
+    //            cs,
+    //            tx_word,
+    //            raw,
+    //            (raw >> 15) & 1,
+    //            (raw >> 14) & 1,
+    //            raw & 0x3FFF,
+    //            raw & 0x3FFF);
+    // }
 
     return raw;
 }
