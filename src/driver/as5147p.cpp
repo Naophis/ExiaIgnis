@@ -18,18 +18,45 @@ static uint16_t make_cmd(uint16_t frame) {
     return calc_parity(frame) ? (frame | 0x8000u) : frame;
 }
 
+static bool _spiCalcEvenParity(uint16_t value) {
+  bool even = 0;
+  uint8_t i;
+  for (i = 0; i < 16; i++) {
+    if (value & (0x0001 << i)) {
+      even = !even;
+    }
+  }
+  return even;
+}
+
 // 16bit ワードを 8bit×2 で送受信 (sample/test.cpp と同じ方式)
-static uint16_t spi_transfer16(spi_inst_t *spi, uint cs, uint16_t tx_word) {
-    uint8_t tx[2] = {(uint8_t)(tx_word >> 8), (uint8_t)(tx_word & 0xFF)};
+static int32_t spi_transfer16(spi_inst_t *spi, uint cs, uint16_t tx_word) {
+    uint8_t tx[2] = {
+        (uint8_t)(tx_word >> 8),
+        (uint8_t)(tx_word & 0xFF)
+    };
     uint8_t rx[2] = {0, 0};
 
     gpio_put(cs, 0);
-    sleep_us(1);                              // CS setup time
+    sleep_us(1);
     spi_write_read_blocking(spi, tx, rx, 2);
-    sleep_us(1);                              // CS hold time
+    sleep_us(1);
     gpio_put(cs, 1);
 
-    return ((uint16_t)rx[0] << 8) | rx[1];
+    uint16_t raw = ((uint16_t)rx[0] << 8) | rx[1];
+
+    if (cs == 9) {
+        printf("cs=%u tx=0x%04X raw=0x%04X parity=%u ef=%u data=0x%04X %u\n",
+               cs,
+               tx_word,
+               raw,
+               (raw >> 15) & 1,
+               (raw >> 14) & 1,
+               raw & 0x3FFF,
+               raw & 0x3FFF);
+    }
+
+    return raw;
 }
 
 void AS5147P::init(spi_inst_t *spi, uint cs_pin) {
@@ -42,12 +69,12 @@ void AS5147P::init(spi_inst_t *spi, uint cs_pin) {
 }
 
 // addr を読んで生の 16bit 値を返す (EF・パリティビット含む)
-uint16_t AS5147P::read_reg(uint16_t addr) {
+int32_t AS5147P::read_reg(uint16_t addr) {
     // mode3 (CPOL=1, CPHA=1), 8-bit — SPI1共有時もSCK遷移不要
-    spi_set_format_safe(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_set_format_safe(spi_, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
 
     uint16_t cmd = make_cmd((1u << 14) | addr);
-    uint16_t nop = make_cmd((1u << 14));  // read NOP (addr=0x0000)
+    uint16_t nop = make_cmd(0x0000);  // read NOP (addr=0x0000)
 
     // Frame 1: コマンド送信 (レスポンスは破棄)
     spi_transfer16(spi_, cs_, cmd);
@@ -90,7 +117,7 @@ void AS5147P::setup() {
            angle,  angle & 0x3FFF);
 }
 
-uint16_t AS5147P::read_angle() {
-    uint16_t raw = read_reg(0x3FFF);
+int32_t AS5147P::read_angle() {
+    int32_t raw = read_reg(0x3FFF);
     return raw & 0x3FFFu;
 }

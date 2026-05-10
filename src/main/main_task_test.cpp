@@ -211,6 +211,10 @@ void MainTask::test_suction() {
 void MainTask::keep_pivot() {}
 
 void MainTask::dump1() {
+
+  mp->reset_gyro_ref_with_check();
+  sleep_ms(250);
+
   const auto se = get_sensing_entity();
 
   const char ESC = '\033';

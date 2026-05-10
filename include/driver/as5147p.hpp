@@ -12,11 +12,11 @@ public:
     void setup();
 
     // 14bit 角度値を取得 [0–16383]
-    uint16_t read_angle();
+    int32_t read_angle();
 
 private:
     spi_inst_t *spi_ = nullptr;
     uint        cs_  = 0;
 
-    uint16_t read_reg(uint16_t addr);
+    int32_t read_reg(uint16_t addr);
 };
