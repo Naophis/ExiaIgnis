@@ -28,19 +28,24 @@ static void psram_init(uint cs_pin) {
   // GPIO を XIP CS1 (QMI M1 チップセレクト) として設定
   gpio_set_function(cs_pin, GPIO_FUNC_XIP_CS1);
 
-  // TIMING: CLKDIV=2 (37.5 MHz), RXDELAY=2, COOLDOWN=1
+  // TIMING: CLKDIV=2 (75 MHz), RXDELAY=2 sys-clocks, COOLDOWN=1
   qmi_hw->m[1].timing = (1u << 30) | (2u << 8) | (2u << 0); // 0x40000202
 
   // APS6404L Quad I/O Read (0xEB):
-  //   prefix=SPI, addr=Quad, suffix(mode)=Quad(0xA0), dummy=4clk Quad, data=Quad
+  //   prefix=SPI(0xEB), addr=Quad, suffix(mode)=Quad(0xA0), dummy=4clk Quad, data=Quad
+  // Bit layout (from RP2350 TRM):
+  //   [1:0]=PREFIX_WIDTH, [3:2]=ADDR_WIDTH, [5:4]=SUFFIX_WIDTH, [7:6]=DUMMY_WIDTH,
+  //   [9:8]=DATA_WIDTH, [12]=PREFIX_LEN(1=8bit), [15:14]=SUFFIX_LEN(2=8bit),
+  //   [18:16]=DUMMY_LEN(1=4clk, 2=8clk)
   qmi_hw->m[1].rfmt =
       (0u << 0) |   // PREFIX_WIDTH = S
       (2u << 2) |   // ADDR_WIDTH   = Q
       (2u << 4) |   // SUFFIX_WIDTH = Q (mode byte 0xA0)
       (2u << 6) |   // DUMMY_WIDTH  = Q
       (2u << 8) |   // DATA_WIDTH   = Q
-      (1u << 16) |  // DUMMY_LEN    = 4 clocks
-      (1u << 12);   // PREFIX_LEN   = 8-bit
+      (1u << 12) |  // PREFIX_LEN   = 8-bit (0xEB command)
+      (2u << 14) |  // SUFFIX_LEN   = 8-bit (0xA0 mode byte) ← was missing, caused garbage reads
+      (1u << 16);   // DUMMY_LEN    = 4 clocks (VALUE_4=1, OK at 75 MHz)
   qmi_hw->m[1].rcmd = (0xA0u << 8) | 0xEBu; // suffix=0xA0, prefix=0xEB
 
   // APS6404L Quad I/O Write (0x38):
