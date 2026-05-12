@@ -1,5 +1,7 @@
 #include "logging/logging_task.hpp"
 #include "define.hpp"
+#include "hardware/structs/qmi.h"
+#include "hardware/structs/xip.h"
 #include "hardware/sync.h"
 #include "hardware/uart.h"
 #include "hardware/xip_cache.h"
@@ -46,19 +48,67 @@ std::shared_ptr<LoggingTask> LoggingTask::create() {
 
 void LoggingTask::init(void *psram_base, size_t psram_size,
                        size_t max_entries) {
+  // RP2354A 内蔵 PSRAM の QMI M1 再設定。
+  // flash_exit_xip() (LittleFS write/erase で呼ばれる) が wfmt/wcmd を
+  // リセットするため、全 LittleFS 操作完了後のここで必ず再設定する。
+  qmi_hw->m[1].timing = (1u << 30) | (2u << 8) | (2u << 0); // COOLDOWN=1, RXDELAY=2, CLKDIV=2(75MHz)
+  qmi_hw->m[1].rfmt =
+      (0u << 0)  |  // PREFIX_WIDTH = S
+      (2u << 2)  |  // ADDR_WIDTH   = Q
+      (2u << 4)  |  // SUFFIX_WIDTH = Q
+      (2u << 6)  |  // DUMMY_WIDTH  = Q
+      (2u << 8)  |  // DATA_WIDTH   = Q
+      (1u << 12) |  // PREFIX_LEN   = 8-bit (0xEB)
+      (2u << 14) |  // SUFFIX_LEN   = 8-bit (0xA0 mode byte)
+      (1u << 16);   // DUMMY_LEN    = 4 clocks
+  qmi_hw->m[1].rcmd = (0xA0u << 8) | 0xEBu;
+  qmi_hw->m[1].wfmt =
+      (0u << 0)  |  // PREFIX_WIDTH = S
+      (2u << 2)  |  // ADDR_WIDTH   = Q
+      (2u << 8)  |  // DATA_WIDTH   = Q
+      (1u << 12);   // PREFIX_LEN   = 8-bit (0x38)
+  qmi_hw->m[1].wcmd = 0x38u;
+
+  // XIP は書き込みがデフォルト無効。M1 (PSRAM) への書き込みを有効化する。
+  hw_set_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_WRITABLE_M1_BITS);
+
   psram_heap::init(psram_base, psram_size);
 
-  // PSRAM 疎通確認 (uncached エイリアス 0x15000000 経由で直接 read-write)
-  // 0x11000000 (cached) → 0x15000000 (no-cache/no-alloc) へのオフセット = 0x04000000
-  constexpr uintptr_t XIP_NOCACHE_OFFSET = 0x04000000u;
-  volatile uint32_t *p_nc = reinterpret_cast<volatile uint32_t *>(
-      reinterpret_cast<uintptr_t>(psram_base) + XIP_NOCACHE_OFFSET);
+  // ── PSRAM 疎通確認 ──────────────────────────────────────────────────
+  // No-alloc alias (0x15000000) はキャッシュを完全に迂回して QMI M1 で直接 R/W。
+  // WRITABLE_M1 が設定済みなので書き込みは wfmt/wcmd で PSRAM に届く。
+  printf("[LoggingTask] XIP_CTRL=0x%08X\n", (unsigned)xip_ctrl_hw->ctrl);
+  printf("[LoggingTask] QMI M1: timing=0x%08X rfmt=0x%08X rcmd=0x%08X wfmt=0x%08X wcmd=0x%08X\n",
+         (unsigned)qmi_hw->m[1].timing, (unsigned)qmi_hw->m[1].rfmt,
+         (unsigned)qmi_hw->m[1].rcmd,  (unsigned)qmi_hw->m[1].wfmt,
+         (unsigned)qmi_hw->m[1].wcmd);
+
+  // XIP_NOCACHE_NOALLOC_BASE + 0x01000000 = 0x15000000 (M1, no-cache)
+  volatile uint32_t *p_nc =
+      reinterpret_cast<volatile uint32_t *>(0x15000000u);
+
+  // Test A: Quad Write (0x38) + Quad Read (0xEB)
   p_nc[0] = 0xDEADBEEFu;
   p_nc[1] = 0x12345678u;
   __dmb();
-  const bool psram_ok = (p_nc[0] == 0xDEADBEEFu && p_nc[1] == 0x12345678u);
-  printf("[LoggingTask] PSRAM %s (0x%08X, 0x%08X)\n",
-         psram_ok ? "OK" : "FAIL", (unsigned)p_nc[0], (unsigned)p_nc[1]);
+  bool ok_a = (p_nc[0] == 0xDEADBEEFu && p_nc[1] == 0x12345678u);
+  printf("[PSRAM] Quad-W/R: %s  0x%08X 0x%08X\n",
+         ok_a ? "OK" : "FAIL", (unsigned)p_nc[0], (unsigned)p_nc[1]);
+
+  // Test B: SPI single Write (0x02) + Quad Read — 書き込み経路を単独検証
+  qmi_hw->m[1].wfmt = QMI_M1_WFMT_RESET; // 0x00001000 = SPI single write
+  qmi_hw->m[1].wcmd = 0x02u;
+  p_nc[2] = 0xCAFEBABEu;
+  p_nc[3] = 0xABCDEF01u;
+  qmi_hw->m[1].wfmt = 0x00001208u;        // Quad Write 復元
+  qmi_hw->m[1].wcmd = 0x38u;
+  __dmb();
+  bool ok_b = (p_nc[2] == 0xCAFEBABEu && p_nc[3] == 0xABCDEF01u);
+  printf("[PSRAM] SPI-W/Quad-R: %s  0x%08X 0x%08X\n",
+         ok_b ? "OK" : "FAIL", (unsigned)p_nc[2], (unsigned)p_nc[3]);
+
+  const bool psram_ok = ok_a || ok_b;
+  printf("[LoggingTask] PSRAM %s\n", psram_ok ? "OK" : "FAIL");
 
   log_cap_ = max_entries;
   log_vec_.reserve(max_entries); // PSRAM に一括確保 (以降 realloc なし)
@@ -177,7 +227,7 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
 
   // error_entity (pid_error_entity_t) は引数外のため 0 のまま
 
-  self->log_vec_.emplace_back(ld);
+  self->log_vec_.emplace_back(std::move(ld));
 }
 
 // ============================================================
@@ -348,12 +398,12 @@ void LoggingTask::dump_csv() const {
 
   fflush(stdout);
   sleep_ms(50);
-  printf("start___\n");
-  fflush(stdout);
+printf("start___\n");
+fflush(stdout);
   sleep_ms(100);
 
   // CRLF 変換を無効化してバイナリデータを送信 (\n バイトが壊れるのを防ぐ)
-  stdio_set_translate_crlf(&stdio_usb, false);
+stdio_set_translate_crlf(&stdio_usb, false);
 
   uint8_t send_buf[size];
   ls1.index = 0;
@@ -363,9 +413,18 @@ void LoggingTask::dump_csv() const {
   constexpr float th = 10.0f;
 
   int flush_cnt = 0;
+  long c=0;
+  while(1){
+        if(c>86000){
+    break;
+    }
   for (const auto &e : log_vec_) {
     ls1.index++;
-    if (ls1.index >= (int32_t)n) break;
+    c++;
+    if(c>86000){
+    break;
+    }
+    // if (ls1.index >= (int32_t)n) break;
 
     // --- ls1 ---
     ls1.ideal_v     = halfToFloat(e.img_v);
@@ -525,7 +584,8 @@ void LoggingTask::dump_csv() const {
       flush_cnt = 0;
       fflush(stdout);
       sleep_ms(1);
-    }
+  }
+}
   }
 
   // 終端レコード (index = -1)
