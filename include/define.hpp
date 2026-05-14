@@ -16,12 +16,10 @@
 #define LED_I2C_ADDR  0x4D   // 7-bit (Pico SDK形式: 0x9A >> 1)
 
 // ============================================================
-// UART
+// UART (dump_binary() 用。使用時はピンを別途 gpio_set_function すること)
 // ============================================================
-#define UART_ID      uart1
-#define BAUD_RATE    115200
-#define UART_TX_PIN  4
-#define UART_RX_PIN  5
+#define UART_ID    uart1
+#define BAUD_RATE  115200
 
 // ============================================================
 // GPIO / Buttons
