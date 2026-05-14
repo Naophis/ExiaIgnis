@@ -161,7 +161,8 @@ void MainTask::test_run() {
       break;
     sleep_ms(10);
   }
-  lt_->dump_csv();
+  lt_->dump_csv();;
+  ui_.coin(120);
   // 2回目: テキスト dump (rx_term.js テキストプロトコル)
   while (1) {
     if (ui_.button_state_hold())
@@ -169,6 +170,7 @@ void MainTask::test_run() {
     sleep_ms(10);
   }
   lt_->dump_csv_text();
+  ui_.coin(120);
   while (1) {
     if (ui_.button_state_hold())
       break;

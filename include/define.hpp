@@ -1,26 +1,17 @@
 #pragma once
 
 // ============================================================
-// SPI
+// PSRAM (APS6404L 外付け, QSPI 共有)
 // ============================================================
-#define SPI_PORT spi0
-#define PIN_MISO 16
-#define PIN_CS   17
-#define PIN_SCK  18
-#define PIN_MOSI 19
-
-// ============================================================
-// I2C0
-// ============================================================
-#define I2C_PORT i2c0
-#define I2C_SDA  8
-#define I2C_SCL  9
+// GPIO0 = XIP_CS1n (QMI M1 CS1)
+// XIP_CS1n に対応する GPIO: 0, 8, 19, 47 のみ (function 9)
+#define PSRAM_CS_PIN 0
 
 // ============================================================
 // I2C1  (UI / LED driver)
 // ============================================================
 #define I2C1_PORT     i2c1
-#define I2C1_SCL      19
+#define I2C1_SCL      23
 #define I2C1_SDA      22
 #define LED_I2C_ADDR  0x4D   // 7-bit (Pico SDK形式: 0x9A >> 1)
 
@@ -35,14 +26,14 @@
 // ============================================================
 // GPIO / Buttons
 // ============================================================
-// Tactile switch on GPIO4 (active low, pull-up)
-#define BTN_PIN 4
+// Tactile switch on GPIO8 (active low, pull-up)
+#define BTN_PIN 8
 
 // ============================================================
 // PWM / Buzzer
 // ============================================================
-// Piezo buzzer on GPIO16 (PWM0 A)
-#define BUZZER_PIN      17
+// Piezo buzzer on GPIO18 (PWM1 A)
+#define BUZZER_PIN      18
 #define BUZZER_FREQ_HZ  500
 #define BUZZER_WRAP     999u  // PWM counter top (1000 steps)
 
@@ -53,14 +44,7 @@
 #define M_PWM_L2      7   // PWM3 B
 #define M_PWM_R1      10  // PWM5 A
 #define M_PWM_R2      11  // PWM5 B
-#define SUCTION_PWM   8   // PWM4 A
+#define SUCTION_PWM   9   // PWM4 B
 
 #define MOTOR_PWM_FREQ_HZ  50000u
 #define MOTOR_DUTY_PCT     5u     // duty (%) applied to active channel
-
-// ============================================================
-// PSRAM (QMI M1 / XIP_CS1)
-// RP2350B の GPIO47 (QSPI_SS1_N) を XIP_CS1 として使用。
-// ボードの配線に応じて変更すること。
-// ============================================================
-#define PSRAM_CS_PIN  47u

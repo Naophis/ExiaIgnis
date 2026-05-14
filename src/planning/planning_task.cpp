@@ -397,6 +397,7 @@ void PlanningTask::motor_enable() {
   ego.kf_v_l.reset(0);
   ego.kf_v_r.reset(0);
   motor_en = true;
+  motor_.motor_enable();
 }
 void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
   motor_en = false;

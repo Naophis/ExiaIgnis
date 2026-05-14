@@ -182,10 +182,12 @@ let LOG_STRUCT_SIZE = 12; // 12 bytes per record
 
 const switchToBinaryMode = (obj) => {
   let last_ang_sum = 0;
-  const dataSize = 48;//obj.byte_size
+  const dataSize = 480 * 500;
   const dataSize2 = obj.data_struct.reduce((prev, cur) => {
     return prev + cur.size;
   }, 0);
+  const recordByteSize = dataSize2;
+  const recordNum = dataSize / recordByteSize;
   console.log('size1: ', dataSize, 'bytes');
   console.log('size2: ', dataSize2, 'bytes');
   console.log('header count:', obj.data_struct.length, '(expected: 120)');
@@ -244,66 +246,69 @@ const switchToBinaryMode = (obj) => {
 
 
   parser.on('data', (binaryData) => {
-    let offset = 0;
-    cnt++;
-    index++;
 
-    // デバッグ: 最初の4バイト(index)を監視
-    if (cnt === 1) {
-      const rawIndex = binaryData.readInt32LE(0);
-      if (rawIndex < 0 || rawIndex > 100000) {
-        console.log(`[WARN] index=${index}, rawIndex=${rawIndex}, first8bytes=${binaryData.slice(0, 8).toString('hex')}`);
-        // 異常なindexを検出したらこのレコードをスキップ
-        cnt = 0;
-        record = [];
-        return;
-      }
-    }
+    for (let j = 0; j < recordNum; j++) {
 
-    let bind = false;
-    const start_idx = (cnt - 1) * 12;
-    const end_idx = start_idx + 12;
+      let offset = j * recordByteSize;
+      cnt++;
+      index++;
 
-    for (let i = start_idx; i < end_idx; i++) {
-
-      const data = obj.data_struct[i];
-      if (data === undefined) {
-        continue;
-      }
-      const tmp_data = offset;
-      switch (data.type) {
-        case 'float':
-          record.push(binaryData.readFloatLE(tmp_data));
-          offset += data.size;
-          bind = true;
-          break;
-        case 'int':
-          record.push(binaryData.readInt32LE(tmp_data));
-          offset += data.size;
-          bind = true;
-          break;
-        case 'short':
-          record.push(binaryData.readInt16LE(tmp_data));
-          offset += data.size;
-          bind = true;
-          break;
-        default:
-          throw new Error(`Unsupported data type: ${data.type}`);
-      }
-      if (data.name === 'index') {
-        const idx = parseInt(binaryData.readInt32LE(tmp_data));
-        console.log(last_idx, idx);
-        if (idx < last_idx) {
-          force_save = true;
+      // デバッグ: 最初の4バイト(index)を監視
+      if (cnt === 1) {
+        const rawIndex = binaryData.readInt32LE(0);
+        if (rawIndex < 0 || rawIndex > 100000) {
+          console.log(`[WARN] index=${index}, rawIndex=${rawIndex}, first8bytes=${binaryData.slice(0, 8).toString('hex')}`);
+          // 異常なindexを検出したらこのレコードをスキップ
+          cnt = 0;
+          record = [];
+          return;
         }
-        last_idx = idx;
       }
-    }
-    if (bind) {
-      last_recived = new Date().getTime();
-    }
 
-    if (cnt === LOG_STRUCT_SIZE) {
+      let bind = false;
+      const start_idx = 0;
+      const end_idx = obj.data_struct.length;
+
+      for (let i = start_idx; i < end_idx; i++) {
+
+        const data = obj.data_struct[i];
+        if (data === undefined) {
+          continue;
+        }
+        const tmp_data = offset;
+        switch (data.type) {
+          case 'float':
+            record.push(binaryData.readFloatLE(tmp_data));
+            offset += data.size;
+            bind = true;
+            break;
+          case 'int':
+            record.push(binaryData.readInt32LE(tmp_data));
+            offset += data.size;
+            bind = true;
+            break;
+          case 'short':
+            record.push(binaryData.readInt16LE(tmp_data));
+            offset += data.size;
+            bind = true;
+            break;
+          default:
+            throw new Error(`Unsupported data type: ${data.type}`);
+        }
+        if (data.name === 'index') {
+          const idx = parseInt(binaryData.readInt32LE(tmp_data));
+          console.log(last_idx, idx);
+          if (idx < last_idx) {
+            force_save = true;
+          }
+          last_idx = idx;
+        }
+      }
+      if (bind) {
+        last_recived = new Date().getTime();
+      }
+
+      // if (cnt > 0 && cnt % LOG_STRUCT_SIZE === 0) {
       cnt = 0;
       if (!finish) {
         let valid = obj.data_struct.every((data, i) => {
@@ -457,7 +462,7 @@ const switchToBinaryMode = (obj) => {
         if (valid) {
           last_index = record[0];
           const str = record.join(',');
-          console.log(str)
+          // console.log(str)
           obj.record += `${str}\n`;
         }
         record = [];
@@ -482,6 +487,7 @@ const switchToBinaryMode = (obj) => {
           record: "",
         });
       }
+      // }
     }
   });
 }

@@ -10,12 +10,12 @@
 #include <stdio.h>
 
 // --- センサー LED ---
-#define R90_LED_PIN 18
-#define R45_LED_PIN2 20
-#define R45_LED_PIN 21
-#define L45_LED_PIN 23
+#define R90_LED_PIN  16
+#define R45_LED_PIN2 19
+#define R45_LED_PIN  20
+#define L45_LED_PIN  21
 #define L45_LED_PIN2 24
-#define L90_LED_PIN 25
+#define L90_LED_PIN  25
 
 // --- ADC (フォトトランジスタ) ---
 #define R90_SEN_PIN 26 // ADC0
@@ -31,11 +31,11 @@
 #define GYRO_MOSI_PIN 15 // SPI1 TX
 
 // --- 右エンコーダ (AS5147P) SPI1 共有 ---
-#define ENC_R_CS_PIN 9 // SPI1 CSn
+#define ENC_R_CS_PIN 17 // GPIO17
 
 // --- 左エンコーダ (AS5147P) SPI0 ---
 #define ENC_L_SPI spi0
-#define ENC_L_MISO_PIN 0 // SPI0 RX
+#define ENC_L_MISO_PIN 4 // SPI0 RX (GPIO4)
 #define ENC_L_CS_PIN 1   // SPI0 CSn
 #define ENC_L_CLK_PIN 2  // SPI0 SCK
 #define ENC_L_MOSI_PIN 3 // SPI0 TX
@@ -304,7 +304,7 @@ void SensingTask::init() {
   enc_l_.init(ENC_L_SPI, ENC_L_CS_PIN);
   enc_l_.setup();
 
-  // SPI0 MISO 疎通確認: bat≠0 なら GPIO0(MISO) は生きている
+  // SPI0 MISO 疎通確認: bat≠0 なら GPIO4(MISO) は生きている
   uint16_t bat0 = battery_.read();
   uint16_t bat1 = battery_.read();
   printf("[bat] raw0=%u raw1=%u  (SPI0 MISO %s)\n", bat0, bat1,

@@ -48,9 +48,9 @@ std::shared_ptr<LoggingTask> LoggingTask::create() {
 
 void LoggingTask::init(void *psram_base, size_t psram_size,
                        size_t max_entries) {
-  // RP2354A 内蔵 PSRAM の QMI M1 再設定。
-  // flash_exit_xip() (LittleFS write/erase で呼ばれる) が wfmt/wcmd を
-  // リセットするため、全 LittleFS 操作完了後のここで必ず再設定する。
+  // LittleFS 書き込み時に flash_exit_xip() が wfmt/wcmd をリセットするため、
+  // 全 LittleFS 操作完了後のここで QMI M1 を必ず再設定する。
+  // (GPIO0 の XIP_CS1n 関数設定は psram_init() で済み。ここでは不要)
   qmi_hw->m[1].timing = (1u << 30) | (2u << 8) | (2u << 0); // COOLDOWN=1, RXDELAY=2, CLKDIV=2(75MHz)
   qmi_hw->m[1].rfmt =
       (0u << 0)  |  // PREFIX_WIDTH = S
@@ -75,39 +75,38 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
   psram_heap::init(psram_base, psram_size);
 
   // ── PSRAM 疎通確認 ──────────────────────────────────────────────────
-  // No-alloc alias (0x15000000) はキャッシュを完全に迂回して QMI M1 で直接 R/W。
-  // WRITABLE_M1 が設定済みなので書き込みは wfmt/wcmd で PSRAM に届く。
   printf("[LoggingTask] XIP_CTRL=0x%08X\n", (unsigned)xip_ctrl_hw->ctrl);
   printf("[LoggingTask] QMI M1: timing=0x%08X rfmt=0x%08X rcmd=0x%08X wfmt=0x%08X wcmd=0x%08X\n",
          (unsigned)qmi_hw->m[1].timing, (unsigned)qmi_hw->m[1].rfmt,
          (unsigned)qmi_hw->m[1].rcmd,  (unsigned)qmi_hw->m[1].wfmt,
          (unsigned)qmi_hw->m[1].wcmd);
 
-  // XIP_NOCACHE_NOALLOC_BASE + 0x01000000 = 0x15000000 (M1, no-cache)
-  volatile uint32_t *p_nc =
-      reinterpret_cast<volatile uint32_t *>(0x15000000u);
+  volatile uint32_t *p_cached = reinterpret_cast<volatile uint32_t *>(0x11000000u);
+  volatile uint32_t *p_nc     = reinterpret_cast<volatile uint32_t *>(0x15000000u);
 
-  // Test A: Quad Write (0x38) + Quad Read (0xEB)
-  p_nc[0] = 0xDEADBEEFu;
-  p_nc[1] = 0x12345678u;
+  // Test A: キャッシュ書き込み → キャッシュ読み出し (XIP write-back 動作確認)
+  p_cached[0] = 0xDEADBEEFu;
+  p_cached[1] = 0x12345678u;
+  __dsb(); __isb();
+  bool ok_a = (p_cached[0] == 0xDEADBEEFu && p_cached[1] == 0x12345678u);
+  printf("[PSRAM] A cached-W/R    : %s  0x%08X 0x%08X\n",
+         ok_a ? "OK" : "FAIL", (unsigned)p_cached[0], (unsigned)p_cached[1]);
+
+  // Test B: キャッシュフラッシュ → no-alloc 読み出し (wfmt で PSRAM 物理書き込み確認)
+  xip_cache_clean_all();
+  bool ok_b = (p_nc[0] == 0xDEADBEEFu && p_nc[1] == 0x12345678u);
+  printf("[PSRAM] B flush/noalloc-R: %s  0x%08X 0x%08X\n",
+         ok_b ? "OK" : "FAIL", (unsigned)p_nc[0], (unsigned)p_nc[1]);
+
+  // Test C: no-alloc 直接書き込み → no-alloc 読み出し (wfmt 直接パス確認)
+  p_nc[4] = 0xCAFEBABEu;
+  p_nc[5] = 0xABCDEF01u;
   __dmb();
-  bool ok_a = (p_nc[0] == 0xDEADBEEFu && p_nc[1] == 0x12345678u);
-  printf("[PSRAM] Quad-W/R: %s  0x%08X 0x%08X\n",
-         ok_a ? "OK" : "FAIL", (unsigned)p_nc[0], (unsigned)p_nc[1]);
+  bool ok_c = (p_nc[4] == 0xCAFEBABEu && p_nc[5] == 0xABCDEF01u);
+  printf("[PSRAM] C noalloc-W/R   : %s  0x%08X 0x%08X\n",
+         ok_c ? "OK" : "FAIL", (unsigned)p_nc[4], (unsigned)p_nc[5]);
 
-  // Test B: SPI single Write (0x02) + Quad Read — 書き込み経路を単独検証
-  qmi_hw->m[1].wfmt = QMI_M1_WFMT_RESET; // 0x00001000 = SPI single write
-  qmi_hw->m[1].wcmd = 0x02u;
-  p_nc[2] = 0xCAFEBABEu;
-  p_nc[3] = 0xABCDEF01u;
-  qmi_hw->m[1].wfmt = 0x00001208u;        // Quad Write 復元
-  qmi_hw->m[1].wcmd = 0x38u;
-  __dmb();
-  bool ok_b = (p_nc[2] == 0xCAFEBABEu && p_nc[3] == 0xABCDEF01u);
-  printf("[PSRAM] SPI-W/Quad-R: %s  0x%08X 0x%08X\n",
-         ok_b ? "OK" : "FAIL", (unsigned)p_nc[2], (unsigned)p_nc[3]);
-
-  const bool psram_ok = ok_a || ok_b;
+  const bool psram_ok = ok_a && ok_b;
   printf("[LoggingTask] PSRAM %s\n", psram_ok ? "OK" : "FAIL");
 
   log_cap_ = max_entries;
@@ -405,7 +404,11 @@ fflush(stdout);
   // CRLF 変換を無効化してバイナリデータを送信 (\n バイトが壊れるのを防ぐ)
 stdio_set_translate_crlf(&stdio_usb, false);
 
-  uint8_t send_buf[size];
+  constexpr int BATCH = 500;
+  uint8_t send_buf[480 * BATCH];
+  size_t batch_off = 0;
+  int batch_cnt = 0;
+
   ls1.index = 0;
   float left45_d_z = 0, right45_d_z = 0;
   float left45_2_d_z = 0, right45_2_d_z = 0;
@@ -567,7 +570,7 @@ stdio_set_translate_crlf(&stdio_usb, false);
     ls10.duty_roll_before= halfToFloat(e.duty_roll_before);
     ls10.reserve5        = 0;
 
-    size_t off = 0;
+    size_t off =batch_off;
     memcpy(send_buf + off, &ls1,  sizeof(ls1));  off += sizeof(ls1);
     memcpy(send_buf + off, &ls2,  sizeof(ls2));  off += sizeof(ls2);
     memcpy(send_buf + off, &ls3,  sizeof(ls3));  off += sizeof(ls3);
@@ -578,12 +581,20 @@ stdio_set_translate_crlf(&stdio_usb, false);
     memcpy(send_buf + off, &ls8,  sizeof(ls8));  off += sizeof(ls8);
     memcpy(send_buf + off, &ls9,  sizeof(ls9));  off += sizeof(ls9);
     memcpy(send_buf + off, &ls10, sizeof(ls10));
-    fwrite(send_buf, 1, size, stdout);
+
+    batch_off += size;
+    batch_cnt++;
+
+  if(batch_cnt >= BATCH){
+      fwrite(send_buf, 1, batch_off, stdout);
+      batch_off = 0;
+      batch_cnt = 0;
+  }
 
     if (++flush_cnt >= 50) {
       flush_cnt = 0;
-      fflush(stdout);
-      sleep_ms(1);
+      // fflush(stdout);
+      // sleep_ms(1);
   }
 }
   }
@@ -603,6 +614,9 @@ stdio_set_translate_crlf(&stdio_usb, false);
     memcpy(send_buf + off, &ls9,  sizeof(ls9));  off += sizeof(ls9);
     memcpy(send_buf + off, &ls10, sizeof(ls10));
     fwrite(send_buf, 1, size, stdout);
+    if(batch_off > 0){
+        fwrite(send_buf, 1, batch_off, stdout);
+    }
   }
   fflush(stdout);
 

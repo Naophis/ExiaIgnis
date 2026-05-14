@@ -54,3 +54,22 @@ void MotorActuator::apply_suction(float duty_suction) {
   pwm_set_chan_level(slice_S_, PWM_CHAN_A, suction_level);
   pwm_set_chan_level(slice_S_, PWM_CHAN_B, 0);
 }
+
+void MotorActuator::motor_enable() {
+  motor_en = true;
+  pwm_set_enabled(slice_L_, true);
+  pwm_set_enabled(slice_R_, true);
+}
+void MotorActuator::motor_disable() {
+  motor_en = false;
+  pwm_set_enabled(slice_L_, false);
+  pwm_set_enabled(slice_R_, false);
+}
+void MotorActuator::suction_enable() {
+  suction_en = true;
+  pwm_set_enabled(slice_S_, true);
+}
+void MotorActuator::suction_disable() {
+  suction_en = false;
+  pwm_set_enabled(slice_S_, false);
+}

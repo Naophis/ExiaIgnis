@@ -64,6 +64,8 @@ void MainTask::run() {
   uint pwm_channel = pwm_gpio_to_channel(BUZZER_PIN);
   pwm_set_enabled(pwm_slice, false);
 
+  planning_->motor_disable();
+  planning_->suction_disable();
   const auto se = get_sensing_entity();
 
   printf("[run] B: ui init\n");

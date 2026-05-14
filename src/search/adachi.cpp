@@ -4,7 +4,12 @@ Adachi::Adachi() {}
 
 Adachi::~Adachi() {}
 
-void Adachi::set_logic(std::shared_ptr<MazeSolverBaseLgc> &_lgc) { lgc = _lgc; }
+void Adachi::set_logic(std::shared_ptr<MazeSolverBaseLgc> &_lgc) {
+  subgoal_list.max_load_factor(1);
+  subgoal_list.reserve(1024);
+  subgoal_list.clear();
+  lgc = _lgc;
+}
 
 void Adachi::set_ego(std::shared_ptr<ego_t> &_ego) { ego = _ego; }
 
@@ -267,7 +272,7 @@ Motion Adachi::exec(bool is_stepped, bool force_back) {
       lgc->update_dist_map(0, goaled); // 再更新したらもう1回歩数マップ生成
     }
     if (pt_list.size() == 1 && pt_list[0].x == 0 && pt_list[0].y == 0) {
-      goal_startpos_lock = true; //ゴール固定
+      goal_startpos_lock = true; // ゴール固定
     } else {
       goal_startpos_lock = false;
     }

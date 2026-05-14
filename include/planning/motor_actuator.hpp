@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pico/types.h"
+#include "hardware/pwm.h"
 #include <stdint.h>
 
 class MotorActuator {
@@ -12,11 +13,10 @@ public:
   void apply(float duty_l, float duty_r, float duty_suction);
   void apply_suction(float duty_suction);
 
-  void motor_enable() { motor_en = true; }
-  void motor_disable() { motor_en = false; }
-  void suction_enable() { suction_en = true; }
-  void suction_disable() { suction_en = false; }
-
+  void motor_enable() ;
+  void motor_disable() ;
+  void suction_enable() ;
+  void suction_disable() ;
 private:
   uint slice_L_ = 0;
   uint slice_R_ = 0;
