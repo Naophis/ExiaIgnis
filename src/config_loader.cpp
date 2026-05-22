@@ -45,8 +45,8 @@ static int flash_prog(const lfs_config *c, lfs_block_t block,
         static_cast<const uint8_t *>(buf),
         (uint32_t)size,
     };
-    flash_safe_execute(do_lfs_prog, &args, UINT32_MAX);
-    return LFS_ERR_OK;
+    int rc = flash_safe_execute(do_lfs_prog, &args, UINT32_MAX);
+    return (rc == 0) ? LFS_ERR_OK : LFS_ERR_IO;
 }
 
 static int flash_erase(const lfs_config *c, lfs_block_t block) {
@@ -54,8 +54,8 @@ static int flash_erase(const lfs_config *c, lfs_block_t block) {
         LFS_FLASH_OFFSET + (uint32_t)(block * c->block_size),
         (uint32_t)c->block_size,
     };
-    flash_safe_execute(do_lfs_erase, &args, UINT32_MAX);
-    return LFS_ERR_OK;
+    int rc = flash_safe_execute(do_lfs_erase, &args, UINT32_MAX);
+    return (rc == 0) ? LFS_ERR_OK : LFS_ERR_IO;
 }
 
 static int flash_sync(const lfs_config *) { return LFS_ERR_OK; }
@@ -101,11 +101,17 @@ static const char DEFAULT_CONFIG[] =
 // ConfigLoader 実装
 // ============================================================
 JsonDocument ConfigLoader::doc_;
+bool ConfigLoader::needs_reformat_ = false;
 
 bool ConfigLoader::init() {
     if (!mount_or_format()) {
         printf("[config] LittleFS mount failed\n");
         return false;
+    }
+
+    // 破損検出済みの場合はファイル操作をスキップ (Core1 起動後に check_and_reformat() で修復)
+    if (needs_reformat_) {
+        return true;
     }
 
     // config.json が存在しなければデフォルトを書く
@@ -173,7 +179,26 @@ bool ConfigLoader::get_bool(const char *path, bool default_val) {
 // ---- private ----
 
 bool ConfigLoader::mount_or_format() {
-    if (lfs_mount(&lfs, &lfs_cfg) == 0) return true;
+    if (lfs_mount(&lfs, &lfs_cfg) == 0) {
+        // open だけでなく read も試みる (open 成功でも read で破損エラーが出る場合がある)
+        lfs_dir_t dir;
+        bool corrupted = false;
+        if (lfs_dir_open(&lfs, &dir, "/") == 0) {
+            struct lfs_info info;
+            int r;
+            while ((r = lfs_dir_read(&lfs, &dir, &info)) > 0) {}
+            lfs_dir_close(&lfs, &dir);
+            corrupted = (r < 0);  // r==0: end-of-dir (OK), r<0: flash error
+        } else {
+            corrupted = true;
+        }
+        if (!corrupted) return true;
+        // 破損検出: Core1 未起動のためここではフォーマット不可。フラグを立てて続行。
+        // check_and_reformat() が Core1 起動後に実際のフォーマットを行う。
+        printf("[config] dir corrupted, deferred reformat scheduled\n");
+        needs_reformat_ = true;
+        return true;
+    }
     printf("[config] formatting LittleFS...\n");
     if (lfs_format(&lfs, &lfs_cfg) < 0) return false;
     return lfs_mount(&lfs, &lfs_cfg) == 0;
@@ -268,6 +293,34 @@ bool ConfigLoader::format_all() {
         return false;
     }
     printf("[config] format OK\n");
+    return true;
+}
+
+bool ConfigLoader::check_and_reformat() {
+    bool corrupted = needs_reformat_;
+
+    // Early-boot detection may have missed corruption (cache/timing effects),
+    // so always re-verify here while Core1 is running and flash writes work.
+    if (!corrupted) {
+        lfs_dir_t dir;
+        if (lfs_dir_open(&lfs, &dir, "/") == 0) {
+            struct lfs_info info;
+            int r;
+            while ((r = lfs_dir_read(&lfs, &dir, &info)) > 0) {}
+            lfs_dir_close(&lfs, &dir);
+            corrupted = (r < 0);
+        } else {
+            corrupted = true;
+        }
+    }
+
+    if (!corrupted) return false;
+
+    printf("[config] deferred reformat: LittleFS was corrupted\n");
+    if (!format_all()) return true;
+    needs_reformat_ = false;
+    write_default_json();
+    read_json();
     return true;
 }
 

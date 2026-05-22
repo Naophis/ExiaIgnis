@@ -98,9 +98,9 @@ int main() {
   gpio_set_dir(BTN_PIN, GPIO_IN);
   gpio_pull_up(BTN_PIN);
 
+  sleep_ms(1500);
   // 設定ファイル読み込み (multicore 起動前に実施)
   ConfigLoader::init();
-  sleep_ms(500);
 
   printf("[boot] step1: SensingTask create\n");
   auto sensing = SensingTask::create();

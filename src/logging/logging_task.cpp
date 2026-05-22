@@ -71,6 +71,9 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
 
   // XIP は書き込みがデフォルト無効。M1 (PSRAM) への書き込みを有効化する。
   hw_set_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_WRITABLE_M1_BITS);
+  // APS6404L-3SQR の 0x38 は "Quad I/O Write": コマンドは SPI (DQ0)、
+  // アドレス/データは Quad (DQ[3:0])。QPI モード (0x35) 不要。
+  // wfmt.PREFIX_WIDTH=S (SPI) で直接使用できる。
 
   psram_heap::init(psram_base, psram_size);
 

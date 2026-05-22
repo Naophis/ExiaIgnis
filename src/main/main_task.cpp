@@ -78,6 +78,13 @@ void MainTask::run() {
   ui_.coin(60);
   ui_.coin(60);
 
+  // ─── 起動時に破損検出されていた場合のデファードリフォーマット ──────────────
+  // Core1 起動後なので flash_safe_execute が正常動作する
+  if (ConfigLoader::check_and_reformat()) {
+    printf("[main] LittleFS was corrupted at boot and has been reformatted\n");
+    ui_.coin(50);
+  }
+
   // ─── パラメータ読み込み ───────────────────────────────────────────────────
   printf("[main] loading params from LittleFS...\n");
   if (load_params()) {

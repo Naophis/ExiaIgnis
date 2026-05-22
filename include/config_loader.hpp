@@ -74,6 +74,10 @@ public:
     // LittleFS を再フォーマットして全ファイルを消去し、マウントし直す
     static bool format_all();
 
+    // 起動時に破損が検出された場合、Core1 起動後にここで実際のフォーマットを行う
+    // 破損があれば true を返す (フォーマット実行)、正常なら false
+    static bool check_and_reformat();
+
     // ルートディレクトリのファイル一覧を列挙する
     // cb(ctx, name, size) がファイルごとに呼ばれる
     static void list_files(void (*cb)(void* ctx, const char* name, int32_t size),
@@ -84,6 +88,7 @@ public:
 
 private:
     static JsonDocument doc_;
+    static bool needs_reformat_;  // 起動時に破損を検出、Core1 起動後に reformat する
 
     static bool mount_or_format();
     static bool read_json();
