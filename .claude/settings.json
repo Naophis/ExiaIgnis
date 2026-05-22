@@ -22,7 +22,9 @@
       "Read(//opt/**)",
       "Bash(./compile.sh)",
       "Bash(ls /dev/ttyACM* 2>/dev/null || echo \"no ACM device found\")",
-      "Read(//dev/**)"
+      "Read(//dev/**)",
+      "Bash(xargs cat)",
+      "Bash(grep -v \".o$\")"
     ]
   }
 }

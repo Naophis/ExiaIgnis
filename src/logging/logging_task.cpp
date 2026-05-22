@@ -62,18 +62,14 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
       (2u << 14) |  // SUFFIX_LEN   = 8-bit (0xA0 mode byte)
       (1u << 16);   // DUMMY_LEN    = 4 clocks
   qmi_hw->m[1].rcmd = (0xA0u << 8) | 0xEBu;
-  qmi_hw->m[1].wfmt =
-      (0u << 0)  |  // PREFIX_WIDTH = S
-      (2u << 2)  |  // ADDR_WIDTH   = Q
-      (2u << 8)  |  // DATA_WIDTH   = Q
-      (1u << 12);   // PREFIX_LEN   = 8-bit (0x38)
-  qmi_hw->m[1].wcmd = 0x38u;
+  // flash_exit_xip() は PSRAM を serial command state に戻す。
+  // この状態では 0x38 Quad Write は使用不可。SDK リセット値と同じ SPI Write 0x02 を使用する。
+  // (QMI_M1_WFMT_RESET=0x1000, QMI_M1_WCMD_RESET=0xa002 の下位バイト=0x02)
+  qmi_hw->m[1].wfmt = 0x00001000u;  // PREFIX_WIDTH=S, ADDR_WIDTH=S, DATA_WIDTH=S, PREFIX_LEN=8-bit
+  qmi_hw->m[1].wcmd = 0x00000002u;  // SPI Write command 0x02
 
   // XIP は書き込みがデフォルト無効。M1 (PSRAM) への書き込みを有効化する。
   hw_set_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_WRITABLE_M1_BITS);
-  // APS6404L-3SQR の 0x38 は "Quad I/O Write": コマンドは SPI (DQ0)、
-  // アドレス/データは Quad (DQ[3:0])。QPI モード (0x35) 不要。
-  // wfmt.PREFIX_WIDTH=S (SPI) で直接使用できる。
 
   psram_heap::init(psram_base, psram_size);
 
@@ -84,30 +80,36 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
          (unsigned)qmi_hw->m[1].rcmd,  (unsigned)qmi_hw->m[1].wfmt,
          (unsigned)qmi_hw->m[1].wcmd);
 
-  volatile uint32_t *p_cached = reinterpret_cast<volatile uint32_t *>(0x11000000u);
-  volatile uint32_t *p_nc     = reinterpret_cast<volatile uint32_t *>(0x15000000u);
+  volatile uint32_t *p = reinterpret_cast<volatile uint32_t *>(0x11000000u);
 
-  // Test A: キャッシュ書き込み → キャッシュ読み出し (XIP write-back 動作確認)
-  p_cached[0] = 0xDEADBEEFu;
-  p_cached[1] = 0x12345678u;
+  // Test A: キャッシュ書き込み → キャッシュ読み出し (write-back 動作確認)
+  p[0] = 0xDEADBEEFu;
+  p[1] = 0x12345678u;
   __dsb(); __isb();
-  bool ok_a = (p_cached[0] == 0xDEADBEEFu && p_cached[1] == 0x12345678u);
+  bool ok_a = (p[0] == 0xDEADBEEFu && p[1] == 0x12345678u);
   printf("[PSRAM] A cached-W/R    : %s  0x%08X 0x%08X\n",
-         ok_a ? "OK" : "FAIL", (unsigned)p_cached[0], (unsigned)p_cached[1]);
+         ok_a ? "OK" : "FAIL", (unsigned)p[0], (unsigned)p[1]);
 
-  // Test B: キャッシュフラッシュ → no-alloc 読み出し (wfmt で PSRAM 物理書き込み確認)
+  // Test B: clean_all (wfmt で PSRAM 書き込み) → キャッシュミスで rfmt 読み出し確認
+  // RP2350-E11 workaround により clean_all はフラッシュ後にキャッシュラインを無効化する。
+  // 次の読み出しはキャッシュミスとなり rfmt (0xEB) で PSRAM から直接読む。
   xip_cache_clean_all();
-  bool ok_b = (p_nc[0] == 0xDEADBEEFu && p_nc[1] == 0x12345678u);
-  printf("[PSRAM] B flush/noalloc-R: %s  0x%08X 0x%08X\n",
-         ok_b ? "OK" : "FAIL", (unsigned)p_nc[0], (unsigned)p_nc[1]);
+  __dsb(); __isb();
+  bool ok_b = (p[0] == 0xDEADBEEFu && p[1] == 0x12345678u);
+  printf("[PSRAM] B clean+miss-R  : %s  0x%08X 0x%08X\n",
+         ok_b ? "OK" : "FAIL", (unsigned)p[0], (unsigned)p[1]);
 
-  // Test C: no-alloc 直接書き込み → no-alloc 読み出し (wfmt 直接パス確認)
-  p_nc[4] = 0xCAFEBABEu;
-  p_nc[5] = 0xABCDEF01u;
-  __dmb();
-  bool ok_c = (p_nc[4] == 0xCAFEBABEu && p_nc[5] == 0xABCDEF01u);
-  printf("[PSRAM] C noalloc-W/R   : %s  0x%08X 0x%08X\n",
-         ok_c ? "OK" : "FAIL", (unsigned)p_nc[4], (unsigned)p_nc[5]);
+  // Test C: 別オフセットに書き込み → clean_range + invalidate_range → キャッシュミス読み出し
+  // XIP_CACHE_LINE_SIZE=8 byte 単位でアライン。オフセット=0x11000008-0x10000000=0x01000008
+  p[2] = 0xCAFEBABEu;  // 0x11000008
+  p[3] = 0xABCDEF01u;  // 0x1100000C
+  __dsb();
+  xip_cache_clean_range(0x01000008u, 8u);     // wfmt で PSRAM に書き込み
+  xip_cache_invalidate_range(0x01000008u, 8u); // キャッシュを無効化して rfmt 読み出しを強制
+  __dsb(); __isb();
+  bool ok_c = (p[2] == 0xCAFEBABEu && p[3] == 0xABCDEF01u);
+  printf("[PSRAM] C clean+inv+R   : %s  0x%08X 0x%08X\n",
+         ok_c ? "OK" : "FAIL", (unsigned)p[2], (unsigned)p[3]);
 
   const bool psram_ok = ok_a && ok_b;
   printf("[LoggingTask] PSRAM %s\n", psram_ok ? "OK" : "FAIL");

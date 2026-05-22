@@ -50,13 +50,10 @@ static void psram_init() {
       (1u << 16);   // DUMMY_LEN    = 4 clocks
   qmi_hw->m[1].rcmd = (0xA0u << 8) | 0xEBu;
 
-  // APS6404L Quad I/O Write (0x38): SPI command, Quad addr/data
-  qmi_hw->m[1].wfmt =
-      (0u << 0)  |  // PREFIX_WIDTH = S
-      (2u << 2)  |  // ADDR_WIDTH   = Q
-      (2u << 8)  |  // DATA_WIDTH   = Q
-      (1u << 12);   // PREFIX_LEN   = 8-bit (0x38)
-  qmi_hw->m[1].wcmd = 0x38u;
+  // SPI Write (0x02): flash_exit_xip() が PSRAM を serial state に戻すため
+  // 0x38 Quad Write は使用不可。SDK リセット値と同じ 0x02 SPI Write を使用する。
+  qmi_hw->m[1].wfmt = 0x00001000u;  // PREFIX_WIDTH=S, ADDR_WIDTH=S, DATA_WIDTH=S, PREFIX_LEN=8-bit
+  qmi_hw->m[1].wcmd = 0x00000002u;  // SPI Write command 0x02
 
   // XIP M1 への書き込みを有効化 (デフォルトは read-only)
   hw_set_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_WRITABLE_M1_BITS);
