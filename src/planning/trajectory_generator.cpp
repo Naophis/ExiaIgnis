@@ -169,4 +169,15 @@ void TrajectoryGenerator::copy_tgt(
 
   tgt_val->ego_in.ideal_px = mpc_next_ego.ideal_px;
   tgt_val->ego_in.ideal_py = mpc_next_ego.ideal_py;
+
+  dynamics.mass = param->Mass;
+  dynamics.lm = param->Lm;
+  dynamics.km = param->Km;
+  dynamics.resist = param->Resist;
+  dynamics.tread = param->tread;
+  dynamics.ke = param->Ke;
+  dynamics.tire = param->tire;
+  dynamics.gear_ratio = param->gear_a / param->gear_b;
+  dynamics.coulomb_friction = param->coulomb_friction;
+  dynamics.viscous_friction = param->viscous_friction;
 }
