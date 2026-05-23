@@ -57,6 +57,25 @@ if(NOT littlefs_POPULATED)
     # LFS_NO_MALLOC must NOT be defined so lfs_file_open() is available
 endif()
 
+# ---- SparkFun PSRAM (sfe_psram only, no allocator/tlsf) ----
+FetchContent_Declare(sparkfun_pico_src
+    GIT_REPOSITORY https://github.com/sparkfun/sparkfun-pico.git
+    GIT_TAG        main
+)
+FetchContent_GetProperties(sparkfun_pico_src)
+if(NOT sparkfun_pico_src_POPULATED)
+    FetchContent_Populate(sparkfun_pico_src)
+    add_library(sfe_psram STATIC
+        ${sparkfun_pico_src_SOURCE_DIR}/sparkfun_pico/sfe_psram.c
+    )
+    target_include_directories(sfe_psram PUBLIC
+        ${sparkfun_pico_src_SOURCE_DIR}/sparkfun_pico
+    )
+    target_link_libraries(sfe_psram PUBLIC
+        pico_stdlib hardware_gpio hardware_clocks hardware_sync hardware_spi pico_flash
+    )
+endif()
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(ExiaIgnis
@@ -144,6 +163,7 @@ target_link_libraries(ExiaIgnis
         pico_flash
         ArduinoJson
         littlefs
+        sfe_psram
         )
 
 pico_add_extra_outputs(ExiaIgnis)

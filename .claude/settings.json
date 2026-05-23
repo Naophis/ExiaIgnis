@@ -24,7 +24,26 @@
       "Bash(ls /dev/ttyACM* 2>/dev/null || echo \"no ACM device found\")",
       "Read(//dev/**)",
       "Bash(xargs cat)",
-      "Bash(grep -v \".o$\")"
+      "Bash(grep -v \".o$\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(gh api *)",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents/src/rp2xxx/sfe_psram.c\")",
+      "Bash(python3 -c \"import sys, json, base64; data = json.load\\(sys.stdin\\); print\\(base64.b64decode\\(data['content']\\).decode\\('utf-8'\\)\\)\")",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents/src/rp2xxx\")",
+      "Bash(python3 -c \"import sys, json; data = json.load\\(sys.stdin\\); [print\\(f['name']\\) for f in data if isinstance\\(data, list\\)]\")",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico\")",
+      "Bash(python3 -c \"import sys, json; data = json.load\\(sys.stdin\\); print\\('Repo exists' if 'id' in data else 'Not found'\\); print\\(data.get\\('message', ''\\)\\)\")",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents/src\")",
+      "Bash(python3 -c \"import sys, json; data = json.load\\(sys.stdin\\); print\\(json.dumps\\(data, indent=2\\)\\)\")",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents\")",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents/sparkfun_pico\")",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents/sparkfun_pico/sfe_psram.c\")",
+      "Bash(python3 -c \"import sys,json; items=json.load\\(sys.stdin\\); [print\\(i['name'], i['type']\\) for i in items]\")",
+      "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents/sparkfun_pico/CMakeLists.txt\")",
+      "Bash(python3 -c \"import sys,json,base64; d=json.load\\(sys.stdin\\); print\\(base64.b64decode\\(d['content']\\).decode\\(\\)\\)\")"
     ]
   }
 }

@@ -7,6 +7,9 @@
 #include "hardware/xip_cache.h"
 #include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
+extern "C" {
+#include "sfe_psram.h"
+}
 #include "tusb.h"
 #include <stdio.h>
 #include <string.h>
@@ -49,29 +52,36 @@ std::shared_ptr<LoggingTask> LoggingTask::create() {
 
 void LoggingTask::init(void *psram_base, size_t psram_size,
                        size_t max_entries) {
-  // LittleFS 書き込み時に flash_exit_xip() が wfmt/wcmd をリセットするため、
-  // 全 LittleFS 操作完了後のここで QMI M1 を必ず再設定する。
-  // (GPIO0 の XIP_CS1n 関数設定は psram_init() で済み。ここでは不要)
-  qmi_hw->m[1].timing = (1u << 30) | (2u << 8) |
-                        (2u << 0); // COOLDOWN=1, RXDELAY=2, CLKDIV=2(75MHz)
-  qmi_hw->m[1].rfmt = (0u << 0) |  // PREFIX_WIDTH = S
-                      (2u << 2) |  // ADDR_WIDTH   = Q
-                      (2u << 4) |  // SUFFIX_WIDTH = Q
-                      (2u << 6) |  // DUMMY_WIDTH  = Q
-                      (2u << 8) |  // DATA_WIDTH   = Q
-                      (1u << 12) | // PREFIX_LEN   = 8-bit (0xEB)
-                      (2u << 14) | // SUFFIX_LEN   = 8-bit (0xA0 mode byte)
-                      (1u << 16);  // DUMMY_LEN    = 4 clocks
-  qmi_hw->m[1].rcmd = (0xA0u << 8) | 0xEBu;
-  // flash_exit_xip() は PSRAM を serial command state に戻す。
-  // この状態では 0x38 Quad Write は使用不可。SDK リセット値と同じ SPI Write
-  // 0x02 を使用する。 (QMI_M1_WFMT_RESET=0x1000, QMI_M1_WCMD_RESET=0xa002
-  // の下位バイト=0x02)
-  qmi_hw->m[1].wfmt = 0x00001000u; // PREFIX_WIDTH=S, ADDR_WIDTH=S,
-                                   // DATA_WIDTH=S, PREFIX_LEN=8-bit
-  qmi_hw->m[1].wcmd = 0x00000002u; // SPI Write command 0x02
+  // LittleFS 書き込み時に flash_exit_xip() が QMI M1 wfmt/wcmd をリセットするため、
+  // 全 LittleFS 操作完了後に QMI M1 を sfe_setup_psram と同じ設定に復元する。
+  // PSRAM ハードウェアは QPI モードを維持しているため、レジスタ復元のみ行う。
+  // sfe_psram_update_timing() は direct_csr を使わないので Core1 動作中も安全。
+  sfe_psram_update_timing();
 
-  // XIP は書き込みがデフォルト無効。M1 (PSRAM) への書き込みを有効化する。
+  // rfmt: QPI Quad Read (0xEB), 24 ダミークロック、サフィックスなし (sfe_psram.c と同一)
+  qmi_hw->m[1].rfmt =
+      (QMI_M1_RFMT_PREFIX_WIDTH_VALUE_Q << QMI_M1_RFMT_PREFIX_WIDTH_LSB) |
+      (QMI_M1_RFMT_ADDR_WIDTH_VALUE_Q   << QMI_M1_RFMT_ADDR_WIDTH_LSB)   |
+      (QMI_M1_RFMT_SUFFIX_WIDTH_VALUE_Q << QMI_M1_RFMT_SUFFIX_WIDTH_LSB) |
+      (QMI_M1_RFMT_DUMMY_WIDTH_VALUE_Q  << QMI_M1_RFMT_DUMMY_WIDTH_LSB)  |
+      (QMI_M1_RFMT_DUMMY_LEN_VALUE_24   << QMI_M1_RFMT_DUMMY_LEN_LSB)    |
+      (QMI_M1_RFMT_DATA_WIDTH_VALUE_Q   << QMI_M1_RFMT_DATA_WIDTH_LSB)   |
+      (QMI_M1_RFMT_PREFIX_LEN_VALUE_8   << QMI_M1_RFMT_PREFIX_LEN_LSB)   |
+      (QMI_M1_RFMT_SUFFIX_LEN_VALUE_NONE<< QMI_M1_RFMT_SUFFIX_LEN_LSB);
+  qmi_hw->m[1].rcmd = 0xEBu << QMI_M1_RCMD_PREFIX_LSB;  // QUAD_READ, no suffix
+
+  // wfmt: QPI Quad Write (0x38), ダミーなし、サフィックスなし
+  qmi_hw->m[1].wfmt =
+      (QMI_M1_WFMT_PREFIX_WIDTH_VALUE_Q << QMI_M1_WFMT_PREFIX_WIDTH_LSB) |
+      (QMI_M1_WFMT_ADDR_WIDTH_VALUE_Q   << QMI_M1_WFMT_ADDR_WIDTH_LSB)   |
+      (QMI_M1_WFMT_SUFFIX_WIDTH_VALUE_Q << QMI_M1_WFMT_SUFFIX_WIDTH_LSB) |
+      (QMI_M1_WFMT_DUMMY_WIDTH_VALUE_Q  << QMI_M1_WFMT_DUMMY_WIDTH_LSB)  |
+      (QMI_M1_WFMT_DUMMY_LEN_VALUE_NONE << QMI_M1_WFMT_DUMMY_LEN_LSB)    |
+      (QMI_M1_WFMT_DATA_WIDTH_VALUE_Q   << QMI_M1_WFMT_DATA_WIDTH_LSB)   |
+      (QMI_M1_WFMT_PREFIX_LEN_VALUE_8   << QMI_M1_WFMT_PREFIX_LEN_LSB)   |
+      (QMI_M1_WFMT_SUFFIX_LEN_VALUE_NONE<< QMI_M1_WFMT_SUFFIX_LEN_LSB);
+  qmi_hw->m[1].wcmd = 0x38u << QMI_M1_WCMD_PREFIX_LSB;  // QUAD_WRITE, no suffix
+
   hw_set_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_WRITABLE_M1_BITS);
 
   psram_heap::init(psram_base, psram_size);
