@@ -157,10 +157,7 @@ void EgoEstimator::reset_kf_state(
     std::shared_ptr<input_param_t> param) {
   const float initial_state = 0.0f;
 
-  kf_w.dt = 0.001f;
-  kf_w2.dt = 0.001f;
-  kf_v_r.dt = 0.001f;
-  kf_v_l.dt = 0.001f;
+  kf_w.dt = kf_w2.dt = kf_v_r.dt = kf_v_l.dt = param->dt;
 
   if (reset_battery) {
     kf_batt.init(sensing_result->ego.battery_raw, param->battery_init_cov,
