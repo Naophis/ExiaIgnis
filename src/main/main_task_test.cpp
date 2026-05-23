@@ -139,7 +139,7 @@ void MainTask::test_run() {
   // lt->stop_slalom_log();
   // bool front_ctrl = (sensing_result->ego.front_dist < 60);
   // vTaskDelay(50.0 / portTICK_RATE_MS);
-  sleep_ms(50);
+  // sleep_ms(50);
   planning_->motor_disable();
   reset_tgt_data();
   reset_ego_data();

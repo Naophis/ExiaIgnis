@@ -32,7 +32,7 @@ public:
   void send_command(std::shared_ptr<motion_tgt_val_t> tgt);
 
   // ---- tick 同期 (Core0 から呼ぶ) ----
-  void wait_tick() { sem_acquire_blocking(&tick_sem_); }
+  void wait_tick();
 
   // ---- 設定セッター ----
   void set_search_mode(bool v) { search_mode = v; }

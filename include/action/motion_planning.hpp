@@ -106,5 +106,7 @@ private:
   param_straight_t ps;
   next_motion_t    nm;
   MotionResult     res_f;
+
+  void wait_tick();
 };
 #endif

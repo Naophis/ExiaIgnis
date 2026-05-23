@@ -110,7 +110,7 @@ void PlanningTask::tick(uint32_t dt_us) {
     cp_request();
   }
 
-  const float dt = param ? param->dt : 0.001f; // param がまだセットされてない場合は dt=10ms 固定
+  const float dt = param->dt;
 
   {
     ego.update(tgt_val, motor_en); // 30 usec
@@ -401,8 +401,19 @@ void PlanningTask::motor_enable() {
 }
 void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
   motor_en = false;
+  motor_.motor_disable();
 }
 void PlanningTask::suction_enable(float duty, float duty_low) {
   suction_en = true;
   ctl_.set_suction_target(duty, duty_low);
+}
+void PlanningTask::wait_tick() {
+  // sleep_us(100); // 1 tick 待つ前に少し待機しておく（これもレース回避のため）
+
+  sem_acquire_blocking(&tick_sem_);
+
+  // const uint32_t last = tick_count_;
+  // while (tick_count_ == last) {
+  //   tight_loop_contents();
+  // }
 }
