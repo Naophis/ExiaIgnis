@@ -10,12 +10,12 @@
 #include <stdio.h>
 
 // --- センサー LED ---
-#define R90_LED_PIN  16
+#define R90_LED_PIN 16
 #define R45_LED_PIN2 19
-#define R45_LED_PIN  20
-#define L45_LED_PIN  21
+#define R45_LED_PIN 20
+#define L45_LED_PIN 21
 #define L45_LED_PIN2 24
-#define L90_LED_PIN  25
+#define L90_LED_PIN 25
 
 // --- ADC (フォトトランジスタ) ---
 #define R90_SEN_PIN 26 // ADC0
@@ -368,7 +368,8 @@ void SensingTask::read_spi_sensors() {
     pt->ego.kf_v_r.predict(accl_r);
     if (enc_r >= 0) {
       se->encoder.right = enc_r;
-      se->ego.v_r = -calc_enc_v(se->encoder.right, se->encoder.right_old, enc_r_dt);
+      se->ego.v_r =
+          -calc_enc_v(se->encoder.right, se->encoder.right_old, enc_r_dt);
       pt->ego.kf_v_r.update(se->ego.v_r);
     }
   }
@@ -377,7 +378,8 @@ void SensingTask::read_spi_sensors() {
     pt->ego.kf_v_l.predict(accl_l);
     if (enc_l >= 0) {
       se->encoder.left = enc_l;
-      se->ego.v_l = calc_enc_v(se->encoder.left, se->encoder.left_old, enc_l_dt);
+      se->ego.v_l =
+          calc_enc_v(se->encoder.left, se->encoder.left_old, enc_l_dt);
       pt->ego.kf_v_l.update(se->ego.v_l);
     }
   }
@@ -432,16 +434,16 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   tgt_val->ego_in.dist += se->ego.v_c * dt;
   tgt_val->global_pos.dist += se->ego.v_c * dt;
 
-  //   if (param->enable_kalman_gyro == 1) {
-  //     tgt_val->ego_in.ang += se->ego.w_kf * gyro_dt;
-  //     tgt_val->global_pos.ang += se->ego.w_kf * gyro_dt;
-  //   } else if (param->enable_kalman_gyro == 2) {
-  //     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
-  //     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
-  //   } else {
-  //     tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
-  //     tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
-  //   }
+  if (param->enable_kalman_gyro == 1) {
+    tgt_val->ego_in.ang += se->ego.w_kf * gyro_dt;
+    tgt_val->global_pos.ang += se->ego.w_kf * gyro_dt;
+  } else if (param->enable_kalman_gyro == 2) {
+    tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
+    tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+  } else {
+    tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
+    tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+  }
 
   w_old = tgt_val->ego_in.w;
   vl_old = se->ego.v_l;

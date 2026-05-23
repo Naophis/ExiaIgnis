@@ -77,6 +77,7 @@ public:
     void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_entity);
     void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
     void set_planning_task(std::shared_ptr<PlanningTask> &_pt);
+    void set_error_entity(std::shared_ptr<pid_error_entity_t> &_ee);
 
 private:
     LoggingTask() = default;
@@ -92,6 +93,7 @@ private:
     std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
     std::shared_ptr<input_param_t> param;
     std::shared_ptr<PlanningTask> pt;
+    std::shared_ptr<pid_error_entity_t> error_entity;
 
 
 static void cdc_write_all(const uint8_t *p, size_t len) ;

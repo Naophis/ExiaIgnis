@@ -52,35 +52,37 @@ std::shared_ptr<LoggingTask> LoggingTask::create() {
 
 void LoggingTask::init(void *psram_base, size_t psram_size,
                        size_t max_entries) {
-  // LittleFS 書き込み時に flash_exit_xip() が QMI M1 wfmt/wcmd をリセットするため、
-  // 全 LittleFS 操作完了後に QMI M1 を sfe_setup_psram と同じ設定に復元する。
-  // PSRAM ハードウェアは QPI モードを維持しているため、レジスタ復元のみ行う。
-  // sfe_psram_update_timing() は direct_csr を使わないので Core1 動作中も安全。
+  // LittleFS 書き込み時に flash_exit_xip() が QMI M1 wfmt/wcmd
+  // をリセットするため、 全 LittleFS 操作完了後に QMI M1 を sfe_setup_psram
+  // と同じ設定に復元する。 PSRAM ハードウェアは QPI
+  // モードを維持しているため、レジスタ復元のみ行う。 sfe_psram_update_timing()
+  // は direct_csr を使わないので Core1 動作中も安全。
   sfe_psram_update_timing();
 
-  // rfmt: QPI Quad Read (0xEB), 24 ダミークロック、サフィックスなし (sfe_psram.c と同一)
+  // rfmt: QPI Quad Read (0xEB), 24 ダミークロック、サフィックスなし
+  // (sfe_psram.c と同一)
   qmi_hw->m[1].rfmt =
       (QMI_M1_RFMT_PREFIX_WIDTH_VALUE_Q << QMI_M1_RFMT_PREFIX_WIDTH_LSB) |
-      (QMI_M1_RFMT_ADDR_WIDTH_VALUE_Q   << QMI_M1_RFMT_ADDR_WIDTH_LSB)   |
+      (QMI_M1_RFMT_ADDR_WIDTH_VALUE_Q << QMI_M1_RFMT_ADDR_WIDTH_LSB) |
       (QMI_M1_RFMT_SUFFIX_WIDTH_VALUE_Q << QMI_M1_RFMT_SUFFIX_WIDTH_LSB) |
-      (QMI_M1_RFMT_DUMMY_WIDTH_VALUE_Q  << QMI_M1_RFMT_DUMMY_WIDTH_LSB)  |
-      (QMI_M1_RFMT_DUMMY_LEN_VALUE_24   << QMI_M1_RFMT_DUMMY_LEN_LSB)    |
-      (QMI_M1_RFMT_DATA_WIDTH_VALUE_Q   << QMI_M1_RFMT_DATA_WIDTH_LSB)   |
-      (QMI_M1_RFMT_PREFIX_LEN_VALUE_8   << QMI_M1_RFMT_PREFIX_LEN_LSB)   |
-      (QMI_M1_RFMT_SUFFIX_LEN_VALUE_NONE<< QMI_M1_RFMT_SUFFIX_LEN_LSB);
-  qmi_hw->m[1].rcmd = 0xEBu << QMI_M1_RCMD_PREFIX_LSB;  // QUAD_READ, no suffix
+      (QMI_M1_RFMT_DUMMY_WIDTH_VALUE_Q << QMI_M1_RFMT_DUMMY_WIDTH_LSB) |
+      (QMI_M1_RFMT_DUMMY_LEN_VALUE_24 << QMI_M1_RFMT_DUMMY_LEN_LSB) |
+      (QMI_M1_RFMT_DATA_WIDTH_VALUE_Q << QMI_M1_RFMT_DATA_WIDTH_LSB) |
+      (QMI_M1_RFMT_PREFIX_LEN_VALUE_8 << QMI_M1_RFMT_PREFIX_LEN_LSB) |
+      (QMI_M1_RFMT_SUFFIX_LEN_VALUE_NONE << QMI_M1_RFMT_SUFFIX_LEN_LSB);
+  qmi_hw->m[1].rcmd = 0xEBu << QMI_M1_RCMD_PREFIX_LSB; // QUAD_READ, no suffix
 
   // wfmt: QPI Quad Write (0x38), ダミーなし、サフィックスなし
   qmi_hw->m[1].wfmt =
       (QMI_M1_WFMT_PREFIX_WIDTH_VALUE_Q << QMI_M1_WFMT_PREFIX_WIDTH_LSB) |
-      (QMI_M1_WFMT_ADDR_WIDTH_VALUE_Q   << QMI_M1_WFMT_ADDR_WIDTH_LSB)   |
+      (QMI_M1_WFMT_ADDR_WIDTH_VALUE_Q << QMI_M1_WFMT_ADDR_WIDTH_LSB) |
       (QMI_M1_WFMT_SUFFIX_WIDTH_VALUE_Q << QMI_M1_WFMT_SUFFIX_WIDTH_LSB) |
-      (QMI_M1_WFMT_DUMMY_WIDTH_VALUE_Q  << QMI_M1_WFMT_DUMMY_WIDTH_LSB)  |
-      (QMI_M1_WFMT_DUMMY_LEN_VALUE_NONE << QMI_M1_WFMT_DUMMY_LEN_LSB)    |
-      (QMI_M1_WFMT_DATA_WIDTH_VALUE_Q   << QMI_M1_WFMT_DATA_WIDTH_LSB)   |
-      (QMI_M1_WFMT_PREFIX_LEN_VALUE_8   << QMI_M1_WFMT_PREFIX_LEN_LSB)   |
-      (QMI_M1_WFMT_SUFFIX_LEN_VALUE_NONE<< QMI_M1_WFMT_SUFFIX_LEN_LSB);
-  qmi_hw->m[1].wcmd = 0x38u << QMI_M1_WCMD_PREFIX_LSB;  // QUAD_WRITE, no suffix
+      (QMI_M1_WFMT_DUMMY_WIDTH_VALUE_Q << QMI_M1_WFMT_DUMMY_WIDTH_LSB) |
+      (QMI_M1_WFMT_DUMMY_LEN_VALUE_NONE << QMI_M1_WFMT_DUMMY_LEN_LSB) |
+      (QMI_M1_WFMT_DATA_WIDTH_VALUE_Q << QMI_M1_WFMT_DATA_WIDTH_LSB) |
+      (QMI_M1_WFMT_PREFIX_LEN_VALUE_8 << QMI_M1_WFMT_PREFIX_LEN_LSB) |
+      (QMI_M1_WFMT_SUFFIX_LEN_VALUE_NONE << QMI_M1_WFMT_SUFFIX_LEN_LSB);
+  qmi_hw->m[1].wcmd = 0x38u << QMI_M1_WCMD_PREFIX_LSB; // QUAD_WRITE, no suffix
 
   hw_set_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_WRITABLE_M1_BITS);
 
@@ -250,7 +252,57 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
   ld.ang_kf_sum = floatToHalf(sr.ang_kf_sum);
   ld.img_ang_sum = floatToHalf(sr.img_ang_sum);
 
-  // error_entity (pid_error_entity_t) は引数外のため 0 のまま
+  const auto *ee = self->error_entity.get();
+  if (ee) {
+    ld.m_pid_p = floatToHalf(ee->v_val.p);
+    ld.m_pid_i = floatToHalf(ee->v_val.i);
+    ld.m_pid_i2 = floatToHalf(ee->v_val.i2);
+    ld.m_pid_d = floatToHalf(ee->v_val.d);
+    if (self->log_vec_.empty() || static_cast<int>(tv.motion_type) == 0 ||
+        (ee->v_val.i_val == 0)) {
+      ld.m_pid_p_v = floatToHalf(0.0f);
+    } else {
+      ld.m_pid_p_v = floatToHalf(ee->v_val.p_val);
+    }
+    ld.m_pid_i_v = floatToHalf(ee->v_val.i_val);
+    ld.m_pid_i2_v = floatToHalf(ee->v_val.i2_val);
+    ld.m_pid_d_v = floatToHalf(ee->v_val.d_val);
+
+    ld.g_pid_p = floatToHalf(ee->w_val.p);
+    ld.g_pid_i = floatToHalf(ee->w_val.i);
+    ld.g_pid_i2 = floatToHalf(ee->w_val.i2);
+    ld.g_pid_d = floatToHalf(ee->w_val.d);
+    ld.g_pid_p_v = floatToHalf(ee->w_val.p_val);
+    ld.g_pid_i_v = floatToHalf(ee->w_val.i_val);
+    ld.g_pid_i2_v = floatToHalf(ee->w_val.i2_val);
+    if (self->log_vec_.empty() || static_cast<int>(tv.motion_type) == 0 ||
+        (ee->v_val.i_val == 0)) {
+      ld.g_pid_d_v = floatToHalf(0.0f);
+    } else {
+      ld.g_pid_d_v = floatToHalf(ee->w_val.d_val);
+    }
+
+    ld.ang_pid_p = floatToHalf(ee->ang_val.p);
+    ld.ang_pid_i = floatToHalf(ee->ang_val.i);
+    ld.ang_pid_d = floatToHalf(ee->ang_val.d);
+    ld.ang_pid_p_v = floatToHalf(ee->ang_val.p_val);
+    ld.ang_pid_i_v = floatToHalf(ee->ang_val.i_val);
+    ld.ang_pid_d_v = floatToHalf(ee->ang_val.d_val);
+
+    ld.s_pid_p = floatToHalf(ee->s_val.p);
+    ld.s_pid_i = floatToHalf(ee->s_val.i);
+    ld.s_pid_i2 = floatToHalf(ee->s_val.i2);
+    ld.s_pid_d = floatToHalf(ee->s_val.d);
+    ld.s_pid_p_v = floatToHalf(ee->s_val.p_val);
+    ld.s_pid_i_v = floatToHalf(ee->s_val.i_val);
+    ld.s_pid_i2_v = floatToHalf(ee->s_val.i2_val);
+    ld.s_pid_d_v = floatToHalf(ee->s_val.d_val);
+
+    ld.ang_i_bias = floatToHalf(ee->ang_val.i2);
+    ld.ang_i_bias_val = floatToHalf(ee->ang_val.i2_val);
+    ld.duty_roll = floatToHalf(ee->aw_log.duty_roll);
+    ld.duty_roll_before = floatToHalf(ee->aw_log.duty_roll_before);
+  }
 
   self->log_vec_.emplace_back(std::move(ld));
 }
@@ -786,6 +838,9 @@ void LoggingTask::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
 void LoggingTask::set_input_param_entity(
     std::shared_ptr<input_param_t> &_param) {
   param = _param;
+}
+void LoggingTask::set_error_entity(std::shared_ptr<pid_error_entity_t> &_ee) {
+  error_entity = _ee;
 }
 void LoggingTask::cdc_write_all(const uint8_t *p, size_t len) {
   while (len > 0) {

@@ -81,6 +81,7 @@ int main() {
 
   printf("[boot] step5: LoggingTask + MainTask create\n");
   auto lt = LoggingTask::create();
+  lt->set_error_entity(planning->ctl_.ee);
   auto main_task = MainTask::create(sensing, planning, param);
   main_task->set_logging_task(lt);
   main_task->set_tgt_val(tgt_val);
