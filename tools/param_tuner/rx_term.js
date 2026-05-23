@@ -315,7 +315,7 @@ const switchToBinaryMode = (obj) => {
       if (!finish) {
         let valid = obj.data_struct.every((data, i) => {
           let res = true;
-          return true
+          // return true
           if (record[i] < -100000 || record[i] > 100000)
             res = false;
           if (data.name === "index") {

@@ -364,20 +364,22 @@ void SensingTask::read_spi_sensors() {
   pt->ego.kf_v_l.dt = enc_l_dt;
 
   if (enc_r_dt > 0) {
-    se->encoder.right = enc_r;
-    se->ego.v_r = -calc_enc_v(se->encoder.right, se->encoder.right_old,
-                              pt->ego.kf_v_r.dt);
     pt->ego.kf_v_r.dt = enc_r_dt;
     pt->ego.kf_v_r.predict(accl_r);
-    pt->ego.kf_v_r.update(se->ego.v_r);
+    if (enc_r >= 0) {
+      se->encoder.right = enc_r;
+      se->ego.v_r = -calc_enc_v(se->encoder.right, se->encoder.right_old, enc_r_dt);
+      pt->ego.kf_v_r.update(se->ego.v_r);
+    }
   }
   if (enc_l_dt > 0) {
-    se->encoder.left = enc_l;
-    se->ego.v_l =
-        calc_enc_v(se->encoder.left, se->encoder.left_old, pt->ego.kf_v_l.dt);
-    pt->ego.kf_v_l.dt = enc_l_dt; 
+    pt->ego.kf_v_l.dt = enc_l_dt;
     pt->ego.kf_v_l.predict(accl_l);
-    pt->ego.kf_v_l.update(se->ego.v_l);
+    if (enc_l >= 0) {
+      se->encoder.left = enc_l;
+      se->ego.v_l = calc_enc_v(se->encoder.left, se->encoder.left_old, enc_l_dt);
+      pt->ego.kf_v_l.update(se->ego.v_l);
+    }
   }
   // printf("enc_l: %d m/s, enc_r: %d \n", enc_l, enc_r);
   if (gyro_dt > 0) {
