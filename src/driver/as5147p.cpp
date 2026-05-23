@@ -38,7 +38,7 @@ static int32_t spi_transfer16(spi_inst_t *spi, uint cs, uint16_t tx_word) {
     uint8_t rx[2] = {0, 0};
 
     gpio_put(cs, 0);
-    sleep_us(1);
+    sleep_us(2);
     spi_write_read_blocking(spi, tx, rx, 2);
     sleep_us(1);
     gpio_put(cs, 1);
@@ -70,8 +70,7 @@ void AS5147P::init(spi_inst_t *spi, uint cs_pin) {
 
 // addr を読んで生の 16bit 値を返す (EF・パリティビット含む)
 int32_t AS5147P::read_reg(uint16_t addr) {
-    // mode3 (CPOL=1, CPHA=1), 8-bit — SPI1共有時もSCK遷移不要
-    spi_set_format_safe(spi_, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_set_format_safe(spi_, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);  // mode 1
 
     uint16_t cmd = make_cmd((1u << 14) | addr);
     uint16_t nop = make_cmd(0x0000);  // read NOP (addr=0x0000)

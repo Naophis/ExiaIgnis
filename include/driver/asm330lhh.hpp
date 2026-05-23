@@ -11,6 +11,15 @@
 #define ASM330_CTRL8_XL   0x17
 #define ASM330_OUTZ_L_G   0x26
 
+#define ASM330LHH_CTRL1_XL 0x10U
+#define ASM330LHH_CTRL2_G 0x11U
+#define ASM330LHH_CTRL3_C 0x12U
+#define ASM330LHH_CTRL4_C 0x13U
+#define ASM330LHH_CTRL6_C 0x15U
+#define ASM330LHH_CTRL7_G 0x16U
+#define ASM330LHH_CTRL8_XL 0x17U
+#define ASM330LHH_CTRL9_XL 0x18U
+
 class ASM330LHH {
 public:
     // init() で SPI バスの初期化からピン設定まで行う

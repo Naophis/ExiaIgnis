@@ -99,7 +99,7 @@ void MainTask::run() {
   printf("[main] LittleFS files:\n");
   ConfigLoader::list_files(
       [](void *, const char *name, int32_t size) {
-        printf("  %-32s %d bytes\n", name, (int)size);
+        // printf("  %-32s %d bytes\n", name, (int)size);
       },
       nullptr);
   {
