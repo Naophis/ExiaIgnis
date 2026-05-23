@@ -297,7 +297,9 @@ const switchToBinaryMode = (obj) => {
         }
         if (data.name === 'index') {
           const idx = parseInt(binaryData.readInt32LE(tmp_data));
-          console.log(last_idx, idx);
+          if (idx % 100 === 0) {
+            console.log(last_idx, idx);
+          }
           if (idx < last_idx) {
             force_save = true;
           }

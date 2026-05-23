@@ -8,20 +8,19 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
-#include "esp_system.h"
 
 union {
   float f;
   uint32_t i;
 } conv;
 
-real32_T IRAM_ATTR t_sqrtF(const real32_T &x) {
+real32_T t_sqrtF(const real32_T &x) {
   conv.f = x;
   conv.i = 0x5f3759df - (conv.i >> 1);
   conv.f = conv.f * (1.5f - 0.5f * x * conv.f * conv.f);
   return 1.0f / conv.f;
 }
-real32_T IRAM_ATTR fast_pow(real32_T x, int n) {
+real32_T fast_pow(real32_T x, int n) {
   if (n == 0) {
     return 1.0;
   }
@@ -41,7 +40,7 @@ real32_T IRAM_ATTR fast_pow(real32_T x, int n) {
 }
 
 template<class To, class From>
-To IRAM_ATTR bit_cast(const From &from) noexcept {
+To bit_cast(const From &from) noexcept {
     To to;
     static_assert(sizeof to == sizeof from);
     std::memcpy(&to, &from, sizeof to);
@@ -135,7 +134,7 @@ namespace {
     }
 }
 
-float IRAM_ATTR exact_expf(float x) noexcept {
+float exact_expf(float x) noexcept {
     if (x < -104.0f) { return 0.0f; }
     if (x > 0x1.62e42ep+6f) { return HUGE_VALF; }
 
@@ -152,7 +151,7 @@ float IRAM_ATTR exact_expf(float x) noexcept {
     const double exp_x = std::fma(exp_s, expm1_t, exp_s);
     return static_cast<float>( exp_x );
 }
-real32_T IRAM_ATTR rt_powf_snf(real32_T u0, real32_T u1)
+real32_T rt_powf_snf(real32_T u0, real32_T u1)
 {
   real32_T y;
   return fast_pow(u0, u1);
@@ -199,7 +198,7 @@ real32_T IRAM_ATTR rt_powf_snf(real32_T u0, real32_T u1)
   return y;
 }
 
-void IRAM_ATTR mpc_tgt_calcModelClass::step(const t_tgt *arg_tgt, const t_ego *arg_ego,
+void mpc_tgt_calcModelClass::step(const t_tgt *arg_tgt, const t_ego *arg_ego,
   int32_T arg_mode, int32_T arg_time_step, t_ego *arg_next_ego, t_dynamics
   *arg_ego1, int32_T *arg_In1)
 {

@@ -161,7 +161,7 @@ void MainTask::test_run() {
       break;
     sleep_ms(10);
   }
-  lt_->dump_csv();;
+  lt_->dump_csv();
   ui_.coin(120);
   // 2回目: テキスト dump (rx_term.js テキストプロトコル)
   while (1) {

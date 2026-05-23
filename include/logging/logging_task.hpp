@@ -92,4 +92,7 @@ private:
     std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
     std::shared_ptr<input_param_t> param;
     std::shared_ptr<PlanningTask> pt;
+
+
+static void cdc_write_all(const uint8_t *p, size_t len) ;
 };
