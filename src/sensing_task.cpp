@@ -399,11 +399,6 @@ void SensingTask::read_spi_sensors() {
     const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
     pt->ego.kf_w.update(se->ego.w_raw);
   }
-  float alpha = 0.f;
-  pt->ego.kf_w.predict(alpha);
-  const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
-  pt->ego.kf_w.update(se->ego.w_raw);
-  // }
   if (param->enable_kalman_gyro == 1) {
     se->ego.w_raw = se->ego.w_kf = pt->ego.kf_w.get_state();
     // se->ego.w_raw2 = se->ego.w_kf2 = pt->ego.kf_w2.get_state();
