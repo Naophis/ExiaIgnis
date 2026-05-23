@@ -44,5 +44,4 @@
 #define M_PWM_R2      11  // PWM5 B
 #define SUCTION_PWM   9   // PWM4 B
 
-#define MOTOR_PWM_FREQ_HZ  50000u
-#define MOTOR_DUTY_PCT     5u     // duty (%) applied to active channel
+#define MOTOR_PWM_FREQ_HZ  37500u
