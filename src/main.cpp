@@ -22,7 +22,6 @@ extern "C" {
 #include "blink.pio.h"
 #include "define.hpp"
 
-
 // ============================================================
 // Core1 RT エントリ: sensing + planning IRQ を Core1 に登録
 // ============================================================
@@ -72,9 +71,7 @@ int main() {
   sensing->set_tgt_val(tgt_val);
   printf("[boot] step3: sensing init\n");
   sensing->init();
-  sensing->configure(
-      (uint32_t)ConfigLoader::get_int("sensing.led_settle_us", 18),
-      (uint32_t)ConfigLoader::get_int("sensing.interval_us", 1000));
+  sensing->configure(22, 1000); // LED安定待ち 22us, サンプリング周期 1000us
 
   printf("[boot] step4: planning init\n");
   planning->set_sensing_entity(sensing_entity);
