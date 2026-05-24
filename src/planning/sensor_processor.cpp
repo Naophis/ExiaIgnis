@@ -13,6 +13,7 @@ void SensorProcessor::init(
   }
 }
 
+__attribute__((noinline, section(".time_critical.sensor_processor")))
 void SensorProcessor::calc_dist(std::shared_ptr<motion_tgt_val_t> tgt_val) {
   // if (!(tgt_val->motion_type == MotionType::NONE ||
   //       tgt_val->motion_type == MotionType::PIVOT)) {

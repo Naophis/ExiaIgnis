@@ -71,6 +71,7 @@ void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
 // ============================================================
 // TIMER1 alarm 0 IRQ ハンドラ (Core0)
 // ============================================================
+__attribute__((noinline, section(".time_critical.planning_tick")))
 void PlanningTask::timer_irq_handler() {
   timer1_hw->intr = 1u << 0;
 
@@ -97,6 +98,7 @@ void PlanningTask::timer_irq_handler() {
 // ============================================================
 // 1tick 処理 (IRQ ハンドラから呼ばれる)
 // ============================================================
+__attribute__((noinline, section(".time_critical.planning_tick")))
 void PlanningTask::tick(uint32_t dt_us) {
   if (dt_us == 0)
     return;

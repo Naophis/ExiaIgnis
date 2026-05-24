@@ -38,9 +38,9 @@ static int32_t spi_transfer16(spi_inst_t *spi, uint cs, uint16_t tx_word) {
     uint8_t rx[2] = {0, 0};
 
     gpio_put(cs, 0);
-    sleep_us(2);
+    busy_wait_us_32(2);
     spi_write_read_blocking(spi, tx, rx, 2);
-    sleep_us(1);
+    busy_wait_us_32(1);
     gpio_put(cs, 1);
 
     uint16_t raw = ((uint16_t)rx[0] << 8) | rx[1];

@@ -12,6 +12,7 @@ void ControlLaw::init(MotorActuator *motor, SensorProcessor *sensor,
   ee = std::make_shared<pid_error_entity_t>();
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc(std::shared_ptr<motion_tgt_val_t> tgt_val,
                       std::shared_ptr<sensing_result_entity_t> sensing_result,
                       std::shared_ptr<input_param_t> param, bool motor_en,

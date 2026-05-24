@@ -45,7 +45,11 @@
       "Bash(curl -s \"https://api.github.com/repos/sparkfun/sparkfun-pico/contents/sparkfun_pico/CMakeLists.txt\")",
       "Bash(python3 -c \"import sys,json,base64; d=json.load\\(sys.stdin\\); print\\(base64.b64decode\\(d['content']\\).decode\\(\\)\\)\")",
       "Bash(ninja -n)",
-      "Bash(grep \" dt\\\\b\\\\| dt$\")"
+      "Bash(grep \" dt\\\\b\\\\| dt$\")",
+      "Bash(arm-none-eabi-nm --size-sort /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
+      "Bash(sort -k1 -rn)",
+      "Bash(awk '$2 == \"T\" && strtonum\\(\"0x\"$1\\) >= strtonum\\(\"0x20000000\"\\) {print}')",
+      "Bash(awk '$2 == \"T\" && strtonum\\(\"0x\"$1\\) >= strtonum\\(\"0x20000000\"\\) && strtonum\\(\"0x\"$1\\) < strtonum\\(\"0x20040000\"\\) {print}')"
     ]
   }
 }

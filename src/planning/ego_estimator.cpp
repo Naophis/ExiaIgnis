@@ -8,6 +8,7 @@ void EgoEstimator::init(std::shared_ptr<sensing_result_entity_t> sensing_result,
   param = prm;
 }
 
+__attribute__((noinline, section(".time_critical.ego_estimator")))
 void EgoEstimator::update(std::shared_ptr<motion_tgt_val_t> tgt_val,
                           bool motor_en) {
   const float dt = param->dt;

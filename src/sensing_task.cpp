@@ -73,6 +73,7 @@ std::shared_ptr<sensing_result_entity_t> SensingTask::get_sensing_entity() {
 // ============================================================
 
 // alarm 1: センサー読み取りシーケンス (one-shot)
+__attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::timer_b_irq_handler() {
   timer_hw->intr = 1u << 1;
 
@@ -179,6 +180,7 @@ void SensingTask::timer_b_irq_handler() {
 }
 
 // alarm 2: 1000us 周期 (1kHz)
+__attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::timer_a_irq_handler() {
   timer_hw->intr = 1u << 2;
 
@@ -290,6 +292,7 @@ void SensingTask::init() {
          (bat0 || bat1) ? "OK" : "STUCK LOW");
 }
 
+__attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::read_spi_sensors() {
   auto *self = s_instance.get();
   const auto se = self->get_sensing_entity();
