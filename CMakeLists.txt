@@ -167,5 +167,10 @@ target_link_libraries(ExiaIgnis
         sfe_psram
         )
 
+# Core1 stack lives in SCRATCH_X (4KB hard limit; SCRATCH_Y is Core0 stack).
+# Default 2KB overflows under deep IRQ chain. 4KB = SCRATCH_X limit, no collision.
+# target_compile_definitions is required — set() is not propagated to -D flags by the SDK.
+target_compile_definitions(ExiaIgnis PRIVATE PICO_CORE1_STACK_SIZE=0x1000)
+
 pico_add_extra_outputs(ExiaIgnis)
 

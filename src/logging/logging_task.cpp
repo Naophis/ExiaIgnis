@@ -183,7 +183,9 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
     return;
   }
 
-  log_data_t2 ld{};
+  // static: Core1 IRQ の単一スレッド呼び出しのため安全。
+  // スタックに 252 bytes 積まないことで IRQ スタック節約。
+  static log_data_t2 ld{};
 
   ld.img_v = floatToHalf(tv.ego_in.v);
   ld.v_l = floatToHalf(sr.ego.v_l);
