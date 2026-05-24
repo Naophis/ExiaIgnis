@@ -71,7 +71,7 @@ int main() {
   sensing->set_tgt_val(tgt_val);
   printf("[boot] step3: sensing init\n");
   sensing->init();
-  sensing->configure(18, 1000); // LED安定待ち 22us, サンプリング周期 1000us
+  sensing->configure(22, 1000); // LED安定待ち 22us, サンプリング周期 1000us
 
   printf("[boot] step4: planning init\n");
   planning->set_sensing_entity(sensing_entity);
