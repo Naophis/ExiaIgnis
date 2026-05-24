@@ -38,23 +38,12 @@ static int32_t spi_transfer16(spi_inst_t *spi, uint cs, uint16_t tx_word) {
     uint8_t rx[2] = {0, 0};
 
     gpio_put(cs, 0);
-    busy_wait_us_32(2);
+    sleep_us(2);
     spi_write_read_blocking(spi, tx, rx, 2);
-    busy_wait_us_32(1);
+    sleep_us(1);
     gpio_put(cs, 1);
 
     uint16_t raw = ((uint16_t)rx[0] << 8) | rx[1];
-
-    // if (cs == 9) {
-    //     printf("cs=%u tx=0x%04X raw=0x%04X parity=%u ef=%u data=0x%04X %u\n",
-    //            cs,
-    //            tx_word,
-    //            raw,
-    //            (raw >> 15) & 1,
-    //            (raw >> 14) & 1,
-    //            raw & 0x3FFF,
-    //            raw & 0x3FFF);
-    // }
 
     return raw;
 }
@@ -73,7 +62,7 @@ int32_t AS5147P::read_reg(uint16_t addr) {
     spi_set_format_safe(spi_, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);  // mode 1
 
     uint16_t cmd = make_cmd((1u << 14) | addr);
-    uint16_t nop = make_cmd(0x0000);  // read NOP (addr=0x0000)
+    uint16_t nop = make_cmd(1u << 14);  // READ NOP (addr=0x0000, bit14=1=READ)
 
     // Frame 1: コマンド送信 (レスポンスは破棄)
     spi_transfer16(spi_, cs_, cmd);
@@ -119,10 +108,11 @@ void AS5147P::setup() {
 int32_t AS5147P::read_angle() {
     for (int retry = 0; retry < 3; ++retry) {
         int32_t raw = read_reg(0x3FFF);
+        // EF ビット (bit14) が立っていたらセンサーエラー → リトライ
+        if (raw & (1 << 14)) continue;
         uint16_t w = (uint16_t)(raw & 0x7FFF);
         w ^= w >> 8; w ^= w >> 4; w ^= w >> 2; w ^= w >> 1;
-        return raw & 0x3FFFu;
-        // if ((w & 1u) == (uint16_t)((raw >> 15) & 1)) return raw & 0x3FFFu;
+        if ((w & 1u) == (uint16_t)((raw >> 15) & 1)) return raw & 0x3FFFu;
     }
     return -1;
 }

@@ -254,7 +254,7 @@ void MainTask::dump1() {
     printf("accel_x: %f\t(%f)\n", se->ego.accel_x_raw,
            se->ego.accel_x_raw / 9806.65 * param_->accel_x_param.gain);
     printf("battery: %0.3f (%d)\n", se->ego.battery_lp, se->battery.raw);
-    printf("encoder: %ld, %ld\n", (long)se->encoder.left,
+    printf("encoder: %5ld, %5ld\n", (long)se->encoder.left,
            (long)se->encoder.right);
     printf("sensor: %4d, %4d, %4d, %4d, %4d, %4d, %4d\n",
            se->led_sen.left90.raw, se->led_sen.left45.raw,
@@ -357,19 +357,12 @@ void MainTask::dump1() {
     printf("planning_time: %d\t%d\n", planning_->tgt_val->calc_time_diff,
            planning_->tgt_val->calc_time);
     printf("sensing_time: %d\t%d\n", se->calc_time, se->calc_time2);
-    printf("sensing_breakdown[us]: spi=%d amb=%d r90=%d r45=%d l45=%d l90=%d total=%d\n",
-           se->t_spi,
-           se->t_ambient,
-           se->t_r90,
-           se->t_r45,
-           se->t_l45,
-           se->t_l90,
+    printf("sensing_breakdown[us]: spi=%d amb=%d r90=%d r45=%d l45=%d l90=%d "
+           "total=%d\n",
+           se->t_spi, se->t_ambient, se->t_r90, se->t_r45, se->t_l45, se->t_l90,
            se->calc_time2);
     printf("spi_breakdown[us]: gyro=%d encr=%d encl=%d bat+calc=%d\n",
-           se->t_gyro,
-           se->t_encr,
-           se->t_encl,
-           se->t_bat);
+           se->t_gyro, se->t_encr, se->t_encl, se->t_bat);
 
     if (ui_.button_state()) {
       planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;

@@ -206,9 +206,7 @@ void SensingTask::timer_b_irq_handler() {
 void SensingTask::start_irq() {
   irq_set_exclusive_handler(TIMER0_IRQ_1, timer_b_irq_handler);
 
-  // timer_b (センサー読み取り本体) は planning (IRQ_0, 0x00) より
-  // 低優先度にして planning がプリエンプトできるようにする。
-  irq_set_priority(TIMER0_IRQ_1, PICO_HIGHEST_IRQ_PRIORITY + 0x40);
+  irq_set_priority(TIMER0_IRQ_1, PICO_HIGHEST_IRQ_PRIORITY);
 
   irq_set_enabled(TIMER0_IRQ_1, true);
 
@@ -262,10 +260,13 @@ void SensingTask::init() {
   enc_r_.setup();
 
   // SPI0 バス初期化 (左エンコーダ + バッテリADC 共有)
-  spi_init(ENC_L_SPI, 1000000);
+  spi_init(ENC_L_SPI, 10'000'000);
   gpio_set_function(ENC_L_CLK_PIN, GPIO_FUNC_SPI);
   gpio_set_function(ENC_L_MOSI_PIN, GPIO_FUNC_SPI);
   gpio_set_function(ENC_L_MISO_PIN, GPIO_FUNC_SPI);
+  // MISO フローティング防止: 両デバイスの CS=HIGH 時に MISO が Hi-Z になるため
+  // pull-up で安定化
+  gpio_pull_up(ENC_L_MISO_PIN);
 
   // バッテリADC (ADS7042I) — enc_l_.setup() より前に CS HIGH に設定して bus
   // contention を防ぐ
@@ -282,8 +283,8 @@ void SensingTask::init() {
          (bat0 || bat1) ? "OK" : "STUCK LOW");
 }
 
-__attribute__((noinline, section(".time_critical.sensing_irq")))
-void SensingTask::read_spi_sensors() {
+__attribute__((noinline, section(".time_critical.sensing_irq"))) void
+SensingTask::read_spi_sensors() {
   auto *self = s_instance.get();
   const auto se = self->get_sensing_entity();
 
@@ -334,17 +335,28 @@ void SensingTask::read_spi_sensors() {
   pt->ego.kf_v_r.dt = enc_r_dt;
   pt->ego.kf_v_l.dt = enc_l_dt;
 
+  auto tmp_r_v =
+      ABS(calc_enc_v(enc_r, se->encoder.right_old, pt->ego.kf_v_r.dt));
+  auto tmp_l_v =
+      ABS(calc_enc_v(enc_l, se->encoder.left_old, pt->ego.kf_v_l.dt));
+
   if (enc_r_dt > 0) {
     pt->ego.kf_v_r.dt = enc_r_dt;
     pt->ego.kf_v_r.predict(accl_r);
-    if (enc_r >= 0) {
+    if (enc_r == 0 && ABS(ABS(tmp_r_v) - ABS(se->ego.v_r)) > 50) {
+      // エンコーダ取得失敗時更新中止
+      enc_r_timestamp_now = enc_r_timestamp_old;
+    } else if (enc_r >= 0) {
       se->encoder.right = enc_r;
       se->ego.v_r =
           -calc_enc_v(se->encoder.right, se->encoder.right_old, enc_r_dt);
       pt->ego.kf_v_r.update(se->ego.v_r);
     }
   }
-  if (enc_l_dt > 0) {
+  if (enc_l == 0 && ABS(ABS(tmp_l_v) - ABS(se->ego.v_l)) > 50) {
+    // エンコーダ取得失敗時更新中止
+    enc_l_timestamp_now = enc_l_timestamp_old;
+  } else if (enc_l_dt > 0) {
     pt->ego.kf_v_l.dt = enc_l_dt;
     pt->ego.kf_v_l.predict(accl_l);
     if (enc_l >= 0) {
@@ -381,6 +393,7 @@ void SensingTask::read_spi_sensors() {
     // se->ego.w_kf2 = pt->ego.kf_w2.get_state();
   }
 
+  // DIAG: ADS7042衝突診断 - コメントアウトしてenc_lが安定するか確認
   se->battery.raw = self->battery_.read();
   calc_vel(gyro_dt, enc_l_dt, enc_r_dt);
   se->t_bat = (int16_t)(time_us_64() - spi_t0);

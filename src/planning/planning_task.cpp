@@ -57,7 +57,9 @@ void PlanningTask::start_irq() {
   irq_set_enabled(TIMER0_IRQ_0, true);
   hw_set_bits(&timer_hw->inte, 1u << 0);
 
-  next_alarm_ = timer_hw->timerawl + interval_us_;
+  // sensing (alarm 1) の直後に start するため位相が重なる。
+  // sensing 自身の実行時間 (~350us) より後に発火するよう 600us 遅らせる。
+  next_alarm_ = timer_hw->timerawl + interval_us_ + 600;
   timer_hw->alarm[0] = next_alarm_;
 }
 
