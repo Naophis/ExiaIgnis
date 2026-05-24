@@ -354,9 +354,9 @@ void MainTask::dump1() {
         9.8;
     printf("accel: %3.3f, %6.6f\n", se->ego.accel_x_raw, tgt_gain);
 
-    printf("planning_time: %d\n", planning_->tgt_val->calc_time);
-    printf("planning_time_diff: %d\n", planning_->tgt_val->calc_time_diff);
-    printf("sensing_time: %d\n", se->calc_time);
+    printf("planning_time: %d\t%d\n", planning_->tgt_val->calc_time_diff,
+           planning_->tgt_val->calc_time);
+    printf("sensing_time: %d\t%d\n", se->calc_time, se->calc_time2);
 
     if (ui_.button_state()) {
       planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;
