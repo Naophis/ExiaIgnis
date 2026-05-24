@@ -75,22 +75,23 @@ void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
 // ============================================================
 __attribute__((noinline, section(".time_critical.planning_tick")))
 void PlanningTask::timer_irq_handler() {
+  // ハンドラ入口で即計測 — 以後の処理による可変遅延を period 計測に含めない
+  const uint64_t now = time_us_64();
   timer_hw->intr = 1u << 0;
 
   auto *self = s_instance.get();
 
   // 次回アラームを絶対時刻で設定 (ドリフトなし)
-  // flash write 等で Core1 が長時間停止した場合にリセット (sensing_task と同様)
   self->next_alarm_ += self->interval_us_;
   {
-    uint32_t now32 = timer_hw->timerawl;
+    // now を使い回すことで余分な timerawl 読み出しを省く
+    const uint32_t now32 = (uint32_t)now;
     if ((int32_t)(now32 - self->next_alarm_) > (int32_t)self->interval_us_)
       self->next_alarm_ = now32 + self->interval_us_;
   }
   timer_hw->alarm[0] = self->next_alarm_;
 
-  uint64_t now = time_us_64();
-  uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;
+  const uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;
   self->prev_ts_ = now;
 
   self->tick(dt_us);
@@ -105,9 +106,10 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (dt_us == 0)
     return;
 
-  uint64_t start = time_us_64();
-  tgt_val->calc_time_diff = start - start_time_z;
-  start_time_z = start;
+  // calc_time_diff はハンドラで計測済みの dt_us をそのまま使う
+  // (tick() 内で再計測すると関数呼び出し分の可変遅延が加わるため)
+  tgt_val->calc_time_diff = dt_us;
+  const uint64_t start = time_us_64(); // exec time 計測用
   // --- motion_tgt_val_t コマンド受け取り (send_command 経由) ---
   if (tgt_cmd_pending_) {
     __dmb(); // pending_tgt_ の書き込みが見えることを保証

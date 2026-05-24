@@ -256,10 +256,14 @@ void MainTask::dump1() {
     printf("battery: %0.3f (%d)\n", se->ego.battery_lp, se->battery.raw);
     printf("encoder: %5ld, %5ld\n", (long)se->encoder.left,
            (long)se->encoder.right);
-    printf("sensor: %4d, %4d, %4d, %4d, %4d, %4d, %4d\n",
-           se->led_sen.left90.raw, se->led_sen.left45.raw,
-           se->led_sen.left45_2.raw, se->led_sen.front.raw,
-           se->led_sen.right45_2.raw, se->led_sen.right45.raw,
+    printf("sensor: %4d, %4d, %4d, %4d, %4d, %4d, %4d, %4d\n",
+           se->led_sen.left90.raw,    //
+           se->led_sen.left45_3.raw,  //
+           se->led_sen.left45_2.raw,  //
+           se->led_sen.left45.raw,    //
+           se->led_sen.right45.raw,   //
+           se->led_sen.right45_2.raw, //
+           se->led_sen.right45_3.raw, //
            se->led_sen.right90.raw);
 
     printf(

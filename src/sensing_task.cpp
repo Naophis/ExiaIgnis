@@ -75,6 +75,8 @@ std::shared_ptr<sensing_result_entity_t> SensingTask::get_sensing_entity() {
 // alarm 1: 1kHz 定周期 + センサー読み取りシーケンス
 __attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::timer_b_irq_handler() {
+  // ハンドラ入口で即計測 — 以後の処理による可変遅延を period 計測に含めない
+  const uint64_t sense_start = time_us_64();
   timer_hw->intr = 1u << 1;
 
   auto *self = s_instance.get();
@@ -82,16 +84,15 @@ void SensingTask::timer_b_irq_handler() {
   // 次回アラームを絶対時刻で設定 (ドリフトなし)
   self->next_alarm_a_ += self->interval_us_;
   {
-    uint32_t now32 = (uint32_t)time_us_64();
+    // sense_start を使い回すことで余分な time_us_64() 呼び出しを省く
+    const uint32_t now32 = (uint32_t)sense_start;
     if ((int32_t)(now32 - self->next_alarm_a_) > (int32_t)self->interval_us_)
       self->next_alarm_a_ = now32 + self->interval_us_;
   }
   timer_hw->alarm[1] = self->next_alarm_a_;
 
   const auto se = self->get_sensing_entity();
-  auto start_time_z = self->start_time_z;
-  const uint64_t sense_start = time_us_64();
-  se->calc_time = sense_start - start_time_z;
+  se->calc_time = (int16_t)(sense_start - self->start_time_z);
   self->start_time_z = sense_start;
   self->data.dt_us = self->prev_timestamp_
                          ? (uint32_t)(sense_start - self->prev_timestamp_)
