@@ -31,7 +31,7 @@ void MotorActuator::init() {
 
 void MotorActuator::apply(float duty_l, float duty_r, float duty_suction) {
   auto set_drive = [&](uint slice, float duty) {
-    uint16_t level = (uint16_t)((float)motor_wrap_ * std::fabs(duty) / 100.0f);
+    uint16_t level = (uint16_t)((float)(motor_wrap_ + 1u) * std::fabs(duty) / 100.0f);
     if (duty >= 0.0f) {
       pwm_set_chan_level(slice, PWM_CHAN_A, level);
       pwm_set_chan_level(slice, PWM_CHAN_B, 0);
@@ -49,7 +49,7 @@ void MotorActuator::apply(float duty_l, float duty_r, float duty_suction) {
 
 void MotorActuator::apply_suction(float duty_suction) {
   uint16_t suction_level =
-      (uint16_t)((float)motor_wrap_ * std::clamp(duty_suction, 0.0f, 100.0f) /
+      (uint16_t)((float)(motor_wrap_ + 1u) * std::clamp(duty_suction, 0.0f, 100.0f) /
                  100.0f);
   pwm_set_chan_level(slice_S_, PWM_CHAN_A, suction_level);
   pwm_set_chan_level(slice_S_, PWM_CHAN_B, 0);
