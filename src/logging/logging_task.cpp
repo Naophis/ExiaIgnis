@@ -138,9 +138,15 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
 
   log_cap_ = max_entries;
   log_vec_.reserve(max_entries); // PSRAM に一括確保 (以降 realloc なし)
-  printf("[LoggingTask] PSRAM %zu KB, cap=%zu entries (%zu KB), entry=%zu B\n",
+
+  constexpr size_t send_buf_bytes = 480 * SEND_BATCH;
+  send_buf_ = static_cast<uint8_t *>(psram_heap::alloc(send_buf_bytes));
+  if (!send_buf_) panic("PSRAM OOM: send_buf");
+
+  printf("[LoggingTask] PSRAM %zu KB, cap=%zu entries (%zu KB), entry=%zu B, send_buf=%zu KB\n",
          psram_size / 1024, max_entries,
-         (max_entries * sizeof(log_data_t2)) / 1024, sizeof(log_data_t2));
+         (max_entries * sizeof(log_data_t2)) / 1024, sizeof(log_data_t2),
+         send_buf_bytes / 1024);
 }
 
 void LoggingTask::start() {
@@ -482,8 +488,8 @@ void LoggingTask::dump_csv() const {
   // CRLF 変換を無効化してバイナリデータを送信 (\n バイトが壊れるのを防ぐ)
   stdio_set_translate_crlf(&stdio_usb, false);
 
-  constexpr int BATCH = 500;
-  uint8_t send_buf[480 * BATCH];
+  constexpr int BATCH = SEND_BATCH;
+  uint8_t *const send_buf = send_buf_;
   size_t batch_off = 0;
   int batch_cnt = 0;
 
