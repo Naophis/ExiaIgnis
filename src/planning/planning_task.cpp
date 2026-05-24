@@ -122,8 +122,11 @@ void PlanningTask::tick(uint32_t dt_us) {
   const float dt = param->dt;
 
   {
-    ego.update(tgt_val, motor_en); // 30 usec
-    sensor_.calc_dist(tgt_val);    // 15 ~ 20 usec
+    ego.update(tgt_val, motor_en);
+    tgt_val->pln_t_ego = (int16_t)(time_us_64() - start);
+
+    sensor_.calc_dist(tgt_val);
+    tgt_val->pln_t_sensor = (int16_t)(time_us_64() - start);
 
     if (first_req) {
       if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
@@ -132,6 +135,7 @@ void PlanningTask::tick(uint32_t dt_us) {
         tgt_val->tgt_in.enable_slip_decel = 0;
       }
       trj_.generate(tgt_val, param, last_tgt_angle);
+      tgt_val->pln_t_trj = (int16_t)(time_us_64() - start);
     }
 
     if (tgt_val->motion_type == MotionType::STRAIGHT ||
@@ -146,6 +150,7 @@ void PlanningTask::tick(uint32_t dt_us) {
     }
     trj_.calc_kanayama(tgt_val, sensing_result, param, ego, sensor_,
                        last_tgt_angle);
+    tgt_val->pln_t_kanayama = (int16_t)(time_us_64() - start);
 
     if (tgt_val->motion_type == MotionType::PIVOT ||
         tgt_val->motion_type == MotionType::FRONT_CTRL) {
@@ -153,16 +158,15 @@ void PlanningTask::tick(uint32_t dt_us) {
       trj_.w_cmd = tgt_val->ego_in.w;
     }
 
-    // 算出結果をコピー
-    trj_.copy_tgt(tgt_val, sensing_result, param, dt); // 1~2usec
+    trj_.copy_tgt(tgt_val, sensing_result, param, dt);
+    tgt_val->pln_t_copy = (int16_t)(time_us_64() - start);
 
-    // PID制御・デューティ計算・モーター出力
     ctl_.calc(tgt_val, sensing_result, param, motor_en, suction_en, search_mode,
               w_reset, last_tgt_angle, dt);
+    tgt_val->pln_t_ctl = (int16_t)(time_us_64() - start);
   }
-  uint64_t end = time_us_64();
 
-  tgt_val->calc_time = static_cast<int16_t>(end - start);
+  tgt_val->calc_time = tgt_val->pln_t_ctl;
 
   // --- ログ記録 (LoggingTask が active な場合のみ実行) ---
   if (sensing_result && tgt_val) {

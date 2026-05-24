@@ -14,36 +14,33 @@ void KalmanFilter::print_state() {
   printf("  P:%f, Q:%f, R:%f\n", P, Q, R); //
 }
 
+__attribute__((section(".time_critical.ego_estimator")))
 void KalmanFilter::predict(float u) {
-  // 予測ステップ
   x = x + u * dt;
   P = P + Q;
   P2 = P2 + Q;
 }
 
+__attribute__((section(".time_critical.ego_estimator")))
 void KalmanFilter::update(float z) {
-  // 更新ステップ
   float K = P / (P + R);
   x = x + K * (z - x);
   P = (1 - K) * P;
 }
 
+__attribute__((section(".time_critical.ego_estimator")))
 void KalmanFilter::update2(float z_gyro, float z_wheel) {
-  // 重み計算
   float weight_gyro = P / (P + R);
   float weight_wheel = P2 / (P2 + R2);
-
-  // 状態統合
   x = (weight_gyro * z_gyro + weight_wheel * z_wheel) /
       (weight_gyro + weight_wheel);
-
-  // 共分散統合
   P = (P * R2) / (R + R2);
   P2 = (P2 * R) / (R + R2);
 }
 
+__attribute__((section(".time_critical.ego_estimator")))
 float KalmanFilter::get_state() {
-  return x; //
+  return x;
 }
 
 void KalmanFilter::reset(float reset_val) {
@@ -52,5 +49,5 @@ void KalmanFilter::reset(float reset_val) {
 }
 
 void KalmanFilter::offset(float offset) {
-  x = x + offset; //
+  x = x + offset;
 }

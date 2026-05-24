@@ -139,7 +139,7 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
   log_cap_ = max_entries;
   log_vec_.reserve(max_entries); // PSRAM に一括確保 (以降 realloc なし)
 
-  constexpr size_t send_buf_bytes = 480 * SEND_BATCH;
+  constexpr size_t send_buf_bytes = 504 * SEND_BATCH;  // 480 (ls1-10) + 24 (ls11)
   send_buf_ = static_cast<uint8_t *>(psram_heap::alloc(send_buf_bytes));
   if (!send_buf_) panic("PSRAM OOM: send_buf");
 
@@ -241,6 +241,12 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
   ld.sen_calc_time2 = sr.calc_time2;
   ld.pln_calc_time = tv.calc_time;
   ld.pln_time_diff = tv.calc_time_diff;
+  ld.pln_t_ego      = tv.pln_t_ego;
+  ld.pln_t_sensor   = tv.pln_t_sensor;
+  ld.pln_t_trj      = tv.pln_t_trj;
+  ld.pln_t_kanayama = tv.pln_t_kanayama;
+  ld.pln_t_copy     = tv.pln_t_copy;
+  ld.pln_t_ctl      = tv.pln_t_ctl;
 
   ld.pos_x = floatToHalf(sr.ego.pos_x);
   ld.pos_y = floatToHalf(sr.ego.pos_y);
@@ -337,12 +343,14 @@ void LoggingTask::dump_csv() const {
   LogStruct8 ls8{};
   LogStruct9 ls9{};
   LogStruct10 ls10{};
+  LogStruct11 ls11{};
 
   const int size = sizeof(LogStruct1) + sizeof(LogStruct2) +
                    sizeof(LogStruct3) + sizeof(LogStruct4) +
                    sizeof(LogStruct5) + sizeof(LogStruct6) +
                    sizeof(LogStruct7) + sizeof(LogStruct8) +
-                   sizeof(LogStruct9) + sizeof(LogStruct10);
+                   sizeof(LogStruct9) + sizeof(LogStruct10) +
+                   sizeof(LogStruct11);
 
   printf("ready___:%d\n", size);
   fflush(stdout);
@@ -478,6 +486,13 @@ void LoggingTask::dump_csv() const {
   printf("img_ang_sum:float:%d\n", (int)sizeof(ls10.img_ang_sum));
   printf("duty_roll_before:float:%d\n", (int)sizeof(ls10.duty_roll_before));
   printf("reserve5:int:%d\n", (int)sizeof(ls10.reserve5));
+  // LogStruct11
+  printf("pln_t_ego:int:%d\n",      (int)sizeof(ls11.pln_t_ego));
+  printf("pln_t_sensor:int:%d\n",   (int)sizeof(ls11.pln_t_sensor));
+  printf("pln_t_trj:int:%d\n",      (int)sizeof(ls11.pln_t_trj));
+  printf("pln_t_kanayama:int:%d\n", (int)sizeof(ls11.pln_t_kanayama));
+  printf("pln_t_copy:int:%d\n",     (int)sizeof(ls11.pln_t_copy));
+  printf("pln_t_ctl:int:%d\n",      (int)sizeof(ls11.pln_t_ctl));
 
   fflush(stdout);
   sleep_ms(50);
@@ -656,6 +671,13 @@ void LoggingTask::dump_csv() const {
     ls10.img_ang_sum = halfToFloat(e.img_ang_sum) * 180.0f / m_PI;
     ls10.duty_roll_before = halfToFloat(e.duty_roll_before);
     ls10.reserve5 = 0;
+    // --- ls11 ---
+    ls11.pln_t_ego      = e.pln_t_ego;
+    ls11.pln_t_sensor   = e.pln_t_sensor;
+    ls11.pln_t_trj      = e.pln_t_trj;
+    ls11.pln_t_kanayama = e.pln_t_kanayama;
+    ls11.pln_t_copy     = e.pln_t_copy;
+    ls11.pln_t_ctl      = e.pln_t_ctl;
 
     size_t off = batch_off;
     memcpy(send_buf + off, &ls1, sizeof(ls1));
@@ -677,6 +699,8 @@ void LoggingTask::dump_csv() const {
     memcpy(send_buf + off, &ls9, sizeof(ls9));
     off += sizeof(ls9);
     memcpy(send_buf + off, &ls10, sizeof(ls10));
+    off += sizeof(ls10);
+    memcpy(send_buf + off, &ls11, sizeof(ls11));
 
     batch_off += size;
     batch_cnt++;
@@ -719,6 +743,8 @@ void LoggingTask::dump_csv() const {
     memcpy(send_buf + off, &ls9, sizeof(ls9));
     off += sizeof(ls9);
     memcpy(send_buf + off, &ls10, sizeof(ls10));
+    off += sizeof(ls10);
+    memcpy(send_buf + off, &ls11, sizeof(ls11));
     fwrite(send_buf, 1, size, stdout);
     if (batch_off > 0) {
       // fwrite(send_buf, 1, batch_off, stdout);
@@ -756,6 +782,7 @@ void LoggingTask::dump_csv_text() const {
          "sen_l45,sen_r45,sen_l45_2,sen_r45_2,sen_l45_3,sen_r45_3,"
          "motion_type,timestamp,"
          "sen_calc_time,sen_calc_time2,pln_calc_time,pln_time_diff,"
+         "pln_t_ego,pln_t_sensor,pln_t_trj,pln_t_kanayama,pln_t_copy,pln_t_ctl,"
          "ff_front,ff_roll,ff_rpm_r,ff_rpm_l,"
          "pos_x,pos_y,odm_x,odm_y,odm_theta,kim_x,kim_y,kim_theta,"
          "knym_v,knym_w,ang_kf_sum,img_ang_sum\n");
@@ -773,6 +800,7 @@ void LoggingTask::dump_csv_text() const {
         "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
         "%u,%d,"
         "%d,%d,%d,%d,"
+        "%d,%d,%d,%d,%d,%d,"
         "%.3f,%.3f,%.3f,%.3f,"
         "%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.4f,"
         "%.3f,%.3f,%.4f,%.4f\n",
@@ -791,6 +819,8 @@ void LoggingTask::dump_csv_text() const {
         halfToFloat(e.sen_log_l45_3), halfToFloat(e.sen_log_r45_3),
         (unsigned)e.motion_type, (int)e.motion_timestamp, (int)e.sen_calc_time,
         (int)e.sen_calc_time2, (int)e.pln_calc_time, (int)e.pln_time_diff,
+        (int)e.pln_t_ego, (int)e.pln_t_sensor, (int)e.pln_t_trj,
+        (int)e.pln_t_kanayama, (int)e.pln_t_copy, (int)e.pln_t_ctl,
         halfToFloat(e.ff_duty_front), halfToFloat(e.ff_duty_roll),
         halfToFloat(e.ff_duty_rpm_r), halfToFloat(e.ff_duty_rpm_l),
         halfToFloat(e.pos_x), halfToFloat(e.pos_y), halfToFloat(e.odm_x),

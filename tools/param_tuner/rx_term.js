@@ -182,15 +182,16 @@ let LOG_STRUCT_SIZE = 12; // 12 bytes per record
 
 const switchToBinaryMode = (obj) => {
   let last_ang_sum = 0;
-  const dataSize = 480 * 500;
   const dataSize2 = obj.data_struct.reduce((prev, cur) => {
     return prev + cur.size;
   }, 0);
+  const RECORDS_PER_CHUNK = 500;
+  const dataSize = dataSize2 * RECORDS_PER_CHUNK;  // レコードサイズに合わせて動的計算
   const recordByteSize = dataSize2;
-  const recordNum = dataSize / recordByteSize;
+  const recordNum = RECORDS_PER_CHUNK;
   console.log('size1: ', dataSize, 'bytes');
   console.log('size2: ', dataSize2, 'bytes');
-  console.log('header count:', obj.data_struct.length, '(expected: 120)');
+  console.log('header count:', obj.data_struct.length);
 
   LOG_STRUCT_SIZE = dataSize2 / (4 * 12); // 4 * 12 bytes per struct
 

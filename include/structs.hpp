@@ -921,6 +921,12 @@ typedef struct {
   volatile int16_t calc_time;
   volatile int16_t calc_time2;
   volatile int16_t calc_time_diff;
+  volatile int16_t pln_t_ego;      // ego.update() 終了時点の累積 [us]
+  volatile int16_t pln_t_sensor;   // sensor_.calc_dist() 終了
+  volatile int16_t pln_t_trj;      // trj_.generate() 終了 (first_req 時のみ更新)
+  volatile int16_t pln_t_kanayama; // trj_.calc_kanayama() 終了
+  volatile int16_t pln_t_copy;     // trj_.copy_tgt() 終了
+  volatile int16_t pln_t_ctl;      // ctl_.calc() 終了 (≈ total)
   volatile global_ego_pos_t global_pos;
   volatile int32_t motion_mode;
   MotionType motion_type;
@@ -1293,6 +1299,13 @@ typedef struct {
   real16_T img_ang_sum;
   real16_T duty_roll;
   real16_T duty_roll_before;
+
+  int16_t pln_t_ego;
+  int16_t pln_t_sensor;
+  int16_t pln_t_trj;
+  int16_t pln_t_kanayama;
+  int16_t pln_t_copy;
+  int16_t pln_t_ctl;
 } log_data_t2;
 
 typedef struct {
@@ -1503,5 +1516,14 @@ typedef struct {
   int reserve5 = 121;
 
 } LogStruct10;
+
+typedef struct {
+  int pln_t_ego      = 122;
+  int pln_t_sensor   = 123;
+  int pln_t_trj      = 124;
+  int pln_t_kanayama = 125;
+  int pln_t_copy     = 126;
+  int pln_t_ctl      = 127;
+} LogStruct11;
 
 #endif

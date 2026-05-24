@@ -360,6 +360,10 @@ void MainTask::dump1() {
 
     printf("planning_time: %d\t%d\n", planning_->tgt_val->calc_time_diff,
            planning_->tgt_val->calc_time);
+    printf("planning_breakdown[us]: ego=%d sensor=%d trj=%d knym=%d copy=%d ctl=%d\n",
+           planning_->tgt_val->pln_t_ego, planning_->tgt_val->pln_t_sensor,
+           planning_->tgt_val->pln_t_trj, planning_->tgt_val->pln_t_kanayama,
+           planning_->tgt_val->pln_t_copy, planning_->tgt_val->pln_t_ctl);
     printf("sensing_time: %d\t%d\n", se->calc_time, se->calc_time2);
     printf("sensing_breakdown[us]: spi=%d amb=%d r90=%d r45=%d l45=%d l90=%d "
            "total=%d\n",
