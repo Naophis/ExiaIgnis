@@ -23,6 +23,7 @@ KalmanFilterMatrix::KalmanFilterMatrix() {
   R = {{{0.1, 0.0, 0.0}, {0.0, 0.1, 0.0}, {0.0, 0.0, 0.1}}};
 }
 
+__attribute__((section(".time_critical.ego_estimator")))
 void KalmanFilterMatrix::predict(float v, float w, float dt) {
   // 状態遷移モデル更新
   float theta = x[2];
@@ -63,6 +64,7 @@ void KalmanFilterMatrix::reset_cov(float init_cov, float p_noise,
   // 観測ノイズ共分散行列
   R = {{{m_noise, 0.0, 0.0}, {0.0, m_noise, 0.0}, {0.0, 0.0, m_noise}}};
 }
+__attribute__((section(".time_critical.ego_estimator")))
 void KalmanFilterMatrix::update(const std::array<float, 3> &z) {
   // カルマンゲイン計算
   auto HP = matrixMultiply(H, P);
