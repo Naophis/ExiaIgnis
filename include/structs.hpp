@@ -273,6 +273,16 @@ typedef struct {
   sen_dist_log_t sen_dist_log;
   int16_t calc_time;
   int16_t calc_time2;
+  int16_t t_spi;     // sense_start からの累積 [us]: read_spi_sensors 終了
+  int16_t t_ambient; // ambient ADC 終了
+  int16_t t_r90;     // R90 シーケンス終了
+  int16_t t_r45;     // R45 シーケンス終了
+  int16_t t_l45;     // L45 シーケンス終了
+  int16_t t_l90;     // L90 終了 (diff 前)
+  int16_t t_gyro;    // read_spi_sensors 先頭からの累積: gyro 終了
+  int16_t t_encr;    // enc_r 終了
+  int16_t t_encl;    // enc_l 終了
+  int16_t t_bat;     // battery + calc_vel 終了 (≈SPI総計)
   int64_t sensing_timestamp;
   float ang_kf_sum = 0;
   float img_ang_sum = 0;

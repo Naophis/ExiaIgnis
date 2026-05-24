@@ -2,7 +2,7 @@
 #include "define.hpp" // M_PWM_L1/L2/R1/R2, SUCTION_PWM, MOTOR_PWM_FREQ_HZ
 #include "hardware/irq.h"
 #include "hardware/sync.h"  // __dmb
-#include "hardware/timer.h" // timer1_hw, TIMER1_IRQ_0
+#include "hardware/timer.h" // timer_hw, TIMER0_IRQ_0
 #include "logging/logging_task.hpp"
 #include "pico/stdlib.h"
 #include "sensing_task.hpp"
@@ -49,16 +49,16 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
 }
 
 // ============================================================
-// TIMER1 IRQ 登録 (Core1 エントリから呼ぶ)
+// TIMER0 alarm 0 IRQ 登録 (Core1 エントリから呼ぶ)
 // ============================================================
 void PlanningTask::start_irq() {
-  irq_set_exclusive_handler(TIMER1_IRQ_0, timer_irq_handler);
-  irq_set_priority(TIMER1_IRQ_0, PICO_HIGHEST_IRQ_PRIORITY);
-  irq_set_enabled(TIMER1_IRQ_0, true);
-  hw_set_bits(&timer1_hw->inte, 1u << 0);
+  irq_set_exclusive_handler(TIMER0_IRQ_0, timer_irq_handler);
+  irq_set_priority(TIMER0_IRQ_0, PICO_HIGHEST_IRQ_PRIORITY);
+  irq_set_enabled(TIMER0_IRQ_0, true);
+  hw_set_bits(&timer_hw->inte, 1u << 0);
 
-  next_alarm_ = timer1_hw->timelr + interval_us_;
-  timer1_hw->alarm[0] = next_alarm_;
+  next_alarm_ = timer_hw->timerawl + interval_us_;
+  timer_hw->alarm[0] = next_alarm_;
 }
 
 void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
@@ -69,11 +69,11 @@ void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
 }
 
 // ============================================================
-// TIMER1 alarm 0 IRQ ハンドラ (Core0)
+// TIMER0 alarm 0 IRQ ハンドラ (Core1)
 // ============================================================
 __attribute__((noinline, section(".time_critical.planning_tick")))
 void PlanningTask::timer_irq_handler() {
-  timer1_hw->intr = 1u << 0;
+  timer_hw->intr = 1u << 0;
 
   auto *self = s_instance.get();
 
@@ -81,11 +81,11 @@ void PlanningTask::timer_irq_handler() {
   // flash write 等で Core1 が長時間停止した場合にリセット (sensing_task と同様)
   self->next_alarm_ += self->interval_us_;
   {
-    uint32_t now32 = timer1_hw->timelr;
+    uint32_t now32 = timer_hw->timerawl;
     if ((int32_t)(now32 - self->next_alarm_) > (int32_t)self->interval_us_)
       self->next_alarm_ = now32 + self->interval_us_;
   }
-  timer1_hw->alarm[0] = self->next_alarm_;
+  timer_hw->alarm[0] = self->next_alarm_;
 
   uint64_t now = time_us_64();
   uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;

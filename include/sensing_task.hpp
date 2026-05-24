@@ -126,8 +126,7 @@ private:
     int64_t enc_l_timestamp_old = 0;
     int64_t enc_l_timestamp_now = 0;
 
-    static void timer_a_irq_handler();  // alarm 2: 周期タイマー
-    static void timer_b_irq_handler();  // alarm 1: センサー読み取りシーケンス
+    static void timer_b_irq_handler();  // alarm 1: 1kHz 定周期 + センサー読み取り
     void calc_vel(float gyro_dt, float enc_l_dt, float enc_r_dt);
 
     uint32_t led_settle_us_ = 18;    // LED 点灯後の安定待ち時間

@@ -357,6 +357,19 @@ void MainTask::dump1() {
     printf("planning_time: %d\t%d\n", planning_->tgt_val->calc_time_diff,
            planning_->tgt_val->calc_time);
     printf("sensing_time: %d\t%d\n", se->calc_time, se->calc_time2);
+    printf("sensing_breakdown[us]: spi=%d amb=%d r90=%d r45=%d l45=%d l90=%d total=%d\n",
+           se->t_spi,
+           se->t_ambient,
+           se->t_r90,
+           se->t_r45,
+           se->t_l45,
+           se->t_l90,
+           se->calc_time2);
+    printf("spi_breakdown[us]: gyro=%d encr=%d encl=%d bat+calc=%d\n",
+           se->t_gyro,
+           se->t_encr,
+           se->t_encl,
+           se->t_bat);
 
     if (ui_.button_state()) {
       planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;

@@ -72,19 +72,34 @@ std::shared_ptr<sensing_result_entity_t> SensingTask::get_sensing_entity() {
 // alarm_pool を介さないため dispatch overhead なし (~12 cycle = 0.08us)
 // ============================================================
 
-// alarm 1: センサー読み取りシーケンス (one-shot)
+// alarm 1: 1kHz 定周期 + センサー読み取りシーケンス
 __attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::timer_b_irq_handler() {
   timer_hw->intr = 1u << 1;
 
   auto *self = s_instance.get();
+
+  // 次回アラームを絶対時刻で設定 (ドリフトなし)
+  self->next_alarm_a_ += self->interval_us_;
+  {
+    uint32_t now32 = (uint32_t)time_us_64();
+    if ((int32_t)(now32 - self->next_alarm_a_) > (int32_t)self->interval_us_)
+      self->next_alarm_a_ = now32 + self->interval_us_;
+  }
+  timer_hw->alarm[1] = self->next_alarm_a_;
+
   const auto se = self->get_sensing_entity();
   auto start_time_z = self->start_time_z;
   const uint64_t sense_start = time_us_64();
   se->calc_time = sense_start - start_time_z;
   self->start_time_z = sense_start;
+  self->data.dt_us = self->prev_timestamp_
+                         ? (uint32_t)(sense_start - self->prev_timestamp_)
+                         : 0;
+  self->prev_timestamp_ = sense_start;
 
   self->read_spi_sensors();
+  se->t_spi = (int16_t)(time_us_64() - sense_start);
 
   // 1. 全LED消灯状態で ambient 読み取り
   adc_select_input(0);
@@ -95,6 +110,7 @@ void SensingTask::timer_b_irq_handler() {
   se->led_sen_before.left45.raw = adc_read();
   adc_select_input(3);
   se->led_sen_before.left90.raw = adc_read();
+  se->t_ambient = (int16_t)(time_us_64() - sense_start);
 
   // 2. 各LEDパターンを順次点灯して対応チャンネルを読み取り
 
@@ -106,6 +122,7 @@ void SensingTask::timer_b_irq_handler() {
   adc_select_input(0);
   se->led_sen_after.right90.raw = adc_read();
   gpio_put(R90_LED_PIN, 0);
+  se->t_r90 = (int16_t)(time_us_64() - sense_start);
 
   // R45 シーケンス: LED1 点灯中に LED2 を追加し、LED1 を消してから LED2
   // 単独を読む
@@ -120,6 +137,7 @@ void SensingTask::timer_b_irq_handler() {
   busy_wait_us_32(self->led_settle_us_);
   se->led_sen_after.right45_3.raw = adc_read(); // LED2 single
   gpio_put(R45_LED_PIN2, 0);                    // LED2 OFF
+  se->t_r45 = (int16_t)(time_us_64() - sense_start);
 
   // L45 シーケンス: 同様
   adc_select_input(2);
@@ -133,6 +151,7 @@ void SensingTask::timer_b_irq_handler() {
   busy_wait_us_32(self->led_settle_us_);
   se->led_sen_after.left45_3.raw = adc_read(); // LED2 single
   gpio_put(L45_LED_PIN2, 0);                   // LED2 OFF
+  se->t_l45 = (int16_t)(time_us_64() - sense_start);
 
   // L90 (single)
   gpio_put(L90_LED_PIN, 1);
@@ -140,6 +159,7 @@ void SensingTask::timer_b_irq_handler() {
   adc_select_input(3);
   se->led_sen_after.left90.raw = adc_read();
   gpio_put(L90_LED_PIN, 0);
+  se->t_l90 = (int16_t)(time_us_64() - sense_start);
 
   // 3. diff 計算 (負になる場合は 0 にクランプ)
   // auto dc = [](uint16_t l, uint16_t d) -> uint16_t {
@@ -179,53 +199,23 @@ void SensingTask::timer_b_irq_handler() {
   self->data_ready = true;
 }
 
-// alarm 2: 1000us 周期 (1kHz)
-__attribute__((noinline, section(".time_critical.sensing_irq")))
-void SensingTask::timer_a_irq_handler() {
-  timer_hw->intr = 1u << 2;
-
-  auto *self = s_instance.get();
-
-  // 次回アラームをすぐに設定 (絶対時刻 → ドリフトなし)
-  // flash write 等で Core1 が長時間停止した場合、next_alarm が過去値になると
-  // RP2350 タイマーの等値比較では
-  // ~71分後まで発火しない。1周期以上遅れたらリセット。
-  self->next_alarm_a_ += self->interval_us_;
-  {
-    uint32_t now32 = (uint32_t)time_us_64();
-    if ((int32_t)(now32 - self->next_alarm_a_) > (int32_t)self->interval_us_)
-      self->next_alarm_a_ = now32 + self->interval_us_;
-  }
-  timer_hw->alarm[2] = self->next_alarm_a_;
-
-  // アラーム鳴動直後の時刻を記録
-  uint64_t now = time_us_64();
-  self->data.dt_us =
-      self->prev_timestamp_ ? (uint32_t)(now - self->prev_timestamp_) : 0;
-  self->prev_timestamp_ = now;
-
-  // alarm 1 でセンサー読み取りシーケンスをスケジュール
-  timer_hw->alarm[1] = (uint32_t)now + 1;
-}
-
 // ============================================================
 // TIMER0 IRQ 登録 + タイマー起動 (ブロックしない)
 // 呼び出したコアで IRQ が動作する。Core0 から呼ぶこと。
 // ============================================================
 void SensingTask::start_irq() {
   irq_set_exclusive_handler(TIMER0_IRQ_1, timer_b_irq_handler);
-  irq_set_exclusive_handler(TIMER0_IRQ_2, timer_a_irq_handler);
 
-  irq_set_priority(TIMER0_IRQ_1, PICO_HIGHEST_IRQ_PRIORITY);
-  irq_set_priority(TIMER0_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
+  // timer_b (センサー読み取り本体) は planning (IRQ_0, 0x00) より
+  // 低優先度にして planning がプリエンプトできるようにする。
+  irq_set_priority(TIMER0_IRQ_1, PICO_HIGHEST_IRQ_PRIORITY + 0x40);
 
   irq_set_enabled(TIMER0_IRQ_1, true);
-  irq_set_enabled(TIMER0_IRQ_2, true);
 
-  hw_set_bits(&timer_hw->inte, (1u << 1) | (1u << 2));
+  hw_set_bits(&timer_hw->inte, 1u << 1);
 
   next_alarm_a_ = (uint32_t)time_us_64() + interval_us_;
-  timer_hw->alarm[2] = next_alarm_a_;
+  timer_hw->alarm[1] = next_alarm_a_;
 }
 
 // ============================================================
@@ -313,14 +303,19 @@ void SensingTask::read_spi_sensors() {
 
   // ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
 
+  const uint64_t spi_t0 = time_us_64();
+
   gyro_timestamp_now = time_us_64();
   auto gyro = self->gyro_.read_gyro_z();
+  se->t_gyro = (int16_t)(time_us_64() - spi_t0);
 
   enc_r_timestamp_now = time_us_64();
   auto enc_r = self->enc_r_.read_angle();
+  se->t_encr = (int16_t)(time_us_64() - spi_t0);
 
   enc_l_timestamp_now = time_us_64();
   auto enc_l = self->enc_l_.read_angle();
+  se->t_encl = (int16_t)(time_us_64() - spi_t0);
 
   float gyro_dt = (float)(gyro_timestamp_now - gyro_timestamp_old) / 1000000;
   float enc_r_dt = (float)(enc_r_timestamp_now - enc_r_timestamp_old) / 1000000;
@@ -388,6 +383,7 @@ void SensingTask::read_spi_sensors() {
 
   se->battery.raw = self->battery_.read();
   calc_vel(gyro_dt, enc_l_dt, enc_r_dt);
+  se->t_bat = (int16_t)(time_us_64() - spi_t0);
 }
 
 void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
