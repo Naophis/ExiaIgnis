@@ -167,10 +167,16 @@ target_link_libraries(ExiaIgnis
         sfe_psram
         )
 
-# Core1 stack lives in SCRATCH_X (4KB hard limit; SCRATCH_Y is Core0 stack).
-# Default 2KB overflows under deep IRQ chain. 4KB = SCRATCH_X limit, no collision.
-# target_compile_definitions is required — set() is not propagated to -D flags by the SDK.
-target_compile_definitions(ExiaIgnis PRIVATE PICO_CORE1_STACK_SIZE=0x1000)
+# Stack layout (see memmap_custom.ld):
+#   Core0: 8KB in SCRATCH (SCRATCH_X 4k + SCRATCH_Y 4k combined = 0x20080000-0x20082000).
+#          __StackTop = 0x20082000 (IDENTICAL to default SDK linker).
+#   Core1: 8KB in regular SRAM via multicore_launch_core1_with_stack() (src/main.cpp).
+#          PICO_CORE1_STACK_SIZE=0 so SCRATCH is entirely free for Core0.
+pico_set_linker_script(ExiaIgnis ${CMAKE_CURRENT_LIST_DIR}/memmap_custom.ld)
+target_compile_definitions(ExiaIgnis PRIVATE
+    PICO_CORE1_STACK_SIZE=0        # no SDK core1_stack[]; Core1 uses g_core1_stack (8KB in BSS)
+    PICO_STACK_SIZE=0x2000         # Core0 stack 8KB (spans SCRATCH_X+SCRATCH_Y in custom ld)
+)
 
 pico_add_extra_outputs(ExiaIgnis)
 

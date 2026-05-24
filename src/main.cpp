@@ -40,6 +40,10 @@ static void rt_core1_entry() {
     __wfi();
 }
 
+// Core1 用 8KB スタック (正規 SRAM 上)
+// SCRATCH_X は 4KB 固定のため multicore_launch_core1_with_stack() 経由で確保。
+static uint32_t g_core1_stack[0x2000 / sizeof(uint32_t)];
+
 // ============================================================
 // Core0 main: 初期化 → Core1 起動 → MainTask (printf/UI) を実行
 // ============================================================
@@ -97,7 +101,7 @@ int main() {
   printf("[boot] step7: multicore_launch_core1\n");
   s_rt_sensing = sensing.get();
   s_rt_planning = planning.get();
-  multicore_launch_core1(rt_core1_entry);
+  multicore_launch_core1_with_stack(rt_core1_entry, g_core1_stack, sizeof(g_core1_stack));
 
   printf("[boot] step8: MainTask start\n");
   MainTask::start();

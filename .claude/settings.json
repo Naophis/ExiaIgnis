@@ -49,7 +49,11 @@
       "Bash(arm-none-eabi-nm --size-sort /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
       "Bash(sort -k1 -rn)",
       "Bash(awk '$2 == \"T\" && strtonum\\(\"0x\"$1\\) >= strtonum\\(\"0x20000000\"\\) {print}')",
-      "Bash(awk '$2 == \"T\" && strtonum\\(\"0x\"$1\\) >= strtonum\\(\"0x20000000\"\\) && strtonum\\(\"0x\"$1\\) < strtonum\\(\"0x20040000\"\\) {print}')"
+      "Bash(awk '$2 == \"T\" && strtonum\\(\"0x\"$1\\) >= strtonum\\(\"0x20000000\"\\) && strtonum\\(\"0x\"$1\\) < strtonum\\(\"0x20040000\"\\) {print}')",
+      "Bash(awk '/img_v;/{start=NR} start && /} log_data_t2/{print NR; exit}' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
+      "Bash(awk 'NR>=1180 && NR<=1192' /home/naoto/Desktop/mouse/ExiaIgnis/include/structs.hpp)",
+      "Bash(awk 'NR<=200 && /float |auto |int |const /' /home/naoto/Desktop/mouse/ExiaIgnis/src/planning/control_law.cpp)",
+      "Bash(grep -v \"^< \\\\*\\\\|^< $\\\\|^<  \")"
     ]
   }
 }
