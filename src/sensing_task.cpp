@@ -78,7 +78,10 @@ void SensingTask::timer_b_irq_handler() {
 
   auto *self = s_instance.get();
   const auto se = self->get_sensing_entity();
+  auto start_time_z = self->start_time_z;
   const uint64_t sense_start = time_us_64();
+  se->calc_time = sense_start - start_time_z;
+  self->start_time_z = sense_start;
 
   self->read_spi_sensors();
 
@@ -168,34 +171,10 @@ void SensingTask::timer_b_irq_handler() {
                 se->led_sen.left45_3.raw = se->led_sen.left90.raw =
                     se->led_sen.front.raw = 0;
   }
-  // 4. ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
-  // self->data.gz_ts_z = self->data.gz_ts;
-  // self->data.gz_ts = time_us_64();
-  // self->data.gz = self->gyro_.read_gyro_z();
-  // se->gyro.raw = se->gyro.data = self->data.gz;
-  // self->data.gz_dt =
-  //     self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z) : 0;
-
-  // self->data.enc_r_ts_z = self->data.enc_r_ts;
-  // self->data.enc_r_ts = time_us_64();
-  // self->data.enc_r = se->encoder.right = self->enc_r_.read_angle();
-  // self->data.enc_r_dt =
-  //     self->data.enc_r_ts_z ? (self->data.enc_r_ts - self->data.enc_r_ts_z) :
-  //     0;
-  // // enc_r は mode3(CPOL=1) でジャイロと同一設定のため SCK
-  // 状態変化なし。restore
-  // // 不要。
-
-  // self->data.enc_l_ts_z = self->data.enc_l_ts;
-  // self->data.enc_l_ts = time_us_64();
-  // self->data.enc_l = se->encoder.left = self->enc_l_.read_angle();
-  // self->data.enc_l_dt =
-  //     self->data.enc_l_ts_z ? (self->data.enc_l_ts - self->data.enc_l_ts_z) :
-  //     0;
 
   // se->battery.raw = self->battery_.read();
   se->battery.data = self->param->battery_gain * 4 * se->battery.raw / 4096;
-  self->data.sense_duration_us = (uint32_t)(time_us_64() - sense_start);
+  se->calc_time2 = (uint32_t)(time_us_64() - sense_start);
   self->data_ready = true;
 }
 
@@ -328,12 +307,6 @@ void SensingTask::read_spi_sensors() {
   gyro_timestamp_old = gyro_timestamp_now;
   enc_r_timestamp_old = enc_r_timestamp_now;
   enc_l_timestamp_old = enc_l_timestamp_now;
-
-  // self->read_spi_sensors();
-
-  //   if (!enc_if.initialized) {
-  //     return;
-  //   }
 
   // ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
 

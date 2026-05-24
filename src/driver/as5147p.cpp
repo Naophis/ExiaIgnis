@@ -121,7 +121,8 @@ int32_t AS5147P::read_angle() {
         int32_t raw = read_reg(0x3FFF);
         uint16_t w = (uint16_t)(raw & 0x7FFF);
         w ^= w >> 8; w ^= w >> 4; w ^= w >> 2; w ^= w >> 1;
-        if ((w & 1u) == (uint16_t)((raw >> 15) & 1)) return raw & 0x3FFFu;
+        return raw & 0x3FFFu;
+        // if ((w & 1u) == (uint16_t)((raw >> 15) & 1)) return raw & 0x3FFFu;
     }
     return -1;
 }

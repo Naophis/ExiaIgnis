@@ -126,9 +126,6 @@ void MainTask::test_run() {
   ps.motion_type = MotionType::STRAIGHT;
   ps.dia_mode = false;
 
-  printf("v_max=%.1f v_end=%.1f dist=%.1f accl=%.1f decel=%.1f\n", ps.v_max,
-         ps.v_end, ps.dist, ps.accl, ps.decel);
-
   mp->go_straight(ps);
   ps.v_max = 20;
   ps.v_end = sys_.test.end_v;
@@ -141,6 +138,8 @@ void MainTask::test_run() {
   // vTaskDelay(50.0 / portTICK_RATE_MS);
   // sleep_ms(50);
   planning_->motor_disable();
+  lt_->stop();
+
   reset_tgt_data();
   reset_ego_data();
   req_error_reset();
@@ -150,9 +149,6 @@ void MainTask::test_run() {
   reset_ego_data();
   req_error_reset();
   mp->coin();
-  if (param_->test_log_enable > 0) {
-    lt_->stop();
-  }
   ui_.coin(120);
   planning_->set_search_mode(false);
   // 1回目: バイナリ dump (rx_term.js バイナリプロトコル)

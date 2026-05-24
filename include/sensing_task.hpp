@@ -135,6 +135,7 @@ private:
 
     uint32_t next_alarm_a_ = 0;
     uint64_t prev_timestamp_ = 0;
+    uint64_t start_time_z = 0;
 
     static std::shared_ptr<SensingTask> s_instance;
     std::shared_ptr<sensing_result_entity_t> sensing_result;

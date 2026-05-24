@@ -42,9 +42,9 @@ void ASM330LHH::setup() {
   sleep_ms(25);
   write_reg(ASM330_CTRL8_XL, 0x00); // XL LPF2 OFF
 
-  uint8_t ctrl2 = read_reg(ASM330LHH_CTRL2_G);
-  uint8_t ctrl3 = read_reg(ASM330LHH_CTRL3_C);
-  uint8_t ctrl4 = read_reg(ASM330LHH_CTRL4_C);
+  uint8_t ctrl2 = read_reg(ASM330_CTRL2_G);
+  uint8_t ctrl3 = read_reg(ASM330_CTRL3_C);
+  uint8_t ctrl4 = read_reg(ASM330_CTRL4_C);
   printf("ASM330LHH regs: CTRL2_G=0x%02X(%s) CTRL3_C=0x%02X CTRL4_C=0x%02X\n",
          ctrl2, ctrl2 == 0x98 ? "OK" : "NG", ctrl3, ctrl4);
 }

@@ -101,6 +101,9 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (dt_us == 0)
     return;
 
+  uint64_t start = time_us_64();
+  tgt_val->calc_time_diff = start - start_time_z;
+  start_time_z = start;
   // --- motion_tgt_val_t コマンド受け取り (send_command 経由) ---
   if (tgt_cmd_pending_) {
     __dmb(); // pending_tgt_ の書き込みが見えることを保証
@@ -151,6 +154,9 @@ void PlanningTask::tick(uint32_t dt_us) {
     ctl_.calc(tgt_val, sensing_result, param, motor_en, suction_en, search_mode,
               w_reset, last_tgt_angle, dt);
   }
+  uint64_t end = time_us_64();
+
+  tgt_val->calc_time = static_cast<int16_t>(end - start);
 
   // --- ログ記録 (LoggingTask が active な場合のみ実行) ---
   if (sensing_result && tgt_val) {

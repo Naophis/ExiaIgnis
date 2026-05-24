@@ -94,6 +94,7 @@ private:
   uint32_t interval_us_ = 1000;
   uint32_t next_alarm_  = 0;
   uint64_t prev_ts_     = 0;
+  uint64_t start_time_z = 0;
   semaphore_t tick_sem_;
 
   // ---- コマンドパイプライン ----
