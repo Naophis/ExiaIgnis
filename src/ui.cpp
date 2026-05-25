@@ -176,7 +176,7 @@ void UserInterface::motion_check() {
   if (tgt_val_ && pt_) {
     tgt_val_->nmr.motion_type = MotionType::READY;
     tgt_val_->nmr.timstamp++;
-    pt_->send_command(tgt_val_);
+    pt_->send_command(*tgt_val_);
   }
 
   sleep_ms(1);

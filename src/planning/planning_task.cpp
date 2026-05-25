@@ -1,7 +1,6 @@
 #include "planning/planning_task.hpp"
 #include "define.hpp" // M_PWM_L1/L2/R1/R2, SUCTION_PWM, MOTOR_PWM_FREQ_HZ
 #include "hardware/irq.h"
-#include "hardware/sync.h"  // __dmb
 #include "hardware/timer.h" // timer_hw, TIMER0_IRQ_0
 #include "logging/logging_task.hpp"
 #include "pico/stdlib.h"
@@ -64,11 +63,14 @@ void PlanningTask::start_irq() {
   timer_hw->alarm[0] = next_alarm_;
 }
 
-void PlanningTask::send_command(std::shared_ptr<motion_tgt_val_t> tgt) {
-  pending_tgt_ = tgt;
-  __dmb();
-  first_req = true;
-  tgt_cmd_pending_ = true;
+void PlanningTask::send_command(const motion_tgt_val_t &tgt) {
+  // double buffer: Core0 は write_cmd_idx_ 側に書き込み、store(release) で公開する。
+  // IRQ 内で shared_ptr や new/delete が一切発生しない。
+  PlanningCmd &buf = cmd_buf_[write_cmd_idx_];
+  buf.nmr    = tgt.nmr;
+  buf.pl_req = tgt.pl_req;
+  pending_cmd_idx_.store(write_cmd_idx_, std::memory_order_release);
+  write_cmd_idx_ ^= 1;
 }
 
 // ============================================================
@@ -111,13 +113,19 @@ void PlanningTask::tick(uint32_t dt_us) {
   // (tick() 内で再計測すると関数呼び出し分の可変遅延が加わるため)
   tgt_val->calc_time_diff = dt_us;
   const uint64_t start = time_us_64(); // exec time 計測用
-  // --- motion_tgt_val_t コマンド受け取り (send_command 経由) ---
-  if (tgt_cmd_pending_) {
-    __dmb(); // pending_tgt_ の書き込みが見えることを保証
-    active_tgt_ = pending_tgt_;
-    receive_req = active_tgt_.get();
-    tgt_cmd_pending_ = false;
-    cp_request();
+  // --- コマンド受け取り (double buffer, acquire ロード) ---
+  {
+    int idx = pending_cmd_idx_.load(std::memory_order_acquire);
+    if (idx >= 0) {
+      active_cmd_ = cmd_buf_[idx];
+      receive_req = &active_cmd_;
+      // 最新コマンドが来ていなければ -1 に戻す (CAS で上書き防止)
+      int expected = idx;
+      pending_cmd_idx_.compare_exchange_strong(expected, -1,
+                                               std::memory_order_relaxed);
+      first_req = true;
+      cp_request();
+    }
   }
 
   const float dt = param->dt;
@@ -211,7 +219,7 @@ float PlanningTask::adjust_b_to_target45(float data, float a) {
 
 void PlanningTask::pl_req_activate() {
   if (receive_req->pl_req.time_stamp != pid_req_timestamp) {
-    ctl_.pl_req_activate(*receive_req);
+    ctl_.pl_req_activate(receive_req->pl_req);
     pid_req_timestamp = receive_req->pl_req.time_stamp;
   }
 }
@@ -266,9 +274,6 @@ void PlanningTask::cp_request() {
 
   tgt_val->ego_in.state = 0;
   tgt_val->ego_in.pivot_state = 0;
-
-  tgt_val->dia_state.left_save = receive_req->dia_state.right_save = false;
-  tgt_val->dia_state.left_old = receive_req->dia_state.right_old = 0;
 
   tgt_val->dia_state.left_save = false;
   tgt_val->dia_state.right_save = false;

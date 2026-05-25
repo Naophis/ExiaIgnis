@@ -25,7 +25,7 @@ public:
             unsigned char w_reset, float last_tgt_angle, float dt);
 
   // ---- コマンドリクエスト処理 ----
-  void pl_req_activate(motion_tgt_val_t &receive_req);
+  void pl_req_activate(const planning_req_t &pl_req);
 
   // ---- 吸引セッター ----
   void set_suction_target(float duty, float duty_low) {

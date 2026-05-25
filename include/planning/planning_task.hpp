@@ -11,10 +11,18 @@
 #include "structs.hpp"
 #include "utils/kalman_filter.hpp"
 #include "utils/kalman_filter_matrix.hpp"
+#include <atomic>
 #include <memory>
 #include <stdint.h>
 
 class SensingTask;
+
+// Core0 → Core1 コマンド転送用の軽量構造体。
+// shared_ptr を排除し、double buffer + atomic index で受け渡す。
+struct PlanningCmd {
+  new_motion_req_t nmr;
+  planning_req_t   pl_req;
+};
 
 // 1kHz ハードウェアタイマー IRQ (TIMER1 alarm 0, Core1) で動作する
 // planning / control タスク。
@@ -29,7 +37,9 @@ public:
   void start_irq();
 
   // ---- Core0 → Core1 コマンド ----
-  void send_command(std::shared_ptr<motion_tgt_val_t> tgt);
+  // tgt の nmr / pl_req を double buffer へコピーして atomic index を publish する。
+  // IRQ 内で shared_ptr 操作が起きないため安全。
+  void send_command(const motion_tgt_val_t &tgt);
 
   // ---- tick 同期 (Core0 から呼ぶ) ----
   void wait_tick();
@@ -70,7 +80,7 @@ private:
   PlanningTask() = default;
 
   static std::shared_ptr<PlanningTask> s_instance;
-  bool  first_req = false;
+  bool first_req = false; // Core1 専用。初回コマンド受信後に true のまま。
 
   // ---- IRQ ハンドラ・内部処理 ----
   static void timer_irq_handler();
@@ -97,17 +107,20 @@ private:
   uint64_t start_time_z = 0;
   semaphore_t tick_sem_;
 
-  // ---- コマンドパイプライン ----
-  std::shared_ptr<motion_tgt_val_t> pending_tgt_;
-  volatile bool tgt_cmd_pending_  = false;
-  int32_t       last_nmr_timestamp_ = -1;
-  int           motion_req_timestamp = 0;
-  int           pid_req_timestamp    = 0;
+  // ---- コマンドパイプライン (double buffer) ----
+  // Core0: cmd_buf_[write_cmd_idx_] に書き込み → pending_cmd_idx_.store(release)
+  // Core1: pending_cmd_idx_.load(acquire) → active_cmd_ にコピー → CAS で -1 に戻す
+  PlanningCmd      cmd_buf_[2];                     // double buffer 実体
+  int              write_cmd_idx_ = 0;              // Core0 専用 (send_command 内のみ)
+  std::atomic<int> pending_cmd_idx_{-1};            // -1=なし, 0/1=受取可能バッファ index
+  int32_t          last_nmr_timestamp_ = -1;
+  int              motion_req_timestamp = 0;
+  int              pid_req_timestamp    = 0;
 
-  // ---- アクティブコマンド状態 ----
-  motion_tgt_val_t                *receive_req = nullptr;
-  std::shared_ptr<motion_tgt_val_t> active_tgt_;
-  sensor_ctrl_keep_dist_t           right_keep;
+  // ---- アクティブコマンド状態 (Core1 専用) ----
+  PlanningCmd      active_cmd_{};                   // IRQ 内でのみ読み書き
+  PlanningCmd     *receive_req = nullptr;           // &active_cmd_ を指す
+  sensor_ctrl_keep_dist_t right_keep;
   sensor_ctrl_keep_dist_t           left_keep;
   slip_t                            slip_param;
 };

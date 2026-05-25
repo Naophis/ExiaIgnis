@@ -1268,23 +1268,23 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
   motor_->apply(duty_l, duty_r, duty_suction_in);
 }
 
-void ControlLaw::pl_req_activate(motion_tgt_val_t &receive_req) {
-  if (receive_req.pl_req.error_gyro_reset == 1) {
+void ControlLaw::pl_req_activate(const planning_req_t &pl_req) {
+  if (pl_req.error_gyro_reset == 1) {
     ee->v.error_i = 0;
   }
-  if (receive_req.pl_req.error_vel_reset == 1) {
+  if (pl_req.error_vel_reset == 1) {
     ee->dist.error_i = 0;
   }
-  if (receive_req.pl_req.error_dist_reset == 1) {
+  if (pl_req.error_dist_reset == 1) {
     ee->w.error_i = 0;
     ee->w_kf.error_i = 0;
   }
-  if (receive_req.pl_req.error_ang_reset == 1) {
+  if (pl_req.error_ang_reset == 1) {
     ee->ang.error_i = 0;
     ee->ang.i_slow = 0;
     ee->ang.i_bias = 0;
   }
-  if (receive_req.pl_req.error_led_reset == 1) {
+  if (pl_req.error_led_reset == 1) {
     // ee->led.error_i = 0;
   }
   // if (tgt_val->pl_req.log_start == 1) {

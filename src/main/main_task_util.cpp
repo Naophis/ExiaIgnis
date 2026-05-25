@@ -345,7 +345,7 @@ void MainTask::req_error_reset() {
   tgt_val_->pl_req.error_ang_reset = 1;
   tgt_val_->pl_req.error_dist_reset = 1;
   tgt_val_->pl_req.time_stamp++;
-  planning_->send_command(tgt_val_);
+  planning_->send_command(*tgt_val_);
 }
 
 void MainTask::check_battery() {

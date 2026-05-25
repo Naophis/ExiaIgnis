@@ -107,7 +107,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   }
   tgt_val->nmr.timstamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
   printf("[mp][go_straight]: sent command\n");
   if (search_mode && adachi != nullptr) {
     adachi->update();
@@ -321,7 +321,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
           tgt_val->nmr.dist = 10;
           tgt_val->nmr.timstamp += 10;
 
-          pt->send_command(tgt_val);
+          pt->send_command(*tgt_val);
           // wait_tick();
 
           return MotionResult::ERROR;
@@ -349,7 +349,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
 
   tgt_val->nmr.timstamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
   wait_tick();
 
   tgt_val->nmr.v_max = 0;
@@ -375,7 +375,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   tgt_val->nmr.sct = SensorCtrlType::NONE;
   tgt_val->nmr.timstamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
   sleep_ms(10);
   const auto sr = sensing_result;
   int c = 0;
@@ -397,7 +397,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
         tgt_val->nmr.motion_type = MotionType::NONE;
         tgt_val->nmr.timstamp++;
 
-        pt->send_command(tgt_val);
+        pt->send_command(*tgt_val);
         wait_tick();
 
         tgt_val->nmr.v_max = 0;
@@ -424,7 +424,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
         tgt_val->nmr.timstamp++;
         c = 0;
 
-        pt->send_command(tgt_val);
+        pt->send_command(*tgt_val);
         sleep_ms(10);
       }
     }
@@ -441,7 +441,7 @@ void MotionPlanning::req_error_reset() {
   tgt_val->pl_req.error_dist_reset = 1;
   tgt_val->pl_req.time_stamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
 }
 MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
                                     next_motion_t &next_motion) {
@@ -794,7 +794,7 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
 
   tgt_val->nmr.ang = (td == TurnDirection::Left) ? sp.ref_ang : -sp.ref_ang;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
   // wait_tick();
   if (search_mode) {
     adachi->update();
@@ -955,7 +955,7 @@ void MotionPlanning::reset_tgt_data() {
   tgt_val->nmr.tgt_reset_req = true;
   pt->last_tgt_angle = 0;
   // TODO
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
   wait_tick();
   tgt_val->nmr.tgt_reset_req = false;
 }
@@ -991,7 +991,7 @@ void MotionPlanning::reset_ego_data() {
   tgt_val->nmr.motion_type = MotionType::NONE;
   tgt_val->nmr.timstamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
   wait_tick();
   tgt_val->nmr.ego_reset_req = false;
 
@@ -1234,7 +1234,7 @@ MotionResult MotionPlanning::front_ctrl(bool limit) {
   tgt_val->ego_in.sla_param.counter = 1;
   tgt_val->nmr.timstamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
 
   unsigned int cnt = 0;
   unsigned int max_cnt = 0;
@@ -1292,7 +1292,7 @@ void MotionPlanning::keep() {
   tgt_val->nmr.sct = SensorCtrlType::NONE;
   tgt_val->nmr.timstamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
 
   while (1) {
     wait_tick();
@@ -1907,7 +1907,7 @@ void MotionPlanning::system_identification(MotionType mt, float volt_l,
   tgt_val->nmr.sys_id.enable = true;
   tgt_val->nmr.timstamp++;
 
-  pt->send_command(tgt_val);
+  pt->send_command(*tgt_val);
 
   sleep_ms((uint32_t)time);
   tgt_val->nmr.sys_id.enable = false;
