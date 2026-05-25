@@ -318,7 +318,7 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.duty_roll_before = floatToHalf(ee->aw_log.duty_roll_before);
   }
 
-  self->log_vec_.emplace_back(ld);
+  self->log_vec_.emplace_back(std::move(ld));
   return true;
 }
 
