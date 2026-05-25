@@ -109,6 +109,9 @@ void MainTask::run() {
            total / 1024, (total - used) / 1024, used * 100 / total);
   }
 
+  // battery check
+  check_battery();
+
   // ─── ボタン待機ループ ────────────────────────────────────────────────────
   // ・"filename@json_content\n" 形式でファイルを受信・保存する
   // ・ファイル受信後は即座にパラメータを再ロードする
@@ -147,8 +150,7 @@ void MainTask::run() {
     load_params();
   printf("[main] starting.\n");
 
-  lt_->init(reinterpret_cast<void *>(0x11000000u),
-            8u * 1024u * 1024u,
+  lt_->init(reinterpret_cast<void *>(0x11000000u), 8u * 1024u * 1024u,
             static_cast<size_t>(param_->log_size));
 
   sleep_ms(25);

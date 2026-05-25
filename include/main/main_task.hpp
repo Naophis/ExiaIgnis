@@ -86,7 +86,7 @@ private:
   void reset_tgt_data();
   void reset_ego_data();
   void req_error_reset();
-
+  void check_battery();
 
   // ─── モード dispatch ──────────────────────────────────────────────────────
   void run_main_mode();
