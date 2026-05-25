@@ -168,10 +168,6 @@ void PlanningTask::tick(uint32_t dt_us) {
 
   tgt_val->calc_time = tgt_val->pln_t_ctl;
 
-  // --- ログ記録 (LoggingTask が active な場合のみ実行) ---
-  if (sensing_result && tgt_val) {
-    LoggingTask::append_from_irq(*sensing_result, *tgt_val);
-  }
 }
 
 std::shared_ptr<sensing_result_entity_t> PlanningTask::get_sensing_entity() {

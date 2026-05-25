@@ -5,6 +5,8 @@
 #include <cstddef>
 #include "sensing_task.hpp"
 #include "planning/planning_task.hpp"
+#include "define.hpp"
+#include "pico/time.h"
 
 
 // ============================================================
@@ -40,8 +42,8 @@ struct PsramAllocator {
 
 // ============================================================
 // LoggingTask
-// Core0 (MainTask) から start/stop/dump を呼び、
-// Core1 (planning IRQ) から append_from_irq() を呼ぶ。
+// Core0 タイマー IRQ (1kHz) が shared_ptr 経由でデータを読み、
+// PSRAM へ直接書き込む。Core1 は一切関与しない。
 // ============================================================
 class LoggingTask {
 public:
@@ -60,10 +62,6 @@ public:
     bool   is_logging() const { return active_; }
     size_t count()      const { return log_vec_.size(); }
 
-    // Core1 (planning IRQ) から呼ぶ — active_ が false ならほぼ no-op
-    static void append_from_irq(const sensing_result_entity_t& sr,
-                                 const motion_tgt_val_t& tv);
-
     // Core0 (MainTask) から stop() 後に呼ぶ
     void dump_csv()      const;  // USB CDC にバイナリ出力 (rx_term.js バイナリプロトコル)
     void dump_csv_text() const;  // USB CDC にテキスト CSV 出力 (rx_term.js テキストプロトコル)
@@ -78,6 +76,7 @@ public:
     void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
     void set_planning_task(std::shared_ptr<PlanningTask> &_pt);
     void set_error_entity(std::shared_ptr<pid_error_entity_t> &_ee);
+    void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tv) { tgt_val_ = _tv; }
 
 private:
     LoggingTask() = default;
@@ -90,6 +89,10 @@ private:
     size_t        log_cap_ = 0;
     uint8_t      *send_buf_ = nullptr;
 
+    // Core0 タイマー — 1kHz で PSRAM へ直接書き込む (Core1 非使用)
+    repeating_timer_t log_timer_{};
+    static bool log_timer_callback(repeating_timer_t *rt);
+
     using LogVec = std::vector<log_data_t2, PsramAllocator<log_data_t2>>;
     LogVec log_vec_;
     std::shared_ptr<sensing_result_entity_t> sensing_result;
@@ -97,7 +100,7 @@ private:
     std::shared_ptr<input_param_t> param;
     std::shared_ptr<PlanningTask> pt;
     std::shared_ptr<pid_error_entity_t> error_entity;
+    std::shared_ptr<motion_tgt_val_t> tgt_val_;
 
-
-static void cdc_write_all(const uint8_t *p, size_t len) ;
+    static void cdc_write_all(const uint8_t *p, size_t len);
 };

@@ -151,120 +151,120 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
 
 void LoggingTask::start() {
   log_vec_.clear(); // size=0 に戻す (capacity・PSRAM 確保は維持)
-  __dmb();
   active_ = true;
+  add_repeating_timer_us(-1000, log_timer_callback, nullptr, &log_timer_);
   printf("[LoggingTask] start\n");
 }
 
 void LoggingTask::stop() {
+  cancel_repeating_timer(&log_timer_);
   active_ = false;
-  __dmb(); // Core1 の最後の push_back が Core0 から見えるようにバリア
-  // RP2350 の XIP キャッシュは write-back のため、Core1 の PSRAM 書き込みが
-  // キャッシュに留まっている可能性がある。clean_all() で物理 PSRAM に flush
-  // する。
   xip_cache_clean_all();
   printf("[LoggingTask] stop: %zu entries\n", log_vec_.size());
 }
 
 // ============================================================
-// Core1 (planning IRQ) から呼ぶ高速パス
+// Core0 タイマー IRQ (1kHz) — active_ が true の間だけ PSRAM へ書き込む。
+// sensing_result / tgt_val_ は shared_ptr 経由で参照するためスレッド安全。
 // ============================================================
-void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
-                                  const motion_tgt_val_t &tv) {
+bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   auto *self = s_instance.get();
   if (!self || !self->active_)
-    return;
+    return true;
 
-  if (tv.calc_time_diff > 3000)
-    return;
+  const auto *sr = self->sensing_result.get();
+  const auto *tv = self->tgt_val_.get();
+  if (!sr || !tv)
+    return true;
+
+  if (tv->calc_time_diff > 3000)
+    return true;
 
   if (self->log_vec_.size() >= self->log_cap_) {
     self->active_ = false;
-    return;
+    return true;
   }
 
-  // static: Core1 IRQ の単一スレッド呼び出しのため安全。
-  // スタックに 252 bytes 積まないことで IRQ スタック節約。
   static log_data_t2 ld{};
 
-  ld.img_v = floatToHalf(tv.ego_in.v);
-  ld.v_l = floatToHalf(sr.ego.v_l);
-  ld.v_c = floatToHalf(sr.ego.v_c);
-  ld.v_c2 = floatToHalf(sr.ego.v_kf);
-  ld.v_r = floatToHalf(sr.ego.v_r);
-  ld.v_r_enc = static_cast<int16_t>(sr.encoder.right);
-  ld.v_l_enc = static_cast<int16_t>(sr.encoder.left);
-  ld.accl = floatToHalf(tv.ego_in.accl / 1000);
-  ld.accl_x = floatToHalf(sr.ego.w_kf);
-  ld.dist_kf = floatToHalf(sr.ego.dist_kf);
+  ld.img_v = floatToHalf(tv->ego_in.v);
+  ld.v_l = floatToHalf(sr->ego.v_l);
+  ld.v_c = floatToHalf(sr->ego.v_c);
+  ld.v_c2 = floatToHalf(sr->ego.v_kf);
+  ld.v_r = floatToHalf(sr->ego.v_r);
+  ld.v_r_enc = static_cast<int16_t>(sr->encoder.right);
+  ld.v_l_enc = static_cast<int16_t>(sr->encoder.left);
+  ld.accl = floatToHalf(tv->ego_in.accl / 1000);
+  ld.accl_x = floatToHalf(sr->ego.w_kf);
+  ld.dist_kf = floatToHalf(sr->ego.dist_kf);
 
-  ld.img_w = floatToHalf(tv.ego_in.w);
-  ld.w_lp = floatToHalf(sr.ego.w_lp);
-  ld.alpha = floatToHalf(tv.ego_in.alpha);
+  ld.img_w = floatToHalf(tv->ego_in.w);
+  ld.w_lp = floatToHalf(sr->ego.w_lp);
+  ld.alpha = floatToHalf(tv->ego_in.alpha);
 
-  ld.img_dist = floatToHalf(tv.ego_in.img_dist);
-  ld.dist = floatToHalf(tv.ego_in.dist);
+  ld.img_dist = floatToHalf(tv->ego_in.img_dist);
+  ld.dist = floatToHalf(tv->ego_in.dist);
 
-  ld.img_ang = floatToHalf(tv.ego_in.img_ang * 180.0f / m_PI);
-  ld.ang = floatToHalf(tv.ego_in.ang * 180.0f / m_PI);
-  ld.ang_kf = floatToHalf(sr.ego.ang_kf * 180.0f / m_PI);
+  ld.img_ang = floatToHalf(tv->ego_in.img_ang * 180.0f / m_PI);
+  ld.ang = floatToHalf(tv->ego_in.ang * 180.0f / m_PI);
+  ld.ang_kf = floatToHalf(sr->ego.ang_kf * 180.0f / m_PI);
 
-  ld.left90_lp = static_cast<int16_t>(sr.led_sen.left90.raw);
-  ld.left45_lp = static_cast<int16_t>(sr.led_sen.left45.raw);
-  ld.right45_lp = static_cast<int16_t>(sr.led_sen.right45.raw);
-  ld.right90_lp = static_cast<int16_t>(sr.led_sen.right90.raw);
-  ld.left45_2_lp = static_cast<int16_t>(sr.led_sen.left45_2.raw);
-  ld.right45_2_lp = static_cast<int16_t>(sr.led_sen.right45_2.raw);
-  ld.left45_3_lp = static_cast<int16_t>(sr.led_sen.left45_3.raw);
-  ld.right45_3_lp = static_cast<int16_t>(sr.led_sen.right45_3.raw);
+  ld.left90_lp = static_cast<int16_t>(sr->led_sen.left90.raw);
+  ld.left45_lp = static_cast<int16_t>(sr->led_sen.left45.raw);
+  ld.right45_lp = static_cast<int16_t>(sr->led_sen.right45.raw);
+  ld.right90_lp = static_cast<int16_t>(sr->led_sen.right90.raw);
+  ld.left45_2_lp = static_cast<int16_t>(sr->led_sen.left45_2.raw);
+  ld.right45_2_lp = static_cast<int16_t>(sr->led_sen.right45_2.raw);
+  ld.left45_3_lp = static_cast<int16_t>(sr->led_sen.left45_3.raw);
+  ld.right45_3_lp = static_cast<int16_t>(sr->led_sen.right45_3.raw);
 
-  ld.battery_lp = floatToHalf(sr.ego.battery_raw);
+  ld.battery_lp = floatToHalf(sr->ego.battery_raw);
 
-  ld.duty_l = floatToHalf(sr.ego.duty.duty_l);
-  ld.duty_r = floatToHalf(sr.ego.duty.duty_r);
+  ld.duty_l = floatToHalf(sr->ego.duty.duty_l);
+  ld.duty_r = floatToHalf(sr->ego.duty.duty_r);
 
-  ld.ff_duty_front = floatToHalf(sr.ego.duty.ff_duty_front);
-  ld.ff_duty_roll = floatToHalf(sr.ego.duty.ff_duty_roll);
-  ld.ff_duty_rpm_r = floatToHalf(sr.ego.duty.ff_duty_rpm_r);
-  ld.ff_duty_rpm_l = floatToHalf(sr.ego.duty.ff_duty_rpm_l);
+  ld.ff_duty_front = floatToHalf(sr->ego.duty.ff_duty_front);
+  ld.ff_duty_roll = floatToHalf(sr->ego.duty.ff_duty_roll);
+  ld.ff_duty_rpm_r = floatToHalf(sr->ego.duty.ff_duty_rpm_r);
+  ld.ff_duty_rpm_l = floatToHalf(sr->ego.duty.ff_duty_rpm_l);
 
-  ld.motion_type = static_cast<uint8_t>(tv.motion_type);
-  ld.duty_sensor_ctrl = floatToHalf(sr.ego.duty.sen);
+  ld.motion_type = static_cast<uint8_t>(tv->motion_type);
+  ld.duty_sensor_ctrl = floatToHalf(sr->ego.duty.sen);
 
-  ld.sen_log_l45 = floatToHalf(sr.sen.l45.sensor_dist);
-  ld.sen_log_r45 = floatToHalf(sr.sen.r45.sensor_dist);
-  ld.sen_log_l45_2 = floatToHalf(sr.sen.l45_2.sensor_dist);
-  ld.sen_log_r45_2 = floatToHalf(sr.sen.r45_2.sensor_dist);
-  ld.sen_log_l45_3 = floatToHalf(sr.sen.l45_3.sensor_dist);
-  ld.sen_log_r45_3 = floatToHalf(sr.sen.r45_3.sensor_dist);
+  ld.sen_log_l45 = floatToHalf(sr->sen.l45.sensor_dist);
+  ld.sen_log_r45 = floatToHalf(sr->sen.r45.sensor_dist);
+  ld.sen_log_l45_2 = floatToHalf(sr->sen.l45_2.sensor_dist);
+  ld.sen_log_r45_2 = floatToHalf(sr->sen.r45_2.sensor_dist);
+  ld.sen_log_l45_3 = floatToHalf(sr->sen.l45_3.sensor_dist);
+  ld.sen_log_r45_3 = floatToHalf(sr->sen.r45_3.sensor_dist);
 
-  ld.motion_timestamp = static_cast<int16_t>(tv.nmr.timstamp);
-  ld.sen_calc_time = sr.calc_time;
-  ld.sen_calc_time2 = sr.calc_time2;
-  ld.pln_calc_time = tv.calc_time;
-  ld.pln_time_diff = tv.calc_time_diff;
-  ld.pln_t_ego      = tv.pln_t_ego;
-  ld.pln_t_sensor   = tv.pln_t_sensor;
-  ld.pln_t_trj      = tv.pln_t_trj;
-  ld.pln_t_kanayama = tv.pln_t_kanayama;
-  ld.pln_t_copy     = tv.pln_t_copy;
-  ld.pln_t_ctl      = tv.pln_t_ctl;
+  ld.motion_timestamp = static_cast<int16_t>(tv->nmr.timstamp);
+  ld.sen_calc_time = sr->calc_time;
+  ld.sen_calc_time2 = sr->calc_time2;
+  ld.pln_calc_time = tv->calc_time;
+  ld.pln_time_diff = tv->calc_time_diff;
+  ld.pln_t_ego      = tv->pln_t_ego;
+  ld.pln_t_sensor   = tv->pln_t_sensor;
+  ld.pln_t_trj      = tv->pln_t_trj;
+  ld.pln_t_kanayama = tv->pln_t_kanayama;
+  ld.pln_t_copy     = tv->pln_t_copy;
+  ld.pln_t_ctl      = tv->pln_t_ctl;
 
-  ld.pos_x = floatToHalf(sr.ego.pos_x);
-  ld.pos_y = floatToHalf(sr.ego.pos_y);
+  ld.pos_x = floatToHalf(sr->ego.pos_x);
+  ld.pos_y = floatToHalf(sr->ego.pos_y);
 
-  ld.knym_v = floatToHalf(sr.ego.knym_v);
-  ld.knym_w = floatToHalf(sr.ego.knym_w);
-  ld.odm_x = floatToHalf(sr.ego.odm_x);
-  ld.odm_y = floatToHalf(sr.ego.odm_y);
-  ld.odm_theta = floatToHalf(sr.ego.odm_theta);
-  ld.kim_x = floatToHalf(sr.ego.kim_x);
-  ld.kim_y = floatToHalf(sr.ego.kim_y);
-  ld.kim_theta = floatToHalf(sr.ego.kim_theta);
+  ld.knym_v = floatToHalf(sr->ego.knym_v);
+  ld.knym_w = floatToHalf(sr->ego.knym_w);
+  ld.odm_x = floatToHalf(sr->ego.odm_x);
+  ld.odm_y = floatToHalf(sr->ego.odm_y);
+  ld.odm_theta = floatToHalf(sr->ego.odm_theta);
+  ld.kim_x = floatToHalf(sr->ego.kim_x);
+  ld.kim_y = floatToHalf(sr->ego.kim_y);
+  ld.kim_theta = floatToHalf(sr->ego.kim_theta);
 
-  ld.duty_suction = floatToHalf(tv.duty_suction);
-  ld.ang_kf_sum = floatToHalf(sr.ang_kf_sum);
-  ld.img_ang_sum = floatToHalf(sr.img_ang_sum);
+  ld.duty_suction = floatToHalf(tv->duty_suction);
+  ld.ang_kf_sum = floatToHalf(sr->ang_kf_sum);
+  ld.img_ang_sum = floatToHalf(sr->img_ang_sum);
 
   const auto *ee = self->error_entity.get();
   if (ee) {
@@ -272,7 +272,7 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
     ld.m_pid_i = floatToHalf(ee->v_val.i);
     ld.m_pid_i2 = floatToHalf(ee->v_val.i2);
     ld.m_pid_d = floatToHalf(ee->v_val.d);
-    if (self->log_vec_.empty() || static_cast<int>(tv.motion_type) == 0 ||
+    if (self->log_vec_.empty() || static_cast<int>(tv->motion_type) == 0 ||
         (ee->v_val.i_val == 0)) {
       ld.m_pid_p_v = floatToHalf(0.0f);
     } else {
@@ -289,7 +289,7 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
     ld.g_pid_p_v = floatToHalf(ee->w_val.p_val);
     ld.g_pid_i_v = floatToHalf(ee->w_val.i_val);
     ld.g_pid_i2_v = floatToHalf(ee->w_val.i2_val);
-    if (self->log_vec_.empty() || static_cast<int>(tv.motion_type) == 0 ||
+    if (self->log_vec_.empty() || static_cast<int>(tv->motion_type) == 0 ||
         (ee->v_val.i_val == 0)) {
       ld.g_pid_d_v = floatToHalf(0.0f);
     } else {
@@ -318,7 +318,8 @@ void LoggingTask::append_from_irq(const sensing_result_entity_t &sr,
     ld.duty_roll_before = floatToHalf(ee->aw_log.duty_roll_before);
   }
 
-  self->log_vec_.emplace_back(std::move(ld));
+  self->log_vec_.emplace_back(ld);
+  return true;
 }
 
 // ============================================================
