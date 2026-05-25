@@ -139,11 +139,10 @@ void SensorProcessor::calc_dist() {
   se->ego.left90_dist_diff = se->ego.left90_dist - se->ego.left90_dist_old;
   se->ego.right90_dist_diff = se->ego.right90_dist - se->ego.right90_dist_old;
 
-  calc_dist_diff(tgt_val);
+  calc_dist_diff();
 }
 
-void SensorProcessor::calc_dist_diff(
-    std::shared_ptr<motion_tgt_val_t> tgt_val) {
+void SensorProcessor::calc_dist_diff() {
   // l45
   if (se->sen.l45.sensor_dist > se->ego.left45_dist ||
       se->sen.l45.sensor_dist == 0) {

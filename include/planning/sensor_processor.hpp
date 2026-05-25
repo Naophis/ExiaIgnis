@@ -35,6 +35,6 @@ private:
   std::shared_ptr<input_param_t>           param;
   std::shared_ptr<motion_tgt_val_t>       tgt_val;
 
-  void  calc_dist_diff(std::shared_ptr<motion_tgt_val_t> tgt_val);
+  void  calc_dist_diff();
   float calc_sensor_val(float data, float a, float b);
 };
