@@ -91,7 +91,7 @@ void SensingTask::timer_b_irq_handler() {
   }
   timer_hw->alarm[1] = self->next_alarm_a_;
 
-  const auto se = self->get_sensing_entity();
+  const auto &se = self->sensing_result;
   se->calc_time = (int16_t)(sense_start - self->start_time_z);
   self->start_time_z = sense_start;
   self->data.dt_us = self->prev_timestamp_
@@ -286,8 +286,7 @@ void SensingTask::init() {
 
 __attribute__((noinline, section(".time_critical.sensing_irq"))) void
 SensingTask::read_spi_sensors() {
-  auto *self = s_instance.get();
-  const auto se = self->get_sensing_entity();
+  const auto &se = sensing_result;
 
   const auto accl_l = (tgt_val->ego_in.v_l - vl_old) / dt;
   const auto accl_r = (tgt_val->ego_in.v_r - vr_old) / dt;
@@ -308,15 +307,15 @@ SensingTask::read_spi_sensors() {
   const uint64_t spi_t0 = time_us_64();
 
   gyro_timestamp_now = time_us_64();
-  auto gyro = self->gyro_.read_gyro_z();
+  auto gyro = gyro_.read_gyro_z();
   se->t_gyro = (int16_t)(time_us_64() - spi_t0);
 
   enc_r_timestamp_now = time_us_64();
-  auto enc_r = self->enc_r_.read_angle();
+  auto enc_r = enc_r_.read_angle();
   se->t_encr = (int16_t)(time_us_64() - spi_t0);
 
   enc_l_timestamp_now = time_us_64();
-  auto enc_l = self->enc_l_.read_angle();
+  auto enc_l = enc_l_.read_angle();
   se->t_encl = (int16_t)(time_us_64() - spi_t0);
 
   float gyro_dt = (float)(gyro_timestamp_now - gyro_timestamp_old) / 1000000;
@@ -395,13 +394,13 @@ SensingTask::read_spi_sensors() {
   }
 
   // DIAG: ADS7042衝突診断 - コメントアウトしてenc_lが安定するか確認
-  se->battery.raw = self->battery_.read();
+  se->battery.raw = battery_.read();
   calc_vel(gyro_dt, enc_l_dt, enc_r_dt);
   se->t_bat = (int16_t)(time_us_64() - spi_t0);
 }
 
 void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
-  const auto se = get_sensing_entity();
+  const auto &se = sensing_result;
   const float tire = param->tire;
 
   // se->ego.v_l = pt->kf_v_l.get_state();
