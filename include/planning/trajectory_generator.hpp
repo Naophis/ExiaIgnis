@@ -11,21 +11,15 @@
 // 1kHz IRQ tick 内で generate() → calc_kanayama() → copy_tgt() の順に呼ぶ。
 class TrajectoryGenerator {
 public:
-  void generate(std::shared_ptr<motion_tgt_val_t> tgt_val,
-                std::shared_ptr<input_param_t>    param,
-                float last_tgt_angle);
+  void init(std::shared_ptr<motion_tgt_val_t> tgt_val,
+            std::shared_ptr<input_param_t> param,
+            std::shared_ptr<sensing_result_entity_t> sensing_result);
+  void generate(float last_tgt_angle);
 
-  void calc_kanayama(std::shared_ptr<motion_tgt_val_t>        tgt_val,
-                     std::shared_ptr<sensing_result_entity_t> sensing_result,
-                     std::shared_ptr<input_param_t>           param,
-                     EgoEstimator   &ego,
-                     SensorProcessor &sensor,
+  void calc_kanayama(EgoEstimator &ego, SensorProcessor &sensor,
                      float last_tgt_angle);
 
-  void copy_tgt(std::shared_ptr<motion_tgt_val_t>        tgt_val,
-                std::shared_ptr<sensing_result_entity_t> sensing_result,
-                std::shared_ptr<input_param_t>           param,
-                float dt);
+  void copy_tgt(float dt);
 
   // tick() が直接書き込むため public
   t_ego mpc_next_ego{};
@@ -47,4 +41,8 @@ private:
   t_ego      mpc_next_ego_prev{};
   mpc_tgt_calcModelClass mpc_tgt_calc;
   std::vector<t_ego> trajectory_points;
+  
+  std::shared_ptr<sensing_result_entity_t> se;
+  std::shared_ptr<motion_tgt_val_t> tgt_val;
+  std::shared_ptr<input_param_t> param;
 };

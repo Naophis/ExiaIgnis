@@ -43,9 +43,10 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
   sem_init(&tick_sem_, 0, 1);
   motor_.init();
-  sensor_.init(sensing_result, param);
-  ctl_.init(&motor_, &sensor_, &trj_, &ego);
-  ego.init(sensing_result, param);
+  sensor_.init(sensing_result, param, tgt_val);
+  ctl_.init(&motor_, &sensor_, &trj_, &ego, tgt_val, sensing_result, param);
+  ego.init(sensing_result, param, tgt_val);
+  trj_.init(tgt_val, param, sensing_result);
 }
 
 // ============================================================
@@ -122,10 +123,10 @@ void PlanningTask::tick(uint32_t dt_us) {
   const float dt = param->dt;
 
   {
-    ego.update(tgt_val, motor_en);
+    ego.update(motor_en);
     tgt_val->pln_t_ego = (int16_t)(time_us_64() - start);
 
-    sensor_.calc_dist(tgt_val);
+    sensor_.calc_dist();
     tgt_val->pln_t_sensor = (int16_t)(time_us_64() - start);
 
     if (first_req) {
@@ -134,7 +135,7 @@ void PlanningTask::tick(uint32_t dt_us) {
       } else {
         tgt_val->tgt_in.enable_slip_decel = 0;
       }
-      trj_.generate(tgt_val, param, last_tgt_angle);
+      trj_.generate(last_tgt_angle);
       tgt_val->pln_t_trj = (int16_t)(time_us_64() - start);
     }
 
@@ -148,8 +149,7 @@ void PlanningTask::tick(uint32_t dt_us) {
         trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
       }
     }
-    trj_.calc_kanayama(tgt_val, sensing_result, param, ego, sensor_,
-                       last_tgt_angle);
+    trj_.calc_kanayama(ego, sensor_, last_tgt_angle);
     tgt_val->pln_t_kanayama = (int16_t)(time_us_64() - start);
 
     if (tgt_val->motion_type == MotionType::PIVOT ||
@@ -158,11 +158,10 @@ void PlanningTask::tick(uint32_t dt_us) {
       trj_.w_cmd = tgt_val->ego_in.w;
     }
 
-    trj_.copy_tgt(tgt_val, sensing_result, param, dt);
+    trj_.copy_tgt(dt);
     tgt_val->pln_t_copy = (int16_t)(time_us_64() - start);
 
-    ctl_.calc(tgt_val, sensing_result, param, motor_en, suction_en, search_mode,
-              w_reset, last_tgt_angle, dt);
+    ctl_.calc(motor_en, suction_en, search_mode, w_reset, last_tgt_angle, dt);
     tgt_val->pln_t_ctl = (int16_t)(time_us_64() - start);
   }
 

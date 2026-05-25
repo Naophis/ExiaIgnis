@@ -13,10 +13,11 @@ class SensorProcessor {
 public:
   // EgoEstimator::init() と同様に se/param を受け取りフィールドに保持する。
   void init(std::shared_ptr<sensing_result_entity_t> sensing_result,
-            std::shared_ptr<input_param_t>           param);
+            std::shared_ptr<input_param_t>           param,
+            std::shared_ptr<motion_tgt_val_t>       tgt_val);
 
   // センサー LP 値 → mm 距離に変換し se を更新する。tick 毎に呼ぶ。
-  void calc_dist(std::shared_ptr<motion_tgt_val_t> tgt_val);
+  void calc_dist();
 
   // 補間ユーティリティ (複数の呼び出し元から使用される)
   float interp1d(vector<float> &vx, vector<float> &vy, float x, bool extrapolate);
@@ -32,6 +33,7 @@ public:
 private:
   std::shared_ptr<sensing_result_entity_t> se;
   std::shared_ptr<input_param_t>           param;
+  std::shared_ptr<motion_tgt_val_t>       tgt_val;
 
   void  calc_dist_diff(std::shared_ptr<motion_tgt_val_t> tgt_val);
   float calc_sensor_val(float data, float a, float b);

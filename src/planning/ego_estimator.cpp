@@ -3,14 +3,15 @@
 #include <cmath>
 
 void EgoEstimator::init(std::shared_ptr<sensing_result_entity_t> sensing_result,
-                        std::shared_ptr<input_param_t> prm) {
+                        std::shared_ptr<input_param_t> prm,
+                        std::shared_ptr<motion_tgt_val_t> tgt_val) {
   se = sensing_result;
   param = prm;
+  this->tgt_val = tgt_val;
 }
 
-__attribute__((noinline, section(".time_critical.ego_estimator")))
-void EgoEstimator::update(std::shared_ptr<motion_tgt_val_t> tgt_val,
-                          bool motor_en) {
+__attribute__((noinline, section(".time_critical.ego_estimator"))) void
+EgoEstimator::update(bool motor_en) {
   const float dt = param->dt;
   tgt_val->ego_in.ff_duty_low_th = param->ff_front_dury;
   tgt_val->ego_in.ff_duty_low_v_th = param->ff_v_th;

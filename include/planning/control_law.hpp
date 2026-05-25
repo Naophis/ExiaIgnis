@@ -14,21 +14,15 @@
 class ControlLaw {
 public:
   // ---- ライフサイクル ----
-  void init(MotorActuator       *motor,
-            SensorProcessor     *sensor,
-            TrajectoryGenerator *trj,
-            EgoEstimator        *ego);
+  void init(MotorActuator *motor, SensorProcessor *sensor,
+            TrajectoryGenerator *trj, EgoEstimator *ego,
+            std::shared_ptr<motion_tgt_val_t> tgt_val,
+            std::shared_ptr<sensing_result_entity_t> sensing_result,
+            std::shared_ptr<input_param_t> param);
 
   // ---- メインエントリ (1kHz tick) ----
-  void calc(std::shared_ptr<motion_tgt_val_t>        tgt_val,
-            std::shared_ptr<sensing_result_entity_t> sensing_result,
-            std::shared_ptr<input_param_t>           param,
-            bool          motor_en,
-            bool          suction_en,
-            bool          search_mode,
-            unsigned char w_reset,
-            float         last_tgt_angle,
-            float         dt);
+  void calc(bool motor_en, bool suction_en, bool search_mode,
+            unsigned char w_reset, float last_tgt_angle, float dt);
 
   // ---- コマンドリクエスト処理 ----
   void pl_req_activate(motion_tgt_val_t &receive_req);

@@ -40,12 +40,14 @@ void MotionPlanning::set_logging_task(std::shared_ptr<LoggingTask> &_lt) {
 
 void MotionPlanning::wait_tick() {
   pt->wait_tick();
-  // sleep_us(10); // 1 tick 待つ前に少し待機しておく（これもレース回避のため）
+  // sleep_us(100); // 1 tick 待つ前に少し待機しておく（これもレース回避のため）
 }
 
+__attribute__((noinline, section(".motion.go_straight")))
 MotionResult MotionPlanning::go_straight(param_straight_t &p,
                                          std::shared_ptr<Adachi> &adachi,
                                          bool search_mode) {
+  printf("[mp]: go_straight\n");
   const auto se = get_sensing_entity();
   const static float ang32 = 32.0f / 180.0f * M_PI;
   const static float cos32 = std::cos(ang32);
@@ -106,7 +108,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   tgt_val->nmr.timstamp++;
 
   pt->send_command(tgt_val);
-
+  printf("[mp][go_straight]: sent command\n");
   if (search_mode && adachi != nullptr) {
     adachi->update();
   }

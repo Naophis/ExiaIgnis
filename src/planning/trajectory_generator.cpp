@@ -2,9 +2,15 @@
 #include <algorithm>
 #include <cmath>
 
-void TrajectoryGenerator::generate(std::shared_ptr<motion_tgt_val_t> tgt_val,
-                                    std::shared_ptr<input_param_t>    param,
-                                    float last_tgt_angle) {
+void TrajectoryGenerator::init(std::shared_ptr<motion_tgt_val_t> tgt_val,
+          std::shared_ptr<input_param_t> param,
+          std::shared_ptr<sensing_result_entity_t> sensing_result) {
+  this->tgt_val = tgt_val;
+  this->param = param;
+  this->se = sensing_result;
+}
+
+void TrajectoryGenerator::generate(float last_tgt_angle) {
   auto tmp = tgt_val->ego_in.img_ang;
   tgt_val->ego_in.img_ang += last_tgt_angle;
 
@@ -33,9 +39,6 @@ void TrajectoryGenerator::generate(std::shared_ptr<motion_tgt_val_t> tgt_val,
 }
 
 void TrajectoryGenerator::calc_kanayama(
-    std::shared_ptr<motion_tgt_val_t>        tgt_val,
-    std::shared_ptr<sensing_result_entity_t> sensing_result,
-    std::shared_ptr<input_param_t>           param,
     EgoEstimator    &ego,
     SensorProcessor &sensor,
     float last_tgt_angle) {
@@ -47,7 +50,6 @@ void TrajectoryGenerator::calc_kanayama(
       sensor.interp1d(trj_idx_v, trj_idx_val, tgt_val->ego_in.v, false);
 
   const int idx = std::min(param->trj_length - 1, idx_val);
-  const auto se = sensing_result;
 
   ego.odm.x     = trajectory_points[idx].ideal_px;
   ego.odm.y     = trajectory_points[idx].ideal_py;
@@ -81,38 +83,33 @@ void TrajectoryGenerator::calc_kanayama(
   const float ky      = param->kanayama.ky;
   const float k_theta = param->kanayama.k_theta;
 
-  sensing_result->ego.knym_v = vd * cos_e_theta + kx * ex;
-  sensing_result->ego.knym_w = wd + vd * (ky * ey + k_theta * sin_e_theta);
-  sensing_result->ego.odm_x     = ego.odm.x;
-  sensing_result->ego.odm_y     = ego.odm.y;
-  sensing_result->ego.odm_theta = ego.odm.theta;
-  sensing_result->ego.kim_x     = ego.kim.x;
-  sensing_result->ego.kim_y     = ego.kim.y;
-  sensing_result->ego.kim_theta = ego.kim.theta;
+  se->ego.knym_v = vd * cos_e_theta + kx * ex;
+  se->ego.knym_w = wd + vd * (ky * ey + k_theta * sin_e_theta);
+  se->ego.odm_x     = ego.odm.x;
+  se->ego.odm_y     = ego.odm.y;
+  se->ego.odm_theta = ego.odm.theta;
+  se->ego.kim_x     = ego.kim.x;
+  se->ego.kim_y     = ego.kim.y;
+  se->ego.kim_theta = ego.kim.theta;
 
   if (param->kanayama.enable > 0 &&
       (tgt_val->motion_type == MotionType::SLALOM ||
        tgt_val->motion_type == MotionType::SLA_BACK_STR)) {
-    v_cmd = sensing_result->ego.knym_v;
-    w_cmd = sensing_result->ego.knym_w;
+    v_cmd = se->ego.knym_v;
+    w_cmd = se->ego.knym_w;
   } else {
     v_cmd = tgt_val->ego_in.v;
     w_cmd = tgt_val->ego_in.w;
   }
   if (tgt_val->motion_type != MotionType::SLALOM ||
       tgt_val->motion_type == MotionType::SLA_BACK_STR) {
-    sensing_result->ego.knym_v = tgt_val->ego_in.v;
-    sensing_result->ego.knym_w = tgt_val->ego_in.w;
+    se->ego.knym_v = tgt_val->ego_in.v;
+    se->ego.knym_w = tgt_val->ego_in.w;
   }
 }
 
-void TrajectoryGenerator::copy_tgt(
-    std::shared_ptr<motion_tgt_val_t>        tgt_val,
-    std::shared_ptr<sensing_result_entity_t> sensing_result,
-    std::shared_ptr<input_param_t>           param,
-    float dt) {
+void TrajectoryGenerator::copy_tgt(float dt) {
 
-  const auto se = sensing_result;
   tgt_val->ego_in.accl            = mpc_next_ego.accl;
   tgt_val->ego_in.alpha           = mpc_next_ego.alpha;
   tgt_val->ego_in.pivot_state     = mpc_next_ego.pivot_state;
@@ -139,7 +136,7 @@ void TrajectoryGenerator::copy_tgt(
   tgt_val->ego_in.sla_param.state      = mpc_next_ego.sla_param.state;
   tgt_val->ego_in.sla_param.counter    = mpc_next_ego.sla_param.counter;
   tgt_val->ego_in.sla_param.state      = mpc_next_ego.sla_param.state;
-  sensing_result->img_ang_z            = tgt_val->ego_in.img_ang;
+  se->img_ang_z            = tgt_val->ego_in.img_ang;
   tgt_val->ego_in.img_ang              = mpc_next_ego.img_ang;
   tgt_val->ego_in.img_dist             = mpc_next_ego.img_dist;
 

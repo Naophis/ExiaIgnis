@@ -4,9 +4,11 @@
 
 void SensorProcessor::init(
     std::shared_ptr<sensing_result_entity_t> sensing_result,
-    std::shared_ptr<input_param_t> prm) {
+    std::shared_ptr<input_param_t> prm,
+    std::shared_ptr<motion_tgt_val_t> tgt_val) {
   se = sensing_result;
   param = prm;
+  this->tgt_val = tgt_val;
   log_table.clear();
   for (int i = 0; i < 4097; i++) {
     log_table.emplace_back(std::log(i));
@@ -14,7 +16,7 @@ void SensorProcessor::init(
 }
 
 __attribute__((noinline, section(".time_critical.sensor_processor")))
-void SensorProcessor::calc_dist(std::shared_ptr<motion_tgt_val_t> tgt_val) {
+void SensorProcessor::calc_dist() {
   // if (!(tgt_val->motion_type == MotionType::NONE ||
   //       tgt_val->motion_type == MotionType::PIVOT)) {
   if (true) {

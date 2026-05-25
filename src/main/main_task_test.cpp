@@ -102,15 +102,18 @@ void MainTask::test_run() {
                               sys_.test.suction_duty_burst_low);
     sleep_ms(500);
   }
-
-  reset_tgt_data();
-  reset_ego_data();
-  planning_->motor_enable();
-
-  req_error_reset();
   if (param_->test_log_enable > 0) {
     lt_->start();
   }
+  reset_tgt_data();
+  printf("reset tgt/ego\n");
+  reset_ego_data();
+  printf("reset_ego_data\n");
+  planning_->motor_enable();
+  printf("motor enabled\n");
+  req_error_reset();
+  printf("req_error_reset\n");
+
   planning_->set_search_mode(test_search_mode > 0);
 
   ps.v_max = sys_.test.v_max;
@@ -126,17 +129,20 @@ void MainTask::test_run() {
   ps.motion_type = MotionType::STRAIGHT;
   ps.dia_mode = false;
 
+  printf("go_straight[1]\n");
   mp->go_straight(ps);
   ps.v_max = 20;
   ps.v_end = sys_.test.end_v;
   ps.dist = 5;
   ps.accl = sys_.test.accl;
   ps.decel = sys_.test.decel;
+  printf("go_straight[2]\n");
   mp->go_straight(ps);
   // lt->stop_slalom_log();
   // bool front_ctrl = (sensing_result->ego.front_dist < 60);
   // vTaskDelay(50.0 / portTICK_RATE_MS);
   // sleep_ms(50);
+  printf("test_run: done\n");
   planning_->motor_disable();
   lt_->stop();
 

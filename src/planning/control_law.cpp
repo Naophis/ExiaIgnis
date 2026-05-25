@@ -4,23 +4,24 @@
 #include <cmath>
 
 void ControlLaw::init(MotorActuator *motor, SensorProcessor *sensor,
-                      TrajectoryGenerator *trj, EgoEstimator *ego) {
+                      TrajectoryGenerator *trj, EgoEstimator *ego,
+                      std::shared_ptr<motion_tgt_val_t> tgt_val,
+                      std::shared_ptr<sensing_result_entity_t> sensing_result,
+                      std::shared_ptr<input_param_t> param) {
   motor_ = motor;
   sensor_ = sensor;
   trj_ = trj;
   ego_ = ego;
   ee = std::make_shared<pid_error_entity_t>();
-}
-
-__attribute__((noinline, section(".time_critical.control_law")))
-void ControlLaw::calc(std::shared_ptr<motion_tgt_val_t> tgt_val,
-                      std::shared_ptr<sensing_result_entity_t> sensing_result,
-                      std::shared_ptr<input_param_t> param, bool motor_en,
-                      bool suction_en, bool search_mode, unsigned char w_reset,
-                      float last_tgt_angle, float dt) {
   tgt_val_ = tgt_val;
   sensing_result_ = sensing_result;
   param_ = param;
+}
+
+__attribute__((noinline, section(".time_critical.control_law")))
+void ControlLaw::calc( bool motor_en,
+                      bool suction_en, bool search_mode, unsigned char w_reset,
+                      float last_tgt_angle, float dt) {
   motor_en_ = motor_en;
   suction_en_ = suction_en;
   search_mode_ = search_mode;

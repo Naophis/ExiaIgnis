@@ -9,11 +9,12 @@
 class EgoEstimator {
 public:
   void init(std::shared_ptr<sensing_result_entity_t> sensing_result,
-            std::shared_ptr<input_param_t> param);
+            std::shared_ptr<input_param_t> param,
+            std::shared_ptr<motion_tgt_val_t> tgt_val);
 
   // センサーデータから自己位置・速度を推定し sensing_result / tgt_val
   // を更新する。 PlanningTask::tick() から毎周期呼ぶ。
-  void update(std::shared_ptr<motion_tgt_val_t> tgt_val, bool motor_en);
+  void update(bool motor_en);
 
   // KF を初期化・リセットする。
   // reset_battery=true のとき kf_batt と pos も再初期化する。
@@ -32,4 +33,5 @@ public:
 private:
   std::shared_ptr<sensing_result_entity_t> se;
   std::shared_ptr<input_param_t> param;
+  std::shared_ptr<motion_tgt_val_t> tgt_val;
 };
