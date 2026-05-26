@@ -94,9 +94,6 @@ void SensingTask::timer_b_irq_handler() {
   const auto &se = self->sensing_result;
   se->calc_time = (int16_t)(sense_start - self->start_time_z);
   self->start_time_z = sense_start;
-  self->data.dt_us = self->prev_timestamp_
-                         ? (uint32_t)(sense_start - self->prev_timestamp_)
-                         : 0;
   self->prev_timestamp_ = sense_start;
 
   self->read_spi_sensors();
@@ -197,7 +194,6 @@ void SensingTask::timer_b_irq_handler() {
   // se->battery.raw = self->battery_.read();
   se->battery.data = self->param->battery_gain * 4 * se->battery.raw / 4096;
   se->calc_time2 = (uint32_t)(time_us_64() - sense_start);
-  self->data_ready = true;
 }
 
 // ============================================================
@@ -282,6 +278,43 @@ void SensingTask::init() {
   uint16_t bat1 = battery_.read();
   printf("[bat] raw0=%u raw1=%u  (SPI0 MISO %s)\n", bat0, bat1,
          (bat0 || bat1) ? "OK" : "STUCK LOW");
+
+  init_dma();
+}
+
+void SensingTask::init_dma() {
+  dma_tx_spi1_ = dma_claim_unused_channel(true);
+  dma_rx_spi1_ = dma_claim_unused_channel(true);
+  dma_tx_spi0_ = dma_claim_unused_channel(true);
+  dma_rx_spi0_ = dma_claim_unused_channel(true);
+
+  // SPI1 TX (gyro, 8-bit): バッファ → SPI DR (固定アドレス)
+  dma_cfg_tx_spi1_ = dma_channel_get_default_config(dma_tx_spi1_);
+  channel_config_set_transfer_data_size(&dma_cfg_tx_spi1_, DMA_SIZE_8);
+  channel_config_set_dreq(&dma_cfg_tx_spi1_, spi_get_dreq(spi1, true));
+  channel_config_set_read_increment(&dma_cfg_tx_spi1_, true);
+  channel_config_set_write_increment(&dma_cfg_tx_spi1_, false);
+
+  // SPI1 RX (gyro, 8-bit): SPI DR (固定アドレス) → バッファ
+  dma_cfg_rx_spi1_ = dma_channel_get_default_config(dma_rx_spi1_);
+  channel_config_set_transfer_data_size(&dma_cfg_rx_spi1_, DMA_SIZE_8);
+  channel_config_set_dreq(&dma_cfg_rx_spi1_, spi_get_dreq(spi1, false));
+  channel_config_set_read_increment(&dma_cfg_rx_spi1_, false);
+  channel_config_set_write_increment(&dma_cfg_rx_spi1_, true);
+
+  // SPI0 TX (bat, 16-bit): 固定ゼロ値 → SPI DR
+  dma_cfg_tx_spi0_ = dma_channel_get_default_config(dma_tx_spi0_);
+  channel_config_set_transfer_data_size(&dma_cfg_tx_spi0_, DMA_SIZE_16);
+  channel_config_set_dreq(&dma_cfg_tx_spi0_, spi_get_dreq(spi0, true));
+  channel_config_set_read_increment(&dma_cfg_tx_spi0_, false);
+  channel_config_set_write_increment(&dma_cfg_tx_spi0_, false);
+
+  // SPI0 RX (bat, 16-bit): SPI DR → 1ワードバッファ
+  dma_cfg_rx_spi0_ = dma_channel_get_default_config(dma_rx_spi0_);
+  channel_config_set_transfer_data_size(&dma_cfg_rx_spi0_, DMA_SIZE_16);
+  channel_config_set_dreq(&dma_cfg_rx_spi0_, spi_get_dreq(spi0, false));
+  channel_config_set_read_increment(&dma_cfg_rx_spi0_, false);
+  channel_config_set_write_increment(&dma_cfg_rx_spi0_, false);
 }
 
 __attribute__((noinline, section(".time_critical.sensing_irq"))) void
@@ -302,21 +335,67 @@ SensingTask::read_spi_sensors() {
   enc_r_timestamp_old = enc_r_timestamp_now;
   enc_l_timestamp_old = enc_l_timestamp_now;
 
-  // ジャイロ・エンコーダ・バッテリ (取得直前の時刻を記録)
-
   const uint64_t spi_t0 = time_us_64();
 
-  gyro_timestamp_now = time_us_64();
-  auto gyro = gyro_.read_gyro_z();
-  se->t_gyro = (int16_t)(time_us_64() - spi_t0);
+  // ================================================================
+  // Phase A: ジャイロ DMA (SPI1) + 左エンコーダ CPU (SPI0) を並列実行
+  // ================================================================
 
+  // SPI1 を mode3 (CPOL=1, CPHA=1) に切り替え; 前回は enc_r が mode1 で終了
+  spi_set_format_safe(GYRO_SPI, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+  busy_wait_us_32(2);  // SCK settling after mode1→mode3 switch
+
+  gyro_dma_tx_[0] = ASM330_OUTZ_L_G | 0x80;
+  gyro_dma_tx_[1] = 0;
+  gyro_dma_tx_[2] = 0;
+
+  // ジャイロ CS アサート → TX/RX DMA を同時スタート
+  gyro_timestamp_now = time_us_64();
+  gpio_put(GYRO_CS_PIN, 0);
+  dma_channel_configure(dma_tx_spi1_, &dma_cfg_tx_spi1_,
+                        &spi_get_hw(GYRO_SPI)->dr, gyro_dma_tx_, 3, false);
+  dma_channel_configure(dma_rx_spi1_, &dma_cfg_rx_spi1_,
+                        gyro_dma_rx_, &spi_get_hw(GYRO_SPI)->dr, 3, false);
+  dma_start_channel_mask((1u << dma_tx_spi1_) | (1u << dma_rx_spi1_));
+
+  // SPI0 で左エンコーダを CPU 読み取り (ジャイロ DMA と並列)
+  enc_l_timestamp_now = time_us_64();
+  auto enc_l = enc_l_.read_angle();
+  se->t_encl = (int16_t)(time_us_64() - spi_t0);
+
+  // ジャイロ DMA 完了待ち → CS デアサート → 結果取得
+  dma_channel_wait_for_finish_blocking(dma_rx_spi1_);
+  gpio_put(GYRO_CS_PIN, 1);
+  se->t_gyro = (int16_t)(time_us_64() - spi_t0);
+  int16_t gyro = static_cast<int16_t>(
+      static_cast<uint16_t>(gyro_dma_rx_[2]) << 8 | gyro_dma_rx_[1]);
+
+  // ================================================================
+  // Phase B: バッテリ DMA (SPI0) + 右エンコーダ CPU (SPI1) を並列実行
+  // ================================================================
+
+  // SPI0 を mode0 (CPOL=0, CPHA=0, 16-bit) に切り替え; enc_l が mode1 で終了
+  spi_set_format_safe(ENC_L_SPI, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+  bat_dma_tx_ = 0x0000;
+
+  // バッテリ CS アサート → TX/RX DMA を同時スタート
+  gpio_put(BATTERY_CS_PIN, 0);
+  dma_channel_configure(dma_tx_spi0_, &dma_cfg_tx_spi0_,
+                        &spi_get_hw(ENC_L_SPI)->dr, &bat_dma_tx_, 1, false);
+  dma_channel_configure(dma_rx_spi0_, &dma_cfg_rx_spi0_,
+                        &bat_dma_rx_, &spi_get_hw(ENC_L_SPI)->dr, 1, false);
+  dma_start_channel_mask((1u << dma_tx_spi0_) | (1u << dma_rx_spi0_));
+
+  // SPI1 で右エンコーダを CPU 読み取り (バッテリ DMA と並列)
   enc_r_timestamp_now = time_us_64();
   auto enc_r = enc_r_.read_angle();
   se->t_encr = (int16_t)(time_us_64() - spi_t0);
 
-  enc_l_timestamp_now = time_us_64();
-  auto enc_l = enc_l_.read_angle();
-  se->t_encl = (int16_t)(time_us_64() - spi_t0);
+  // バッテリ DMA 完了待ち → CS デアサート → 結果格納
+  dma_channel_wait_for_finish_blocking(dma_rx_spi0_);
+  gpio_put(BATTERY_CS_PIN, 1);
+  se->battery.raw = (bat_dma_rx_ >> 2) & 0x0FFF;
+  se->t_bat = (int16_t)(time_us_64() - spi_t0);
 
   float gyro_dt = (float)(gyro_timestamp_now - gyro_timestamp_old) / 1000000;
   float enc_r_dt = (float)(enc_r_timestamp_now - enc_r_timestamp_old) / 1000000;
@@ -393,10 +472,7 @@ SensingTask::read_spi_sensors() {
     // se->ego.w_kf2 = pt->ego.kf_w2.get_state();
   }
 
-  // DIAG: ADS7042衝突診断 - コメントアウトしてenc_lが安定するか確認
-  se->battery.raw = battery_.read();
   calc_vel(gyro_dt, enc_l_dt, enc_r_dt);
-  se->t_bat = (int16_t)(time_us_64() - spi_t0);
 }
 
 __attribute__((noinline, section(".time_critical.sensing.calc_vel")))

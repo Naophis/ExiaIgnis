@@ -9,79 +9,11 @@
 #include "driver/ads7042.hpp"
 #include "structs.hpp"
 #include "planning/planning_task.hpp"
+#include "hardware/dma.h"
 
 
 class SensingTask {
 public:
-    // 全LED消灯時のADC値 (ambient)
-    struct SensorDark {
-        uint16_t r90, r45, l45, l90;
-    };
-
-    // 各LEDパターン点灯時のADC値
-    struct SensorLit {
-        uint16_t r90;
-        uint16_t r45_1;     // R45_LED1 のみ
-        uint16_t r45_both;  // R45_LED1 + R45_LED2
-        uint16_t r45_2;     // R45_LED2 のみ
-        uint16_t l45_1;     // L45_LED1 のみ
-        uint16_t l45_both;  // L45_LED1 + L45_LED2
-        uint16_t l45_2;     // L45_LED2 のみ
-        uint16_t l90;
-    };
-
-    // lit - dark の差分 (負になる場合は 0)
-    struct SensorDiff {
-        uint16_t r90;
-        uint16_t r45_1, r45_both, r45_2;
-        uint16_t l45_1, l45_both, l45_2;
-        uint16_t l90;
-    };
-
-    struct Data {
-        uint32_t   dt_us;           // 前回割り込みからの経過時間 [us]
-        uint32_t   sense_duration_us; // sensing シーケンス全体の処理時間 [us]
-        SensorDark dark;
-        SensorLit  lit;
-        SensorDiff diff;
-        int16_t    gz;         // ジャイロZ軸角速度
-        uint64_t   gz_ts;      // gz 取得時刻 [us]
-        uint64_t   gz_ts_z;      // gz 取得時刻_z [us]
-        uint64_t   gz_dt;      // gz diff [us]
-        
-        uint16_t   enc_r;
-        uint64_t   enc_r_ts;   // enc_r 取得時刻 [us]
-        uint64_t   enc_r_ts_z;   // enc_r 取得時刻_z [us]
-        uint64_t   enc_r_dt;   // enc_r diff [us]
-        
-        uint16_t   enc_l;
-        uint64_t   enc_l_ts;   // enc_l 取得時刻 [us]
-        uint64_t   enc_l_ts_z;   // enc_l 取得時刻_z [us]
-        uint64_t   enc_l_dt;   // enc_l diff [us]
-        uint16_t   battery;
-
-        Data() = default;
-        Data(const volatile Data &o)
-            : dt_us(o.dt_us)
-            , sense_duration_us(o.sense_duration_us)
-            , dark{o.dark.r90, o.dark.r45, o.dark.l45, o.dark.l90}
-            , lit {o.lit.r90,
-                   o.lit.r45_1, o.lit.r45_both, o.lit.r45_2,
-                   o.lit.l45_1, o.lit.l45_both, o.lit.l45_2,
-                   o.lit.l90}
-            , diff{o.diff.r90,
-                   o.diff.r45_1, o.diff.r45_both, o.diff.r45_2,
-                   o.diff.l45_1, o.diff.l45_both, o.diff.l45_2,
-                   o.diff.l90}
-            , gz(o.gz)
-            , gz_ts(o.gz_ts), gz_ts_z(o.gz_ts_z), gz_dt(o.gz_dt)
-            , enc_r(o.enc_r)
-            , enc_r_ts(o.enc_r_ts), enc_r_ts_z(o.enc_r_ts_z), enc_r_dt(o.enc_r_dt)
-            , enc_l(o.enc_l)
-            , enc_l_ts(o.enc_l_ts), enc_l_ts_z(o.enc_l_ts_z), enc_l_dt(o.enc_l_dt)
-            , battery(o.battery) {}
-    };
-
     static std::shared_ptr<SensingTask> create();
 
     void init();
@@ -94,9 +26,6 @@ public:
 
     // multicore_launch_core1 より前に呼ぶこと
     void configure(uint32_t led_settle_us, uint32_t interval_us);
-
-    volatile Data data{};
-    volatile bool data_ready = false;
 
     void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_entity);
     void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
@@ -111,9 +40,24 @@ private:
 
     std::shared_ptr<input_param_t> param;
     ASM330LHH gyro_;
-    AS5147P   enc_r_;   // 右エンコーダ (SPI1, CS=GPIO9)
+    AS5147P   enc_r_;   // 右エンコーダ (SPI1, CS=GPIO17)
     AS5147P   enc_l_;   // 左エンコーダ (SPI0, CS=GPIO1)
     ADS7042   battery_; // バッテリADC  (SPI0, CS=GPIO5)
+
+    // DMA channels: SPI1/SPI0 TX+RX for gyro/bat parallel transfer
+    int dma_tx_spi1_ = -1;
+    int dma_rx_spi1_ = -1;
+    int dma_tx_spi0_ = -1;
+    int dma_rx_spi0_ = -1;
+    uint8_t  gyro_dma_tx_[3]{};
+    uint8_t  gyro_dma_rx_[3]{};
+    uint16_t bat_dma_tx_ = 0;
+    uint16_t bat_dma_rx_ = 0;
+    dma_channel_config dma_cfg_tx_spi1_{};
+    dma_channel_config dma_cfg_rx_spi1_{};
+    dma_channel_config dma_cfg_tx_spi0_{};
+    dma_channel_config dma_cfg_rx_spi0_{};
+    void init_dma();
     float w_old = 0;
     float vr_old = 0;
     float vl_old = 0;
