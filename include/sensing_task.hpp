@@ -76,6 +76,7 @@ private:
     uint32_t led_settle_us_ = 18;    // LED 点灯後の安定待ち時間
     uint32_t interval_us_   = 1000;  // サンプリング周期
 
+    bool     skip_sensing_ = false;  // R90/L90とR45/L45のambient ADCを交互取得
     uint32_t next_alarm_a_ = 0;
     uint64_t prev_timestamp_ = 0;
     uint64_t start_time_z = 0;

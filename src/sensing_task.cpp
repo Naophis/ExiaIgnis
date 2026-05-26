@@ -99,70 +99,174 @@ void SensingTask::timer_b_irq_handler() {
   self->read_spi_sensors();
   se->t_spi = (int16_t)(time_us_64() - sense_start);
 
-  // 1. 全LED消灯状態で ambient 読み取り
-  adc_select_input(0);
-  se->led_sen_before.right90.raw = adc_read();
-  adc_select_input(1);
-  se->led_sen_before.right45.raw = adc_read();
-  adc_select_input(2);
-  se->led_sen_before.left45.raw = adc_read();
-  adc_select_input(3);
-  se->led_sen_before.left90.raw = adc_read();
+  const auto &tv = self->tgt_val;
+  const bool search_mode = self->pt->get_search_mode();
+
+  // LED点灯条件フラグを決定
+  bool r90 = true, l90 = true, r45 = true, l45 = true;
+  if (search_mode && tv->motion_type == MotionType::STRAIGHT) {
+    r90 = l90 = false;
+  }
+  if (search_mode && tv->nmr.sct == SensorCtrlType::NONE) {
+    r90 = l90 = false;
+    r45 = l45 = false;
+  }
+  if (tv->nmr.sct == SensorCtrlType::Dia) {
+    r45 = l45 = true;
+  }
+  if (tv->nmr.sct == SensorCtrlType::Straight) {
+    r90 = l90 = true;
+    r45 = l45 = true;
+  }
+  if (tv->motion_type == MotionType::READY) {
+    r90 = l90 = true;
+    r45 = l45 = false;
+  }
+  if (tv->motion_type == MotionType::FRONT_CTRL) {
+    r90 = l90 = true;
+    r45 = l45 = false;
+  }
+  if (tv->motion_type == MotionType::SENSING_DUMP) {
+    r90 = l90 = true;
+    r45 = l45 = true;
+  }
+  if (tv->motion_type == MotionType::SLALOM) {
+    r90 = l90 = r45 = l45 = false;
+    if (tv->tt == TurnType::Normal) {
+      if (tv->td == TurnDirection::Right) {
+        l45 = true;
+      } else {
+        r45 = true;
+      }
+    }
+  }
+
+  // 1. ambient ADC (LED消灯) — skip_sensing で R90/L90 と R45/L45 を交互に取得
+  self->skip_sensing_ = !self->skip_sensing_;
+  const bool skip_sensing = self->skip_sensing_;
+  if (skip_sensing) {
+    if (r90) {
+      adc_select_input(0);
+      se->led_sen_before.right90.raw = adc_read();
+    } else {
+      se->led_sen_before.right90.raw = 0;
+    }
+    if (l90) {
+      adc_select_input(3);
+      se->led_sen_before.left90.raw = adc_read();
+    } else {
+      se->led_sen_before.left90.raw = 0;
+    }
+  } else {
+    if (r45) {
+      adc_select_input(1);
+      se->led_sen_before.right45.raw = adc_read();
+      se->led_sen_before.right45_2.raw =
+          se->led_sen_before.right45_3.raw = se->led_sen_before.right45.raw;
+    } else {
+      se->led_sen_before.right45.raw = 0;
+    }
+    if (l45) {
+      adc_select_input(2);
+      se->led_sen_before.left45.raw = adc_read();
+      se->led_sen_before.left45_2.raw =
+          se->led_sen_before.left45_3.raw = se->led_sen_before.left45.raw;
+    } else {
+      se->led_sen_before.left45.raw = 0;
+    }
+  }
   se->t_ambient = (int16_t)(time_us_64() - sense_start);
 
-  // 2. 各LEDパターンを順次点灯して対応チャンネルを読み取り
-
+  // 2. LED点灯 + ADC取得
   bool led_on = true;
+  if (tv->motion_type == MotionType::PIVOT) {
+    led_on = false;
+  }
+  if (tv->motion_type == MotionType::SLALOM) {
+    led_on = true;
+  }
 
-  // R90 (single)
-  gpio_put(R90_LED_PIN, 1);
-  busy_wait_us_32(self->led_settle_us_);
-  adc_select_input(0);
-  se->led_sen_after.right90.raw = adc_read();
-  gpio_put(R90_LED_PIN, 0);
-  se->t_r90 = (int16_t)(time_us_64() - sense_start);
+  if (led_on) {
+    // R90
+    if (r90) {
+      gpio_put(R90_LED_PIN, 1);
+      busy_wait_us_32(self->led_settle_us_);
+      adc_select_input(0);
+      se->led_sen_after.right90.raw = adc_read();
+      gpio_put(R90_LED_PIN, 0);
+    } else {
+      se->led_sen_after.right90.raw = 0;
+    }
+    se->t_r90 = (int16_t)(time_us_64() - sense_start);
 
-  // R45 シーケンス: LED1 点灯中に LED2 を追加し、LED1 を消してから LED2
-  // 単独を読む
-  adc_select_input(1);
-  gpio_put(R45_LED_PIN, 1); // LED1 ON
-  busy_wait_us_32(self->led_settle_us_);
-  se->led_sen_after.right45.raw = adc_read(); // LED1 single
-  gpio_put(R45_LED_PIN2, 1);                  // LED2 ON (LED1 still on)
-  busy_wait_us_32(self->led_settle_us_);
-  se->led_sen_after.right45_2.raw = adc_read(); // LED1 + LED2
-  gpio_put(R45_LED_PIN, 0);                     // LED1 OFF (LED2 still on)
-  busy_wait_us_32(self->led_settle_us_);
-  se->led_sen_after.right45_3.raw = adc_read(); // LED2 single
-  gpio_put(R45_LED_PIN2, 0);                    // LED2 OFF
-  se->t_r45 = (int16_t)(time_us_64() - sense_start);
+    // L90
+    if (l90) {
+      gpio_put(L90_LED_PIN, 1);
+      busy_wait_us_32(self->led_settle_us_);
+      adc_select_input(3);
+      se->led_sen_after.left90.raw = adc_read();
+      gpio_put(L90_LED_PIN, 0);
+    } else {
+      se->led_sen_after.left90.raw = 0;
+    }
+    se->t_l90 = (int16_t)(time_us_64() - sense_start);
 
-  // L45 シーケンス: 同様
-  adc_select_input(2);
-  gpio_put(L45_LED_PIN, 1); // LED1 ON
-  busy_wait_us_32(self->led_settle_us_);
-  se->led_sen_after.left45.raw = adc_read(); // LED1 single
-  gpio_put(L45_LED_PIN2, 1);                 // LED2 ON (LED1 still on)
-  busy_wait_us_32(self->led_settle_us_);
-  se->led_sen_after.left45_2.raw = adc_read(); // LED1 + LED2
-  gpio_put(L45_LED_PIN, 0);                    // LED1 OFF (LED2 still on)
-  busy_wait_us_32(self->led_settle_us_);
-  se->led_sen_after.left45_3.raw = adc_read(); // LED2 single
-  gpio_put(L45_LED_PIN2, 0);                   // LED2 OFF
-  se->t_l45 = (int16_t)(time_us_64() - sense_start);
+    // R45
+    if (r45) {
+      adc_select_input(1);
+      gpio_put(R45_LED_PIN, 1); // LED1 ON
+      busy_wait_us_32(self->led_settle_us_);
+      se->led_sen_after.right45.raw = adc_read(); // LED1 single
+      if (tv->motion_type == MotionType::WALL_OFF ||
+          tv->motion_type == MotionType::WALL_OFF_DIA ||
+          tv->motion_type == MotionType::SENSING_DUMP ||
+          tv->motion_type == MotionType::SLA_BACK_STR) {
+        gpio_put(R45_LED_PIN2, 1); // LED2 ON (LED1 still on)
+        busy_wait_us_32(self->led_settle_us_);
+        se->led_sen_after.right45_2.raw = adc_read(); // LED1 + LED2
+        gpio_put(R45_LED_PIN, 0);                     // LED1 OFF
+        busy_wait_us_32(self->led_settle_us_);
+        se->led_sen_after.right45_3.raw = adc_read(); // LED2 single
+        gpio_put(R45_LED_PIN2, 0);
+      } else {
+        gpio_put(R45_LED_PIN, 0);
+        se->led_sen_after.right45_2.raw = se->led_sen_after.right45_3.raw = 0;
+      }
+    } else {
+      se->led_sen_after.right45.raw = se->led_sen_after.right45_2.raw =
+          se->led_sen_after.right45_3.raw = 0;
+    }
+    se->t_r45 = (int16_t)(time_us_64() - sense_start);
 
-  // L90 (single)
-  gpio_put(L90_LED_PIN, 1);
-  busy_wait_us_32(self->led_settle_us_);
-  adc_select_input(3);
-  se->led_sen_after.left90.raw = adc_read();
-  gpio_put(L90_LED_PIN, 0);
-  se->t_l90 = (int16_t)(time_us_64() - sense_start);
+    // L45
+    if (l45) {
+      adc_select_input(2);
+      gpio_put(L45_LED_PIN, 1); // LED1 ON
+      busy_wait_us_32(self->led_settle_us_);
+      se->led_sen_after.left45.raw = adc_read(); // LED1 single
+      if (tv->motion_type == MotionType::WALL_OFF ||
+          tv->motion_type == MotionType::WALL_OFF_DIA ||
+          tv->motion_type == MotionType::SENSING_DUMP ||
+          tv->motion_type == MotionType::SLA_BACK_STR) {
+        gpio_put(L45_LED_PIN2, 1); // LED2 ON (LED1 still on)
+        busy_wait_us_32(self->led_settle_us_);
+        se->led_sen_after.left45_2.raw = adc_read(); // LED1 + LED2
+        gpio_put(L45_LED_PIN, 0);                    // LED1 OFF
+        busy_wait_us_32(self->led_settle_us_);
+        se->led_sen_after.left45_3.raw = adc_read(); // LED2 single
+        gpio_put(L45_LED_PIN2, 0);
+      } else {
+        gpio_put(L45_LED_PIN, 0);
+        se->led_sen_after.left45_2.raw = se->led_sen_after.left45_3.raw = 0;
+      }
+    } else {
+      se->led_sen_after.left45.raw = se->led_sen_after.left45_2.raw =
+          se->led_sen_after.left45_3.raw = 0;
+    }
+    se->t_l45 = (int16_t)(time_us_64() - sense_start);
+  }
 
   // 3. diff 計算 (負になる場合は 0 にクランプ)
-  // auto dc = [](uint16_t l, uint16_t d) -> uint16_t {
-  //     return l > d ? static_cast<uint16_t>(l - d) : 0u;
-  // };
   if (led_on) {
     se->led_sen.right90.raw = std::max(
         se->led_sen_after.right90.raw - se->led_sen_before.right90.raw, 0);
@@ -178,7 +282,6 @@ void SensingTask::timer_b_irq_handler() {
         se->led_sen_after.left45_2.raw - se->led_sen_before.left45_2.raw, 0);
     se->led_sen.left45_3.raw = std::max(
         se->led_sen_after.left45_3.raw - se->led_sen_before.left45_3.raw, 0);
-
     se->led_sen.left90.raw = std::max(
         se->led_sen_after.left90.raw - se->led_sen_before.left90.raw, 0);
     se->led_sen.front.raw =

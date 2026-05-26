@@ -240,8 +240,10 @@ void MainTask::keep_pivot() {
 void MainTask::dump1() {
 
   mp->reset_gyro_ref_with_check();
-  sleep_ms(250);
-
+  sleep_ms(10);
+  planning_->tgt_val->nmr.motion_type = MotionType::SENSING_DUMP;
+  planning_->tgt_val->nmr.timstamp++;
+  planning_->send_command(*planning_->tgt_val);
   const auto se = get_sensing_entity();
 
   const char ESC = '\033';
@@ -366,7 +368,8 @@ void MainTask::dump1() {
 
     printf("planning_time: %d\t%d\n", planning_->tgt_val->calc_time_diff,
            planning_->tgt_val->calc_time);
-    printf("planning_breakdown[us]: ego=%d sensor=%d trj=%d knym=%d copy=%d ctl=%d\n",
+    printf("planning_breakdown[us]: ego=%d sensor=%d trj=%d knym=%d copy=%d "
+           "ctl=%d\n",
            planning_->tgt_val->pln_t_ego, planning_->tgt_val->pln_t_sensor,
            planning_->tgt_val->pln_t_trj, planning_->tgt_val->pln_t_kanayama,
            planning_->tgt_val->pln_t_copy, planning_->tgt_val->pln_t_ctl);

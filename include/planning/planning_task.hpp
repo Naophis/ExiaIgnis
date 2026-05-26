@@ -48,6 +48,7 @@ public:
 
   // ---- 設定セッター ----
   void set_search_mode(bool v) { search_mode = v; }
+  bool get_search_mode() const { return search_mode; }
   void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_sensing_result);
   void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
   void set_tgt_val(std::shared_ptr<motion_tgt_val_t> _tgt_val) { tgt_val = _tgt_val; }
