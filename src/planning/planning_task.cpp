@@ -120,7 +120,7 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (g_ctl_debug_ticks > 0) --g_ctl_debug_ticks;
 
   // T0 はコマンド処理前に評価（コマンドによる cmd_log_remain 変化は T1 以降に影響）
-  const bool do_log0 = (tick_num <= 30) || (cmd_log_remain > 0);
+  const bool do_log0 = false; // (tick_num <= 30) || (cmd_log_remain > 0);
   if (do_log0) g_irq_log.push("T0");
 
   tgt_val->calc_time_diff = dt_us;
@@ -128,9 +128,9 @@ void PlanningTask::tick(uint32_t dt_us) {
   {
     int idx = pending_cmd_idx_.load(std::memory_order_acquire);
     if (idx >= 0) {
-      cmd_log_remain = 100; // このコマンドを受けた tick + 次 99 tick を強制ログ
-      g_ctl_debug_ticks = 100; // ctl_.calc() サブチェックポイントを同期して有効化
-      g_irq_log.push("TR");
+      cmd_log_remain = 0; // このコマンドを受けた tick + 次 N tick を強制ログ (0=無効)
+      g_ctl_debug_ticks = 0; // ctl_.calc() サブチェックポイント (0=無効)
+      // g_irq_log.push("TR");
       active_cmd_ = cmd_buf_[idx];
       receive_req = &active_cmd_;
       int expected = idx;
@@ -138,14 +138,14 @@ void PlanningTask::tick(uint32_t dt_us) {
                                                std::memory_order_relaxed);
       first_req = true;
       cp_request();
-      g_irq_log.push("TQ");
+      // g_irq_log.push("TQ");
     }
   }
 
   const float dt = param->dt;
 
   // T1 以降: コマンド受信で cmd_log_remain が更新された後に評価
-  const bool do_log = (tick_num <= 30) || (cmd_log_remain > 0);
+  const bool do_log = false; // (tick_num <= 30) || (cmd_log_remain > 0);
 
   if (do_log) g_irq_log.push("T1"); // pre ego.update
   ego.update(motor_en);
@@ -239,9 +239,9 @@ float PlanningTask::adjust_b_to_target45(float data, float a) {
 }
 
 void PlanningTask::pl_req_activate() {
-  if (receive_req->pl_req.time_stamp != pid_req_timestamp) {
+  if (receive_req->nmr.timstamp != pid_req_timestamp) {
     ctl_.pl_req_activate(receive_req->pl_req);
-    pid_req_timestamp = receive_req->pl_req.time_stamp;
+    pid_req_timestamp = receive_req->nmr.timstamp;
   }
 }
 

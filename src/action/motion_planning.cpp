@@ -45,13 +45,13 @@ void MotionPlanning::wait_tick() {
   // and we'd never see the push() messages that reveal where the crash is.
   static int timeout_count = 0;
   while (!pt->try_wait_tick_ms(3)) {
-    g_irq_log.drain([](const char *msg) { printf("%s", msg); });
+    // g_irq_log.drain([](const char *msg) { printf("%s", msg); });
     if (++timeout_count % 100 == 0) {
       printf("[wait_tick] TIMEOUT x%d - tick not releasing sem\n", timeout_count);
     }
   }
   timeout_count = 0;
-  g_irq_log.drain([](const char *msg) { printf("%s", msg); });
+  // g_irq_log.drain([](const char *msg) { printf("%s", msg); });
 }
 
 __attribute__((noinline, section(".motion.go_straight")))
@@ -453,8 +453,7 @@ void MotionPlanning::req_error_reset() {
   tgt_val->pl_req.error_gyro_reset = 1;
   tgt_val->pl_req.error_ang_reset = 1;
   tgt_val->pl_req.error_dist_reset = 1;
-  tgt_val->pl_req.time_stamp++;
-
+  tgt_val->nmr.timstamp++;
   pt->send_command(*tgt_val);
 }
 MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
