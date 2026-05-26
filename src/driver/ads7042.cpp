@@ -12,6 +12,7 @@ void ADS7042::init(spi_inst_t *spi, uint cs_pin) {
     gpio_put(cs_, 1);
 }
 
+__attribute__((noinline, section(".time_critical.sensing.ads7042_read")))
 uint16_t ADS7042::read() {
     // ADS7042I: mode 0 (CPOL=0, CPHA=0), 16-bit transfer
     // フレーム: [15:14]=00, [13:2]=12bit結果, [1:0]=00

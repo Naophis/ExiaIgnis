@@ -17,6 +17,7 @@ void TrajectoryGenerator::setup() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.trajectory")))
 void TrajectoryGenerator::generate(float last_tgt_angle) {
   auto tmp = tgt_val->ego_in.img_ang;
   tgt_val->ego_in.img_ang += last_tgt_angle;
@@ -49,6 +50,7 @@ void TrajectoryGenerator::generate(float last_tgt_angle) {
   (void)tmp;
 }
 
+__attribute__((noinline, section(".time_critical.trajectory")))
 void TrajectoryGenerator::calc_kanayama(
     EgoEstimator    &ego,
     SensorProcessor &sensor,
@@ -119,6 +121,7 @@ void TrajectoryGenerator::calc_kanayama(
   }
 }
 
+__attribute__((noinline, section(".time_critical.trajectory")))
 void TrajectoryGenerator::copy_tgt(float dt) {
 
   tgt_val->ego_in.accl            = mpc_next_ego.accl;

@@ -58,6 +58,7 @@ void AS5147P::init(spi_inst_t *spi, uint cs_pin) {
 }
 
 // addr を読んで生の 16bit 値を返す (EF・パリティビット含む)
+__attribute__((noinline, section(".time_critical.sensing.as5147p_read_reg")))
 int32_t AS5147P::read_reg(uint16_t addr) {
     spi_set_format_safe(spi_, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);  // mode 1
 
@@ -105,6 +106,7 @@ void AS5147P::setup() {
            angle,  angle & 0x3FFF);
 }
 
+__attribute__((noinline, section(".time_critical.sensing.as5147p_read")))
 int32_t AS5147P::read_angle() {
     for (int retry = 0; retry < 3; ++retry) {
         int32_t raw = read_reg(0x3FFF);

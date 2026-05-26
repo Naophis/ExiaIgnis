@@ -49,6 +49,7 @@ void ASM330LHH::setup() {
          ctrl2, ctrl2 == 0x98 ? "OK" : "NG", ctrl3, ctrl4);
 }
 
+__attribute__((noinline, section(".time_critical.sensing.asm330_read")))
 int16_t ASM330LHH::read_gyro_z() {
   spi_set_format_safe(spi_, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
   busy_wait_us_32(2);  // SCK settling: LOW→HIGH transition after mode switch from enc (mode1)

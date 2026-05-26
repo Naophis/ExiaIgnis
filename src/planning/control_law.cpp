@@ -82,6 +82,7 @@ void ControlLaw::calc( bool motor_en,
 
 // ============================================================
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_tgt_duty() {
   const bool dlog = (g_ctl_debug_ticks > 0);
   if (dlog) g_irq_log.push("D0"); // calc_tgt_duty start
@@ -161,6 +162,7 @@ void ControlLaw::calc_tgt_duty() {
   sensing_result_->ego.duty.ff_duty_rpm_l = trj_->mpc_next_ego.ff_duty_rpm_l;
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_translational_ctrl() {
   const float dt = param_->dt;
   if (!motor_en_) {
@@ -207,6 +209,7 @@ void ControlLaw::calc_translational_ctrl() {
   last_accl = tgt_val_->ego_in.accl;
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 float ControlLaw::calc_sensor_pid() {
   float duty = 0;
   SensingControlType type = SensingControlType::None;
@@ -280,6 +283,7 @@ float ControlLaw::calc_sensor_pid() {
   return duty;
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 float ControlLaw::calc_sensor_pid_dia() {
   float duty = 0;
   SensingControlType type = SensingControlType::None;
@@ -653,6 +657,7 @@ void ControlLaw::check_fail_safe() {
     tgt_val_->fss.error = 1;
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_pid_val() {
   ee->v.error_dd = ee->v.error_d;
   ee->v_kf.error_dd = ee->v_kf.error_d;
@@ -697,6 +702,7 @@ void ControlLaw::calc_pid_val() {
   tgt_val_->v_error = ee->v.error_i;
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_pid_val_ang() {
   const auto tgt = tgt_val_;
   const auto se = sensing_result_;
@@ -743,6 +749,7 @@ void ControlLaw::calc_pid_val_ang() {
                param_->angle_pid.d * ee->ang.error_d, 0, 0);
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_pid_val_ang_vel() {
   const auto tgt = tgt_val_;
   const auto se = sensing_result_;
@@ -975,6 +982,7 @@ void ControlLaw::calc_front_ctrl_duty() {
   gyro_pid_histerisis_i = 0.0f;
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_angle_velocity_ctrl() {
   const auto se = sensing_result_;
   if (tgt_val_->motion_type != ee->ang_log.prev_motion_type) {
@@ -1087,6 +1095,7 @@ void ControlLaw::calc_angle_velocity_ctrl() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::summation_duty() {
   auto ff_front = trj_->mpc_next_ego.ff_duty_front;
   auto ff_roll = trj_->mpc_next_ego.ff_duty_roll;

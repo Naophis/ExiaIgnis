@@ -399,6 +399,7 @@ SensingTask::read_spi_sensors() {
   se->t_bat = (int16_t)(time_us_64() - spi_t0);
 }
 
+__attribute__((noinline, section(".time_critical.sensing.calc_vel")))
 void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   const auto &se = sensing_result;
   const float tire = param->tire;
@@ -437,6 +438,7 @@ void SensingTask::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
   pt = _pt;
 }
 
+__attribute__((noinline, section(".time_critical.sensing.calc_enc_v")))
 float SensingTask::calc_enc_v(float now, float old, float dt) {
   const float tire = param->tire;
   const auto enc_delta = now - old;
