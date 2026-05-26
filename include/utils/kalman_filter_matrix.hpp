@@ -31,6 +31,8 @@ private:
   std::array<std::array<float, 3>, 3> R; // 観測ノイズ共分散行列
 
   // ヘルパー関数群
+
+__attribute__((section(".time_critical.ego_estimator")))
   std::array<std::array<float, 3>, 3>
   matrixMultiply(const std::array<std::array<float, 3>, 3> &A,
                  const std::array<std::array<float, 3>, 3> &B) {
@@ -45,6 +47,7 @@ private:
     return result;
   }
 
+__attribute__((section(".time_critical.ego_estimator")))
   std::array<std::array<float, 3>, 3>
   transpose(const std::array<std::array<float, 3>, 3> &A) {
     std::array<std::array<float, 3>, 3> result = {0};
@@ -56,6 +59,7 @@ private:
     return result;
   }
 
+__attribute__((section(".time_critical.ego_estimator")))
   std::array<std::array<float, 3>, 3>
   matrixAdd(const std::array<std::array<float, 3>, 3> &A,
             const std::array<std::array<float, 3>, 3> &B) {
@@ -68,6 +72,7 @@ private:
     return result;
   }
 
+__attribute__((section(".time_critical.ego_estimator")))
   std::array<std::array<float, 3>, 3>
   invertMatrix(const std::array<std::array<float, 3>, 3> &A) {
     std::array<std::array<float, 3>, 3> result = {0};
@@ -109,6 +114,7 @@ private:
     return result;
   }
 
+__attribute__((section(".time_critical.ego_estimator")))
   std::array<std::array<float, 3>, 3> identityMatrix(int size) {
     std::array<std::array<float, 3>, 3> result = {0};
     for (int i = 0; i < size; ++i) {
