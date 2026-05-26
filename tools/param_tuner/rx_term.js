@@ -180,235 +180,55 @@ const switchLineMode = (obj) => {
 }
 
 const switchToBinaryMode = (obj) => {
-  let last_ang_sum = 0;
-  const dataSize2 = obj.data_struct.reduce((prev, cur) => {
-    return prev + cur.size;
-  }, 0);
-  const recordByteSize = dataSize2;
+  const recordByteSize = obj.data_struct.reduce((s, d) => s + d.size, 0);
   const totalBytes = obj.total_bytes;
   const recordNum = Math.floor(totalBytes / recordByteSize);
+  const fieldCount = obj.data_struct.length;
   console.log('record size:', recordByteSize, 'bytes');
   console.log('total bytes:', totalBytes, 'bytes');
   console.log('record count:', recordNum);
-  console.log('header count:', obj.data_struct.length);
+  console.log('header count:', fieldCount);
 
   binaryMode = true;
-
-  // パイプラインをクリア
   port.unpipe(parser);
-
-  // ByteLength パーサに切り替え (全データを一括受信)
   parser = port.pipe(new ByteLengthParser({ length: totalBytes, highWaterMark: 256 * 1024 }));
 
-  const header = obj.data_struct.map((data) => {
-    return data.name
-  }).join(',');
-  obj.record += `${header}\n`;
+  const header = obj.data_struct.map(d => d.name).join(',');
   console.log('header:', header);
 
-  let last_index = 0;
-  let last_idx = 0;
+  // フィールドごとの読み取り関数とサイズをループ外で確定
+  const fieldReaders = obj.data_struct.map(d => {
+    if (d.type === 'float') return (buf, off) => buf.readFloatLE(off);
+    if (d.type === 'int')   return (buf, off) => buf.readInt32LE(off);
+    if (d.type === 'short') return (buf, off) => buf.readInt16LE(off);
+    throw new Error(`Unsupported type: ${d.type}`);
+  });
+  const fieldSizes = obj.data_struct.map(d => d.size);
+  const indexField = obj.data_struct.findIndex(d => d.name === 'index');
 
   parser.on('data', (binaryData) => {
+    const record = new Array(fieldCount);
+    const rows = new Array(recordNum + 1);
+    rows[0] = header;
+    let last_idx = 0;
 
     for (let j = 0; j < recordNum; j++) {
-
       let offset = j * recordByteSize;
-      let record = [];
-
-      for (let i = 0; i < obj.data_struct.length; i++) {
-
-        const data = obj.data_struct[i];
-        if (data === undefined) {
-          continue;
-        }
-        const tmp_data = offset;
-        switch (data.type) {
-          case 'float':
-            record.push(binaryData.readFloatLE(tmp_data));
-            offset += data.size;
-            break;
-          case 'int':
-            record.push(binaryData.readInt32LE(tmp_data));
-            offset += data.size;
-            break;
-          case 'short':
-            record.push(binaryData.readInt16LE(tmp_data));
-            offset += data.size;
-            break;
-          default:
-            throw new Error(`Unsupported data type: ${data.type}`);
-        }
-        if (data.name === 'index') {
-          const idx = parseInt(binaryData.readInt32LE(tmp_data));
-          if (idx % 100 === 0) {
-            console.log(last_idx, idx);
-          }
-          last_idx = idx;
-        }
+      for (let i = 0; i < fieldCount; i++) {
+        record[i] = fieldReaders[i](binaryData, offset);
+        offset += fieldSizes[i];
       }
-
-      const valid = obj.data_struct.every((data, i) => {
-          let res = true;
-          // return true
-          if (record[i] < -100000 || record[i] > 100000)
-            res = false;
-          if (data.name === "index") {
-            if (record[i] < 0 || record[i] > 100000)
-              res = false;
-            if (Math.abs(record[0] - last_index) > 100)
-              res = false;
-          }
-          if (data.name.match(/_pid_/) !== null)
-            if (record[i] > 100000 || record[i] < -100000) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name.match(/ff_/) !== null)
-            if (record[i] > 100000 || record[i] < -100000) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name === "motion_state")
-            if (record[i] > 1000 || record[i] < -1000) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name === "timestamp")
-            if (record[i] > 10000 || record[i] < 0) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name === "duty_roll")
-            if (record[i] > 0.05 || record[i] < -0.05) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name === "duty_roll_before")
-            if (record[i] > 70 || record[i] < -70) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name === "x")
-            if (record[i] > 100000 || record[i] < -100000) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name === "y")
-            if (record[i] > 100000 || record[i] < -100000) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          if (data.name === "ang_kf_sum") {
-            if (record[i] > 1000 || record[i] < -1000) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-            if (Math.abs(Math.abs(record[i]) - last_ang_sum) > 40) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-            last_ang_sum = Math.abs(record[i]);
-          }
-          if (data.name === "pln_time_diff")
-            if (record[i] > 3000 || record[i] < 0) {
-              console.log(data.name, 'error:', record[i]);
-              res = false;
-            }
-          return res;
-          if (data.name === "battery")
-            if (record[i] > 15 || record[i] < 0)
-              res = false;
-          if (data.name === "alpha")
-            if (record[i] > 100000 || record[i] < -100000)
-              res = false;
-          if (data.name === "m_pid_i_v")
-            if (record[i] > 0.1 || record[i] < -0.1)
-              res = false;
-          if (data.name === "dist")
-            if (record[i] > 180 * 64 || record[i] < 0)
-              res = false;
-          if (data.name === "dideal_ang")
-            if (record[i] > 180 * 64 || record[i] < 0)
-              res = false;
-          if (data.name === "v_c")
-            if (record[i] > 10000 || record[i] < -10000)
-              res = false;
-          if (data.name === "right45_2_d")
-            if (record[i] > 200 || record[i] < -200)
-              res = false;
-          if (data.name === "right45_3_d")
-            if (record[i] > 200 || record[i] < -200)
-              res = false;
-          if (data.name === "left45_2_d")
-            if (record[i] > 200 || record[i] < -200)
-              res = false;
-          if (data.name === "left45_3_d")
-            if (record[i] > 200 || record[i] < -200)
-              res = false;
-          if (data.name === "ff_duty_front")
-            if (record[i] > 100 || record[i] < -100)
-              res = false;
-          if (data.name === "odm_y")
-            if (record[i] > 1000 || record[i] < -1000)
-              res = false;
-          if (data.name === "kim_theta")
-            if (record[i] > 400 || record[i] < -400)
-              res = false;
-          if (data.name === "odm_theta")
-            if (record[i] > 400 || record[i] < -400)
-              res = false;
-          if (data.name === "knym_v")
-            if (record[i] > 20000 || record[i] < -20000)
-              res = false;
-          if (data.name === "knym_w")
-            if (record[i] > 2000 || record[i] < -2000)
-              res = false;
-          if (data.name === "ang_i_bias")
-            if (record[i] > 3 || record[i] < -3)
-              res = false;
-          if (data.name === "ang_i_bias_val")
-            if (record[i] > 200 || record[i] < -200)
-              res = false;
-          if (data.name === "left45_d_diff")
-            if (record[i] > 50 || record[i] < -50)
-              res = false;
-          if (data.name === "left45_2_d_diff")
-            if (record[i] > 50 || record[i] < -50)
-              res = false;
-          if (data.name === "left45_3_d_diff")
-            if (record[i] > 50 || record[i] < -50)
-              res = false;
-          if (data.name === "right45_d_diff")
-            if (record[i] > 50 || record[i] < -50)
-              res = false;
-          if (data.name === "right45_2_d_diff")
-            if (record[i] > 50 || record[i] < -50)
-              res = false;
-          if (data.name === "right45_3_d_diff")
-            if (record[i] > 50 || record[i] < -50)
-              res = false;
-          if (data.name === "duty_roll")
-            if (record[i] > 0.1 || record[i] < -0.1)
-              res = false;
-          if (data.name === "duty_roll_before")
-            if (record[i] > 0.1 || record[i] < -0.1)
-              res = false;
-          return res;
-      });
-      if (valid) {
-        last_index = record[0];
-        obj.record += `${record.join(',')}\n`;
+      if (indexField >= 0) {
+        const idx = record[indexField];
+        if (idx % 100 === 0) console.log(last_idx, idx);
+        last_idx = idx;
       }
+      rows[j + 1] = record.join(',');
     }
 
-    fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
-      flag: "w+",
-    });
-    fs.copyFileSync(
-      `${__dirname}/logs/${obj.file_name}`,
-      `${__dirname}/logs/latest.csv`
-    );
+    const content = rows.join('\n') + '\n';
+    fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, content, { flag: "w+" });
+    fs.copyFileSync(`${__dirname}/logs/${obj.file_name}`, `${__dirname}/logs/latest.csv`);
     console.log(`[LoggingTask] dump done: ${recordNum} records -> ${obj.file_name}`);
     switchLineMode({
       dump_to_csv_ready: false,
