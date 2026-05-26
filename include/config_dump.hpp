@@ -452,6 +452,46 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["enable_mpc"]               = (int)src.enable_mpc;
     dst["dia90_offset"]             = src.dia90_offset;
     dst["kanayama"]                 = src.kanayama;
+    {
+        JsonArray a = dst["axel_degenerate_x"].to<JsonArray>();
+        for (float v : src.axel_degenerate_x) a.add(v);
+    }
+    {
+        JsonArray a = dst["axel_degenerate_y"].to<JsonArray>();
+        for (float v : src.axel_degenerate_y) a.add(v);
+    }
+    {
+        JsonArray a = dst["axel_degenerate_dia_x"].to<JsonArray>();
+        for (float v : src.axel_degenerate_dia_x) a.add(v);
+    }
+    {
+        JsonArray a = dst["axel_degenerate_dia_y"].to<JsonArray>();
+        for (float v : src.axel_degenerate_dia_y) a.add(v);
+    }
+    {
+        JsonArray a = dst["sensor_deg_limitter_v"].to<JsonArray>();
+        for (float v : src.sensor_deg_limitter_v) a.add(v);
+    }
+    {
+        JsonArray a = dst["sensor_deg_limitter_str"].to<JsonArray>();
+        for (float v : src.sensor_deg_limitter_str) a.add(v);
+    }
+    {
+        JsonArray a = dst["sensor_deg_limitter_dia"].to<JsonArray>();
+        for (float v : src.sensor_deg_limitter_dia) a.add(v);
+    }
+    {
+        JsonArray a = dst["sensor_deg_limitter_piller"].to<JsonArray>();
+        for (float v : src.sensor_deg_limitter_piller) a.add(v);
+    }
+    {
+        JsonArray a = dst["trj_idx_v"].to<JsonArray>();
+        for (int v : src.trj_idx_v) a.add(v);
+    }
+    {
+        JsonArray a = dst["trj_idx_val"].to<JsonArray>();
+        for (int v : src.trj_idx_val) a.add(v);
+    }
 }
 
 inline void convertToJson(const test_mode_t& src, JsonVariant dst) {

@@ -32,9 +32,7 @@ public:
   float ideal_v_r = 0.0f;
   float ideal_v_l = 0.0f;
 
-  // 外部から設定するルックアップテーブル
-  std::vector<int> trj_idx_v;
-  std::vector<int> trj_idx_val;
+  // trj_idx_v / trj_idx_val は input_param_t 経由で param->trj_idx_v/val を参照
 
 private:
   int32_t    mpc_step = 1;

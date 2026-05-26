@@ -54,11 +54,11 @@ void TrajectoryGenerator::calc_kanayama(
     SensorProcessor &sensor,
     float last_tgt_angle) {
 
-  if (trj_idx_v.size() == 0 || trj_idx_val.size() == 0)
+  if (param->trj_idx_v.size() == 0 || param->trj_idx_val.size() == 0)
     return;
 
   const auto idx_val =
-      sensor.interp1d(trj_idx_v, trj_idx_val, tgt_val->ego_in.v, false);
+      sensor.interp1d(param->trj_idx_v, param->trj_idx_val, tgt_val->ego_in.v, false);
 
   const int idx = std::min(param->trj_length - 1, idx_val);
 

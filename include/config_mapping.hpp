@@ -510,6 +510,43 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "pos_init_cov", dst.pos_init_cov);
     from_json_field(src, "pos_p_noise", dst.pos_p_noise);
     from_json_field(src, "pos_m_noise", dst.pos_m_noise);
+    // hardware.yaml のネスト形式 (*_kalman_config: {init_cov, p_noise, m_noise}) を読む。
+    // 上のフラットキーより後に処理するのでネスト形式が優先される。
+    if (!src["battery_kalman_config"].isNull()) {
+        from_json_field(src["battery_kalman_config"], "init_cov", dst.battery_init_cov);
+        from_json_field(src["battery_kalman_config"], "p_noise",  dst.battery_p_noise);
+        from_json_field(src["battery_kalman_config"], "m_noise",  dst.battery_m_noise);
+    }
+    if (!src["encoder_kalman_config"].isNull()) {
+        from_json_field(src["encoder_kalman_config"], "init_cov", dst.encoder_init_cov);
+        from_json_field(src["encoder_kalman_config"], "p_noise",  dst.encoder_p_noise);
+        from_json_field(src["encoder_kalman_config"], "m_noise",  dst.encoder_m_noise);
+    }
+    if (!src["w_kalman_config"].isNull()) {
+        from_json_field(src["w_kalman_config"], "init_cov", dst.w_init_cov);
+        from_json_field(src["w_kalman_config"], "p_noise",  dst.w_p_noise);
+        from_json_field(src["w_kalman_config"], "m_noise",  dst.w_m_noise);
+    }
+    if (!src["v_kalman_config"].isNull()) {
+        from_json_field(src["v_kalman_config"], "init_cov", dst.v_init_cov);
+        from_json_field(src["v_kalman_config"], "p_noise",  dst.v_p_noise);
+        from_json_field(src["v_kalman_config"], "m_noise",  dst.v_m_noise);
+    }
+    if (!src["ang_kalman_config"].isNull()) {
+        from_json_field(src["ang_kalman_config"], "init_cov", dst.ang_init_cov);
+        from_json_field(src["ang_kalman_config"], "p_noise",  dst.ang_p_noise);
+        from_json_field(src["ang_kalman_config"], "m_noise",  dst.ang_m_noise);
+    }
+    if (!src["dist_kalman_config"].isNull()) {
+        from_json_field(src["dist_kalman_config"], "init_cov", dst.dist_init_cov);
+        from_json_field(src["dist_kalman_config"], "p_noise",  dst.dist_p_noise);
+        from_json_field(src["dist_kalman_config"], "m_noise",  dst.dist_m_noise);
+    }
+    if (!src["pos_kalman_config"].isNull()) {
+        from_json_field(src["pos_kalman_config"], "init_cov", dst.pos_init_cov);
+        from_json_field(src["pos_kalman_config"], "p_noise",  dst.pos_p_noise);
+        from_json_field(src["pos_kalman_config"], "m_noise",  dst.pos_m_noise);
+    }
     from_json_field(src, "tread", dst.tread);
     from_json_field(src, "FF_front", dst.FF_front);
     from_json_field(src, "FF_roll", dst.FF_roll);
@@ -643,6 +680,12 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "slip_param_K", dst.slip_param_K);
     from_json_field(src, "slip_param_k2", dst.slip_param_k2);
     from_json_nested(src, "fail_check", dst.fail_check);
+    // hardware.yaml はフラットキーで記述する場合がある。ネスト形式が存在しない時に有効。
+    if (!src["fail_duty_cnt"].isNull())     dst.fail_check.duty     = src["fail_duty_cnt"].as<int>();
+    if (!src["fail_v_cnt"].isNull())        dst.fail_check.v        = src["fail_v_cnt"].as<int>();
+    if (!src["fail_w_cnt"].isNull())        dst.fail_check.w        = src["fail_w_cnt"].as<int>();
+    if (!src["fail_ang_cnt"].isNull())      dst.fail_check.ang      = src["fail_ang_cnt"].as<int>();
+    if (!src["fail_wall_off_cnt"].isNull()) dst.fail_check.wall_off = src["fail_wall_off_cnt"].as<int>();
     from_json_field(src, "fail_check_ang_th", dst.fail_check_ang_th);
     from_json_field(src, "normal_sla_offset", dst.normal_sla_offset);
     from_json_field(src, "normal_sla_offset_front", dst.normal_sla_offset_front);
@@ -695,6 +738,19 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "enable_mpc", dst.enable_mpc);
     from_json_field(src, "dia90_offset", dst.dia90_offset);
     from_json_nested(src, "kanayama", dst.kanayama);
+    // 軸退化ゲインテーブル (hardware.yaml: axel_degenerate_*)
+    from_json_vector(src, "axel_degenerate_x",          dst.axel_degenerate_x);
+    from_json_vector(src, "axel_degenerate_y",          dst.axel_degenerate_y);
+    from_json_vector(src, "axel_degenerate_dia_x",      dst.axel_degenerate_dia_x);
+    from_json_vector(src, "axel_degenerate_dia_y",      dst.axel_degenerate_dia_y);
+    // センサー角速度リミッタテーブル (hardware.yaml: sensor_deg_limitter_*)
+    from_json_vector(src, "sensor_deg_limitter_v",      dst.sensor_deg_limitter_v);
+    from_json_vector(src, "sensor_deg_limitter_str",    dst.sensor_deg_limitter_str);
+    from_json_vector(src, "sensor_deg_limitter_dia",    dst.sensor_deg_limitter_dia);
+    from_json_vector(src, "sensor_deg_limitter_piller", dst.sensor_deg_limitter_piller);
+    // 軌道インデックステーブル (offset.yaml: trj_idx_v / trj_idx_val)
+    from_json_vector(src, "trj_idx_v",                  dst.trj_idx_v);
+    from_json_vector(src, "trj_idx_val",                dst.trj_idx_val);
 }
 /**
  * system.txt

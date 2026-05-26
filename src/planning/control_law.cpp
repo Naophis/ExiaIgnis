@@ -37,27 +37,27 @@ void ControlLaw::calc( bool motor_en,
   float axel_degenerate_gain = 1.0f;
   diff_old = diff;
   if (!search_mode_ && tgt_val_->motion_type == MotionType::STRAIGHT) {
-    if (sensor_->axel_degenerate_x.size() >= 2 &&
+    if (param_->axel_degenerate_x.size() >= 2 &&
         tgt_val_->nmr.sct == SensorCtrlType::Straight) {
       SensingControlType type = SensingControlType::None;
       diff = ABS(check_sen_error(type));
       if (diff == 0)
         diff = diff_old;
       axel_degenerate_gain = sensor_->interp1d(
-          sensor_->axel_degenerate_x, sensor_->axel_degenerate_y, diff, false);
+          param_->axel_degenerate_x, param_->axel_degenerate_y, diff, false);
       tgt_val_->tgt_in.axel_degenerate_gain =
           (1 - param_->sensor_gain.front2.b) *
               tgt_val_->tgt_in.axel_degenerate_gain +
           param_->sensor_gain.front2.b * axel_degenerate_gain;
-    } else if (sensor_->axel_degenerate_dia_x.size() >= 2 &&
+    } else if (param_->axel_degenerate_dia_x.size() >= 2 &&
                tgt_val_->nmr.sct == SensorCtrlType::Dia) {
       SensingControlType type = SensingControlType::None;
       diff = ABS(check_sen_error_dia(type));
       if (diff == 0)
         diff = diff_old;
       axel_degenerate_gain =
-          sensor_->interp1d(sensor_->axel_degenerate_dia_x,
-                            sensor_->axel_degenerate_dia_y, diff, false);
+          sensor_->interp1d(param_->axel_degenerate_dia_x,
+                            param_->axel_degenerate_dia_y, diff, false);
       if (axel_degenerate_gain < 0 &&
           tgt_val_->tgt_in.end_v > tgt_val_->ego_in.v) {
         tgt_val_->tgt_in.axel_degenerate_gain = 0.01f;
@@ -261,12 +261,12 @@ float ControlLaw::calc_sensor_pid() {
   if (type == SensingControlType::None) {
     return 0;
   } else if (type == SensingControlType::Wall) {
-    limit = sensor_->interp1d(sensor_->sensor_deg_limitter_v,
-                              sensor_->sensor_deg_limitter_str,
+    limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
+                              param_->sensor_deg_limitter_str,
                               tgt_val_->ego_in.v, false);
   } else if (type == SensingControlType::Piller) {
-    limit = sensor_->interp1d(sensor_->sensor_deg_limitter_v,
-                              sensor_->sensor_deg_limitter_piller,
+    limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
+                              param_->sensor_deg_limitter_piller,
                               tgt_val_->ego_in.v, false);
   }
   duty = std::clamp(duty, -limit, limit);
@@ -305,8 +305,8 @@ float ControlLaw::calc_sensor_pid_dia() {
   if (type == SensingControlType::None) {
     return 0;
   } else if (type == SensingControlType::DiaPiller) {
-    limit = sensor_->interp1d(sensor_->sensor_deg_limitter_v,
-                              sensor_->sensor_deg_limitter_dia,
+    limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
+                              param_->sensor_deg_limitter_dia,
                               tgt_val_->ego_in.v, false);
   }
   duty = std::clamp(duty, -limit, limit);

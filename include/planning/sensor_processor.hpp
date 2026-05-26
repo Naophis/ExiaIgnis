@@ -25,10 +25,6 @@ public:
 
   // 設定テーブル (外部から直接代入)
   vector<float> log_table;
-  vector<float> axel_degenerate_x,     axel_degenerate_y;
-  vector<float> axel_degenerate_dia_x, axel_degenerate_dia_y;
-  vector<float> sensor_deg_limitter_v,   sensor_deg_limitter_str;
-  vector<float> sensor_deg_limitter_dia, sensor_deg_limitter_piller;
 
 private:
   std::shared_ptr<sensing_result_entity_t> se;

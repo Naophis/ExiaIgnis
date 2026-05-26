@@ -755,6 +755,22 @@ typedef struct {
   char enable_mpc = 0;
   float dia90_offset = 0;
   kanayama_t kanayama;
+
+  // 軸退化ゲインテーブル (control_law で interp1d に渡す)
+  std::vector<float> axel_degenerate_x;
+  std::vector<float> axel_degenerate_y;
+  std::vector<float> axel_degenerate_dia_x;
+  std::vector<float> axel_degenerate_dia_y;
+
+  // センサー角速度リミッタテーブル (control_law で interp1d に渡す)
+  std::vector<float> sensor_deg_limitter_v;
+  std::vector<float> sensor_deg_limitter_str;
+  std::vector<float> sensor_deg_limitter_dia;
+  std::vector<float> sensor_deg_limitter_piller;
+
+  // 軌道インデックステーブル (trajectory_generator で interp1d に渡す)
+  std::vector<int> trj_idx_v;
+  std::vector<int> trj_idx_val;
 } input_param_t;
 
 typedef struct {
