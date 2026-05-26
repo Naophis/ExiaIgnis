@@ -103,6 +103,10 @@ add_executable(ExiaIgnis
     src/main/main_task_util.cpp
     src/main/main_task_run.cpp
     src/main/main_task_test.cpp
+    src/main/main_task_test_sla.cpp
+    src/main/main_task_test_run.cpp
+    src/main/main_task_test_pivot.cpp
+    src/main/main_task_test_misc.cpp
     src/logging/logging_task.cpp
     src/ui.cpp
     src/driver/asm330lhh.cpp
