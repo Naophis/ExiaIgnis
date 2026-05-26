@@ -198,6 +198,8 @@ real32_T rt_powf_snf(real32_T u0, real32_T u1)
   return y;
 }
 
+
+__attribute__((noinline, section(".time_critical.mpc_tgt_calc")))
 void mpc_tgt_calcModelClass::step(const t_tgt *arg_tgt, const t_ego *arg_ego,
   int32_T arg_mode, int32_T arg_time_step, t_ego *arg_next_ego, t_dynamics
   *arg_ego1, int32_T *arg_In1)
