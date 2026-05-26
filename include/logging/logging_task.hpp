@@ -83,8 +83,6 @@ private:
 
     static std::shared_ptr<LoggingTask> s_instance;
 
-    static constexpr int SEND_BATCH = 500;
-
     volatile bool active_  = false;
     size_t        log_cap_ = 0;
     uint8_t      *send_buf_ = nullptr;

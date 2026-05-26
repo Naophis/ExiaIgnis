@@ -58,7 +58,7 @@ __attribute__((noinline, section(".motion.go_straight")))
 MotionResult MotionPlanning::go_straight(param_straight_t &p,
                                          std::shared_ptr<Adachi> &adachi,
                                          bool search_mode) {
-  printf("[mp]: go_straight\n");
+  // printf("[mp]: go_straight\n");
   const auto se = get_sensing_entity();
   const static float ang32 = 32.0f / 180.0f * M_PI;
   const static float cos32 = std::cos(ang32);

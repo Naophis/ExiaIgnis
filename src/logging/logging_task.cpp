@@ -139,14 +139,9 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
   log_cap_ = max_entries;
   log_vec_.reserve(max_entries); // PSRAM に一括確保 (以降 realloc なし)
 
-  constexpr size_t send_buf_bytes = 504 * SEND_BATCH;  // 480 (ls1-10) + 24 (ls11)
-  send_buf_ = static_cast<uint8_t *>(psram_heap::alloc(send_buf_bytes));
-  if (!send_buf_) panic("PSRAM OOM: send_buf");
-
-  printf("[LoggingTask] PSRAM %zu KB, cap=%zu entries (%zu KB), entry=%zu B, send_buf=%zu KB\n",
+  printf("[LoggingTask] PSRAM %zu KB, cap=%zu entries (%zu KB), entry=%zu B\n",
          psram_size / 1024, max_entries,
-         (max_entries * sizeof(log_data_t2)) / 1024, sizeof(log_data_t2),
-         send_buf_bytes / 1024);
+         (max_entries * sizeof(log_data_t2)) / 1024, sizeof(log_data_t2));
 }
 
 void LoggingTask::start() {
@@ -329,9 +324,8 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
 // Astraea の print_header() + dump_log() と同じ方式:
 //   ready___:<record_bytes>\n   … dump_to_csv_ready フラグ
 //   name:type:sizeof(field)\n × 120 フィールド
-//   start___\n
-//   LogStruct1〜10 を memcpy した 480 byte × n エントリ
-//   終端レコード (index=-1)
+//   start___:<total_bytes>\n
+//   LogStruct1〜10 を memcpy した 480 byte × n エントリ (合計 total_bytes)
 // ============================================================
 void LoggingTask::dump_csv() const {
   const size_t n = log_vec_.size();
@@ -499,17 +493,18 @@ void LoggingTask::dump_csv() const {
 
   fflush(stdout);
   sleep_ms(50);
-  printf("start___\n");
+  const auto send_buf_bytes = n * size; 
+  printf("start___:%zu\n", send_buf_bytes);
   fflush(stdout);
+  
+  // send_buf_ = static_cast<uint8_t *>(psram_heap::alloc(send_buf_bytes));
+
   sleep_ms(100);
 
   // CRLF 変換を無効化してバイナリデータを送信 (\n バイトが壊れるのを防ぐ)
   stdio_set_translate_crlf(&stdio_usb, false);
 
-  constexpr int BATCH = SEND_BATCH;
-  uint8_t *const send_buf = send_buf_;
-  size_t batch_off = 0;
-  int batch_cnt = 0;
+  uint8_t send_buf[504];  // 1レコード分のスタックバッファ (ls1-10: 480 + ls11: 24)
 
   ls1.index = 0;
   float left45_d_z = 0, right45_d_z = 0;
@@ -517,19 +512,8 @@ void LoggingTask::dump_csv() const {
   float left45_3_d_z = 0, right45_3_d_z = 0;
   constexpr float th = 10.0f;
 
-  int flush_cnt = 0;
-  long c = 0;
-  // while(1){
-  //       if(c>86000){
-  //   break;
-  //   }
   for (const auto &e : log_vec_) {
     ls1.index++;
-    c++;
-    // if(c>86000){
-    // break;
-    // }
-    // if (ls1.index >= (int32_t)n) break;
 
     // --- ls1 ---
     ls1.ideal_v = halfToFloat(e.img_v);
@@ -682,78 +666,21 @@ void LoggingTask::dump_csv() const {
     ls11.pln_t_copy     = e.pln_t_copy;
     ls11.pln_t_ctl      = e.pln_t_ctl;
 
-    size_t off = batch_off;
-    memcpy(send_buf + off, &ls1, sizeof(ls1));
-    off += sizeof(ls1);
-    memcpy(send_buf + off, &ls2, sizeof(ls2));
-    off += sizeof(ls2);
-    memcpy(send_buf + off, &ls3, sizeof(ls3));
-    off += sizeof(ls3);
-    memcpy(send_buf + off, &ls4, sizeof(ls4));
-    off += sizeof(ls4);
-    memcpy(send_buf + off, &ls5, sizeof(ls5));
-    off += sizeof(ls5);
-    memcpy(send_buf + off, &ls6, sizeof(ls6));
-    off += sizeof(ls6);
-    memcpy(send_buf + off, &ls7, sizeof(ls7));
-    off += sizeof(ls7);
-    memcpy(send_buf + off, &ls8, sizeof(ls8));
-    off += sizeof(ls8);
-    memcpy(send_buf + off, &ls9, sizeof(ls9));
-    off += sizeof(ls9);
-    memcpy(send_buf + off, &ls10, sizeof(ls10));
-    off += sizeof(ls10);
-    memcpy(send_buf + off, &ls11, sizeof(ls11));
-
-    batch_off += size;
-    batch_cnt++;
-
-    if (batch_cnt >= BATCH) {
-      // fwrite(send_buf, 1, batch_off, stdout);
-      cdc_write_all(send_buf, batch_off);
-      batch_off = 0;
-      batch_cnt = 0;
-    }
-
-    if (++flush_cnt >= 50) {
-      flush_cnt = 0;
-      // fflush(stdout);
-      // sleep_ms(1);
-    }
-  }
-  // }
-
-  // 終端レコード (index = -1)
-  ls1.index = -1;
-  {
     size_t off = 0;
-    memcpy(send_buf + off, &ls1, sizeof(ls1));
-    off += sizeof(ls1);
-    memcpy(send_buf + off, &ls2, sizeof(ls2));
-    off += sizeof(ls2);
-    memcpy(send_buf + off, &ls3, sizeof(ls3));
-    off += sizeof(ls3);
-    memcpy(send_buf + off, &ls4, sizeof(ls4));
-    off += sizeof(ls4);
-    memcpy(send_buf + off, &ls5, sizeof(ls5));
-    off += sizeof(ls5);
-    memcpy(send_buf + off, &ls6, sizeof(ls6));
-    off += sizeof(ls6);
-    memcpy(send_buf + off, &ls7, sizeof(ls7));
-    off += sizeof(ls7);
-    memcpy(send_buf + off, &ls8, sizeof(ls8));
-    off += sizeof(ls8);
-    memcpy(send_buf + off, &ls9, sizeof(ls9));
-    off += sizeof(ls9);
-    memcpy(send_buf + off, &ls10, sizeof(ls10));
-    off += sizeof(ls10);
+    memcpy(send_buf + off, &ls1,  sizeof(ls1));  off += sizeof(ls1);
+    memcpy(send_buf + off, &ls2,  sizeof(ls2));  off += sizeof(ls2);
+    memcpy(send_buf + off, &ls3,  sizeof(ls3));  off += sizeof(ls3);
+    memcpy(send_buf + off, &ls4,  sizeof(ls4));  off += sizeof(ls4);
+    memcpy(send_buf + off, &ls5,  sizeof(ls5));  off += sizeof(ls5);
+    memcpy(send_buf + off, &ls6,  sizeof(ls6));  off += sizeof(ls6);
+    memcpy(send_buf + off, &ls7,  sizeof(ls7));  off += sizeof(ls7);
+    memcpy(send_buf + off, &ls8,  sizeof(ls8));  off += sizeof(ls8);
+    memcpy(send_buf + off, &ls9,  sizeof(ls9));  off += sizeof(ls9);
+    memcpy(send_buf + off, &ls10, sizeof(ls10)); off += sizeof(ls10);
     memcpy(send_buf + off, &ls11, sizeof(ls11));
-    fwrite(send_buf, 1, size, stdout);
-    if (batch_off > 0) {
-      // fwrite(send_buf, 1, batch_off, stdout);
-      cdc_write_all(send_buf, size);
-    }
+    cdc_write_all(send_buf, size);
   }
+
   fflush(stdout);
   sleep_ms(100);
 

@@ -157,15 +157,16 @@ const switchLineMode = (obj) => {
       console.log(obj);
     }
 
-    if (data.match(/^start/)) {
+    if (data.match(/^start___/)) {
       obj.file_name = getNowYMD();
       obj.record = "";
+      obj.total_bytes = parseInt(data.split(":")[1]);
 
-      // デバッグ: 最初の20カラムの型定義を出力
       console.log('First 20 columns:');
       for (let i = 0; i < 20 && i < obj.data_struct.length; i++) {
         console.log(`  [${i}] ${obj.data_struct[i].name}: ${obj.data_struct[i].type}`);
       }
+      console.log(`total_bytes: ${obj.total_bytes}`);
       switchToBinaryMode(obj);
     }
 
@@ -178,99 +179,44 @@ const switchLineMode = (obj) => {
   });
 }
 
-let LOG_STRUCT_SIZE = 12; // 12 bytes per record
-
 const switchToBinaryMode = (obj) => {
   let last_ang_sum = 0;
   const dataSize2 = obj.data_struct.reduce((prev, cur) => {
     return prev + cur.size;
   }, 0);
-  const RECORDS_PER_CHUNK = 500;
-  const dataSize = dataSize2 * RECORDS_PER_CHUNK;  // レコードサイズに合わせて動的計算
   const recordByteSize = dataSize2;
-  const recordNum = RECORDS_PER_CHUNK;
-  console.log('size1: ', dataSize, 'bytes');
-  console.log('size2: ', dataSize2, 'bytes');
+  const totalBytes = obj.total_bytes;
+  const recordNum = Math.floor(totalBytes / recordByteSize);
+  console.log('record size:', recordByteSize, 'bytes');
+  console.log('total bytes:', totalBytes, 'bytes');
+  console.log('record count:', recordNum);
   console.log('header count:', obj.data_struct.length);
-
-  LOG_STRUCT_SIZE = dataSize2 / (4 * 12); // 4 * 12 bytes per struct
 
   binaryMode = true;
 
   // パイプラインをクリア
   port.unpipe(parser);
 
-  // ByteLength パーサに切り替え
-  parser = port.pipe(new ByteLengthParser({ length: dataSize, highWaterMark: 256 * 1024 }));
+  // ByteLength パーサに切り替え (全データを一括受信)
+  parser = port.pipe(new ByteLengthParser({ length: totalBytes, highWaterMark: 256 * 1024 }));
 
   const header = obj.data_struct.map((data) => {
     return data.name
   }).join(',');
   obj.record += `${header}\n`;
   console.log('header:', header);
-  let cnt = 0;
-  let record = [];
-  let finish = false;
-  let index = 0;
+
   let last_index = 0;
-  let last_recived = new Date().getTime();
-  let now = new Date().getTime();
-  let force_save = false;
-
   let last_idx = 0;
-
-  let interval = setInterval(() => {
-    console.log("force save");
-    if ((now - last_recived > 1000) || force_save) {
-      console.log('timeout');
-      fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
-        flag: "w+",
-      });
-      fs.copyFileSync(
-        `${__dirname}/logs/${obj.file_name}`,
-        `${__dirname}/logs/latest.csv`
-      );
-      finish = true;
-      // port.unpipe(parser);
-      clearInterval(interval);
-      switchLineMode({
-        dump_to_csv_ready: false,
-        dump_to_map: false,
-        dump_to_csv_text: false,
-        data_struct: [],
-        file_name: getNowYMD(),
-        record: "",
-      });
-    }
-    now = new Date().getTime();
-  }, 1000);
-
 
   parser.on('data', (binaryData) => {
 
     for (let j = 0; j < recordNum; j++) {
 
       let offset = j * recordByteSize;
-      cnt++;
-      index++;
+      let record = [];
 
-      // デバッグ: 最初の4バイト(index)を監視
-      if (cnt === 1) {
-        const rawIndex = binaryData.readInt32LE(0);
-        if (rawIndex < 0 || rawIndex > 100000) {
-          console.log(`[WARN] index=${index}, rawIndex=${rawIndex}, first8bytes=${binaryData.slice(0, 8).toString('hex')}`);
-          // 異常なindexを検出したらこのレコードをスキップ
-          cnt = 0;
-          record = [];
-          return;
-        }
-      }
-
-      let bind = false;
-      const start_idx = 0;
-      const end_idx = obj.data_struct.length;
-
-      for (let i = start_idx; i < end_idx; i++) {
+      for (let i = 0; i < obj.data_struct.length; i++) {
 
         const data = obj.data_struct[i];
         if (data === undefined) {
@@ -281,17 +227,14 @@ const switchToBinaryMode = (obj) => {
           case 'float':
             record.push(binaryData.readFloatLE(tmp_data));
             offset += data.size;
-            bind = true;
             break;
           case 'int':
             record.push(binaryData.readInt32LE(tmp_data));
             offset += data.size;
-            bind = true;
             break;
           case 'short':
             record.push(binaryData.readInt16LE(tmp_data));
             offset += data.size;
-            bind = true;
             break;
           default:
             throw new Error(`Unsupported data type: ${data.type}`);
@@ -301,22 +244,13 @@ const switchToBinaryMode = (obj) => {
           if (idx % 100 === 0) {
             console.log(last_idx, idx);
           }
-          if (idx < last_idx) {
-            force_save = true;
-          }
           last_idx = idx;
         }
       }
-      if (bind) {
-        last_recived = new Date().getTime();
-      }
 
-      // if (cnt > 0 && cnt % LOG_STRUCT_SIZE === 0) {
-      cnt = 0;
-      if (!finish) {
-        let valid = obj.data_struct.every((data, i) => {
+      const valid = obj.data_struct.every((data, i) => {
           let res = true;
-          return true
+          // return true
           if (record[i] < -100000 || record[i] > 100000)
             res = false;
           if (data.name === "index") {
@@ -461,37 +395,29 @@ const switchToBinaryMode = (obj) => {
             if (record[i] > 0.1 || record[i] < -0.1)
               res = false;
           return res;
-        });
-        if (valid) {
-          last_index = record[0];
-          const str = record.join(',');
-          // console.log(str)
-          obj.record += `${str}\n`;
-        }
-        record = [];
-      } else if (finish) {
-        clearInterval(interval);
-        fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
-          flag: "w+",
-        });
-        fs.copyFileSync(
-          `${__dirname}/logs/${obj.file_name}`,
-          `${__dirname}/logs/latest.csv`
-        );
-        finish = true;
-        console.log("end");
-        clearInterval(interval);
-        switchLineMode({
-          dump_to_csv_ready: false,
-          dump_to_map: false,
-          dump_to_csv_text: false,
-          data_struct: [],
-          file_name: getNowYMD(),
-          record: "",
-        });
+      });
+      if (valid) {
+        last_index = record[0];
+        obj.record += `${record.join(',')}\n`;
       }
-      // }
     }
+
+    fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, `${obj.record}`, {
+      flag: "w+",
+    });
+    fs.copyFileSync(
+      `${__dirname}/logs/${obj.file_name}`,
+      `${__dirname}/logs/latest.csv`
+    );
+    console.log(`[LoggingTask] dump done: ${recordNum} records -> ${obj.file_name}`);
+    switchLineMode({
+      dump_to_csv_ready: false,
+      dump_to_map: false,
+      dump_to_csv_text: false,
+      data_struct: [],
+      file_name: getNowYMD(),
+      record: "",
+    });
   });
 }
 
