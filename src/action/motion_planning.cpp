@@ -34,6 +34,7 @@ void MotionPlanning::set_path_creator(std::shared_ptr<PathCreator> &_pc) {
 }
 void MotionPlanning::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
   pt = _pt;
+  wall_off_controller->set_planning_task(_pt);
 }
 void MotionPlanning::set_logging_task(std::shared_ptr<LoggingTask> &_lt) {
   lt = _lt; //
