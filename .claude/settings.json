@@ -62,7 +62,15 @@
       "Bash(arm-none-eabi-nm --print-size --size-sort /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
       "Bash(arm-none-eabi-objdump -d /home/naoto/Desktop/mouse/ExiaIgnis/build/CMakeFiles/ExiaIgnis.dir/src/planning/planning_task.cpp.o)",
       "Bash(arm-none-eabi-objdump -d /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
-      "Bash(./flash.sh)"
+      "Bash(./flash.sh)",
+      "Bash(awk -F, 'NR==1{for\\(i=1;i<=NF;i++\\) if\\($i==\"pln_t_trj\" || $i==\"pln_t_ctl\"\\) col[i]=$i; next} {for\\(i in col\\) printf col[i]\"=\"$i\" \"; print \"\"}' /home/naoto/Desktop/mouse/ExiaIgnis/tools/param_tuner/logs/latest.csv)",
+      "Bash(sort -t= -k2 -rn)",
+      "Bash(xargs ls)",
+      "Bash(awk '$3 ~ /^[0-9a-f]/ && $1 ~ /^2/ {sum += strtonum\\(\"0x\" $1\\)} END {print \"SRAM symbols start up to:\", sprintf\\(\"0x%x\", sum\\)}')",
+      "Bash(arm-none-eabi-objdump -h build/ExiaIgnis.elf)",
+      "Bash(awk -F, 'NR==1{for\\(i=1;i<=NF;i++\\) if\\($i~/pln_t_/\\) col[i]=$i; next} {for\\(i in col\\) printf col[i]\"=\"$i\" \"; print \"\"}' /home/naoto/Desktop/mouse/ExiaIgnis/tools/param_tuner/logs/latest.csv)",
+      "Bash(arm-none-eabi-readelf -S build/ExiaIgnis.elf)",
+      "Bash(./sram_usage.sh)"
     ]
   }
 }
