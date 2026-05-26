@@ -17,9 +17,8 @@ void SensorProcessor::init(
 
 __attribute__((noinline, section(".time_critical.sensor_processor")))
 void SensorProcessor::calc_dist() {
-  // if (!(tgt_val->motion_type == MotionType::NONE ||
-  //       tgt_val->motion_type == MotionType::PIVOT)) {
-  if (true) {
+  if (!(tgt_val->motion_type == MotionType::NONE ||
+        tgt_val->motion_type == MotionType::PIVOT)) {
     se->ego.left90_dist_old = se->ego.left90_dist;
     se->ego.left45_dist_old = se->ego.left45_dist;
     se->ego.left45_2_dist_old = se->ego.left45_2_dist;

@@ -88,6 +88,7 @@ int main() {
   lt->set_error_entity(planning->ctl_.ee);
   lt->set_tgt_val(tgt_val);
   lt->set_sensing_entity(sensing_entity);
+  lt->set_input_param_entity(param);
   auto main_task = MainTask::create(sensing, planning, param);
   main_task->set_logging_task(lt);
   main_task->set_tgt_val(tgt_val);

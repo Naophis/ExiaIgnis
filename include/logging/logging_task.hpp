@@ -7,7 +7,7 @@
 #include "planning/planning_task.hpp"
 #include "define.hpp"
 #include "pico/time.h"
-
+#include <algorithm>
 
 // ============================================================
 // PSRAM バンプアロケータ
@@ -101,4 +101,5 @@ private:
     std::shared_ptr<motion_tgt_val_t> tgt_val_;
 
     static void cdc_write_all(const uint8_t *p, size_t len);
+    float calc_sensor(float data, float a, float b, char motion_type) const;
 };

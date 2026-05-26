@@ -238,12 +238,12 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.sen_calc_time2 = sr->calc_time2;
   ld.pln_calc_time = tv->calc_time;
   ld.pln_time_diff = tv->calc_time_diff;
-  ld.pln_t_ego      = tv->pln_t_ego;
-  ld.pln_t_sensor   = tv->pln_t_sensor;
-  ld.pln_t_trj      = tv->pln_t_trj;
+  ld.pln_t_ego = tv->pln_t_ego;
+  ld.pln_t_sensor = tv->pln_t_sensor;
+  ld.pln_t_trj = tv->pln_t_trj;
   ld.pln_t_kanayama = tv->pln_t_kanayama;
-  ld.pln_t_copy     = tv->pln_t_copy;
-  ld.pln_t_ctl      = tv->pln_t_ctl;
+  ld.pln_t_copy = tv->pln_t_copy;
+  ld.pln_t_ctl = tv->pln_t_ctl;
 
   ld.pos_x = floatToHalf(sr->ego.pos_x);
   ld.pos_y = floatToHalf(sr->ego.pos_y);
@@ -342,12 +342,11 @@ void LoggingTask::dump_csv() const {
   LogStruct10 ls10{};
   LogStruct11 ls11{};
 
-  const int size = sizeof(LogStruct1) + sizeof(LogStruct2) +
-                   sizeof(LogStruct3) + sizeof(LogStruct4) +
-                   sizeof(LogStruct5) + sizeof(LogStruct6) +
-                   sizeof(LogStruct7) + sizeof(LogStruct8) +
-                   sizeof(LogStruct9) + sizeof(LogStruct10) +
-                   sizeof(LogStruct11);
+  const int size =
+      sizeof(LogStruct1) + sizeof(LogStruct2) + sizeof(LogStruct3) +
+      sizeof(LogStruct4) + sizeof(LogStruct5) + sizeof(LogStruct6) +
+      sizeof(LogStruct7) + sizeof(LogStruct8) + sizeof(LogStruct9) +
+      sizeof(LogStruct10) + sizeof(LogStruct11);
 
   printf("ready___:%d\n", size);
   fflush(stdout);
@@ -484,19 +483,19 @@ void LoggingTask::dump_csv() const {
   printf("duty_roll_before:float:%d\n", (int)sizeof(ls10.duty_roll_before));
   printf("reserve5:int:%d\n", (int)sizeof(ls10.reserve5));
   // LogStruct11
-  printf("pln_t_ego:int:%d\n",      (int)sizeof(ls11.pln_t_ego));
-  printf("pln_t_sensor:int:%d\n",   (int)sizeof(ls11.pln_t_sensor));
-  printf("pln_t_trj:int:%d\n",      (int)sizeof(ls11.pln_t_trj));
+  printf("pln_t_ego:int:%d\n", (int)sizeof(ls11.pln_t_ego));
+  printf("pln_t_sensor:int:%d\n", (int)sizeof(ls11.pln_t_sensor));
+  printf("pln_t_trj:int:%d\n", (int)sizeof(ls11.pln_t_trj));
   printf("pln_t_kanayama:int:%d\n", (int)sizeof(ls11.pln_t_kanayama));
-  printf("pln_t_copy:int:%d\n",     (int)sizeof(ls11.pln_t_copy));
-  printf("pln_t_ctl:int:%d\n",      (int)sizeof(ls11.pln_t_ctl));
+  printf("pln_t_copy:int:%d\n", (int)sizeof(ls11.pln_t_copy));
+  printf("pln_t_ctl:int:%d\n", (int)sizeof(ls11.pln_t_ctl));
 
   fflush(stdout);
   sleep_ms(50);
-  const auto send_buf_bytes = n * size; 
+  const auto send_buf_bytes = n * size;
   printf("start___:%zu\n", send_buf_bytes);
   fflush(stdout);
-  
+
   // send_buf_ = static_cast<uint8_t *>(psram_heap::alloc(send_buf_bytes));
 
   sleep_ms(100);
@@ -504,16 +503,34 @@ void LoggingTask::dump_csv() const {
   // CRLF 変換を無効化してバイナリデータを送信 (\n バイトが壊れるのを防ぐ)
   stdio_set_translate_crlf(&stdio_usb, false);
 
-  uint8_t send_buf[504];  // 1レコード分のスタックバッファ (ls1-10: 480 + ls11: 24)
+  uint8_t send_buf[504]; // 1レコード分のスタックバッファ (ls1-10: 480 + ls11: 24)
 
   ls1.index = 0;
+
+  float left90_d_z = 0, right90_d_z = 0;
   float left45_d_z = 0, right45_d_z = 0;
   float left45_2_d_z = 0, right45_2_d_z = 0;
   float left45_3_d_z = 0, right45_3_d_z = 0;
+
   constexpr float th = 10.0f;
 
   for (const auto &e : log_vec_) {
     ls1.index++;
+
+    left90_d_z = ls3.left90_d;
+    left45_d_z = ls3.left45_d;
+    right45_d_z = ls3.right45_d;
+    right90_d_z = ls3.right90_d;
+
+    left45_2_d_z = ls8.left45_2_d;
+    right45_2_d_z = ls8.right45_2_d;
+    left45_3_d_z = ls8.left45_3_d;
+    right45_3_d_z = ls8.right45_3_d;
+
+    if (ls1.index == 0) {
+      left90_d_z = right90_d_z = left45_3_d_z = left45_2_d_z = left45_d_z =
+          right45_d_z = right45_2_d_z = right45_3_d_z = 0;
+    }
 
     // --- ls1 ---
     ls1.ideal_v = halfToFloat(e.img_v);
@@ -523,8 +540,8 @@ void LoggingTask::dump_csv() const {
     ls1.v_r = halfToFloat(e.v_r);
     ls1.v_l_enc = e.v_l_enc;
     ls1.v_r_enc = e.v_r_enc;
-    ls1.v_l_enc_sin = 0.0f;
-    ls1.v_r_enc_sin = 0.0f;
+    ls1.v_l_enc_sin = std::sin(2.0 * M_PI * e.v_l_enc / ENC_RESOLUTION);
+    ls1.v_r_enc_sin = std::sin(2.0 * M_PI * e.v_r_enc / ENC_RESOLUTION);
     ls1.accl = halfToFloat(e.accl) * 1000.0f;
     ls1.accl_x = halfToFloat(e.accl_x);
     // --- ls2 ---
@@ -543,21 +560,66 @@ void LoggingTask::dump_csv() const {
     // --- ls3 ---
     ls3.right45 = e.right45_lp;
     ls3.right90 = e.right90_lp;
-    ls3.left90_d = 0.0f;
-    ls3.left45_d = halfToFloat(e.sen_log_l45);
-    ls3.front_d = 0.0f;
-    ls3.right45_d = halfToFloat(e.sen_log_r45);
-    ls3.right90_d = 0.0f;
-    ls3.left90_far_d = 0.0f;
-    ls3.front_far_d = 0.0f;
-    ls3.right90_far_d = 0.0f;
+
+    auto l90 = calc_sensor((e.left90_lp), param->sensor_gain.l90.a,
+                           param->sensor_gain.l90.b, e.motion_type);
+    auto l45 = calc_sensor((e.left45_lp), param->sensor_gain.l45.a,
+                           param->sensor_gain.l45.b, e.motion_type);
+    auto r45 = calc_sensor((e.right45_lp), param->sensor_gain.r45.a,
+                           param->sensor_gain.r45.b, e.motion_type);
+    auto r45_2 = calc_sensor((e.right45_2_lp), param->sensor_gain.r45_2.a,
+                             param->sensor_gain.r45_2.b, e.motion_type);
+    auto l45_2 = calc_sensor((e.left45_2_lp), param->sensor_gain.l45_2.a,
+                             param->sensor_gain.l45_2.b, e.motion_type);
+    auto l45_3 = calc_sensor((e.left45_3_lp), param->sensor_gain.l45_3.a,
+                             param->sensor_gain.l45_3.b, e.motion_type);
+    auto r45_3 = calc_sensor((e.right45_3_lp), param->sensor_gain.r45_3.a,
+                             param->sensor_gain.r45_3.b, e.motion_type);
+    auto r90 = calc_sensor((e.right90_lp), param->sensor_gain.r90.a,
+                           param->sensor_gain.r90.b, e.motion_type);
+    auto l90_far = calc_sensor((e.left90_lp), param->sensor_gain.l90_far.a,
+                               param->sensor_gain.l90_far.b, e.motion_type);
+    auto r90_far = calc_sensor((e.right90_lp), param->sensor_gain.r90_far.a,
+                               param->sensor_gain.r90_far.b, e.motion_type);
+    float front = 0;
+    if (l90 > 0 && r90 > 0) {
+      front = (l90 + r90) / 2;
+    } else if (l90 == 0 && r90 > 0) {
+      front = r90;
+    } else if (l90 > 0 && r90 == 0) {
+      front = l90;
+    } else {
+      front = 0;
+    }
+    float front_far = 0;
+    if (l90_far > 0 && r90_far > 0) {
+      front_far = (l90_far + r90_far) / 2;
+    } else if (l90_far > 0 && r90_far == 0) {
+      front_far = l90_far;
+    } else if (l90_far == 0 && r90_far > 0) {
+      front_far = r90_far;
+    } else {
+      front_far = 0;
+    }
+    auto dist = halfToFloat(e.img_dist);
+    float dist_mod = (int)(dist / param->dist_mod_num);
+    float tmp_dist = dist - param->dist_mod_num * dist_mod;
+
+    ls3.left90_d = l90;
+    ls3.left45_d = l45;
+    ls3.front_d = front;
+    ls3.right45_d = r45;
+    ls3.right90_d = r90;
+    ls3.left90_far_d = l90_far;
+    ls3.front_far_d = front_far;
+    ls3.right90_far_d = r90_far;
     ls3.battery = halfToFloat(e.battery_lp);
     ls3.duty_l = halfToFloat(e.duty_l);
     // --- ls4 ---
     ls4.duty_r = halfToFloat(e.duty_r);
     ls4.motion_state = e.motion_type;
     ls4.duty_sen = halfToFloat(e.duty_sensor_ctrl);
-    ls4.dist_mod90 = 0.0f;
+    ls4.dist_mod90 = tmp_dist;
     ls4.sen_dist_l45 = halfToFloat(e.sen_log_l45);
     ls4.sen_dist_r45 = halfToFloat(e.sen_log_r45);
     ls4.timestamp = e.motion_timestamp;
@@ -629,22 +691,20 @@ void LoggingTask::dump_csv() const {
     ls9.kim_theta = halfToFloat(e.kim_theta) * 180.0f / m_PI;
     ls9.ang_i_bias = halfToFloat(e.ang_i_bias);
     ls9.ang_i_bias_val = halfToFloat(e.ang_i_bias_val);
-    ls9.left90_d_diff = 0.0f;
-    ls9.right90_d_diff = 0.0f;
+
+    ls9.left90_d_diff = std::clamp(l90 - left90_d_z, -th, th);
+    ls9.right90_d_diff = std::clamp(r90 - right90_d_z, -th, th);
     // --- ls10 ---
     {
       float l45 = ls3.left45_d, r45 = ls3.right45_d;
       float l45_2 = ls8.left45_2_d, r45_2 = ls8.right45_2_d;
       float l45_3 = ls8.left45_3_d, r45_3 = ls8.right45_3_d;
-      auto clamp = [](float v, float lo, float hi) {
-        return v < lo ? lo : (v > hi ? hi : v);
-      };
-      ls10.right45_3_d_diff = clamp(r45_3 - right45_3_d_z, -th, th);
-      ls10.right45_2_d_diff = clamp(r45_2 - right45_2_d_z, -th, th);
-      ls10.right45_d_diff = clamp(r45 - right45_d_z, -th, th);
-      ls10.left45_d_diff = clamp(l45 - left45_d_z, -th, th);
-      ls10.left45_2_d_diff = clamp(l45_2 - left45_2_d_z, -th, th);
-      ls10.left45_3_d_diff = clamp(l45_3 - left45_3_d_z, -th, th);
+      ls10.right45_3_d_diff = std::clamp(r45_3 - right45_3_d_z, -th, th);
+      ls10.right45_2_d_diff = std::clamp(r45_2 - right45_2_d_z, -th, th);
+      ls10.right45_d_diff = std::clamp(r45 - right45_d_z, -th, th);
+      ls10.left45_d_diff = std::clamp(l45 - left45_d_z, -th, th);
+      ls10.left45_2_d_diff = std::clamp(l45_2 - left45_2_d_z, -th, th);
+      ls10.left45_3_d_diff = std::clamp(l45_3 - left45_3_d_z, -th, th);
       left45_d_z = l45;
       right45_d_z = r45;
       left45_2_d_z = l45_2;
@@ -659,24 +719,34 @@ void LoggingTask::dump_csv() const {
     ls10.duty_roll_before = halfToFloat(e.duty_roll_before);
     ls10.reserve5 = 0;
     // --- ls11 ---
-    ls11.pln_t_ego      = e.pln_t_ego;
-    ls11.pln_t_sensor   = e.pln_t_sensor;
-    ls11.pln_t_trj      = e.pln_t_trj;
+    ls11.pln_t_ego = e.pln_t_ego;
+    ls11.pln_t_sensor = e.pln_t_sensor;
+    ls11.pln_t_trj = e.pln_t_trj;
     ls11.pln_t_kanayama = e.pln_t_kanayama;
-    ls11.pln_t_copy     = e.pln_t_copy;
-    ls11.pln_t_ctl      = e.pln_t_ctl;
+    ls11.pln_t_copy = e.pln_t_copy;
+    ls11.pln_t_ctl = e.pln_t_ctl;
 
     size_t off = 0;
-    memcpy(send_buf + off, &ls1,  sizeof(ls1));  off += sizeof(ls1);
-    memcpy(send_buf + off, &ls2,  sizeof(ls2));  off += sizeof(ls2);
-    memcpy(send_buf + off, &ls3,  sizeof(ls3));  off += sizeof(ls3);
-    memcpy(send_buf + off, &ls4,  sizeof(ls4));  off += sizeof(ls4);
-    memcpy(send_buf + off, &ls5,  sizeof(ls5));  off += sizeof(ls5);
-    memcpy(send_buf + off, &ls6,  sizeof(ls6));  off += sizeof(ls6);
-    memcpy(send_buf + off, &ls7,  sizeof(ls7));  off += sizeof(ls7);
-    memcpy(send_buf + off, &ls8,  sizeof(ls8));  off += sizeof(ls8);
-    memcpy(send_buf + off, &ls9,  sizeof(ls9));  off += sizeof(ls9);
-    memcpy(send_buf + off, &ls10, sizeof(ls10)); off += sizeof(ls10);
+    memcpy(send_buf + off, &ls1, sizeof(ls1));
+    off += sizeof(ls1);
+    memcpy(send_buf + off, &ls2, sizeof(ls2));
+    off += sizeof(ls2);
+    memcpy(send_buf + off, &ls3, sizeof(ls3));
+    off += sizeof(ls3);
+    memcpy(send_buf + off, &ls4, sizeof(ls4));
+    off += sizeof(ls4);
+    memcpy(send_buf + off, &ls5, sizeof(ls5));
+    off += sizeof(ls5);
+    memcpy(send_buf + off, &ls6, sizeof(ls6));
+    off += sizeof(ls6);
+    memcpy(send_buf + off, &ls7, sizeof(ls7));
+    off += sizeof(ls7);
+    memcpy(send_buf + off, &ls8, sizeof(ls8));
+    off += sizeof(ls8);
+    memcpy(send_buf + off, &ls9, sizeof(ls9));
+    off += sizeof(ls9);
+    memcpy(send_buf + off, &ls10, sizeof(ls10));
+    off += sizeof(ls10);
     memcpy(send_buf + off, &ls11, sizeof(ls11));
     cdc_write_all(send_buf, size);
   }
@@ -831,4 +901,23 @@ void LoggingTask::cdc_write_all(const uint8_t *p, size_t len) {
     p += written;
     len -= written;
   }
+}
+
+float LoggingTask::calc_sensor(float data, float a, float b,
+                               char motion_type) const {
+  if ((motion_type == static_cast<char>(MotionType::NONE) ||
+       motion_type == static_cast<char>(MotionType::PIVOT))) {
+    return 0;
+  }
+  if (data <= 1 || data >= 4005) {
+    return 0;
+  }
+  auto res = a / std::log(data) - b;
+  if (res < param->sensor_range_min || res > param->sensor_range_max) {
+    return 0;
+  }
+  if (!isfinite(res)) {
+    return 0;
+  }
+  return res;
 }
