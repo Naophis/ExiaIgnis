@@ -124,7 +124,7 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (do_log0) g_irq_log.push("T0");
 
   tgt_val->calc_time_diff = dt_us;
-  const uint64_t start = time_us_64();
+  uint64_t t_prev = time_us_64();
   {
     int idx = pending_cmd_idx_.load(std::memory_order_acquire);
     if (idx >= 0) {
@@ -149,11 +149,19 @@ void PlanningTask::tick(uint32_t dt_us) {
 
   if (do_log) g_irq_log.push("T1"); // pre ego.update
   ego.update(motor_en);
-  tgt_val->pln_t_ego = (int16_t)(time_us_64() - start);
+  {
+    uint64_t t_now = time_us_64();
+    tgt_val->pln_t_ego = (int16_t)(t_now - t_prev);
+    t_prev = t_now;
+  }
 
   if (do_log) g_irq_log.push("T2"); // pre sensor.calc_dist
   sensor_.calc_dist();
-  tgt_val->pln_t_sensor = (int16_t)(time_us_64() - start);
+  {
+    uint64_t t_now = time_us_64();
+    tgt_val->pln_t_sensor = (int16_t)(t_now - t_prev);
+    t_prev = t_now;
+  }
 
   if (do_log) g_irq_log.push("T3"); // pre generate
   if (first_req) {
@@ -163,7 +171,9 @@ void PlanningTask::tick(uint32_t dt_us) {
       tgt_val->tgt_in.enable_slip_decel = 0;
     }
     trj_.generate(last_tgt_angle);
-    tgt_val->pln_t_trj = (int16_t)(time_us_64() - start);
+    uint64_t t_now = time_us_64();
+    tgt_val->pln_t_trj = (int16_t)(t_now - t_prev);
+    t_prev = t_now;
   }
 
   if (tgt_val->motion_type == MotionType::STRAIGHT ||
@@ -178,7 +188,11 @@ void PlanningTask::tick(uint32_t dt_us) {
   }
   if (do_log) g_irq_log.push("T4"); // pre calc_kanayama
   trj_.calc_kanayama(ego, sensor_, last_tgt_angle);
-  tgt_val->pln_t_kanayama = (int16_t)(time_us_64() - start);
+  {
+    uint64_t t_now = time_us_64();
+    tgt_val->pln_t_kanayama = (int16_t)(t_now - t_prev);
+    t_prev = t_now;
+  }
 
   if (tgt_val->motion_type == MotionType::PIVOT ||
       tgt_val->motion_type == MotionType::FRONT_CTRL) {
@@ -188,11 +202,18 @@ void PlanningTask::tick(uint32_t dt_us) {
 
   if (do_log) g_irq_log.push("T5"); // pre copy_tgt
   trj_.copy_tgt(dt);
-  tgt_val->pln_t_copy = (int16_t)(time_us_64() - start);
+  {
+    uint64_t t_now = time_us_64();
+    tgt_val->pln_t_copy = (int16_t)(t_now - t_prev);
+    t_prev = t_now;
+  }
 
   if (do_log) g_irq_log.push("T6"); // pre ctl.calc
   ctl_.calc(motor_en, suction_en, search_mode, w_reset, last_tgt_angle, dt);
-  tgt_val->pln_t_ctl = (int16_t)(time_us_64() - start);
+  {
+    uint64_t t_now = time_us_64();
+    tgt_val->pln_t_ctl = (int16_t)(t_now - t_prev);
+  }
 
   if (do_log) g_irq_log.push("T7"); // tick complete
   tgt_val->calc_time = tgt_val->pln_t_ctl;
