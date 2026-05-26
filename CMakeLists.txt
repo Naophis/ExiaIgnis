@@ -98,6 +98,7 @@ add_executable(ExiaIgnis
     src/action/motion_planning.cpp
     src/action/wall_off_controller.cpp
     src/action/trajectory_creator.cpp
+    src/action/path_creator.cpp
     src/main/main_task.cpp
     src/main/main_task_usb.cpp
     src/main/main_task_util.cpp
