@@ -119,7 +119,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   tgt_val->nmr.timstamp++;
 
   pt->send_command(*tgt_val);
-  printf("[mp][go_straight]: sent command\n");
+  // printf("[mp][go_straight]: sent command\n");
   if (search_mode && adachi != nullptr) {
     adachi->update();
   }
@@ -153,7 +153,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   while (1) {
     wait_tick();
     if(cnt==0){
-      printf("[mp][go_straight]: start motion\n");
+      // printf("[mp][go_straight]: start motion\n");
     }
     cnt++;
     auto now_dist = (cnt == 1) ? 0.0f : tgt_val->ego_in.dist;

@@ -1153,9 +1153,6 @@ void ControlLaw::summation_duty() {
     float torque_r = ff_front2 + ff_roll2 + duty_c + duty_roll + ff_friction_r;
     float torque_l = ff_front2 - ff_roll2 + duty_c - duty_roll + ff_friction_l;
 
-    // float torque_r = ff_front2 ;//+ ff_roll2 + duty_c + duty_roll + ff_friction_r;
-    // float torque_l = ff_front2 ;//- ff_roll2 + duty_c - duty_roll + ff_friction_l;
-
 
     const float km_gear = param_->Km * (param_->gear_a / param_->gear_b);
     float req_v_r = torque_r * param_->Resist / km_gear + ff_duty_r2;

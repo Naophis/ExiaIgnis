@@ -45,6 +45,8 @@ public:
   void set_tgt_val(std::shared_ptr<motion_tgt_val_t> t) { tgt_val_ = t; }
   void set_planning(std::shared_ptr<PlanningTask> p) { pt_ = p; }
 
+  TurnDirection select_direction();
+
   std::vector<uint8_t> blight_level_list; // インデックスごとの輝度値
 
 private:

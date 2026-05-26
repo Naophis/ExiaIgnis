@@ -83,6 +83,7 @@ private:
   std::shared_ptr<SearchController> search_ctrl;
   std::shared_ptr<PathCreator> pc;
   param_straight_t ps;
+  param_roll_t pr;
   void reset_tgt_data();
   void reset_ego_data();
   void req_error_reset();

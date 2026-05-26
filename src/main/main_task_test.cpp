@@ -171,16 +171,58 @@ void MainTask::test_run() {
       break;
     sleep_ms(10);
   }
-  lt_->dump_csv_text();
   ui_.coin(120);
+}
+
+void MainTask::test_turn() {
+  
+
+  const auto rorl = ui_.select_direction();
+
+  mp->reset_gyro_ref_with_check();
+  reset_tgt_data();
+  reset_ego_data();
+
+  planning_->motor_enable();
+
+  req_error_reset();
+
+  load_slalom_param(0, 0, 0);
+  auto str_p = param_set.str_map[StraightType::Search];
+
+  if (param_->test_log_enable > 0) {
+    lt_->start_slalom_log();
+  }
+  // pt->active_logging();
+  pr.w_max = sys_.test.w_max;
+  pr.alpha = sys_.test.alpha;
+  pr.w_end = str_p.w_end;
+  pr.ang = sys_.test.ang * m_PI / 180;
+  pr.RorL = rorl;
+
+  mp->pivot_turn(pr);
+  sleep_ms(100);
+  planning_->motor_disable();
+  planning_->suction_disable();
+
+  lt_->stop();
+  reset_tgt_data();
+  reset_ego_data();
+  req_error_reset();
+  ui_.coin(120);
+
+  while (1) {
+    if (ui_.button_state_hold())
+      break;
+    sleep_ms(10);
+  }
+  lt_->dump_csv();
   while (1) {
     if (ui_.button_state_hold())
       break;
     sleep_ms(10);
   }
 }
-
-void MainTask::test_turn() {}
 
 void MainTask::test_run_sla() {}
 
