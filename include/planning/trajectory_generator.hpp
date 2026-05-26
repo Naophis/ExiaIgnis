@@ -14,6 +14,8 @@ public:
   void init(std::shared_ptr<motion_tgt_val_t> tgt_val,
             std::shared_ptr<input_param_t> param,
             std::shared_ptr<sensing_result_entity_t> sensing_result);
+  // motor_enable() から呼ばれる: trj_length に合わせて trajectory_points を確保する
+  void setup();
   void generate(float last_tgt_angle);
 
   void calc_kanayama(EgoEstimator &ego, SensorProcessor &sensor,

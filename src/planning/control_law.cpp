@@ -1,5 +1,6 @@
 #include "planning/control_law.hpp"
 #include "define.hpp"
+#include "utils/irq_log.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -29,11 +30,14 @@ void ControlLaw::calc( bool motor_en,
   last_tgt_angle_ = last_tgt_angle;
   dt_ = dt;
 
+  const bool ctl_log = (g_ctl_debug_ticks > 0);
+  if (ctl_log) g_irq_log.push("Ca"); // calc() start, before axel_degenerate block
+
   // axel degenerate gain (pre-calc before sensor PID, mirrors tick() logic)
   float axel_degenerate_gain = 1.0f;
   diff_old = diff;
   if (!search_mode_ && tgt_val_->motion_type == MotionType::STRAIGHT) {
-    if (sensor_->axel_degenerate_x.size() > 0 &&
+    if (sensor_->axel_degenerate_x.size() >= 2 &&
         tgt_val_->nmr.sct == SensorCtrlType::Straight) {
       SensingControlType type = SensingControlType::None;
       diff = ABS(check_sen_error(type));
@@ -45,7 +49,7 @@ void ControlLaw::calc( bool motor_en,
           (1 - param_->sensor_gain.front2.b) *
               tgt_val_->tgt_in.axel_degenerate_gain +
           param_->sensor_gain.front2.b * axel_degenerate_gain;
-    } else if (sensor_->axel_degenerate_dia_x.size() > 0 &&
+    } else if (sensor_->axel_degenerate_dia_x.size() >= 2 &&
                tgt_val_->nmr.sct == SensorCtrlType::Dia) {
       SensingControlType type = SensingControlType::None;
       diff = ABS(check_sen_error_dia(type));
@@ -68,14 +72,20 @@ void ControlLaw::calc( bool motor_en,
     tgt_val_->tgt_in.axel_degenerate_gain = axel_degenerate_gain;
   }
 
+  if (ctl_log) g_irq_log.push("Cb"); // after axel_degenerate block, before calc_tgt_duty
   calc_tgt_duty();
+  if (ctl_log) g_irq_log.push("Cc"); // after calc_tgt_duty, before check_fail_safe
   check_fail_safe();
+  if (ctl_log) g_irq_log.push("Cd"); // after check_fail_safe, before set_next_duty
   set_next_duty(tgt_duty.duty_l, tgt_duty.duty_r, tgt_duty.duty_suction);
 }
 
 // ============================================================
 
 void ControlLaw::calc_tgt_duty() {
+  const bool dlog = (g_ctl_debug_ticks > 0);
+  if (dlog) g_irq_log.push("D0"); // calc_tgt_duty start
+
   const unsigned char reset_req = motor_en_ ? 1 : 0;
   const unsigned char enable = 1;
   duty_sen = 0;
@@ -104,6 +114,8 @@ void ControlLaw::calc_tgt_duty() {
     ee->sen_log_dia.gain_zz = 0;
     ee->sen_log_dia.gain_z = 0;
   }
+  if (dlog) g_irq_log.push("D1"); // after sct sensor_pid block
+
   sensing_result_->ego.duty.sen = duty_sen;
   sensing_result_->ego.duty.sen_ang = sen_ang;
 
@@ -111,6 +123,7 @@ void ControlLaw::calc_tgt_duty() {
   calc_pid_val_ang();
   calc_pid_val_ang_vel();
   calc_pid_val_front_ctrl();
+  if (dlog) g_irq_log.push("D2"); // after calc_pid_val*
 
   duty_c = 0;
   duty_roll = 0;
@@ -126,6 +139,7 @@ void ControlLaw::calc_tgt_duty() {
     calc_translational_ctrl();
     calc_angle_velocity_ctrl();
   }
+  if (dlog) g_irq_log.push("D3"); // after translational/angle ctrl
   sensing_result_->ego.duty.sen = duty_sen;
 
   summation_duty();

@@ -43,6 +43,8 @@ public:
 
   // ---- tick 同期 (Core0 から呼ぶ) ----
   void wait_tick();
+  // タイムアウト付き wait (タイムアウトなら false)。ログドレイン用ポーリングに使う。
+  bool try_wait_tick_ms(uint32_t ms);
 
   // ---- 設定セッター ----
   void set_search_mode(bool v) { search_mode = v; }

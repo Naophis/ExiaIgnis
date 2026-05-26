@@ -58,7 +58,11 @@
       "Bash(arm-none-eabi-objdump -d build/ExiaIgnis.elf)",
       "Bash(awk ' *)",
       "Bash(arm-none-eabi-nm --size-sort build/ExiaIgnis.elf)",
-      "Bash(arm-none-eabi-nm build/ExiaIgnis.elf)"
+      "Bash(arm-none-eabi-nm build/ExiaIgnis.elf)",
+      "Bash(arm-none-eabi-nm --print-size --size-sort /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
+      "Bash(arm-none-eabi-objdump -d /home/naoto/Desktop/mouse/ExiaIgnis/build/CMakeFiles/ExiaIgnis.dir/src/planning/planning_task.cpp.o)",
+      "Bash(arm-none-eabi-objdump -d /home/naoto/Desktop/mouse/ExiaIgnis/build/ExiaIgnis.elf)",
+      "Bash(./flash.sh)"
     ]
   }
 }

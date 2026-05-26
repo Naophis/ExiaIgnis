@@ -5,6 +5,7 @@
 #include "logging/logging_task.hpp"
 #include "pico/stdlib.h"
 #include "sensing_task.hpp"
+#include "utils/irq_log.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -66,11 +67,13 @@ void PlanningTask::start_irq() {
 void PlanningTask::send_command(const motion_tgt_val_t &tgt) {
   // double buffer: Core0 は write_cmd_idx_ 側に書き込み、store(release) で公開する。
   // IRQ 内で shared_ptr や new/delete が一切発生しない。
+  // printf("send-");
   PlanningCmd &buf = cmd_buf_[write_cmd_idx_];
   buf.nmr    = tgt.nmr;
   buf.pl_req = tgt.pl_req;
   pending_cmd_idx_.store(write_cmd_idx_, std::memory_order_release);
   write_cmd_idx_ ^= 1;
+  // printf("-end\n");
 }
 
 // ============================================================
@@ -109,72 +112,90 @@ void PlanningTask::tick(uint32_t dt_us) {
   if (dt_us == 0)
     return;
 
-  // calc_time_diff はハンドラで計測済みの dt_us をそのまま使う
-  // (tick() 内で再計測すると関数呼び出し分の可変遅延が加わるため)
+  // 最初の 30 tick + コマンド受信後 6 tick だけログ出力（クラッシュ箇所の特定用）
+  static uint32_t tick_num = 0;
+  static uint32_t cmd_log_remain = 0;
+  ++tick_num;
+  if (cmd_log_remain > 0) --cmd_log_remain;
+  if (g_ctl_debug_ticks > 0) --g_ctl_debug_ticks;
+
+  // T0 はコマンド処理前に評価（コマンドによる cmd_log_remain 変化は T1 以降に影響）
+  const bool do_log0 = (tick_num <= 30) || (cmd_log_remain > 0);
+  if (do_log0) g_irq_log.push("T0");
+
   tgt_val->calc_time_diff = dt_us;
-  const uint64_t start = time_us_64(); // exec time 計測用
-  // --- コマンド受け取り (double buffer, acquire ロード) ---
+  const uint64_t start = time_us_64();
   {
     int idx = pending_cmd_idx_.load(std::memory_order_acquire);
     if (idx >= 0) {
+      cmd_log_remain = 100; // このコマンドを受けた tick + 次 99 tick を強制ログ
+      g_ctl_debug_ticks = 100; // ctl_.calc() サブチェックポイントを同期して有効化
+      g_irq_log.push("TR");
       active_cmd_ = cmd_buf_[idx];
       receive_req = &active_cmd_;
-      // 最新コマンドが来ていなければ -1 に戻す (CAS で上書き防止)
       int expected = idx;
       pending_cmd_idx_.compare_exchange_strong(expected, -1,
                                                std::memory_order_relaxed);
       first_req = true;
       cp_request();
+      g_irq_log.push("TQ");
     }
   }
 
   const float dt = param->dt;
 
-  {
-    ego.update(motor_en);
-    tgt_val->pln_t_ego = (int16_t)(time_us_64() - start);
+  // T1 以降: コマンド受信で cmd_log_remain が更新された後に評価
+  const bool do_log = (tick_num <= 30) || (cmd_log_remain > 0);
 
-    sensor_.calc_dist();
-    tgt_val->pln_t_sensor = (int16_t)(time_us_64() - start);
+  if (do_log) g_irq_log.push("T1"); // pre ego.update
+  ego.update(motor_en);
+  tgt_val->pln_t_ego = (int16_t)(time_us_64() - start);
 
-    if (first_req) {
-      if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
-        tgt_val->tgt_in.enable_slip_decel = 1;
-      } else {
-        tgt_val->tgt_in.enable_slip_decel = 0;
-      }
-      trj_.generate(last_tgt_angle);
-      tgt_val->pln_t_trj = (int16_t)(time_us_64() - start);
+  if (do_log) g_irq_log.push("T2"); // pre sensor.calc_dist
+  sensor_.calc_dist();
+  tgt_val->pln_t_sensor = (int16_t)(time_us_64() - start);
+
+  if (do_log) g_irq_log.push("T3"); // pre generate
+  if (first_req) {
+    if (search_mode && tgt_val->motion_type == MotionType::SLALOM) {
+      tgt_val->tgt_in.enable_slip_decel = 1;
+    } else {
+      tgt_val->tgt_in.enable_slip_decel = 0;
     }
-
-    if (tgt_val->motion_type == MotionType::STRAIGHT ||
-        tgt_val->motion_type == MotionType::SLA_FRONT_STR ||
-        tgt_val->motion_type == MotionType::SLA_BACK_STR) {
-      if (tgt_val->ego_in.img_dist >= tgt_val->tgt_in.tgt_dist) {
-        trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
-      }
-      if (tgt_val->ego_in.dist >= tgt_val->tgt_in.tgt_dist) {
-        trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
-      }
-    }
-    trj_.calc_kanayama(ego, sensor_, last_tgt_angle);
-    tgt_val->pln_t_kanayama = (int16_t)(time_us_64() - start);
-
-    if (tgt_val->motion_type == MotionType::PIVOT ||
-        tgt_val->motion_type == MotionType::FRONT_CTRL) {
-      trj_.v_cmd = tgt_val->ego_in.v;
-      trj_.w_cmd = tgt_val->ego_in.w;
-    }
-
-    trj_.copy_tgt(dt);
-    tgt_val->pln_t_copy = (int16_t)(time_us_64() - start);
-
-    ctl_.calc(motor_en, suction_en, search_mode, w_reset, last_tgt_angle, dt);
-    tgt_val->pln_t_ctl = (int16_t)(time_us_64() - start);
+    trj_.generate(last_tgt_angle);
+    tgt_val->pln_t_trj = (int16_t)(time_us_64() - start);
   }
 
-  tgt_val->calc_time = tgt_val->pln_t_ctl;
+  if (tgt_val->motion_type == MotionType::STRAIGHT ||
+      tgt_val->motion_type == MotionType::SLA_FRONT_STR ||
+      tgt_val->motion_type == MotionType::SLA_BACK_STR) {
+    if (tgt_val->ego_in.img_dist >= tgt_val->tgt_in.tgt_dist) {
+      trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
+    }
+    if (tgt_val->ego_in.dist >= tgt_val->tgt_in.tgt_dist) {
+      trj_.mpc_next_ego.v = tgt_val->tgt_in.end_v;
+    }
+  }
+  if (do_log) g_irq_log.push("T4"); // pre calc_kanayama
+  trj_.calc_kanayama(ego, sensor_, last_tgt_angle);
+  tgt_val->pln_t_kanayama = (int16_t)(time_us_64() - start);
 
+  if (tgt_val->motion_type == MotionType::PIVOT ||
+      tgt_val->motion_type == MotionType::FRONT_CTRL) {
+    trj_.v_cmd = tgt_val->ego_in.v;
+    trj_.w_cmd = tgt_val->ego_in.w;
+  }
+
+  if (do_log) g_irq_log.push("T5"); // pre copy_tgt
+  trj_.copy_tgt(dt);
+  tgt_val->pln_t_copy = (int16_t)(time_us_64() - start);
+
+  if (do_log) g_irq_log.push("T6"); // pre ctl.calc
+  ctl_.calc(motor_en, suction_en, search_mode, w_reset, last_tgt_angle, dt);
+  tgt_val->pln_t_ctl = (int16_t)(time_us_64() - start);
+
+  if (do_log) g_irq_log.push("T7"); // tick complete
+  tgt_val->calc_time = tgt_val->pln_t_ctl;
 }
 
 std::shared_ptr<sensing_result_entity_t> PlanningTask::get_sensing_entity() {
@@ -405,6 +426,11 @@ void PlanningTask::cp_request() {
 }
 
 void PlanningTask::motor_enable() {
+  // 2回目呼び出し（motor_en=true 中）は generate() と競合するためスキップ
+  if (!motor_en) {
+    trj_.setup();
+  }
+
   ego.kf_dist.reset(0);
   ego.kf_ang.reset(0);
   ego.kf_v.reset(0);
@@ -424,12 +450,9 @@ void PlanningTask::suction_enable(float duty, float duty_low) {
   ctl_.set_suction_target(duty, duty_low);
 }
 void PlanningTask::wait_tick() {
-  // sleep_us(100); // 1 tick 待つ前に少し待機しておく（これもレース回避のため）
-
   sem_acquire_blocking(&tick_sem_);
+}
 
-  // const uint32_t last = tick_count_;
-  // while (tick_count_ == last) {
-  //   tight_loop_contents();
-  // }
+bool PlanningTask::try_wait_tick_ms(uint32_t ms) {
+  return sem_acquire_timeout_ms(&tick_sem_, ms);
 }

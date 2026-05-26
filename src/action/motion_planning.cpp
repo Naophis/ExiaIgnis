@@ -1,5 +1,6 @@
 #include "action/motion_planning.hpp"
 #include "pico/stdlib.h"
+#include "utils/irq_log.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -39,8 +40,18 @@ void MotionPlanning::set_logging_task(std::shared_ptr<LoggingTask> &_lt) {
 }
 
 void MotionPlanning::wait_tick() {
-  pt->wait_tick();
-  // sleep_us(100); // 1 tick 待つ前に少し待機しておく（これもレース回避のため）
+  // Poll with timeout so the log buffer drains even if tick() crashes on Core1.
+  // A crash prevents sem_release, meaning sem_acquire_blocking would hang forever
+  // and we'd never see the push() messages that reveal where the crash is.
+  static int timeout_count = 0;
+  while (!pt->try_wait_tick_ms(3)) {
+    g_irq_log.drain([](const char *msg) { printf("%s", msg); });
+    if (++timeout_count % 100 == 0) {
+      printf("[wait_tick] TIMEOUT x%d - tick not releasing sem\n", timeout_count);
+    }
+  }
+  timeout_count = 0;
+  g_irq_log.drain([](const char *msg) { printf("%s", msg); });
 }
 
 __attribute__((noinline, section(".motion.go_straight")))
@@ -141,6 +152,9 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
 
   while (1) {
     wait_tick();
+    if(cnt==0){
+      printf("[mp][go_straight]: start motion\n");
+    }
     cnt++;
     auto now_dist = (cnt == 1) ? 0.0f : tgt_val->ego_in.dist;
 

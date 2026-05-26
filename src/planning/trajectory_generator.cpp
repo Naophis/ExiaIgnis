@@ -10,11 +10,22 @@ void TrajectoryGenerator::init(std::shared_ptr<motion_tgt_val_t> tgt_val,
   this->se = sensing_result;
 }
 
+void TrajectoryGenerator::setup() {
+  if (param->trj_length > 0 &&
+      (int)trajectory_points.size() < param->trj_length) {
+    trajectory_points.resize(param->trj_length);
+  }
+}
+
 void TrajectoryGenerator::generate(float last_tgt_angle) {
   auto tmp = tgt_val->ego_in.img_ang;
   tgt_val->ego_in.img_ang += last_tgt_angle;
 
   if (param->trj_length <= 0) {
+    return;
+  }
+
+  if ((int)trajectory_points.size() < param->trj_length) {
     return;
   }
 

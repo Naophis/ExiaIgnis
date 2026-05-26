@@ -256,6 +256,7 @@ float SensorProcessor::calc_sensor_val(float data, float a, float b) {
 float SensorProcessor::interp1d(vector<float> &vx, vector<float> &vy, float x,
                                 bool extrapolate) {
   int size = vx.size();
+  if (size < 2) return size == 1 ? vy[0] : 0.0f;
   int i = 0;
   if (x >= vx[size - 2]) {
     i = size - 2;
@@ -277,8 +278,7 @@ float SensorProcessor::interp1d(vector<float> &vx, vector<float> &vy, float x,
 int SensorProcessor::interp1d(vector<int> &vx, vector<int> &vy, float x,
                               bool extrapolate) {
   int size = vx.size();
-  if (size == 0)
-    return 0;
+  if (size < 2) return size == 1 ? vy[0] : 0;
   int i = 0;
   if (x >= vx[size - 2]) {
     i = size - 2;
