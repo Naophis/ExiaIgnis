@@ -1150,11 +1150,11 @@ void ControlLaw::summation_duty() {
       ff_front2 = ff_roll2 = ff_duty_r2 = ff_duty_l2 = ff_friction_r =
           ff_friction_l = 0;
     }
-    // float torque_r = ff_front2 + ff_roll2 + duty_c + duty_roll + ff_friction_r;
-    // float torque_l = ff_front2 - ff_roll2 + duty_c - duty_roll + ff_friction_l;
+    float torque_r = ff_front2 + ff_roll2 + duty_c + duty_roll + ff_friction_r;
+    float torque_l = ff_front2 - ff_roll2 + duty_c - duty_roll + ff_friction_l;
 
-    float torque_r = ff_front2 ;//+ ff_roll2 + duty_c + duty_roll + ff_friction_r;
-    float torque_l = ff_front2 ;//- ff_roll2 + duty_c - duty_roll + ff_friction_l;
+    // float torque_r = ff_front2 ;//+ ff_roll2 + duty_c + duty_roll + ff_friction_r;
+    // float torque_l = ff_front2 ;//- ff_roll2 + duty_c - duty_roll + ff_friction_l;
 
 
     const float km_gear = param_->Km * (param_->gear_a / param_->gear_b);
