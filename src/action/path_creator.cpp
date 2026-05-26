@@ -1,6 +1,11 @@
 #include "include/action/path_creator.hpp"
 
-PathCreator::PathCreator() {}
+PathCreator::PathCreator() {
+  const int capacity = MAX_MAZE_SIZE * MAX_MAZE_SIZE;
+  other_route_map.reserve(capacity);
+  other_route_map_bk.reserve(capacity);
+  stepped.reserve(capacity);
+}
 
 PathCreator::~PathCreator() {}
 
