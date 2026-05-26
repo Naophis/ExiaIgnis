@@ -82,8 +82,18 @@ private:
   std::shared_ptr<MazeSolverBaseLgc> lgc;
   std::shared_ptr<SearchController> search_ctrl;
   std::shared_ptr<PathCreator> pc;
+  int file_idx;
+  float backup_l;
+  float backup_r;
+  float backup_l_expand;
+  float backup_r_expand;
+  straight_param_t str_p;
+  slalom_param2_t sla_p;
+  TurnDirection rorl;
+  TurnDirection rorl2;
   param_straight_t ps;
   param_roll_t pr;
+  next_motion_t nm;
   void reset_tgt_data();
   void reset_ego_data();
   void req_error_reset();
