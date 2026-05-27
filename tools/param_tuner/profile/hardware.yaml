@@ -224,9 +224,9 @@ gyro_pid:
   windup_gain: 10.0
   windup_dead_bind: 1.50
 
-  p: 0.000325
-  i: 0.01465 # dif angle
-  b: 0.0000595 #summation
+  p: 0.000425
+  i: 0.01565 # dif angle
+  b: 0.0000595 #summation i2
   d: 0.000295
 
   # p: 0.00

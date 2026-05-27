@@ -315,7 +315,7 @@ void MainTask::test_run_sla() {
 void MainTask::test_search_sla(bool wall_off) {
 
   file_idx = 0;
-
+  load_turn_param_profiles(true, file_idx);
   if (file_idx >= tpp.file_list_size) {
     ui_->error();
     return;

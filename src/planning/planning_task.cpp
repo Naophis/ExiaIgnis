@@ -261,9 +261,9 @@ float PlanningTask::adjust_b_to_target45(float data, float a) {
 }
 
 void PlanningTask::pl_req_activate() {
-  if (receive_req->nmr.timstamp != pid_req_timestamp) {
+  if (receive_req->pl_req.time_stamp != pid_req_timestamp) {
     ctl_.pl_req_activate(receive_req->pl_req);
-    pid_req_timestamp = receive_req->nmr.timstamp;
+    pid_req_timestamp = receive_req->pl_req.time_stamp;
   }
 }
 
