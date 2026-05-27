@@ -121,7 +121,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   if (p.motion_type != MotionType::NONE) {
     tgt_val->nmr.motion_type = p.motion_type;
   }
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
   // printf("[mp][go_straight]: sent command\n");
@@ -368,7 +368,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   // tgt_val->motion_type = MotionType::NONE;
   tgt_val->nmr.motion_type = MotionType::NONE;
 
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
   wait_tick();
@@ -394,7 +394,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   tgt_val->nmr.motion_mode = RUN_MODE2::PIVOT_TURN;
   tgt_val->nmr.motion_type = MotionType::PIVOT;
   tgt_val->nmr.sct = SensorCtrlType::NONE;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
   sleep_ms(10);
@@ -416,7 +416,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
         reset_ego_data();
         // tgt_val->motion_type = MotionType::NONE;
         tgt_val->nmr.motion_type = MotionType::NONE;
-        tgt_val->nmr.timstamp++;
+        tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
         pt->send_command(*tgt_val);
         wait_tick();
@@ -442,7 +442,7 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
         tgt_val->nmr.motion_mode = RUN_MODE2::PIVOT_TURN;
         tgt_val->nmr.motion_type = MotionType::PIVOT;
         tgt_val->nmr.sct = SensorCtrlType::NONE;
-        tgt_val->nmr.timstamp++;
+        tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
         c = 0;
 
         pt->send_command(*tgt_val);
@@ -817,7 +817,7 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
   tgt_val->ego_in.sla_param.counter = 1;
   tgt_val->ego_in.sla_param.limit_time_count =
       (int)(tgt_val->nmr.sla_time * 2 / dt);
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   tgt_val->nmr.ang = (td == TurnDirection::Left) ? sp.ref_ang : -sp.ref_ang;
 
@@ -1021,7 +1021,7 @@ void MotionPlanning::reset_ego_data() {
   // 一度初期化
   // tgt_val->motion_type = MotionType::NONE;
   tgt_val->nmr.motion_type = MotionType::NONE;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
   wait_tick();
@@ -1163,7 +1163,7 @@ void MotionPlanning::reset_gyro_ref() {
   bool check2 = false;
   tgt_val->gyro_retry = 0;
   tgt_val->calibration_mode = CalibrationMode::DOING;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
   sleep_ms(10); // 他モジュールの起動待ち
 
   auto print = [=, this]() -> void {
@@ -1234,7 +1234,7 @@ void MotionPlanning::reset_gyro_ref() {
   tgt_val->temp_zero_p_offset = temp_data_sum / RESET_GYRO_LOOP_CNT;
 
   tgt_val->calibration_mode = CalibrationMode::NONE;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
   sleep_ms(10); // 他モジュールの起動待ち
 
   print();
@@ -1272,7 +1272,7 @@ MotionResult MotionPlanning::front_ctrl(bool limit) {
   tgt_val->nmr.motion_type = MotionType::FRONT_CTRL;
   tgt_val->nmr.dia_mode = false;
   tgt_val->ego_in.sla_param.counter = 1;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
 
@@ -1331,7 +1331,7 @@ void MotionPlanning::keep() {
   tgt_val->nmr.motion_dir = MotionDirection::RIGHT;
   tgt_val->nmr.dia_mode = false;
   tgt_val->nmr.sct = SensorCtrlType::NONE;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
 
@@ -1957,7 +1957,7 @@ void MotionPlanning::system_identification(MotionType mt, float volt_l,
   tgt_val->nmr.sys_id.left_v = volt_l;
   tgt_val->nmr.sys_id.right_v = volt_r;
   tgt_val->nmr.sys_id.enable = true;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
 

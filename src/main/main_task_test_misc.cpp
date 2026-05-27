@@ -29,7 +29,7 @@ void MainTask::dump1() {
   mp->reset_gyro_ref_with_check();
   sleep_ms(10);
   planning_->tgt_val->nmr.motion_type = MotionType::SENSING_DUMP;
-  planning_->tgt_val->nmr.timstamp++;
+  planning_->tgt_val->nmr.timstamp = planning_->tgt_val->nmr.timstamp + 1;
   planning_->send_command(*planning_->tgt_val);
   const auto se = get_sensing_entity();
 
@@ -180,7 +180,7 @@ void MainTask::dump2() {
   const auto se = get_sensing_entity();
   mp->reset_gyro_ref_with_check();
   planning_->tgt_val->nmr.motion_type = MotionType::SENSING_DUMP;
-  planning_->tgt_val->nmr.timstamp++;
+  planning_->tgt_val->nmr.timstamp = planning_->tgt_val->nmr.timstamp + 1;
   planning_->send_command(*planning_->tgt_val);
 
   while (1) {

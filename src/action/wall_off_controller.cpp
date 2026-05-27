@@ -35,7 +35,7 @@ bool WallOffController::execute_wall_off(TurnDirection td,
                                 : MotionDirection::RIGHT;
   tgt_val->nmr.dia_mode = ps_front.dia_mode;
   tgt_val->nmr.sct = SensorCtrlType::Straight;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   if (pt) pt->send_command(*tgt_val);
   sleep_ms(1);
@@ -288,7 +288,7 @@ bool WallOffController::execute_wall_off_dia(TurnDirection td,
   tgt_val->nmr.motion_dir = MotionDirection::RIGHT;
   tgt_val->nmr.dia_mode = ps_front.dia_mode;
   tgt_val->nmr.sct = SensorCtrlType::NONE;
-  tgt_val->nmr.timstamp++;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   use_oppo_wall = false;
   exist_wall = false;
