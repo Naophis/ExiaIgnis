@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 void MainTask::test_turn() {
-  const auto rorl = ui_.select_direction();
+  const auto rorl = ui_->select_direction();
   const auto se = get_sensing_entity();
 
   mp->reset_gyro_ref_with_check();
@@ -40,16 +40,16 @@ void MainTask::test_turn() {
   reset_tgt_data();
   reset_ego_data();
   req_error_reset();
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_csv();
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -73,7 +73,7 @@ void MainTask::keep_pivot() {
   mp->go_straight(ps);
   while (1) {
     sleep_ms(1);
-    if (ui_.button_state_hold()) {
+    if (ui_->button_state_hold()) {
       break;
     }
   }
@@ -81,7 +81,7 @@ void MainTask::keep_pivot() {
 }
 
 void MainTask::test_pivot_n() {
-  rorl = ui_.select_direction();
+  rorl = ui_->select_direction();
 
   mp->reset_gyro_ref_with_check();
   reset_tgt_data();
@@ -112,23 +112,23 @@ void MainTask::test_pivot_n() {
   reset_ego_data();
   req_error_reset();
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
 }
 
 void MainTask::test_pivot_n2() {
-  // rorl = ui_.select_direction();
+  // rorl = ui_->select_direction();
   // search_ctrl->set_lgc(lgc);
   // search_ctrl->set_motion_plannning(mp);
   // pc->set_logic(lgc);
@@ -165,16 +165,16 @@ void MainTask::test_pivot_n2() {
   // reset_ego_data();
   // req_error_reset();
   // lt_->save(slalom_log_file);
-  // ui_.coin(120);
+  // ui_->coin(120);
 
   // while (1) {
-  //   if (ui_.button_state_hold())
+  //   if (ui_->button_state_hold())
   //     break;
   //   sleep_ms(10);
   // }
   // lt_->dump_log(slalom_log_file);
   // while (1) {
-  //   if (ui_.button_state_hold())
+  //   if (ui_->button_state_hold())
   //     break;
   //   sleep_ms(10);
   // }
@@ -185,7 +185,7 @@ void MainTask::test_search_pivot() {
   file_idx = 0;
 
   if (file_idx >= tpp.file_list_size) {
-    ui_.error();
+    ui_->error();
     return;
   }
   search_ctrl->set_motion_plannning(mp);
@@ -247,18 +247,18 @@ void MainTask::test_search_pivot() {
   lt_->stop_slalom_log();
 
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   param_->sen_ref_p.normal.exist.right45 = backup_r;
   param_->sen_ref_p.normal.exist.left45 = backup_l;
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }

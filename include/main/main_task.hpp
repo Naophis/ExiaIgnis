@@ -51,7 +51,7 @@ private:
   std::shared_ptr<SensingTask> sensing_;
   std::shared_ptr<PlanningTask> planning_;
   std::shared_ptr<LoggingTask> lt_;
-  UserInterface ui_;
+  std::shared_ptr<UserInterface> ui_;
 
   std::vector<exec_pram_t> exec_param_list;
   turn_param_profile_t tpp;
@@ -109,6 +109,10 @@ private:
   // 短押し: 次のモードへ(LED 2進表示更新) / 長押し(>=1秒): 決定
   int select_run_mode(int max_mode);
   int select_mode();
+  void path_run(int idx, int idx2, int idx3);
+  void sim_run_time_all();
+  void sim_run_time(int mode_num, int idx, int idx2, int idx3,
+                    bool dump_all);
 
   //────パラメータ、迷路データの読み書き────
   void load_circuit_path();
@@ -189,6 +193,6 @@ private:
       {ExecParamType::Slow, "slow"},     //
   };
 };
-static const std::string maze_log_file("/spiflash/maze.txt");
-static const std::string maze_log_kata_file("/spiflash/maze_kata.log");
-static const std::string maze_log_return_file("/spiflash/maze_return.log");
+static const std::string maze_log_file("/maze.txt");
+static const std::string maze_log_kata_file("/maze_kata.log");
+static const std::string maze_log_return_file("/maze_return.log");

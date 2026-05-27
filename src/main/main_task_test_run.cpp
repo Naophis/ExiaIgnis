@@ -62,23 +62,23 @@ void MainTask::test_run() {
   reset_ego_data();
   req_error_reset();
   mp->coin();
-  ui_.coin(120);
+  ui_->coin(120);
   planning_->set_search_mode(false);
   // 1回目: バイナリ dump (rx_term.js バイナリプロトコル)
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_csv();
-  ui_.coin(120);
+  ui_->coin(120);
   // 2回目: テキスト dump (rx_term.js テキストプロトコル)
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
-  ui_.coin(120);
+  ui_->coin(120);
 }
 
 void MainTask::test_back() {
@@ -131,16 +131,16 @@ void MainTask::test_back() {
   req_error_reset();
   mp->coin();
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -213,16 +213,16 @@ void MainTask::test_front_wall_offset() {
   reset_ego_data();
   req_error_reset();
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -232,7 +232,7 @@ void MainTask::test_front_ctrl(bool mode) {
   file_idx = sys_.test.file_idx;
 
   if (file_idx >= tpp.file_list_size) {
-    ui_.error();
+    ui_->error();
     return;
   }
 
@@ -245,16 +245,16 @@ void MainTask::test_front_ctrl(bool mode) {
 
   mp->front_ctrl(mode);
   planning_->motor_disable();
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }

@@ -26,6 +26,7 @@ MainTask::create(std::shared_ptr<SensingTask> sensing,
   s_instance->lgc = std::make_shared<MazeSolverBaseLgc>();
   s_instance->pc = std::make_shared<PathCreator>();
   s_instance->search_ctrl = std::make_shared<SearchController>();
+  s_instance->ui_ = std::make_shared<UserInterface>();
   s_instance->mp->set_path_creator(s_instance->pc);
   return s_instance;
 }
@@ -69,26 +70,26 @@ void MainTask::run() {
   const auto se = get_sensing_entity();
 
   printf("[run] B: ui init\n");
-  ui_.init(pwm_slice, pwm_channel, se);
-  ui_.set_tgt_val(tgt_val_);
-  ui_.set_planning(planning_);
-  ui_.LED_headlight();
-  // ui_.hello_exia();
+  ui_->init(pwm_slice, pwm_channel, se);
+  ui_->set_tgt_val(tgt_val_);
+  ui_->set_planning(planning_);
+  ui_->LED_headlight();
+  // ui_->hello_exia();
   printf("[run] C: coin\n");
-  ui_.coin(60);
-  ui_.coin(60);
+  ui_->coin(60);
+  ui_->coin(60);
 
   // ─── 起動時に破損検出されていた場合のデファードリフォーマット ──────────────
   // Core1 起動後なので flash_safe_execute が正常動作する
   if (ConfigLoader::check_and_reformat()) {
     printf("[main] LittleFS was corrupted at boot and has been reformatted\n");
-    ui_.coin(50);
+    ui_->coin(50);
   }
 
   // ─── パラメータ読み込み ───────────────────────────────────────────────────
   printf("[main] loading params from LittleFS...\n");
   if (load_params()) {
-    ui_.coin(80);
+    ui_->coin(80);
     printf("[main] params OK  mode=%d  maze=%d\n", sys_.user_mode,
            sys_.maze_size);
   } else {
@@ -126,14 +127,14 @@ void MainTask::run() {
     } else {
       uint32_t hb_tick = 0;
       while (true) {
-        if (ui_.button_state_hold()) {
-          ui_.coin(100);
+        if (ui_->button_state_hold()) {
+          ui_->coin(100);
           break;
         }
         int rlen = usb_read_with_timeout(rx_buf, RX_BUF_SIZE, 50);
         if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
           updated = true;
-          ui_.coin(25);
+          ui_->coin(25);
         }
         // 2秒ごとにハートビートを出力してシリアル接続を確認できるようにする
         // send_file.py の "[" スキップフィルタで無視されるので通信に影響なし

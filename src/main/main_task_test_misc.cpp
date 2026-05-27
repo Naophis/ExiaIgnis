@@ -14,7 +14,7 @@ void MainTask::test_suction() {
   sleep_ms(250);
   planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
 
-  while (!ui_.button_state()) {
+  while (!ui_->button_state()) {
     printf("suction target=%.2fV battery=%.3fV duty=%.1f%%\n", target_v,
            se->ego.batt_kf, planning_->tgt_val->duty_suction);
     sleep_ms(200);
@@ -168,7 +168,7 @@ void MainTask::dump1() {
     printf("spi_breakdown[us]: gyro=%d encr=%d encl=%d bat+calc=%d\n",
            se->t_gyro, se->t_encr, se->t_encl, se->t_bat);
 
-    if (ui_.button_state()) {
+    if (ui_->button_state()) {
       planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;
     }
 
@@ -190,7 +190,7 @@ void MainTask::dump2() {
            se->led_sen.right45.raw, se->led_sen.right45_2.raw,
            se->led_sen.right45_3.raw, se->led_sen.right90.raw);
 
-    if (ui_.button_state()) {
+    if (ui_->button_state()) {
       planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;
     }
 

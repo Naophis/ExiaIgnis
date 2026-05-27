@@ -13,7 +13,7 @@ int MainTask::select_run_mode(int max_mode) {
 
   char max_mode_idx = 2 + exec_param_list.size() + 4;
   while (1) {
-    int res = ui_.encoder_operation();
+    int res = ui_->encoder_operation();
     mode_num += res;
     if (mode_num == -1) {
       mode_num = max_mode_idx - 1;
@@ -21,8 +21,8 @@ int MainTask::select_run_mode(int max_mode) {
       mode_num = 0;
     }
     show_mode_led(mode_num);
-    if (ui_.button_state_hold()) {
-      ui_.coin(100);
+    if (ui_->button_state_hold()) {
+      ui_->coin(100);
       break;
     }
     sleep_ms(1);
@@ -43,9 +43,9 @@ int MainTask::select_run_mode(int max_mode) {
 //
 void MainTask::run_main_mode() {
   printf("[main] === MAIN RUN MODE ===\n");
-  ui_.coin(200);
+  ui_->coin(200);
 
-  ui_.coin(200);
+  ui_->coin(200);
   lgc->init(sys_.maze_size, sys_.maze_size * sys_.maze_size - 1);
   lgc->set_goal_pos(sys_.goals);
   search_ctrl->set_lgc(lgc);
@@ -68,7 +68,7 @@ void MainTask::run_main_mode() {
            exec_param_list.size());
     if (mode_num == 0) {
       lgc->set_goal_pos(sys_.goals);
-      rorl2 = ui_.select_direction();
+      rorl2 = ui_->select_direction();
       int idx = 0;
       if (rorl2 == TurnDirection::Right) {
         idx = 0;
@@ -80,15 +80,15 @@ void MainTask::run_main_mode() {
       if (sr == SearchResult::SUCCESS)
         save_maze_data(true);
       while (1) {
-        if (ui_.button_state_hold())
+        if (ui_->button_state_hold())
           break;
         sleep_ms(10);
       }
       search_ctrl->print_maze();
     } else if (mode_num == 1) {
       lgc->set_goal_pos(sys_.goals);
-      rorl = ui_.select_direction();
-      rorl2 = ui_.select_direction();
+      rorl = ui_->select_direction();
+      rorl2 = ui_->select_direction();
       int idx = 0;
       if (rorl2 == TurnDirection::Right) {
         idx = 0;
@@ -105,7 +105,7 @@ void MainTask::run_main_mode() {
         save_maze_data(true);
       }
       while (1) {
-        if (ui_.button_state_hold())
+        if (ui_->button_state_hold())
           break;
         sleep_ms(10);
       }
@@ -130,14 +130,255 @@ void MainTask::run_main_mode() {
       sim_run_time_all();
     } else if (mode_num == (2 + exec_param_list.size() + 3)) {
       save_maze_data(false);
-      ui_.coin(25);
+      ui_->coin(25);
       save_maze_kata_data(false);
-      ui_.coin(25);
+      ui_->coin(25);
       save_maze_return_data(false);
-      ui_.coin(25);
+      ui_->coin(25);
       lgc->init(sys_.maze_size, sys_.maze_size * sys_.maze_size - 1);
       lgc->set_goal_pos(sys_.goals);
     }
     sleep_ms(10);
   }
+}
+
+void MainTask::path_run(int idx, int idx2, int idx3) {
+  planning_->set_mode_select(false);
+  load_slalom_param(idx, idx2, idx3);
+  param_set.cell_size = param_->cell;
+  param_set.start_offset = param_->offset_start_dist;
+  if (sys_.circuit_mode == 0) {
+    const auto rorl = ui_->select_direction();
+    if (rorl == TurnDirection::Right) {
+      //速度ベース経路導出
+      for (int i = 1; i <= 5; i++) {
+        lgc->set_param_num(i);
+        pc->other_route_map.clear();
+        const bool res = pc->path_create(false);
+        printf("other route size = %d\n", pc->other_route_map.size());
+        if (!res) {
+          ui_->error();
+          return;
+        }
+        pc->convert_large_path(true);
+        pc->diagonalPath(true, true);
+        if (i == 0) {
+          pc->path_s2.clear();
+          pc->path_t2.clear();
+          for (int i = 0; i < pc->path_t.size(); i++) {
+            pc->path_s2.push_back(pc->path_s[i]);
+            pc->path_t2.push_back(pc->path_t[i]);
+          }
+        }
+        path_set_t p;
+        p.type = i;
+        p.time = 10000;
+        pc->timebase_path_create(false, param_set, p);
+        pc->path_set_map.push(p);
+      }
+
+      // 先頭に最適な経路を持ってくる
+      const auto top_p = pc->path_set_map.top();
+      if (top_p.result) { //成功
+        pc->path_s.clear();
+        pc->path_t.clear();
+        for (int i = 0; i < top_p.path_s.size(); i++) {
+          pc->path_s.push_back(top_p.path_s[i]);
+          pc->path_t.push_back(top_p.path_t[i]);
+        }
+        // clear map
+        while (!pc->path_set_map.empty()) {
+          auto p2 = pc->path_set_map.top();
+          // printf("type: %d, time: %f, turn: %d\n", p2.type, p2.time,
+          //        p2.path_t.size());
+          p2.path_s.clear();
+          p2.path_t.clear();
+          pc->path_set_map.pop();
+        }
+
+      } else { //失敗
+        pc->other_route_map.clear();
+        const bool res = pc->path_create(false);
+        if (!res) {
+          ui_->error();
+          return;
+        }
+        pc->convert_large_path(true);
+        pc->diagonalPath(true, true);
+      }
+    } else {
+      pc->other_route_map.clear();
+      const bool res = pc->path_create(false);
+      if (!res) {
+        ui_->error();
+        return;
+      }
+      pc->convert_large_path(true);
+      pc->diagonalPath(true, true);
+      pc->print_path();
+    }
+  } else {
+    load_circuit_path();
+  }
+  printf("----------------\n");
+  if (pc->path_s.size() == 0) {
+    ui_->error();
+    ui_->error();
+    pc->other_route_map.clear();
+    const bool res = pc->path_create(false);
+    if (!res) {
+      ui_->error();
+      return;
+    }
+    pc->convert_large_path(true);
+    pc->diagonalPath(true, true);
+    pc->print_path();
+  }
+
+  pc->calc_goal_time(param_set, true);
+  pc->print_path();
+  // printf("after: %d bytes\n",
+  // heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+
+  const auto backup_l45 = param_->sen_ref_p.normal.exist.left45;
+  const auto backup_r45 = param_->sen_ref_p.normal.exist.right45;
+
+  mp->exec_path_running(param_set);
+
+  pc->print_path();
+
+  dump1();
+  param_->sen_ref_p.normal.exist.left45 = backup_l45;
+  param_->sen_ref_p.normal.exist.right45 = backup_r45;
+
+  // param->fast_log_enable = 0; //１回きり
+}
+
+void MainTask::sim_run_time_all() {
+  param_set.cell_size = param_->cell;
+  param_set.start_offset = param_->offset_start_dist;
+  const auto rorl = ui_->select_direction();
+  silent_load = true;
+  sim_run_time(2, 2, 2, 2, false);
+  sim_run_time(3, 3, 3, 3, false);
+  sim_run_time(4, 6, 4, 3, false);
+  sim_run_time(6, 10, 6, 3, false);
+  sim_run_time(8, 10, 8, 3, false);
+  sim_run_time(10, 11, 10, 3, false);
+  sim_run_time(12, 12, 12, 3, false);
+  silent_load = false;
+  sim_run_time(13, 13, 12, 3, true);
+  // sim_run_time(14, 24, 23, 14, true);
+}
+
+
+void MainTask::sim_run_time(int mode_num, int idx, int idx2, int idx3,
+                            bool dump_all) {
+  planning_->set_search_mode(false);
+  printf("[sim_run_time] mode_num = %d\n", mode_num);
+  load_slalom_param(idx, idx2, idx3);
+
+  if (!silent_load) {
+    // fast
+    printf("fast: \n");
+    printf("  - Large: %0.2f\n", param_set.map_fast[TurnType::Large].v);
+    printf("  - Orval: %0.2f\n", param_set.map_fast[TurnType::Orval].v);
+    printf("  - Dia45: %0.2f\n", param_set.map_fast[TurnType::Dia45].v);
+    printf("  - Dia45_2: %0.2f\n", param_set.map_fast[TurnType::Dia45_2].v);
+    printf("  - Dia135: %0.2f\n", param_set.map_fast[TurnType::Dia135].v);
+    printf("  - Dia135_2: %0.2f\n", param_set.map_fast[TurnType::Dia135_2].v);
+    printf("  - Dia90: %0.2f\n", param_set.map_fast[TurnType::Dia90].v);
+
+    // normal
+    printf("normal: \n");
+    printf("  - Large: %0.2f\n", param_set.map[TurnType::Large].v);
+    printf("  - Orval: %0.2f\n", param_set.map[TurnType::Orval].v);
+    printf("  - Dia45: %0.2f\n", param_set.map[TurnType::Dia45].v);
+    printf("  - Dia45_2: %0.2f\n", param_set.map[TurnType::Dia45_2].v);
+    printf("  - Dia135: %0.2f\n", param_set.map[TurnType::Dia135].v);
+    printf("  - Dia135_2: %0.2f\n", param_set.map[TurnType::Dia135_2].v);
+    printf("  - Dia90: %0.2f\n", param_set.map[TurnType::Dia90].v);
+
+    // slow
+    printf("slow: \n");
+    printf("  - Large: %0.2f\n", param_set.map_slow[TurnType::Large].v);
+    printf("  - Orval: %0.2f\n", param_set.map_slow[TurnType::Orval].v);
+    printf("  - Dia45: %0.2f\n", param_set.map_slow[TurnType::Dia45].v);
+    printf("  - Dia45_2: %0.2f\n", param_set.map_slow[TurnType::Dia45_2].v);
+    printf("  - Dia135: %0.2f\n", param_set.map_slow[TurnType::Dia135].v);
+    printf("  - Dia135_2: %0.2f\n", param_set.map_slow[TurnType::Dia135_2].v);
+    printf("  - Dia90: %0.2f\n", param_set.map_slow[TurnType::Dia90].v);
+  }
+
+  for (int i = 1; i <= 5; i++) {
+    lgc->set_param_num(i);
+    pc->other_route_map.clear();
+    const bool res = pc->path_create(false);
+    if (dump_all) {
+      printf("other route size = %d\n", pc->other_route_map.size());
+    }
+    if (!res) {
+      ui_->error();
+      return;
+    }
+    pc->convert_large_path(true);
+    pc->diagonalPath(true, true);
+    if (i == 0) {
+      pc->path_s2.clear();
+      pc->path_t2.clear();
+      for (int i = 0; i < pc->path_t.size(); i++) {
+        pc->path_s2.push_back(pc->path_s[i]);
+        pc->path_t2.push_back(pc->path_t[i]);
+      }
+    }
+    path_set_t p;
+    p.type = i;
+    p.time = 10000;
+    pc->timebase_path_create(false, param_set, p);
+    pc->path_set_map.push(p);
+  }
+
+  // 先頭に最適な経路を持ってくる
+  const auto top_p = pc->path_set_map.top();
+  if (top_p.result) { //成功
+    pc->path_s.clear();
+    pc->path_t.clear();
+    for (int i = 0; i < top_p.path_s.size(); i++) {
+      pc->path_s.push_back(top_p.path_s[i]);
+      pc->path_t.push_back(top_p.path_t[i]);
+    }
+    // clear map
+    while (!pc->path_set_map.empty()) {
+      auto p2 = pc->path_set_map.top();
+      p2.path_s.clear();
+      p2.path_t.clear();
+      pc->path_set_map.pop();
+    }
+
+  } else { //失敗
+    pc->other_route_map.clear();
+    const bool res = pc->path_create(false);
+    if (!res) {
+      ui_->error();
+      return;
+    }
+    pc->convert_large_path(true);
+    pc->diagonalPath(true, true);
+  }
+  if (pc->path_s.size() == 0) {
+    pc->other_route_map.clear();
+    const bool res = pc->path_create(false);
+    if (!res) {
+      ui_->error();
+      return;
+    }
+    pc->convert_large_path(true);
+    pc->diagonalPath(true, true);
+    pc->print_path();
+  }
+
+  pc->calc_goal_time(param_set, true);
+  pc->print_path();
+
+  printf("----------------\n");
 }

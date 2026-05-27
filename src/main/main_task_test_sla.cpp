@@ -10,7 +10,7 @@ void MainTask::test_sla() {
 
   if (file_idx >= tpp.file_list_size) {
     printf("%d %d\n", file_idx, tpp.file_list_size);
-    ui_.error();
+    ui_->error();
     return;
   }
   // silent_load = false;
@@ -37,7 +37,7 @@ void MainTask::test_sla() {
   printf("  front: [%f, %f]\n", sla_p2.front.left, sla_p2.front.right);
   printf("  back: [%f, %f]\n", sla_p2.back.left, sla_p2.back.right);
 
-  rorl = ui_.select_direction();
+  rorl = ui_->select_direction();
   rorl2 = (rorl == TurnDirection::Right) ? (TurnDirection::Left)
                                          : (TurnDirection::Right);
 
@@ -218,12 +218,12 @@ void MainTask::test_sla() {
   planning_->suction_disable();
 
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   param_->sen_ref_p.normal.exist.right45 = backup_r;
   param_->sen_ref_p.normal.exist.left45 = backup_l;
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -238,7 +238,7 @@ void MainTask::test_sla() {
   printf("----------------------------------\n");
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -297,16 +297,16 @@ void MainTask::test_run_sla() {
   reset_ego_data();
   req_error_reset();
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -317,7 +317,7 @@ void MainTask::test_search_sla(bool wall_off) {
   file_idx = 0;
 
   if (file_idx >= tpp.file_list_size) {
-    ui_.error();
+    ui_->error();
     return;
   }
 
@@ -330,7 +330,7 @@ void MainTask::test_search_sla(bool wall_off) {
   printf("- accl: %f\n", str_p.accl);
   printf("- decel: %f\n", str_p.decel);
 
-  rorl = ui_.select_direction();
+  rorl = ui_->select_direction();
   backup_r = param_->sen_ref_p.normal.exist.right45;
   backup_l = param_->sen_ref_p.normal.exist.left45;
   backup_r_expand = param_->sen_ref_p.normal.expand.right45;
@@ -406,18 +406,18 @@ void MainTask::test_search_sla(bool wall_off) {
   lt_->stop_slalom_log();
 
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   param_->sen_ref_p.normal.exist.right45 = backup_r;
   param_->sen_ref_p.normal.exist.left45 = backup_l;
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -430,7 +430,7 @@ void MainTask::test_sla_walloff() {
   backup_r = param_->sen_ref_p.normal.exist.right45;
   backup_l = param_->sen_ref_p.normal.exist.left45;
   if (test_search_mode == 0) {
-    rorl = ui_.select_direction();
+    rorl = ui_->select_direction();
 
     if (rorl == TurnDirection::Right) {
       param_->sen_ref_p.normal.exist.left45 += 10;
@@ -555,10 +555,10 @@ void MainTask::test_sla_walloff() {
   reset_ego_data();
   req_error_reset();
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
@@ -571,14 +571,14 @@ void MainTask::test_sla_walloff() {
   printf("sensor dist: %f, %f\n", mp->g_sen_l_dist, mp->g_sen_r_dist);
   printf("----------------------------------\n");
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
 }
 
 void MainTask::test_dia_walloff() {
-  rorl = ui_.select_direction();
+  rorl = ui_->select_direction();
   rorl2 = (rorl == TurnDirection::Right) ? (TurnDirection::Left)
                                          : (TurnDirection::Right);
   if (rorl == TurnDirection::Right) {
@@ -658,16 +658,16 @@ void MainTask::test_dia_walloff() {
   reset_ego_data();
   req_error_reset();
   lt_->save(slalom_log_file);
-  ui_.coin(120);
+  ui_->coin(120);
 
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }
   lt_->dump_log(slalom_log_file);
   while (1) {
-    if (ui_.button_state_hold())
+    if (ui_->button_state_hold())
       break;
     sleep_ms(10);
   }

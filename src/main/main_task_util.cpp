@@ -38,14 +38,14 @@ void MainTask::setup_before_run() {
 // ─────────────────────────────────────────────────────────────
 void MainTask::show_mode_led(int mode) {
   int v = mode + 1;
-  ui_.LED_bit((v >> 0) & 1, (v >> 1) & 1, (v >> 2) & 1, (v >> 3) & 1,
+  ui_->LED_bit((v >> 0) & 1, (v >> 1) & 1, (v >> 2) & 1, (v >> 3) & 1,
               (v >> 4) & 1, (v >> 5) & 1);
 }
 
 // ─── ボタン待機ヘルパー
 // ───────────────────────────────────────────────────────
 void MainTask::wait_button() {
-  while (!ui_.button_state_hold())
+  while (!ui_->button_state_hold())
     sleep_ms(10);
 }
 
@@ -357,11 +357,11 @@ void MainTask::check_battery() {
   if (se->ego.battery_raw > LOW_BATTERY_TH || se->ego.battery_raw < 10.5)
     return;
   while (1) {
-    ui_.music_sync(MUSIC::G5_, 250);
+    ui_->music_sync(MUSIC::G5_, 250);
     sleep_ms(250);
-    bool break_btn = ui_.button_state_hold();
+    bool break_btn = ui_->button_state_hold();
     if (break_btn) {
-      ui_.coin(100);
+      ui_->coin(100);
       break;
     }
   }
@@ -373,7 +373,7 @@ int MainTask::select_mode() {
 
   char max_mode_idx = 2 + exec_param_list.size() + 4;
   while (1) {
-    int res = ui_.encoder_operation();
+    int res = ui_->encoder_operation();
     mode_num += res;
     if (mode_num == -1) {
       mode_num = max_mode_idx - 1;
@@ -381,9 +381,9 @@ int MainTask::select_mode() {
       mode_num = 0;
     }
     lbit.byte = mode_num + 1;
-    ui_.LED_bit(lbit.b0, lbit.b1, lbit.b2, lbit.b3, lbit.b4, lbit.b5);
-    if (ui_.button_state_hold()) {
-      ui_.coin(100);
+    ui_->LED_bit(lbit.b0, lbit.b1, lbit.b2, lbit.b3, lbit.b4, lbit.b5);
+    if (ui_->button_state_hold()) {
+      ui_->coin(100);
       break;
     }
     sleep_ms(10);
