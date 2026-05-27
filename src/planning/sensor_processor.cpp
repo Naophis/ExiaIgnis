@@ -10,6 +10,7 @@ void SensorProcessor::init(
   param = prm;
   this->tgt_val = tgt_val;
   log_table.clear();
+  log_table.reserve(4097);
   for (int i = 0; i < 4097; i++) {
     log_table.emplace_back(std::log(i));
   }

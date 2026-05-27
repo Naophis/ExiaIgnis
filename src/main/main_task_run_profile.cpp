@@ -21,6 +21,8 @@ void MainTask::load_circuit_path() {
   pc->other_route_map.clear();
   pc->path_s.clear();
   pc->path_t.clear();
+  pc->path_s.reserve(path_size);
+  pc->path_t.reserve(path_size);
   for (int i = 0; i < path_size; i++) {
     pc->path_s.emplace_back(path_str[i].as<float>());
     pc->path_t.emplace_back(static_cast<unsigned char>(path_turn[i].as<int>()));

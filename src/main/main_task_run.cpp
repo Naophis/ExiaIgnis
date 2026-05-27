@@ -165,6 +165,8 @@ void MainTask::path_run(int idx, int idx2, int idx3) {
         if (i == 0) {
           pc->path_s2.clear();
           pc->path_t2.clear();
+          pc->path_s2.reserve(pc->path_s.size());
+          pc->path_t2.reserve(pc->path_t.size());
           for (int i = 0; i < pc->path_t.size(); i++) {
             pc->path_s2.push_back(pc->path_s[i]);
             pc->path_t2.push_back(pc->path_t[i]);
@@ -182,6 +184,8 @@ void MainTask::path_run(int idx, int idx2, int idx3) {
       if (top_p.result) { //成功
         pc->path_s.clear();
         pc->path_t.clear();
+        pc->path_s.reserve(top_p.path_s.size());
+        pc->path_t.reserve(top_p.path_t.size());
         for (int i = 0; i < top_p.path_s.size(); i++) {
           pc->path_s.push_back(top_p.path_s[i]);
           pc->path_t.push_back(top_p.path_t[i]);

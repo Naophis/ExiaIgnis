@@ -35,8 +35,8 @@ void MazeSolverBaseLgc::set_ego(std::shared_ptr<ego_t> &_ego) { ego = _ego; }
 void MazeSolverBaseLgc::set_goal_pos(const vector<point_t> &list) {
   goal_list.clear();
   goal_list_origin.clear();
-  goal_list.shrink_to_fit();
-  goal_list_origin.shrink_to_fit();
+  goal_list.reserve(list.size());
+  goal_list_origin.reserve(list.size());
   for (const auto p : list) {
     goal_list.emplace_back(p);
     goal_list_origin.emplace_back(p);
@@ -45,7 +45,7 @@ void MazeSolverBaseLgc::set_goal_pos(const vector<point_t> &list) {
 
 void MazeSolverBaseLgc::set_goal_pos2(const vector<point_t> &pt_list) {
   goal_list2.clear();
-  goal_list2.shrink_to_fit();
+  goal_list2.reserve(pt_list.size());
   for (const auto p : pt_list)
     goal_list2.emplace_back(p);
 }
