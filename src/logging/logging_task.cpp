@@ -165,12 +165,12 @@ void LoggingTask::stop() {
 __attribute__((noinline, section(".time_critical.logging")))
 bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   auto *self = s_instance.get();
-  if (!self || !self->active_)
+  if (!self || !self->active_) [[unlikely]]
     return true;
 
   const auto *sr = self->sensing_result.get();
   const auto *tv = self->tgt_val_.get();
-  if (!sr || !tv)
+  if (!sr || !tv) [[unlikely]]
     return true;
 
   if (tv->calc_time_diff > 3000)

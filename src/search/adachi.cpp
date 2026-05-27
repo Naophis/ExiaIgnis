@@ -264,15 +264,14 @@ Motion Adachi::exec(bool is_stepped, bool force_back) {
     if (subgoal_list.size() == 0) {
       pt_list.clear();
       // pt_list.shrink_to_fit();
-      tmp_p.x = tmp_p.y = 0;
-      pt_list.emplace_back(tmp_p);
+      pt_list.emplace_back(point_t{.x = 0, .y = 0});
     } else {
       pt_list.clear();
       // pt_list.shrink_to_fit();
       for (auto itr = subgoal_list.begin(); itr != subgoal_list.end(); ++itr) {
-        tmp_p.x = itr->first % lgc->maze_size;
-        tmp_p.y = itr->first / lgc->maze_size;
-        pt_list.emplace_back(tmp_p);
+        pt_list.emplace_back(point_t{
+            .x = (unsigned char)(itr->first % lgc->maze_size),
+            .y = (unsigned char)(itr->first / lgc->maze_size)});
       }
     }
     lgc->set_goal_pos2(pt_list);

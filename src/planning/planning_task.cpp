@@ -110,7 +110,7 @@ void PlanningTask::timer_irq_handler() {
 // ============================================================
 __attribute__((noinline, section(".time_critical.planning_tick")))
 void PlanningTask::tick(uint32_t dt_us) {
-  if (dt_us == 0)
+  if (dt_us == 0) [[unlikely]]
     return;
 
   // 最初の 30 tick + コマンド受信後 6 tick だけログ出力（クラッシュ箇所の特定用）

@@ -302,9 +302,7 @@ bool MazeSolverBaseLgc::isStep(const int x, const int y, Direction dir) {
 
 void MazeSolverBaseLgc::back_home() {
   clear_goal();
-  point_t p;
-  p.x = p.y = 0;
-  goal_list.emplace_back(p);
+  goal_list.emplace_back(point_t{.x = 0, .y = 0});
 }
 
 void MazeSolverBaseLgc::clear_goal() {
@@ -313,9 +311,7 @@ void MazeSolverBaseLgc::clear_goal() {
 }
 
 void MazeSolverBaseLgc::append_goal(const int x, const int y) {
-  point_t p;
-  p.x = p.y = 0;
-  goal_list.emplace_back(p);
+  goal_list.emplace_back(point_t{.x = 0, .y = 0});
 }
 
 int MazeSolverBaseLgc::get_max_step_val() { return max_step_val; }
@@ -353,44 +349,28 @@ int MazeSolverBaseLgc::clear_vector_distmap() {
     int idx = x + y * maze_size;
     if (!existWall(x, y, Direction::North)) {
       vector_dist[idx].n = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::North;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::North, .dist2 = 0.0f});
       tail++;
       if (y < maze_size - 1)
         vector_dist[(x) + (y + 1) * maze_size].s = 0;
     }
     if (!existWall(x, y, Direction::East)) {
       vector_dist[idx].e = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::East;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::East, .dist2 = 0.0f});
       tail++;
       if (x < maze_size - 1)
         vector_dist[(x + 1) + (y)*maze_size].w = 0;
     }
     if (!existWall(x, y, Direction::West)) {
       vector_dist[idx].w = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::West;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::West, .dist2 = 0.0f});
       tail++;
       if (x > 0)
         vector_dist[(x - 1) + (y)*maze_size].e = 0;
     }
     if (!existWall(x, y, Direction::South)) {
       vector_dist[idx].s = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::South;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::South, .dist2 = 0.0f});
       tail++;
       if (y > 0)
         vector_dist[(x) + (y - 1) * maze_size].n = 0;
@@ -451,44 +431,28 @@ int MazeSolverBaseLgc::clear_vector_distmap(
     int idx = x + y * maze_size;
     if (!existWall(x, y, Direction::North)) {
       vector_dist[idx].n = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::North;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::North, .dist2 = 0.0f});
       tail++;
       if (y < maze_size - 1)
         vector_dist[(x) + (y + 1) * maze_size].s = 0;
     }
     if (!existWall(x, y, Direction::East)) {
       vector_dist[idx].e = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::East;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::East, .dist2 = 0.0f});
       tail++;
       if (x < maze_size - 1)
         vector_dist[(x + 1) + (y)*maze_size].w = 0;
     }
     if (!existWall(x, y, Direction::West)) {
       vector_dist[idx].w = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::West;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::West, .dist2 = 0.0f});
       tail++;
       if (x > 0)
         vector_dist[(x - 1) + (y)*maze_size].e = 0;
     }
     if (!existWall(x, y, Direction::South)) {
       vector_dist[idx].s = 0;
-      dir_pt.x = x;
-      dir_pt.y = y;
-      dir_pt.dir = Direction::South;
-      dir_pt.dist2 = 0;
-      vq_list.push(dir_pt);
+      vq_list.push(dir_pt_t{.x = x, .y = y, .dir = Direction::South, .dist2 = 0.0f});
       tail++;
       if (y > 0)
         vector_dist[(x) + (y - 1) * maze_size].n = 0;
@@ -772,11 +736,7 @@ unsigned int MazeSolverBaseLgc::updateVectorMap(const bool isSearch) {
           if (tmp <= getDistV(X + i, Y + j, d2[k])) {
             if (!isUpdated(X + i, Y + j, d2[k])) {
               setDistV(X + i, Y + j, d2[k], tmp);
-              dir_pt.x = (X + i);
-              dir_pt.y = (Y + j);
-              dir_pt.dir = d2[k];
-              dir_pt.dist2 = tmp;
-              vq_list.push(dir_pt);
+              vq_list.push(dir_pt_t{.x = (unsigned char)(X + i), .y = (unsigned char)(Y + j), .dir = d2[k], .dist2 = tmp});
               simplesort(tail);
               tail++;
               updateMapCheck(X + i, Y + j, d2[k]);
@@ -794,11 +754,7 @@ unsigned int MazeSolverBaseLgc::updateVectorMap(const bool isSearch) {
           if (tmp <= getDistV(X + i, Y + j, d2[k])) {
             if (!isUpdated(X + i, Y + j, d2[k])) {
               setDistV(X + i, Y + j, d2[k], tmp);
-              dir_pt.x = (X + i);
-              dir_pt.y = (Y + j);
-              dir_pt.dir = d2[k];
-              dir_pt.dist2 = tmp;
-              vq_list.push(dir_pt);
+              vq_list.push(dir_pt_t{.x = (unsigned char)(X + i), .y = (unsigned char)(Y + j), .dir = d2[k], .dist2 = tmp});
               simplesort(tail);
               tail++;
               updateMapCheck(X + i, Y + j, d2[k]);
@@ -889,11 +845,7 @@ unsigned int MazeSolverBaseLgc::updateVectorMap(
           if (tmp <= getDistV(X + i, Y + j, d2[k])) {
             if (!isUpdated(X + i, Y + j, d2[k])) {
               setDistV(X + i, Y + j, d2[k], tmp);
-              dir_pt.x = (X + i);
-              dir_pt.y = (Y + j);
-              dir_pt.dir = d2[k];
-              dir_pt.dist2 = tmp;
-              vq_list.push(dir_pt);
+              vq_list.push(dir_pt_t{.x = (unsigned char)(X + i), .y = (unsigned char)(Y + j), .dir = d2[k], .dist2 = tmp});
               simplesort(tail);
               tail++;
               updateMapCheck(X + i, Y + j, d2[k]);
@@ -911,11 +863,7 @@ unsigned int MazeSolverBaseLgc::updateVectorMap(
           if (tmp <= getDistV(X + i, Y + j, d2[k])) {
             if (!isUpdated(X + i, Y + j, d2[k])) {
               setDistV(X + i, Y + j, d2[k], tmp);
-              dir_pt.x = (X + i);
-              dir_pt.y = (Y + j);
-              dir_pt.dir = d2[k];
-              dir_pt.dist2 = tmp;
-              vq_list.push(dir_pt);
+              vq_list.push(dir_pt_t{.x = (unsigned char)(X + i), .y = (unsigned char)(Y + j), .dir = d2[k], .dist2 = tmp});
               simplesort(tail);
               tail++;
               updateMapCheck(X + i, Y + j, d2[k]);
