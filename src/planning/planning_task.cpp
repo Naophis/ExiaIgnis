@@ -118,7 +118,7 @@ void PlanningTask::tick(uint32_t dt_us) {
   static uint32_t cmd_log_remain = 0;
   ++tick_num;
   if (cmd_log_remain > 0) --cmd_log_remain;
-  if (g_ctl_debug_ticks > 0) --g_ctl_debug_ticks;
+  if (g_ctl_debug_ticks > 0) g_ctl_debug_ticks = g_ctl_debug_ticks - 1;
 
   // T0 はコマンド処理前に評価（コマンドによる cmd_log_remain 変化は T1 以降に影響）
   const bool do_log0 = false; // (tick_num <= 30) || (cmd_log_remain > 0);

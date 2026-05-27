@@ -310,7 +310,7 @@ void MainTask::req_error_reset() {
   tgt_val_->pl_req.error_gyro_reset = 1;
   tgt_val_->pl_req.error_ang_reset = 1;
   tgt_val_->pl_req.error_dist_reset = 1;
-  tgt_val_->nmr.timstamp++;
+  tgt_val_->nmr.timstamp = tgt_val_->nmr.timstamp + 1;
   planning_->send_command(*tgt_val_);
 }
 

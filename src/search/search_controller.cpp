@@ -167,7 +167,8 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
   p.accl = p_set.str_map[StraightType::Search].accl;
   p.decel = p_set.str_map[StraightType::Search].decel;
   p.dist = param->pivot_straight - diff;
-  p.search_str_wide_ctrl_l = p.search_str_wide_ctrl_r = false;
+  p.search_str_wide_ctrl_l = false;
+  p.search_str_wide_ctrl_r = false;
   bool back_enable = false;
   if (10 < sensing_result->ego.left90_mid_dist &&
       sensing_result->ego.left90_mid_dist < param->pivot_back_enable_front_th &&
@@ -363,7 +364,8 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
   // p.v_max = p_set.str_map[StraightType::Search].v_max;
   // p.v_end = p_set.str_map[StraightType::Search].v_max;
 
-  p.v_max = p.v_end = p_set.str_map[StraightType::Search].v_max;
+  p.v_max = p_set.str_map[StraightType::Search].v_max;
+  p.v_end = p_set.str_map[StraightType::Search].v_max;
 
   p.accl = p_set.str_map[StraightType::Search].accl;
   p.decel = p_set.str_map[StraightType::Search].decel;
@@ -393,7 +395,8 @@ MotionResult SearchController::pivot90(param_set_t &p_set,
   p.accl = p_set.str_map[StraightType::Search].accl;
   p.decel = p_set.str_map[StraightType::Search].decel;
   p.dist = param->cell / 2 - 5 - diff;
-  p.search_str_wide_ctrl_l = p.search_str_wide_ctrl_r = false;
+  p.search_str_wide_ctrl_l = false;
+  p.search_str_wide_ctrl_r = false;
   if (10 < sensing_result->ego.left90_mid_dist &&
       sensing_result->ego.left90_mid_dist < param->pivot_back_enable_front_th &&
       10 < sensing_result->ego.right90_mid_dist &&
@@ -488,7 +491,8 @@ MotionResult SearchController::pivot90(param_set_t &p_set,
   p.v_end = p_set.str_map[StraightType::Search].v_max;
   p.accl = p_set.str_map[StraightType::Search].accl;
   p.decel = p_set.str_map[StraightType::Search].decel;
-  p.search_str_wide_ctrl_l = p.search_str_wide_ctrl_r = false;
+  p.search_str_wide_ctrl_l = false;
+  p.search_str_wide_ctrl_r = false;
   p.dist = param->cell / 2 + offset_dist;
   // if (offset_dist != 45) {
   //   p.dist = offset_dist;
@@ -527,7 +531,8 @@ MotionResult SearchController::finish(param_set_t &p_set) {
   p.accl = p_set.str_map[StraightType::Search].accl;
   p.decel = p_set.str_map[StraightType::Search].decel;
   p.dist = param->cell / 2 - 5;
-  p.search_str_wide_ctrl_l = p.search_str_wide_ctrl_r = false;
+  p.search_str_wide_ctrl_l = false;
+  p.search_str_wide_ctrl_r = false;
   mp->go_straight(p);
 
   p.v_max = 20;
@@ -554,7 +559,8 @@ SearchResult SearchController::exec(param_set_t &p_set, SearchMode sm) {
         (lgc->map[p.x + p.y * lgc->maze_size] & 0x0f);
   }
 
-  p.v_max = p.v_end = p_set.str_map[StraightType::Search].v_max;
+  p.v_max = p_set.str_map[StraightType::Search].v_max;
+  p.v_end = p_set.str_map[StraightType::Search].v_max;
   p.accl = p_set.str_map[StraightType::Search].accl;
   p.decel = p_set.str_map[StraightType::Search].decel;
   p.dist = param->cell / 2 + param->offset_start_dist_search;

@@ -813,14 +813,18 @@ float PathCreator::calc_goal_time(param_set_t &p_set, bool debug) {
 
       if (i == 0 && start_turn) {
         auto next_turn_type = tc.get_turn_type(path_t[i + 1]);
-        v_now = ps.v_end = p_set.map[next_turn_type].v;
+        ps.v_end = p_set.map[next_turn_type].v;
+        v_now = ps.v_end;
       } else if (dist3 == 0) {
         auto next_turn_type = tc.get_turn_type(path_t[i + 1]);
-        tmp_time.v_max = tmp_time.v_end = ps.v_end =
-            p_set.map[next_turn_type].v;
+        ps.v_end       = p_set.map[next_turn_type].v;
+        tmp_time.v_end = ps.v_end;
+        tmp_time.v_max = ps.v_end;
       } else if (dist == 0) {
         auto turn_type = tc.get_turn_type(path_t[i]);
-        tmp_time.v_max = tmp_time.v_end = ps.v_end = p_set.map[turn_type].v;
+        ps.v_end       = p_set.map[turn_type].v;
+        tmp_time.v_end = ps.v_end;
+        tmp_time.v_max = ps.v_end;
       }
       v_now = ps.v_end;
 

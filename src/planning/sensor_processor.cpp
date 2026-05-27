@@ -106,24 +106,24 @@ void SensorProcessor::calc_dist() {
       se->ego.front_mid_dist = param->sensor_range_max;
     }
   } else {
-    se->ego.left90_dist          //
-        = se->ego.left45_dist    //
-        = se->ego.left45_2_dist  //
-        = se->ego.left45_3_dist  //
-        = se->ego.front_dist     //
-        = se->ego.right45_dist   //
-        = se->ego.right45_2_dist //
-        = se->ego.right45_3_dist //
-        = se->ego.right90_dist = param->sensor_range_max;
+    se->ego.left90_dist       = param->sensor_range_max;
+    se->ego.left45_dist       = param->sensor_range_max;
+    se->ego.left45_2_dist     = param->sensor_range_max;
+    se->ego.left45_3_dist     = param->sensor_range_max;
+    se->ego.front_dist        = param->sensor_range_max;
+    se->ego.right45_dist      = param->sensor_range_max;
+    se->ego.right45_2_dist    = param->sensor_range_max;
+    se->ego.right45_3_dist    = param->sensor_range_max;
+    se->ego.right90_dist      = param->sensor_range_max;
 
-    se->ego.left45_dist_diff          //
-        = se->ego.right45_dist_diff   //
-        = se->ego.right45_2_dist_diff //
-        = se->ego.right45_3_dist_diff //
-        = se->ego.left45_2_dist_diff  //
-        = se->ego.left45_3_dist_diff  //
-        = se->ego.right90_dist_diff   //
-        = se->ego.left90_dist_diff = 0;
+    se->ego.left45_dist_diff      = 0;
+    se->ego.right45_dist_diff     = 0;
+    se->ego.right45_2_dist_diff   = 0;
+    se->ego.right45_3_dist_diff   = 0;
+    se->ego.left45_2_dist_diff    = 0;
+    se->ego.left45_3_dist_diff    = 0;
+    se->ego.right90_dist_diff     = 0;
+    se->ego.left90_dist_diff      = 0;
   }
 
   se->ego.left45_dist_diff = se->ego.left45_dist - se->ego.left45_dist_old;

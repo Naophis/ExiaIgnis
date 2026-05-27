@@ -489,8 +489,10 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
   const auto se = get_sensing_entity();
   float orval_offset = 0;
 
-  ps_front.search_str_wide_ctrl_l = ps_front.search_str_wide_ctrl_r =
-      ps_back.search_str_wide_ctrl_l = ps_back.search_str_wide_ctrl_r = false;
+  ps_front.search_str_wide_ctrl_l = false;
+  ps_front.search_str_wide_ctrl_r = false;
+  ps_back.search_str_wide_ctrl_l  = false;
+  ps_back.search_str_wide_ctrl_r  = false;
 
   ps_front.v_max = sp.v;
   ps_front.v_end = sp.v;
@@ -1361,7 +1363,8 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
   ps.motion_type = MotionType::STRAIGHT;
   ps.sct = SensorCtrlType::Straight;
   ps.wall_ctrl_mode = WallCtrlMode::NONE;
-  ps.search_str_wide_ctrl_l = ps.search_str_wide_ctrl_r = false;
+  ps.search_str_wide_ctrl_l = false;
+  ps.search_str_wide_ctrl_r = false;
 
   reset_gyro_ref_with_check();
   reset_tgt_data();
@@ -1410,7 +1413,8 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
       ps.accl = p_set.str_map[st].accl;
       ps.decel = p_set.str_map[st].decel;
       ps.dia_mode = dia;
-      ps.search_str_wide_ctrl_l = ps.search_str_wide_ctrl_r = false;
+      ps.search_str_wide_ctrl_l = false;
+  ps.search_str_wide_ctrl_r = false;
       ps.wall_ctrl_mode = WallCtrlMode::LEFT_ONLY;
 
       ps.dist = !dia ? (dist * param->cell) : (dist * param->cell * ROOT2);
