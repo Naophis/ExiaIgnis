@@ -10,6 +10,7 @@
 #include "structs.hpp"
 #include "ui.hpp"
 #include <memory>
+#include <string.h>
 
 // Core0 で動作するメインタスク。
 // シリアル出力・ボタン処理・planning への指示を担う。
@@ -94,6 +95,7 @@ private:
   param_straight_t ps;
   param_roll_t pr;
   next_motion_t nm;
+
   void reset_tgt_data();
   void reset_ego_data();
   void req_error_reset();
@@ -102,10 +104,20 @@ private:
   // ─── モード dispatch ──────────────────────────────────────────────────────
   void run_main_mode();
   void run_test_mode(int mode);
-
+  
   // ─── 本走行サブモード選択 ─────────────────────────────────────────────────
   // 短押し: 次のモードへ(LED 2進表示更新) / 長押し(>=1秒): 決定
   int select_run_mode(int max_mode);
+  int select_mode();
+
+  //────パラメータ、迷路データの読み書き────
+  void load_circuit_path();
+  void exec_param_prof();
+  void save_maze_data(bool write);
+  void save_maze_kata_data(bool write);
+  void save_maze_return_data(bool write);
+  void read_maze_data();
+
 
   // ─── 個別モード ───────────────────────────────────────────────────────────
 
@@ -177,3 +189,6 @@ private:
       {ExecParamType::Slow, "slow"},     //
   };
 };
+static const std::string maze_log_file("/spiflash/maze.txt");
+static const std::string maze_log_kata_file("/spiflash/maze_kata.log");
+static const std::string maze_log_return_file("/spiflash/maze_return.log");

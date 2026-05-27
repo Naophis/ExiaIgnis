@@ -366,3 +366,27 @@ void MainTask::check_battery() {
     }
   }
 }
+
+int MainTask::select_mode() {
+  int mode_num = 0;
+  lbit.byte = 0;
+
+  char max_mode_idx = 2 + exec_param_list.size() + 4;
+  while (1) {
+    int res = ui_.encoder_operation();
+    mode_num += res;
+    if (mode_num == -1) {
+      mode_num = max_mode_idx - 1;
+    } else if (mode_num == max_mode_idx) {
+      mode_num = 0;
+    }
+    lbit.byte = mode_num + 1;
+    ui_.LED_bit(lbit.b0, lbit.b1, lbit.b2, lbit.b3, lbit.b4, lbit.b5);
+    if (ui_.button_state_hold()) {
+      ui_.coin(100);
+      break;
+    }
+    sleep_ms(10);
+  }
+  return mode_num;
+}

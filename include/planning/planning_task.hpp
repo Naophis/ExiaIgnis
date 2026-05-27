@@ -79,6 +79,9 @@ public:
   TrajectoryGenerator               trj_;
   ControlLaw                        ctl_;
 
+  void set_mode_select(bool mode) { mode_select = mode; }
+  bool get_mode_select() const { return mode_select; }
+
 private:
   PlanningTask() = default;
 
@@ -126,4 +129,6 @@ private:
   sensor_ctrl_keep_dist_t right_keep;
   sensor_ctrl_keep_dist_t           left_keep;
   slip_t                            slip_param;
+
+  bool mode_select = false;
 };

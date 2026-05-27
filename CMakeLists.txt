@@ -103,6 +103,7 @@ add_executable(ExiaIgnis
     src/main/main_task_usb.cpp
     src/main/main_task_util.cpp
     src/main/main_task_run.cpp
+    src/main/main_task_run_profile.cpp
     src/main/main_task_test.cpp
     src/main/main_task_test_sla.cpp
     src/main/main_task_test_run.cpp
