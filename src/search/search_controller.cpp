@@ -778,6 +778,7 @@ MotionResult SearchController::straight_offset(param_set_t &p_set,
   pt->motor_enable();
   return mp->go_straight(p);
 }
+__attribute__((noinline, section(".time_critical.search")))
 bool SearchController::judge2() {
   const auto near = (10 < sensing_result->ego.left90_mid_dist &&
                      sensing_result->ego.left90_mid_dist <
@@ -797,6 +798,7 @@ bool SearchController::judge2() {
   return near | diff;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void SearchController::judge_wall() {
   wall_n = false;
   wall_e = false;

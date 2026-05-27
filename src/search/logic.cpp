@@ -50,6 +50,7 @@ void MazeSolverBaseLgc::set_goal_pos2(const vector<point_t> &pt_list) {
     goal_list2.emplace_back(p);
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::valid_map_list_idx(const int x, const int y) {
   if (x < 0 || x >= maze_size || y < 0 || y >= maze_size)
     return false;
@@ -60,11 +61,13 @@ bool MazeSolverBaseLgc::valid_map_list_idx(const int x, const int y) {
   return true;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::candidate_end(const int x, const int y) {
   unsigned char temp = map[x + y * maze_size] & 0x0f;
   return (temp == 0x0e || temp == 0x0d || temp == 0x0b || temp == 0x07 ||
           temp == 0x0f);
 }
+
 void MazeSolverBaseLgc::updateWall(int x, int y, Direction dir) {
   if (dir == Direction::North) {
     set_wall_data(x, y, Direction::North, true);
@@ -81,6 +84,7 @@ void MazeSolverBaseLgc::updateWall(int x, int y, Direction dir) {
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::remove_goal_pos3() {
   for (auto it = goal_list3.begin(); it != goal_list3.end();) {
     bool flag1 = false;
@@ -94,6 +98,7 @@ void MazeSolverBaseLgc::remove_goal_pos3() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::reset_dist_map() {
   int c = 0;
   for (int i = 0; i < maze_size; i++)
@@ -102,6 +107,7 @@ void MazeSolverBaseLgc::reset_dist_map() {
   reset_done = true;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::update_dist_map(const int mode,
                                         const bool search_mode) {
   int c = 0;
@@ -193,11 +199,13 @@ void MazeSolverBaseLgc::update_dist_map(const int mode,
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::set_dist_val(const int x, const int y, const int val) {
   if (valid_map_list_idx(x, y))
     dist[x + y * maze_size] = val;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 int MazeSolverBaseLgc::get_dist_val(int x, int y) {
   if (valid_map_list_idx(x, y))
     return dist[x + y * maze_size];
@@ -205,6 +213,7 @@ int MazeSolverBaseLgc::get_dist_val(int x, int y) {
     return max_step_val;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 float MazeSolverBaseLgc::get_diadist_n_val(const int x, const int y) {
   if (valid_map_list_idx(x, y))
     return vector_dist[x + y * maze_size].n;
@@ -212,6 +221,7 @@ float MazeSolverBaseLgc::get_diadist_n_val(const int x, const int y) {
     return vector_max_step_val;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 float MazeSolverBaseLgc::get_diadist_e_val(const int x, const int y) {
   if (valid_map_list_idx(x, y))
     return vector_dist[x + y * maze_size].e;
@@ -219,6 +229,7 @@ float MazeSolverBaseLgc::get_diadist_e_val(const int x, const int y) {
     return vector_max_step_val;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 int MazeSolverBaseLgc::get_map_val(const int x, const int y) {
   if (valid_map_list_idx(x, y))
     return map[x + y * maze_size];
@@ -226,6 +237,7 @@ int MazeSolverBaseLgc::get_map_val(const int x, const int y) {
     return 0xff;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::isProceed(const int x, const int y, Direction dir) {
   if (valid_map_list_idx(x, y))
     return ((get_map_val(x, y) / static_cast<int>(dir)) & 0x11) == 0x10;
@@ -233,6 +245,7 @@ bool MazeSolverBaseLgc::isProceed(const int x, const int y, Direction dir) {
     return false;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::existWall(const int x, const int y, Direction dir) {
   if (valid_map_list_idx(x, y))
     return ((get_map_val(x, y) / static_cast<int>(dir)) & 0x01) == 0x01;
@@ -246,6 +259,7 @@ void MazeSolverBaseLgc::set_map_val(const int x, const int y, const int val) {
 }
 void MazeSolverBaseLgc::set_map_val(int idx, int val) { map[idx] = val; }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::set_wall_data(const int x, const int y, Direction dir,
                                       const bool isWall) {
   if (valid_map_list_idx(x, y)) {
@@ -279,6 +293,7 @@ void MazeSolverBaseLgc::set_default_wall_data() {
   set_wall_data(0, 1, Direction::South, false);
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::isStep(const int x, const int y, Direction dir) {
   if (valid_map_list_idx(x, y))
     return ((map[x + y * maze_size] / static_cast<int>(dir)) & 0x10) == 0x10;
@@ -305,6 +320,7 @@ void MazeSolverBaseLgc::append_goal(const int x, const int y) {
 
 int MazeSolverBaseLgc::get_max_step_val() { return max_step_val; }
 
+__attribute__((noinline, section(".time_critical.search")))
 int MazeSolverBaseLgc::clear_vector_distmap() {
   int tail = 0;
   for (char i = 0; i < maze_size; i++) {
@@ -384,6 +400,7 @@ int MazeSolverBaseLgc::clear_vector_distmap() {
   return tail;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 int MazeSolverBaseLgc::clear_vector_distmap(
     unordered_map<unsigned int, unsigned char> &subgoal_list) {
   int tail = 0;
@@ -481,6 +498,7 @@ int MazeSolverBaseLgc::clear_vector_distmap(
   return tail;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 int MazeSolverBaseLgc::haveVectorLv(const int x, const int y, Direction dir) {
   const int idx = x + y * maze_size;
   if (dir == Direction::North) {
@@ -527,6 +545,7 @@ int MazeSolverBaseLgc::haveVectorLv(const int x, const int y, Direction dir) {
   return 0;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 float MazeSolverBaseLgc::getDistV(const int x, const int y, Direction dir) {
   if (valid_map_list_idx(x, y)) {
     if (dir == Direction::North)
@@ -541,6 +560,7 @@ float MazeSolverBaseLgc::getDistV(const int x, const int y, Direction dir) {
   return vector_max_step_val;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::setDistV(const int x, const int y, Direction dir,
                                  const float val) {
   if (valid_map_list_idx(x, y)) {
@@ -565,6 +585,7 @@ void MazeSolverBaseLgc::setDistV(const int x, const int y, Direction dir,
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::isUpdated(const int x, const int y, Direction dir) {
   if (!valid_map_list_idx(x, y))
     return true;
@@ -590,6 +611,7 @@ bool MazeSolverBaseLgc::isUpdated(const int x, const int y, Direction dir) {
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::addVector(const int x, const int y, Direction dir,
                                   float val) {
   if (valid_map_list_idx(x, y)) {
@@ -615,6 +637,7 @@ void MazeSolverBaseLgc::addVector(const int x, const int y, Direction dir,
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::updateMapCheck(const int x, const int y,
                                        Direction dir) {
   if (valid_map_list_idx(x, y)) {
@@ -638,6 +661,7 @@ void MazeSolverBaseLgc::updateMapCheck(const int x, const int y,
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 int MazeSolverBaseLgc::getVector(const int x, const int y, Direction dir) {
   if (valid_map_list_idx(x, y)) {
     const int idx = x + y * maze_size;
@@ -661,6 +685,7 @@ int MazeSolverBaseLgc::getVector(const int x, const int y, Direction dir) {
   return 0;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::is_unknown(const int x, const int y, Direction dir) {
   if (valid_map_list_idx(x, y)) {
     // return (map[x + y * maze_size] & 0xf0) != 0xf0;
@@ -678,6 +703,7 @@ bool MazeSolverBaseLgc::is_unknown(const int x, const int y, Direction dir) {
 
 void MazeSolverBaseLgc::simplesort(const int tail) {}
 
+__attribute__((noinline, section(".time_critical.search")))
 unsigned int MazeSolverBaseLgc::updateVectorMap(const bool isSearch) {
   unsigned int head = 0;
   unsigned int tail = clear_vector_distmap();
@@ -787,6 +813,7 @@ unsigned int MazeSolverBaseLgc::updateVectorMap(const bool isSearch) {
   return c;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 unsigned int MazeSolverBaseLgc::updateVectorMap(
     const bool isSearch,
     unordered_map<unsigned int, unsigned char> &subgoal_list) {
@@ -902,6 +929,7 @@ unsigned int MazeSolverBaseLgc::updateVectorMap(
   }
   return c;
 }
+
 void MazeSolverBaseLgc::step_cell(int x, int y, Direction d) {
   if (valid_map_list_idx(x, y)) {
     if (d == Direction::North)
@@ -915,11 +943,14 @@ void MazeSolverBaseLgc::step_cell(int x, int y, Direction d) {
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::is_stepped(int x, int y) {
   if (valid_map_list_idx(x, y))
     return ((map[x + y * maze_size]) & 0xf0) == 0xf0;
   return false;
 }
+
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::is_front_cell_stepped(int x, int y, Direction dir) {
   if (valid_map_list_idx(x, y)) {
     if (dir == Direction::North) {
@@ -943,6 +974,7 @@ bool MazeSolverBaseLgc::is_front_cell_stepped(int x, int y, Direction dir) {
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 float MazeSolverBaseLgc::getDistVector(const int x, const int y,
                                        Direction dir) {
   if (valid_map_list_idx(x, y)) {
@@ -960,6 +992,7 @@ float MazeSolverBaseLgc::getDistVector(const int x, const int y,
   return VectorMax;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::setNextRootDirectionPathUnKnown(
     int x, int y, Direction dir, Direction now_dir, Direction &nextDirection,
     float &Value) {
@@ -974,6 +1007,7 @@ void MazeSolverBaseLgc::setNextRootDirectionPathUnKnown(
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::arrival_goal_position(const int x, const int y) {
   for (const auto p : goal_list)
     if (p.x == x && p.y == y)
@@ -981,6 +1015,7 @@ bool MazeSolverBaseLgc::arrival_goal_position(const int x, const int y) {
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 unsigned int MazeSolverBaseLgc::searchGoalPosition(
     const bool isSearch,
     unordered_map<unsigned int, unsigned char> &subgoal_list) {
@@ -1082,6 +1117,8 @@ unsigned int MazeSolverBaseLgc::searchGoalPosition(
 
   return cnt;
 }
+
+__attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::priorityStraight2(int x, int y, Direction now_dir,
                                           Direction dir, float &dist_val,
                                           Direction &next_dir) {

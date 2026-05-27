@@ -13,6 +13,7 @@ void Adachi::set_logic(std::shared_ptr<MazeSolverBaseLgc> &_lgc) {
 
 void Adachi::set_ego(std::shared_ptr<ego_t> &_ego) { ego = _ego; }
 
+__attribute__((noinline, section(".time_critical.search")))
 void Adachi::setNextDirection(int x2, int y2, Direction dir,
                               Direction &next_dir, int &val) {
   bool isWall = lgc->existWall(ego->x, ego->y, dir);
@@ -43,6 +44,7 @@ void Adachi::setNextDirection(int x2, int y2, Direction dir,
     }
   }
 }
+__attribute__((noinline, section(".time_critical.search")))
 void Adachi::setNextDirection2(int x2, int y2, Direction dir,
                                Direction &next_dir, int &val) {
   bool isWall = lgc->existWall(ego->x, ego->y, dir);
@@ -116,6 +118,7 @@ void Adachi::deadEnd(int egox, int egoy) {
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 Direction Adachi::detect_next_direction() {
   int dist_val = lgc->get_max_step_val();
   Direction next_dir = Direction::Undefined;
@@ -153,6 +156,7 @@ Direction Adachi::detect_next_direction() {
   return next_dir;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 void Adachi::get_next_pos(Direction next_direction) {
   if (next_direction == Direction::Undefined) {
     if (ego->dir == Direction::North)
@@ -178,6 +182,7 @@ void Adachi::get_next_pos(Direction next_direction) {
   return;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 Motion Adachi::get_next_motion(Direction next_direction) {
   if (ego->dir == next_direction)
     return Motion::Straight;
@@ -206,11 +211,13 @@ Motion Adachi::get_next_motion(Direction next_direction) {
   return Motion::Back;
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 bool Adachi::is_go_home() {
   if (pt_list.size() == 1 && pt_list[0].x == 0 && pt_list[0].y == 0)
     return true;
   return false;
 }
+__attribute__((noinline, section(".time_critical.search")))
 void Adachi::goal_step_check() {
   for (auto it = lgc->goal_list_origin.begin();
        it != lgc->goal_list_origin.end(); it++) {
@@ -238,6 +245,7 @@ void Adachi::goal_step_check() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.search")))
 Motion Adachi::exec(bool is_stepped, bool force_back) {
   int calc_cnt = 0;
   goal_step_check();
