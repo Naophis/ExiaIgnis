@@ -309,7 +309,7 @@ void MazeSolverBaseLgc::back_home() {
 
 void MazeSolverBaseLgc::clear_goal() {
   goal_list.clear();
-  goal_list.shrink_to_fit();
+  // goal_list.shrink_to_fit();
 }
 
 void MazeSolverBaseLgc::append_goal(const int x, const int y) {

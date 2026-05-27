@@ -41,6 +41,7 @@ int MainTask::select_run_mode(int max_mode) {
 //   2: 吸引テスト  (インタラクティブ)
 //   3: センサーモニター
 //
+__attribute__((noinline, section(".time_critical.main")))
 void MainTask::run_main_mode() {
   printf("[main] === MAIN RUN MODE ===\n");
   ui_->coin(200);
@@ -142,6 +143,7 @@ void MainTask::run_main_mode() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.main")))
 void MainTask::path_run(int idx, int idx2, int idx3) {
   planning_->set_mode_select(false);
   load_slalom_param(idx, idx2, idx3);
@@ -257,7 +259,7 @@ void MainTask::path_run(int idx, int idx2, int idx3) {
 
   // param->fast_log_enable = 0; //１回きり
 }
-
+__attribute__((noinline, section(".time_critical.main")))
 void MainTask::sim_run_time_all() {
   param_set.cell_size = param_->cell;
   param_set.start_offset = param_->offset_start_dist;
@@ -275,7 +277,7 @@ void MainTask::sim_run_time_all() {
   // sim_run_time(14, 24, 23, 14, true);
 }
 
-
+__attribute__((noinline, section(".time_critical.main")))
 void MainTask::sim_run_time(int mode_num, int idx, int idx2, int idx3,
                             bool dump_all) {
   planning_->set_search_mode(false);

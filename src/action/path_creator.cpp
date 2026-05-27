@@ -113,6 +113,7 @@ bool PathCreator::path_create(bool is_search) {
   return path_create(is_search, 0, 0, Direction::Null, use);
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 bool PathCreator::path_create(bool is_search, int tgt_x, int tgt_y,
                               Direction tgt_dir, bool &use) {
   Direction next_dir = Direction::North;
@@ -224,7 +225,7 @@ bool PathCreator::path_create(bool is_search, int tgt_x, int tgt_y,
   path_size = idx;
   return false;
 }
-
+__attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::convert_large_path(bool b1) {
   int i = 0;
   int finish = 0;
@@ -327,6 +328,7 @@ void PathCreator::convert_large_path(bool b1) {
   }
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::diagonalPath(bool isFull, bool a1) {
   int i = 0;
   int j = 0;
@@ -510,6 +512,7 @@ void PathCreator::diagonalPath(bool isFull, bool a1) {
   pathOffset();
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::pathOffset() {
   int i = 0;
   for (i = 0; i < path_size; i++) {
@@ -540,6 +543,7 @@ void PathCreator::pathOffset() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::print_path() {
   auto size = path_s.size();
   bool dia = false;
@@ -568,6 +572,7 @@ void PathCreator::print_path() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::print_path2() {
   auto size = path_s2.size();
   for (int i = 0; i < (int)size; i++) {
@@ -576,6 +581,7 @@ void PathCreator::print_path2() {
   }
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 bool PathCreator::path_create_with_change(bool is_search, int tgt_x, int tgt_y,
                                           Direction tgt_dir,
                                           path_create_status_t &pc_state,
@@ -596,6 +602,7 @@ bool PathCreator::path_create_with_change(bool is_search, int tgt_x, int tgt_y,
   return true;
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 float PathCreator::timebase_path_create(bool is_search, param_set_t &p_set,
                                         path_set_t &p) {
   bool next_end = false;
@@ -668,6 +675,7 @@ float PathCreator::timebase_path_create(bool is_search, param_set_t &p_set,
   return 0;
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::checkOtherRoot(int x, int y, Direction now_dir, float now) {
   if (other_route_map.count(x + y * lgc->maze_size) > 0) {
     return;
@@ -692,6 +700,7 @@ void PathCreator::checkOtherRoot(int x, int y, Direction now_dir, float now) {
   }
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 float PathCreator::calc_goal_time(param_set_t &p_set, bool debug) {
   bool fast_mode = false;
   bool start_turn = false;
@@ -843,6 +852,7 @@ float PathCreator::calc_goal_time(param_set_t &p_set, bool debug) {
   return path_time_total.back().total_time;
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 char PathCreator::asc(float d, float d2) {
   if (d < d2) {
     return 2;
@@ -850,6 +860,7 @@ char PathCreator::asc(float d, float d2) {
   return 1;
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 float PathCreator::go_straight_dummy(float v1, float vmax, float v2, float ac,
                                      float diac, float dist,
                                      planning_time_t &planning_time,
@@ -919,6 +930,7 @@ float PathCreator::go_straight_dummy(float v1, float vmax, float v2, float ac,
   return time / 1000;
 }
 
+__attribute__((noinline, section(".time_critical.path_creator")))
 float PathCreator::slalom_dummy(
     TurnType turn_type, TurnDirection td,
     std::unordered_map<TurnType, slalom_param2_t> &turn_param) {
