@@ -13,6 +13,7 @@ std::shared_ptr<input_param_t> WallOffController::get_input_param_entity() {
   return param;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::execute_wall_off(TurnDirection td,
                                          param_straight_t &ps_front) {
   const auto se = get_sensing_entity();
@@ -43,6 +44,7 @@ bool WallOffController::execute_wall_off(TurnDirection td,
                                       : process_left_wall_off(ps_front);
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
   const auto se = get_sensing_entity();
   const auto p_wall_off = get_wall_off_param();
@@ -132,6 +134,7 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
   const auto se = get_sensing_entity();
   const auto p_wall_off = get_wall_off_param();
@@ -221,6 +224,7 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::apply_front_sensor_correction(
     param_straight_t &ps_front, float tmp_dist_before, float tmp_dist_after,
     TurnDirection td) {
@@ -262,6 +266,7 @@ bool WallOffController::apply_front_sensor_correction(
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::execute_wall_off_dia(TurnDirection td,
                                               param_straight_t &ps_front,
                                               bool &use_oppo_wall,
@@ -296,6 +301,7 @@ bool WallOffController::execute_wall_off_dia(TurnDirection td,
              : process_left_wall_off_dia(ps_front, use_oppo_wall, exist_wall);
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 MotionResult WallOffController::execute_search_wall_off(param_straight_t &p,
                                                          bool search_mode) {
   const auto se = get_sensing_entity();
@@ -342,6 +348,7 @@ MotionResult WallOffController::execute_search_wall_off(param_straight_t &p,
   return MotionResult::NONE;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::is_wall_exist(TurnDirection td, float threshold_l,
                                       float threshold_r) {
   const auto se = get_sensing_entity();
@@ -352,6 +359,7 @@ bool WallOffController::is_wall_exist(TurnDirection td, float threshold_l,
   }
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::process_right_wall_off_dia(param_straight_t &ps_front,
                                                     bool &use_oppo_wall,
                                                     bool &exist_wall) {
@@ -433,6 +441,7 @@ bool WallOffController::process_right_wall_off_dia(param_straight_t &ps_front,
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::process_left_wall_off_dia(param_straight_t &ps_front,
                                                    bool &use_oppo_wall,
                                                    bool &exist_wall) {
@@ -514,6 +523,7 @@ bool WallOffController::process_left_wall_off_dia(param_straight_t &ps_front,
   return false;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 float WallOffController::calculate_dia_wall_off_distance(TurnDirection td,
                                                           TurnType turn_type,
                                                           bool &exist_wall) {
@@ -594,10 +604,12 @@ float WallOffController::calculate_dia_wall_off_distance(TurnDirection td,
   return offset;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 wall_off_hold_dist_t &WallOffController::get_wall_off_param() {
   return param->wall_off_dist;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 WallSensorStrategy &WallOffController::get_right_strategy() {
   if (right_strategy.has_value()) {
     return *right_strategy;
@@ -687,6 +699,7 @@ WallSensorStrategy &WallOffController::get_right_strategy() {
   return *right_strategy;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 WallSensorStrategy &WallOffController::get_left_strategy() {
   if (left_strategy.has_value()) {
     return *left_strategy;
@@ -776,6 +789,7 @@ WallSensorStrategy &WallOffController::get_left_strategy() {
   return *left_strategy;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 DiagonalWallOffStrategy &WallOffController::get_left_dia_strategy() {
   if (left_dia_strategy.has_value()) {
     return *left_dia_strategy;
@@ -846,6 +860,7 @@ DiagonalWallOffStrategy &WallOffController::get_left_dia_strategy() {
   return *left_dia_strategy;
 }
 
+__attribute__((noinline, section(".time_critical.wall_off")))
 DiagonalWallOffStrategy &WallOffController::get_right_dia_strategy() {
   if (right_dia_strategy.has_value()) {
     return *right_dia_strategy;

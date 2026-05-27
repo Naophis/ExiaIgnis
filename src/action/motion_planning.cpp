@@ -32,14 +32,18 @@ void MotionPlanning::set_userinterface(std::shared_ptr<UserInterface> &_ui) {
 void MotionPlanning::set_path_creator(std::shared_ptr<PathCreator> &_pc) {
   pc = _pc;
 }
+
 void MotionPlanning::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
   pt = _pt;
   wall_off_controller->set_planning_task(_pt);
 }
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::set_logging_task(std::shared_ptr<LoggingTask> &_lt) {
   lt = _lt; //
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::wait_tick() {
   // Poll with timeout so the log buffer drains even if tick() crashes on Core1.
   // A crash prevents sem_release, meaning sem_acquire_blocking would hang forever
@@ -451,6 +455,8 @@ MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   }
   return MotionResult::NONE;
 }
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::req_error_reset() {
   tgt_val->pl_req.error_vel_reset = 1;
   tgt_val->pl_req.error_gyro_reset = 1;
@@ -459,11 +465,14 @@ void MotionPlanning::req_error_reset() {
   tgt_val->nmr.timstamp++;
   pt->send_command(*tgt_val);
 }
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
                                     next_motion_t &next_motion) {
   return slalom(sp, td, next_motion, false);
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
                                     next_motion_t &next_motion, bool dia) {
   return slalom(sp, td, next_motion, dia, fake_adachi, false);
@@ -948,9 +957,13 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
   }
   return MotionResult::NONE;
 }
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::normal_slalom(param_normal_slalom_t &p,
                                    param_straight_t &p_str) {}
 
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::reset_tgt_data() {
   tgt_val->tgt_in.v_max = 0;
   tgt_val->tgt_in.end_v = 0;
@@ -978,6 +991,7 @@ void MotionPlanning::reset_tgt_data() {
   tgt_val->nmr.tgt_reset_req = false;
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::reset_ego_data() {
   pt->reset_kf_state(false);
   tgt_val->ego_in.accl = 0;
@@ -1030,7 +1044,8 @@ struct YawBiasResultF {
 
 namespace detail {
 
-inline float median_copy(std::vector<float> v) {
+__attribute__((noinline))
+float median_copy(std::vector<float> v) {
   const size_t n = v.size();
   if (n == 0)
     return 0.0f;
@@ -1045,7 +1060,8 @@ inline float median_copy(std::vector<float> v) {
   return 0.5f * (m1 + m2);
 }
 
-inline float mad_copy(const std::vector<float> &x, float med) {
+__attribute__((noinline))
+float mad_copy(const std::vector<float> &x, float med) {
   std::vector<float> dev;
   dev.reserve(x.size());
   for (float v : x)
@@ -1053,7 +1069,8 @@ inline float mad_copy(const std::vector<float> &x, float med) {
   return median_copy(std::move(dev));
 }
 
-inline float tukey_biweight_mean(const std::vector<float> &vals, float center,
+__attribute__((noinline))
+float tukey_biweight_mean(const std::vector<float> &vals, float center,
                                  float sigma, float c) {
   if (sigma <= 0.0f)
     return center;
@@ -1075,7 +1092,8 @@ inline float tukey_biweight_mean(const std::vector<float> &vals, float center,
 
 // 入力: yaw[deg/s]（例: 512点 @1ms, 静止中）
 // 出力: バイアス + 分散（不偏/ロバスト）
-inline YawBiasResultF calibrateYawBiasF(const std::vector<float> &yaw_dps,
+__attribute__((noinline))
+YawBiasResultF calibrateYawBiasF(const std::vector<float> &yaw_dps,
                                         float k_sigma_trim = 3.0f,
                                         float tukey_c = 4.685f) {
   if (yaw_dps.empty())
@@ -1132,6 +1150,7 @@ inline YawBiasResultF calibrateYawBiasF(const std::vector<float> &yaw_dps,
           true};
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::reset_gyro_ref() {
   float gyro_raw_data_sum = 0;
   float gyro2_raw_data_sum = 0;
@@ -1222,6 +1241,7 @@ void MotionPlanning::reset_gyro_ref() {
 
   pt->reset_kf_state(true);
 }
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::reset_gyro_ref_with_check() {
   ui->motion_check();
   reset_gyro_ref();
@@ -1229,8 +1249,10 @@ void MotionPlanning::reset_gyro_ref_with_check() {
   pt->reset_pos(-param->offset_start_dist, 0, 0);
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::coin() { ui->coin(120); }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::front_ctrl(bool limit) {
   req_error_reset();
   sleep_ms(2);
@@ -1290,6 +1312,7 @@ MotionResult MotionPlanning::front_ctrl(bool limit) {
   return MotionResult::NONE;
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::keep() {
   tgt_val->nmr.v_max = 0;
   tgt_val->nmr.v_end = 0;
@@ -1543,24 +1566,29 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
   lt->dump_log(slalom_log_file);
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::search_front_ctrl(param_straight_t &p) {
   return MotionResult::NONE;
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::wall_off(param_straight_t &p, bool dia) {
   return MotionResult::NONE;
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 bool MotionPlanning::wall_off(TurnDirection td, param_straight_t &ps_front) {
   return wall_off_controller->execute_wall_off(td, ps_front);
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 bool MotionPlanning::wall_off_dia(TurnDirection td, param_straight_t &ps_front,
                                   bool &use_oppo_wall, bool &exist_wall) {
   return wall_off_controller->execute_wall_off_dia(td, ps_front, use_oppo_wall,
                                                    exist_wall);
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::calc_dia135_offset(param_straight_t &front,
                                         param_straight_t &back,
                                         TurnDirection dir, bool exec_wall_off) {
@@ -1651,6 +1679,7 @@ void MotionPlanning::calc_dia135_offset(param_straight_t &front,
   // back.dist += offset * ROOT2;
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 float MotionPlanning::calc_orval_offset(TurnDirection dir) {
   const auto se = get_sensing_entity();
   float offset_l = 0;
@@ -1728,6 +1757,7 @@ float MotionPlanning::calc_orval_offset(TurnDirection dir) {
                     param->orval_offset_max_dist);
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::calc_large_offset(param_straight_t &front,
                                        param_straight_t &back,
                                        TurnDirection dir, bool exec_wall_off) {
@@ -1815,6 +1845,7 @@ void MotionPlanning::calc_large_offset(param_straight_t &front,
   // back.dist += offset * ROOT2;
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::calc_dia45_offset(param_straight_t &front,
                                        param_straight_t &back,
                                        TurnDirection dir, bool exec_wall_off) {
@@ -1903,6 +1934,7 @@ void MotionPlanning::calc_dia45_offset(param_straight_t &front,
   }
   // back.dist += offset * ROOT2;
 }
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::system_identification(MotionType mt, float volt_l,
                                            float volt_r, float time) {
   req_error_reset();
