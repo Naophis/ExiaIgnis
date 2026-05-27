@@ -4,7 +4,54 @@
 #include <stdlib.h>
 #include <string.h>
 
-void MainTask::load_circuit_path() {}
+void MainTask::load_circuit_path() {
+  const char *fileName = (sys_.hf_cl == 0) ? "/circuit.hf" : "/circuit.cl";
+
+  JsonDocument doc;
+  if (!ConfigLoader::load_file(fileName, doc)) {
+    printf("not found\n");
+    return;
+  }
+
+  JsonArrayConst path_str  = doc["path_str"].as<JsonArrayConst>();
+  JsonArrayConst path_turn = doc["path_turn"].as<JsonArrayConst>();
+  int path_size = (int)path_str.size();
+  printf("path_size: %d\n", path_size);
+
+  pc->other_route_map.clear();
+  pc->path_s.clear();
+  pc->path_t.clear();
+  for (int i = 0; i < path_size; i++) {
+    pc->path_s.emplace_back(path_str[i].as<float>());
+    pc->path_t.emplace_back(static_cast<unsigned char>(path_turn[i].as<int>()));
+  }
+
+  param_->sen_ref_p.normal.exist.left45 =
+      doc["sensor_exist_left45"] | param_->sen_ref_p.normal.exist.left45;
+  param_->wall_off_wait_dist =
+      doc["wall_off_wait_dist"] | param_->wall_off_wait_dist;
+  param_->front_dist_offset2 =
+      doc["front_dist_offset2"] | param_->front_dist_offset2;
+  param_->front_dist_offset3 =
+      doc["front_dist_offset3"] | param_->front_dist_offset3;
+  param_->front_dist_offset4 =
+      doc["front_dist_offset4"] | param_->front_dist_offset4;
+  param_->wall_off_dist.div_th_r =
+      param_->wall_off_dist.div_th_r2 =
+          param_->wall_off_dist.div_th_r3 =
+              doc["wall_off_hold_div_th_r"] | param_->wall_off_dist.div_th_r;
+  param_->wall_off_diff_ref_front_th =
+      doc["wall_off_diff_ref_front_th"] | param_->wall_off_diff_ref_front_th;
+  param_->wall_off_front_move_dist_th =
+      doc["wall_off_front_move_dist_th"] | param_->wall_off_front_move_dist_th;
+  param_->wall_off_dist.diff_check_dist =
+      doc["wall_off_diff_check_dist"] | param_->wall_off_dist.diff_check_dist;
+  param_->wall_off_dist.right_diff_th =
+      doc["wall_off_noexist_diff_r"] | param_->wall_off_dist.right_diff_th;
+  param_->wall_off_dist.noexist_th_r =
+      param_->wall_off_dist.noexist_th_r2 =
+          doc["wall_off_hold_noexist_th_r"] | param_->wall_off_dist.noexist_th_r;
+}
 
 void MainTask::exec_param_prof() {
   const char *fileName = (sys_.hf_cl == 0) ? "/run_prf.hf" : "/run_prf.cl";
