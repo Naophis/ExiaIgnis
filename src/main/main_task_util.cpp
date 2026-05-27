@@ -288,8 +288,7 @@ void MainTask::reset_ego_data() { mp->reset_ego_data(); }
 void MainTask::setup_components() {
   auto sensing_entity = sensing_->get_sensing_entity();
 
-  // UserInterface は値メンバーのため no-op deleter で shared_ptr 化
-  auto ui_ptr = std::shared_ptr<UserInterface>(&ui_, [](UserInterface *) {});
+  auto ui_ptr = ui_;
 
   // MotionPlanning
   printf("[main] wiring MotionPlanning\n");
