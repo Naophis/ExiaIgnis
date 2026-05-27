@@ -63,6 +63,7 @@ if(NOT littlefs_POPULATED)
     )
     target_include_directories(littlefs PUBLIC ${littlefs_SOURCE_DIR})
     # LFS_NO_MALLOC must NOT be defined so lfs_file_open() is available
+    target_compile_options(littlefs PRIVATE -Wno-stringop-overread)
 endif()
 
 # ---- SparkFun PSRAM (sfe_psram only, no allocator/tlsf) ----
@@ -132,6 +133,16 @@ add_executable(ExiaIgnis
     src/search/adachi.cpp
     src/search/logic.cpp
     src/search/search_controller.cpp
+)
+
+# gen_code_mpc は自動生成コードのため C++20 の volatile 警告を抑制
+set_source_files_properties(
+    gen_code_mpc/mpc_tgt_calc_data.cpp
+    gen_code_mpc/mpc_tgt_calc.cpp
+    gen_code_mpc/rtGetInf.cpp
+    gen_code_mpc/rtGetNaN.cpp
+    gen_code_mpc/rt_nonfinite.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-volatile"
 )
 
 pico_set_program_name(ExiaIgnis "ExiaIgnis")

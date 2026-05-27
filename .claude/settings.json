@@ -72,7 +72,11 @@
       "Bash(arm-none-eabi-readelf -S build/ExiaIgnis.elf)",
       "Bash(./sram_usage.sh)",
       "Bash(echo \"exit: $?\")",
-      "Bash(bash sram_usage.sh)"
+      "Bash(bash sram_usage.sh)",
+      "Bash(cmake --version)",
+      "Bash(cmake3 --version)",
+      "Bash(~/.pico-sdk/toolchain/15_2_Rel1/bin/arm-none-eabi-g++ --version)",
+      "Bash(~/.pico-sdk/toolchain/15_2_Rel1/bin/arm-none-eabi-g++ -v)"
     ]
   }
 }

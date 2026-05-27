@@ -1,5 +1,8 @@
 #pragma once
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wvolatile"
 #include "gen_code_mpc/mpc_tgt_calc.h"
+#pragma GCC diagnostic pop
 #include "planning/astraea_types.hpp"
 #include "planning/ego_estimator.hpp"
 #include "planning/sensor_processor.hpp"
