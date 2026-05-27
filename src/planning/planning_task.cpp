@@ -64,6 +64,7 @@ void PlanningTask::start_irq() {
   timer_hw->alarm[0] = next_alarm_;
 }
 
+__attribute__((noinline, section(".time_critical.planning_cmd")))
 void PlanningTask::send_command(const motion_tgt_val_t &tgt) {
   // double buffer: Core0 は write_cmd_idx_ 側に書き込み、store(release) で公開する。
   // IRQ 内で shared_ptr や new/delete が一切発生しない。
