@@ -57,7 +57,7 @@ public:
   void motor_enable();
   void motor_disable();
   void suction_enable(float duty, float duty_low);
-  void suction_disable() { suction_en = false; }
+  void suction_disable();
 
   // ---- 推定リセット ----
   void reset_kf_state(bool full) {

@@ -470,7 +470,13 @@ void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
 void PlanningTask::suction_enable(float duty, float duty_low) {
   suction_en = true;
   ctl_.set_suction_target(duty, duty_low);
+  motor_.suction_enable();
 }
+void PlanningTask::suction_disable() {
+  suction_en = false;
+  motor_.suction_disable();
+}
+
 void PlanningTask::wait_tick() {
   sem_acquire_blocking(&tick_sem_);
 }

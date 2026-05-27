@@ -51,8 +51,8 @@ void MotorActuator::apply_suction(float duty_suction) {
   uint16_t suction_level =
       (uint16_t)((float)(motor_wrap_ + 1u) * std::clamp(duty_suction, 0.0f, 100.0f) /
                  100.0f);
-  pwm_set_chan_level(slice_S_, PWM_CHAN_A, suction_level);
-  pwm_set_chan_level(slice_S_, PWM_CHAN_B, 0);
+  // pwm_set_chan_level(slice_S_, PWM_CHAN_A, 0);
+  pwm_set_chan_level(slice_S_, PWM_CHAN_B, suction_level);
 }
 
 void MotorActuator::motor_enable() {
