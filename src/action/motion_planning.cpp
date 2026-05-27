@@ -1166,7 +1166,7 @@ void MotionPlanning::reset_gyro_ref() {
   tgt_val->nmr.timstamp++;
   sleep_ms(10); // 他モジュールの起動待ち
 
-  auto print = [=]() -> void {
+  auto print = [=, this]() -> void {
     printf("gyro bias: %f\n", tgt_val->gyro_zero_p_offset);
     printf("gyro var_robust_dps2: %f\n", tgt_val->var_robust_dps2);
     printf("gyro var_unbiased_dps2: %f\n", tgt_val->var_unbiased_dps2);
