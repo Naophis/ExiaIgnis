@@ -70,7 +70,9 @@
       "Bash(arm-none-eabi-objdump -h build/ExiaIgnis.elf)",
       "Bash(awk -F, 'NR==1{for\\(i=1;i<=NF;i++\\) if\\($i~/pln_t_/\\) col[i]=$i; next} {for\\(i in col\\) printf col[i]\"=\"$i\" \"; print \"\"}' /home/naoto/Desktop/mouse/ExiaIgnis/tools/param_tuner/logs/latest.csv)",
       "Bash(arm-none-eabi-readelf -S build/ExiaIgnis.elf)",
-      "Bash(./sram_usage.sh)"
+      "Bash(./sram_usage.sh)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(bash sram_usage.sh)"
     ]
   }
 }
