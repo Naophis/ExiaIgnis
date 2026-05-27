@@ -22,7 +22,7 @@ public:
 
   // ---- メインエントリ (1kHz tick) ----
   void calc(bool motor_en, bool suction_en, bool search_mode,
-            unsigned char w_reset, float last_tgt_angle, float dt);
+            float last_tgt_angle, float dt);
 
   // ---- コマンドリクエスト処理 ----
   void pl_req_activate(const planning_req_t &pl_req);
