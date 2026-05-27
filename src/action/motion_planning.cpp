@@ -55,7 +55,7 @@ void MotionPlanning::wait_tick() {
   // g_irq_log.drain([](const char *msg) { printf("%s", msg); });
 }
 
-__attribute__((noinline, section(".motion.go_straight")))
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::go_straight(param_straight_t &p,
                                          std::shared_ptr<Adachi> &adachi,
                                          bool search_mode) {
@@ -350,10 +350,12 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   return MotionResult::NONE;
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::go_straight(param_straight_t &p) {
   return go_straight(p, fake_adachi, false);
 }
 
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   // 一度初期化
   pt->motor_enable();
@@ -466,6 +468,8 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
                                     next_motion_t &next_motion, bool dia) {
   return slalom(sp, td, next_motion, dia, fake_adachi, false);
 }
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
                                     next_motion_t &next_motion, bool dia,
                                     std::shared_ptr<Adachi> &adachi,
@@ -1315,6 +1319,8 @@ void MotionPlanning::keep() {
     }
   }
 }
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::exec_path_running(param_set_t &p_set) {
   ego.x = ego.y = ego.ang = 0;
   ego.dir = Direction::North;
