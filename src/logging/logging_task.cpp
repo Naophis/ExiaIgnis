@@ -162,6 +162,7 @@ void LoggingTask::stop() {
 // Core0 タイマー IRQ (1kHz) — active_ が true の間だけ PSRAM へ書き込む。
 // sensing_result / tgt_val_ は shared_ptr 経由で参照するためスレッド安全。
 // ============================================================
+__attribute__((noinline, section(".time_critical.logging")))
 bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   auto *self = s_instance.get();
   if (!self || !self->active_)
