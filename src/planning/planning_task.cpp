@@ -210,7 +210,7 @@ void PlanningTask::tick(uint32_t dt_us) {
   }
 
   if (do_log) g_irq_log.push("T6"); // pre ctl.calc
-  ctl_.calc(motor_en, suction_en, search_mode, w_reset, last_tgt_angle, dt);
+  ctl_.calc(motor_en, suction_en, search_mode, last_tgt_angle, dt);
   {
     uint64_t t_now = time_us_64();
     tgt_val->pln_t_ctl = (int16_t)(t_now - t_prev);

@@ -21,11 +21,11 @@ void ControlLaw::init(MotorActuator *motor, SensorProcessor *sensor,
 
 __attribute__((noinline, section(".time_critical.control_law"))) void
 ControlLaw::calc(bool motor_en, bool suction_en, bool search_mode,
-                 unsigned char w_reset, float last_tgt_angle, float dt) {
+                 float last_tgt_angle, float dt) {
   motor_en_ = motor_en;
   suction_en_ = suction_en;
   search_mode_ = search_mode;
-  w_reset_ = w_reset;
+  w_reset_ = 1;
   last_tgt_angle_ = last_tgt_angle;
   dt_ = dt;
 
