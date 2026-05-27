@@ -879,11 +879,17 @@ inline void convertFromJson(JsonVariantConst src, slalom_param2_t& dst) {
  */
 inline void convertFromJson(JsonVariantConst src, straight_param_t& dst) {
     from_json_field(src, "v_max", dst.v_max);
-    from_json_field(src, "accl", dst.accl);
+    from_json_field(src, "v",     dst.v_max);  // vel_prof short alias
+    from_json_field(src, "accl",  dst.accl);
+    from_json_field(src, "a",     dst.accl);   // vel_prof short alias
     from_json_field(src, "decel", dst.decel);
+    from_json_field(src, "d",     dst.decel);  // vel_prof short alias
     from_json_field(src, "w_max", dst.w_max);
+    from_json_field(src, "w0",    dst.w_max);  // vel_prof short alias
     from_json_field(src, "w_end", dst.w_end);
+    from_json_field(src, "w1",    dst.w_end);  // vel_prof short alias
     from_json_field(src, "alpha", dst.alpha);
+    from_json_field(src, "a2",    dst.alpha);  // vel_prof short alias
 }
 
 /**

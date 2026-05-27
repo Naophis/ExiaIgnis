@@ -62,8 +62,6 @@ private:
   LED_bit lbit;
 
   // ─── 共通ユーティリティ (main_task_util.cpp) ─────────────────────────────
-  bool load_exec_params();
-  void setup_before_run();
   void show_mode_led(int mode);
   void wait_button();
   void mount();

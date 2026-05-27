@@ -5,60 +5,27 @@
 #include "pico/stdlib.h"
 #include <stdio.h>
 
-// ─── exec パラメータロード
-// ──────────────────────────────────────────────────── /exec.json (JSON 配列)
-// を読み込んで exec_param_list を構築する。
-// 本走行・テスト走行の両モードに入る前に呼ぶこと。
-bool MainTask::load_exec_params() {
-  JsonDocument doc;
-  if (!ConfigLoader::load_file("/exec.json", doc)) {
-    printf("[main] /exec.json not found, exec_param_list empty.\n");
-    return false;
-  }
-
-  exec_param_list.clear();
-  for (JsonVariantConst v : doc.as<JsonArrayConst>()) {
-    exec_pram_t ep{};
-    convertFromJson(v, ep);
-    exec_param_list.push_back(ep);
-  }
-
-  printf("[main] exec_params loaded: %u entries\n",
-         (unsigned)exec_param_list.size());
-  return !exec_param_list.empty();
-}
-
-// ─── 走行前共通セットアップ
-// ────────────────────────────────────────────────────
-void MainTask::setup_before_run() {
-  // planning_->reset_gyro_ref_with_check();
-}
-
-// ─── LED ヘルパー
-// ─────────────────────────────────────────────────────────────
+// ─── LED ヘルパー───────────────────────────────────────────────────
 void MainTask::show_mode_led(int mode) {
   int v = mode + 1;
   ui_->LED_bit((v >> 0) & 1, (v >> 1) & 1, (v >> 2) & 1, (v >> 3) & 1,
-              (v >> 4) & 1, (v >> 5) & 1);
+               (v >> 4) & 1, (v >> 5) & 1);
 }
 
-// ─── ボタン待機ヘルパー
-// ───────────────────────────────────────────────────────
+// ─── ボタン待機ヘルパー────────────────────────────────
 void MainTask::wait_button() {
   while (!ui_->button_state_hold())
     sleep_ms(10);
 }
 
-// ─── LittleFS マウント管理
-// ──────────────────────────────────────────────────── ConfigLoader が起動時に
-// init() 済みのため、ここでは再初期化は不要。
+// ─── LittleFS マウント管理───────────────────────────────
+// ConfigLoader が起動時に init() 済みのため、ここでは再初期化は不要。
 // 将来的にファイルシステムの排他制御が必要になった際にここに実装する。
 void MainTask::mount() {}
 void MainTask::umount() {}
 
-// ─── プロファイルロード
-// ─────────────────────────────────────────────────────── /profiles.hf または
-// /profiles.cl から TurnType ごとのファイルインデックスを構築する。
+// ─── プロファイルロード────────────────────────────────
+//  /profiles.hf または /profiles.cl から TurnType ごとのファイルインデックスを構築する。
 void MainTask::load_turn_param_profiles(bool const_mode, int const_index) {
   const char *fileName = (sys_.hf_cl == 0) ? "/profiles.hf" : "/profiles.cl";
 
