@@ -412,7 +412,7 @@ int MazeSolverBaseLgc::clear_vector_distmap(
           vector_dist[idx].w == vector_max_step_val &&
           vector_dist[idx].s == vector_max_step_val)
         subgoal_list.erase(idx);
-      else if (subgoal_list.count(idx) > 0) {
+      else if (subgoal_list.contains(idx)) {
         subgoal_list[idx]++;
         if (maze_size > 20) {
           if (subgoal_list[idx] > 45)

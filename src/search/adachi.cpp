@@ -330,8 +330,7 @@ Motion Adachi::exec(bool is_stepped, bool force_back) {
 void Adachi::update() {
   goal_step_check();
   if (goal_step && sm == SearchMode::ALL) {
-    if ((subgoal_list.find(ego->x + ego->y * lgc->maze_size) !=
-         subgoal_list.end())) {
+    if (subgoal_list.contains(ego->x + ego->y * lgc->maze_size)) {
       subgoal_list.erase(ego->x + ego->y * lgc->maze_size);
     }
     {

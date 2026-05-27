@@ -149,7 +149,7 @@ bool PathCreator::path_create(bool is_search, int tgt_x, int tgt_y,
     dirLog[2] = dirLog[1];
     dirLog[1] = dirLog[0];
     dirLog[0] = now_dir;
-    if (stepped.count(x + lgc->maze_size * y) != 0) {
+    if (stepped.contains(x + lgc->maze_size * y)) {
       return false;
     }
     stepped[x + lgc->maze_size * y] = 1;
@@ -196,7 +196,7 @@ bool PathCreator::path_create(bool is_search, int tgt_x, int tgt_y,
         dist_val = lgc->getDistV(x, y, next_dir);
         use = true;
       }
-      if (other_route_map.count(x + lgc->maze_size * y) != 0) {
+      if (other_route_map.contains(x + lgc->maze_size * y)) {
         if (other_route_map[x + lgc->maze_size * y].selected) {
           next_dir = other_route_map[x + lgc->maze_size * y].select_dir;
           dist_val = lgc->getDistV(x, y, next_dir);
@@ -677,7 +677,7 @@ float PathCreator::timebase_path_create(bool is_search, param_set_t &p_set,
 
 __attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::checkOtherRoot(int x, int y, Direction now_dir, float now) {
-  if (other_route_map.count(x + y * lgc->maze_size) > 0) {
+  if (other_route_map.contains(x + y * lgc->maze_size)) {
     return;
   }
 

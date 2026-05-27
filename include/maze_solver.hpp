@@ -3,6 +3,7 @@
 
 #include "stdio.h"
 #include <cmath>
+#include <numbers>
 #include <set>
 #include <vector>
 
@@ -11,7 +12,7 @@ constexpr unsigned char MAX_MAZE_SIZE = 32;
 constexpr float ROOT2 = sqrt(2.0f);
 constexpr float dt = 0.001;
 constexpr float eps = 0.001;
-constexpr float m_PI = 3.141592653589793238;
+constexpr float m_PI = std::numbers::pi_v<float>;
 
 typedef struct {
   float n;
