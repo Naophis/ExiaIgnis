@@ -1,9 +1,8 @@
 #include "search_controller.hpp"
+#include "config_loader.hpp"
 #include "pico/time.h"
 
 static const std::string maze_log_file("/maze.txt");
-static inline void mount() {}
-static inline void umount() {}
 
 SearchController::SearchController() {
   adachi = std::make_shared<Adachi>();
@@ -914,25 +913,15 @@ void SearchController::print_maze() {
   printf("\r\n");
 }
 void SearchController::save_maze_data() {
-  // auto *f = fopen(maze_log_kata_file.c_str(), "wb");
-  mount();
-  FILE *f;
-  for (int i = 0; i < 10; i++) {
-    errno = 0; // ← 毎回リセット
-    f = fopen(maze_log_file.c_str(), "wb");
-    if (f != NULL) {
-      break;
-    }
-  }
-  if (f == NULL) {
-    ui->error();
-    umount();
-    return;
-  }
+  std::string data;
   for (const auto d : lgc->map) {
-    fprintf(f, "%d,", d);
+    data += std::to_string(d);
+    data += ',';
   }
-  fflush(f);
-  fclose(f);
-  umount();
+  if (!ConfigLoader::write_file(maze_log_file.c_str(),
+                                reinterpret_cast<const uint8_t *>(data.c_str()),
+                                data.size())) {
+    printf("[search] save_maze_data: write failed\n");
+    ui->error();
+  }
 }
