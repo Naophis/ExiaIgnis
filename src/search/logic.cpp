@@ -1,5 +1,6 @@
 
 #include "logic.hpp"
+#include <algorithm>
 
 void MazeSolverBaseLgc::init(const int _maze_size, const int _max_step_val) {
   maze_size = _maze_size;
@@ -86,16 +87,9 @@ void MazeSolverBaseLgc::updateWall(int x, int y, Direction dir) {
 
 __attribute__((noinline, section(".time_critical.search")))
 void MazeSolverBaseLgc::remove_goal_pos3() {
-  for (auto it = goal_list3.begin(); it != goal_list3.end();) {
-    bool flag1 = false;
-    flag1 |= is_stepped((*it).x, (*it).y);
-    flag1 |= get_dist_val((*it).x, (*it).y) == max_step_val;
-
-    if (flag1)
-      it = goal_list3.erase(it);
-    else
-      it++;
-  }
+  std::erase_if(goal_list3, [this](const point_t &p) {
+    return is_stepped(p.x, p.y) || get_dist_val(p.x, p.y) == max_step_val;
+  });
 }
 
 __attribute__((noinline, section(".time_critical.search")))
@@ -957,10 +951,9 @@ void MazeSolverBaseLgc::setNextRootDirectionPathUnKnown(
 
 __attribute__((noinline, section(".time_critical.search")))
 bool MazeSolverBaseLgc::arrival_goal_position(const int x, const int y) {
-  for (const auto p : goal_list)
-    if (p.x == x && p.y == y)
-      return true;
-  return false;
+  return std::ranges::any_of(goal_list, [&](const auto &p) {
+    return p.x == x && p.y == y;
+  });
 }
 
 __attribute__((noinline, section(".time_critical.search")))

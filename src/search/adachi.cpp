@@ -1,4 +1,5 @@
 #include "adachi.hpp"
+#include <algorithm>
 
 Adachi::Adachi() {}
 
@@ -75,10 +76,9 @@ void Adachi::setNextDirection2(int x2, int y2, Direction dir,
 }
 
 bool Adachi::is_goal(int x, int y) {
-  for (const auto p : lgc->goal_list)
-    if (p.x == x && p.y == 0)
-      return true;
-  return false;
+  return std::ranges::any_of(lgc->goal_list, [&](const auto &p) {
+    return p.x == x && p.y == 0;
+  });
 }
 
 void Adachi::deadEnd(int egox, int egoy) {
@@ -219,23 +219,21 @@ bool Adachi::is_go_home() {
 }
 __attribute__((noinline, section(".time_critical.search")))
 void Adachi::goal_step_check() {
-  for (auto it = lgc->goal_list_origin.begin();
-       it != lgc->goal_list_origin.end(); it++) {
-    if ((*it).x == ego->x && (*it).y == ego->y) {
-      it = lgc->goal_list_origin.erase(it);
-      break;
-    }
+  if (auto it = std::ranges::find_if(lgc->goal_list_origin, [&](const auto &p) {
+        return p.x == ego->x && p.y == ego->y;
+      });
+      it != lgc->goal_list_origin.end()) {
+    lgc->goal_list_origin.erase(it);
   }
   if (lgc->goal_list_origin.size() == 1) {
-    for (auto it = lgc->goal_list_origin.begin();
-         it != lgc->goal_list_origin.end(); it++) {
-      if (lgc->isStep((*it).x, (*it).y, Direction::North) &&
-          lgc->isStep((*it).x, (*it).y, Direction::East) &&
-          lgc->isStep((*it).x, (*it).y, Direction::West) &&
-          lgc->isStep((*it).x, (*it).y, Direction::South)) {
-        it = lgc->goal_list_origin.erase(it);
-        break;
-      }
+    if (auto it = std::ranges::find_if(lgc->goal_list_origin, [&](const auto &p) {
+          return lgc->isStep(p.x, p.y, Direction::North) &&
+                 lgc->isStep(p.x, p.y, Direction::East) &&
+                 lgc->isStep(p.x, p.y, Direction::West) &&
+                 lgc->isStep(p.x, p.y, Direction::South);
+        });
+        it != lgc->goal_list_origin.end()) {
+      lgc->goal_list_origin.erase(it);
     }
   }
   if (lgc->goal_list_origin.size() == 0) {
