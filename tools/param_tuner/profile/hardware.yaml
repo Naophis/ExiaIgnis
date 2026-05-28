@@ -265,14 +265,14 @@ angle_pid: # pid for angle
   # i: 0.0
   # d: 4.5
 
-  # p: 9.50
-  # i: 0.0
-  # d: 4.5
-  # b: 40 #deg
-  p: 0.0
+  p: 4.50
   i: 0.0
-  d: 0.0
-  b: 0 #deg
+  d: 4.5
+  b: 40 #deg
+  # p: 0.0
+  # i: 0.0
+  # d: 0.0
+  # b: 0 #deg
 
   antiwindup: 0 #I制御してないので意味ない
   windup_gain: 1

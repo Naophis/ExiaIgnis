@@ -209,7 +209,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
 
   flag = (left_exist || right_exist);
   // pr.ang = (flag) ? m_PI / 2 : m_PI;
-  pr.ang = (flag) ? param->pivot_angle_90 : param->pivot_angle_180;
+  pr.ang = (flag) ? param->pivot_angle_90 * M_PI / 180.0 : param->pivot_angle_180 * M_PI / 180.0;
 
   bool front_ctrl2 = false;
   if (!left_exist && !right_exist) {
@@ -262,7 +262,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     p.motion_type = MotionType::PIVOT_OFFSET;
     p.sct = SensorCtrlType::NONE;
     // pr.ang = m_PI / 2;
-    pr.ang = param->pivot_angle_90;
+    pr.ang = param->pivot_angle_90 * M_PI / 180.0;
     res = mp->pivot_turn(pr);
     sleep_ms(1);
     front_ctrl = (sensing_result->ego.front_dist < param->search_front_ctrl_th);
@@ -298,7 +298,7 @@ MotionResult SearchController::pivot(param_set_t &p_set, float diff) {
     sleep_ms(1);
   } else {
     // pr.ang = m_PI;
-    pr.ang = param->pivot_angle_180;
+    pr.ang = param->pivot_angle_180 * M_PI / 180.0;
     res = mp->pivot_turn(pr);
     pt->motor_disable();
     mp->reset_tgt_data();
@@ -462,7 +462,7 @@ MotionResult SearchController::pivot90(param_set_t &p_set,
   pr.alpha = p_set.str_map[StraightType::Search].alpha;
   pr.w_end = p_set.str_map[StraightType::Search].w_end;
   // pr.ang = m_PI / 2;
-  pr.ang = param->pivot_angle_90;
+  pr.ang = param->pivot_angle_90 * M_PI / 180.0;
   pr.RorL = td;
 
   // pt->motor_disable();
