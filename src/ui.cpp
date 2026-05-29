@@ -173,6 +173,7 @@ int UserInterface::encoder_operation() {
 
 void UserInterface::motion_check() {
   int c = 0;
+  printf("motion check start\n");
   if (tgt_val_ && pt_) {
     tgt_val_->nmr.motion_type = MotionType::READY;
     tgt_val_->nmr.timstamp = tgt_val_->nmr.timstamp + 1;
@@ -207,7 +208,8 @@ void UserInterface::motion_check() {
   }
 }
 
-TurnDirection UserInterface::select_direction() {  TurnDirection td = TurnDirection::None;
+TurnDirection UserInterface::select_direction() {  
+  TurnDirection td = TurnDirection::None;
   bool b = true;
   while (1) {
     if (sensing_result->ego.v_r > ENC_OPE_V_R_TH) {
@@ -224,6 +226,7 @@ TurnDirection UserInterface::select_direction() {  TurnDirection td = TurnDirect
     if (td != TurnDirection::None) {
       if (button_state_hold()) {
         coin(80);
+        LED_off_all();
         return td;
       }
     } else {

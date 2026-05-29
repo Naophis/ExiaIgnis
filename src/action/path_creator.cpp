@@ -545,6 +545,7 @@ void PathCreator::pathOffset() {
 
 __attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::print_path() {
+  printf("path size: %d\n", path_size);
   auto size = path_s.size();
   bool dia = false;
   for (int i = 0; i < (int)size; i++) {
@@ -702,6 +703,9 @@ void PathCreator::checkOtherRoot(int x, int y, Direction now_dir, float now) {
 
 __attribute__((noinline, section(".time_critical.path_creator")))
 float PathCreator::calc_goal_time(param_set_t &p_set, bool debug) {
+  if (debug) {
+    printf("calc_goal_time start\n");
+  }
   bool fast_mode = false;
   bool start_turn = false;
   bool dia = false;

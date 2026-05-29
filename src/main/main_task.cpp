@@ -160,6 +160,7 @@ void MainTask::run() {
 
   printf("[main] user_mode=%d\n", sys_.user_mode);
   setup_components();
+  load_turn_param_profiles(false, 0);
   reset_tgt_data();
   reset_ego_data();
   if (sys_.user_mode != 0) {

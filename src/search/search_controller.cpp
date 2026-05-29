@@ -748,7 +748,7 @@ MotionResult SearchController::straight_offset(param_set_t &p_set,
   pr.alpha = p_set.str_map[StraightType::Search].alpha;
   pr.w_end = p_set.str_map[StraightType::Search].w_end;
   // pr.ang = m_PI / 2;
-  pr.ang = param->pivot_angle_90;
+  pr.ang = param->pivot_angle_90 * M_PI / 180.0;
   pr.RorL = td;
 
   pt->motor_enable();
@@ -913,15 +913,19 @@ void SearchController::print_maze() {
   printf("\r\n");
 }
 void SearchController::save_maze_data() {
-  std::string data;
-  for (const auto d : lgc->map) {
-    data += std::to_string(d);
-    data += ',';
+  void *h = ConfigLoader::open_write(maze_log_file.c_str());
+  if (!h) {
+    printf("[search] save_maze_data: open failed\n");
+    ui->error();
+    return;
   }
-  if (!ConfigLoader::write_file(maze_log_file.c_str(),
-                                reinterpret_cast<const uint8_t *>(data.c_str()),
-                                data.size())) {
-    printf("[search] save_maze_data: write failed\n");
+  char buf[5]; // "255," + null
+  for (const auto d : lgc->map) {
+    int n = snprintf(buf, sizeof(buf), "%u,", (unsigned)d);
+    ConfigLoader::write_chunk(h, reinterpret_cast<const uint8_t *>(buf), n);
+  }
+  if (!ConfigLoader::close_write(h)) {
+    printf("[search] save_maze_data: close failed\n");
     ui->error();
   }
 }

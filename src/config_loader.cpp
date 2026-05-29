@@ -244,6 +244,28 @@ bool ConfigLoader::write_file(const char* path, const uint8_t* data, size_t size
     return n == (lfs_ssize_t)size;
 }
 
+void* ConfigLoader::open_write(const char* path) {
+    auto* f = new lfs_file_t;
+    if (lfs_file_open(&lfs, f, path,
+                      LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) < 0) {
+        delete f;
+        return nullptr;
+    }
+    return f;
+}
+
+bool ConfigLoader::write_chunk(void* handle, const uint8_t* data, size_t size) {
+    auto* f = static_cast<lfs_file_t*>(handle);
+    return lfs_file_write(&lfs, f, data, size) == (lfs_ssize_t)size;
+}
+
+bool ConfigLoader::close_write(void* handle) {
+    auto* f = static_cast<lfs_file_t*>(handle);
+    int r = lfs_file_close(&lfs, f);
+    delete f;
+    return r >= 0;
+}
+
 bool ConfigLoader::read_file_raw(const char* path,
                                   uint8_t* buf, size_t buf_size,
                                   size_t& out_size) {

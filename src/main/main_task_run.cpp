@@ -44,16 +44,17 @@ int MainTask::select_run_mode(int max_mode) {
 __attribute__((noinline, section(".time_critical.main")))
 void MainTask::run_main_mode() {
   printf("[main] === MAIN RUN MODE ===\n");
-  ui_->coin(200);
-
-  ui_->coin(200);
+  ui_->coin(100);
+  ui_->coin(100);
+  
   lgc->init(sys_.maze_size, sys_.maze_size * sys_.maze_size - 1);
   lgc->set_goal_pos(sys_.goals);
   search_ctrl->set_lgc(lgc);
   search_ctrl->set_motion_plannning(mp);
   pc->set_logic(lgc);
   pc->set_userinterface(ui_);
-  // read_maze_data();
+  read_maze_data();
+  exec_param_prof();
   search_ctrl->print_maze();
 
   int mode_num = 0;
@@ -64,7 +65,6 @@ void MainTask::run_main_mode() {
     planning_->set_mode_select(true);
     mode_num = select_mode();
     planning_->set_mode_select(false);
-    exec_param_prof();
     printf("mode_num: %d, exec_param_list.size(): %d\n", mode_num,
            exec_param_list.size());
     if (mode_num == 0) {
@@ -243,6 +243,10 @@ void MainTask::path_run(int idx, int idx2, int idx3) {
 
   pc->calc_goal_time(param_set, true);
   pc->print_path();
+  if (ui_->button_state()) {
+    ui_->button_state_hold();
+  }
+  printf("suction: %d\n", param_set.suction);
   // printf("after: %d bytes\n",
   // heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 

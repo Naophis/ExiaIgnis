@@ -61,6 +61,11 @@ public:
     // rawバイト列をファイルに書き込む (作成 or 上書き)
     static bool write_file(const char* path, const uint8_t* data, size_t size);
 
+    // 逐次書き込み用 API (大きなバッファを確保せずにチャンク単位で書ける)
+    static void* open_write(const char* path);
+    static bool  write_chunk(void* handle, const uint8_t* data, size_t size);
+    static bool  close_write(void* handle);
+
     // rawバイト列としてファイルを読み出す。buf_size より大きければ失敗
     static bool read_file_raw(const char* path,
                               uint8_t* buf, size_t buf_size, size_t& out_size);
