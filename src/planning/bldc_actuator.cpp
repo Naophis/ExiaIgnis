@@ -4,9 +4,14 @@
 #include "hardware/dma.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
+#include "hardware/regs/dma.h"   // DMA_CH0_TRANS_COUNT_MODE_* defines
 #include "pico/stdlib.h"
 #include <algorithm>
 #include <cmath>
+
+// RP2350: TRANS_COUNT [31:28] = TRIGGER_SELF (0x1) → DMA が自動再起動する
+static constexpr uint32_t TRANS_COUNT_TRIGGER_SELF =
+    (DMA_CH0_TRANS_COUNT_MODE_VALUE_TRIGGER_SELF << DMA_CH0_TRANS_COUNT_MODE_LSB);
 
 // ============================================================
 // 初期化 (Core0 から呼ぶ)
@@ -31,16 +36,14 @@ void BldcActuator::init() {
     pwm_set_enabled(s, false);
   }
 
-  // テーブルを振幅 0 (全相 50% = ゼロ電圧) で初期化
-  rebuild_tables();
+  rebuild_tables();  // amplitude_=0: 全エントリを 50% (ゼロ電圧) で初期化
 
-  // DMA チャンネルを確保 (init 時のみ)
   ch_uv_ = dma_claim_unused_channel(true);
   ch_w_  = dma_claim_unused_channel(true);
 }
 
 // ============================================================
-// サインテーブル再計算
+// サインテーブル再計算 (amplitude_ から 3 相 PWM レベルを生成)
 // ============================================================
 void BldcActuator::rebuild_tables() {
   constexpr float TWO_PI   = 2.0f * (float)M_PI;
@@ -50,11 +53,11 @@ void BldcActuator::rebuild_tables() {
 
   for (int i = 0; i < TABLE_SIZE; i++) {
     const float theta = TWO_PI * i / TABLE_SIZE;
-    const auto  u = (uint16_t)((0.5f + half_amp * sinf(theta))          * wu1);
-    const auto  v = (uint16_t)((0.5f + half_amp * sinf(theta - TWO_PI_3)) * wu1);
-    const auto  w = (uint16_t)((0.5f + half_amp * sinf(theta + TWO_PI_3)) * wu1);
+    const auto u = (uint16_t)((0.5f + half_amp * sinf(theta))          * wu1);
+    const auto v = (uint16_t)((0.5f + half_amp * sinf(theta - TWO_PI_3)) * wu1);
+    const auto w = (uint16_t)((0.5f + half_amp * sinf(theta + TWO_PI_3)) * wu1);
     table_uv_[i] = ((uint32_t)v << 16) | u;  // PWM4 CC: [31:16]=V, [15:0]=U
-    table_w_[i]  = w;                         // PWM5 CC: [15:0]=W (上位=0, chan B未使用)
+    table_w_[i]  = w;                         // PWM5 CC: [15:0]=W (上位=0 未使用)
   }
 }
 
@@ -67,37 +70,42 @@ void BldcActuator::set_duty(float duty_pct) {
 }
 
 // ============================================================
-// 有効化: DMA を設定して SPWM 出力を開始
+// 有効化: DMA を設定・起動して SPWM 出力を開始
 // ============================================================
 void BldcActuator::enable() {
   rebuild_tables();
 
-  // PWM4 DREQ トリガで slice_s1_ の CC レジスタを DMA 更新
-  const uint dreq = pwm_get_dreq(slice_s1_);
-
+  // --- ch_uv_: PWM4 wrap DREQ → table_uv_ → PWM4 CC (U+V) ---
   dma_channel_config c = dma_channel_get_default_config(ch_uv_);
   channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-  channel_config_set_dreq(&c, dreq);
+  channel_config_set_dreq(&c, pwm_get_dreq(slice_s1_));
   channel_config_set_read_increment(&c, true);
   channel_config_set_write_increment(&c, false);
-  channel_config_set_ring(&c, false, RING_SIZE_BITS);  // read ring: 2^7 = 128 bytes
+  channel_config_set_ring(&c, false, RING_SIZE_BITS);  // read ring: 128 bytes
   dma_channel_configure(ch_uv_, &c,
       &pwm_hw->slice[slice_s1_].cc,  // dst: PWM4 CC (固定)
-      table_uv_,                     // src: UV テーブル (ring)
-      0x0FFFFFFF,                    // count: 実質無限 (37.5 kHz × ~7000 s)
-      true);                         // trigger: DREQ 待ちで即開始
+      table_uv_,                     // src: ring バッファ先頭
+      TABLE_SIZE,                    // count (TRIGGER_SELF で上書き)
+      false);
+  // TRIGGER_SELF モードに切り替え: 読了後に自動再起動 (CPU 割り込み不要)
+  dma_hw->ch[ch_uv_].transfer_count = TRANS_COUNT_TRIGGER_SELF | TABLE_SIZE;
 
-  dma_channel_config cw = dma_channel_get_default_config(ch_w_);
-  channel_config_set_transfer_data_size(&cw, DMA_SIZE_32);
-  channel_config_set_dreq(&cw, dreq);  // 同じ DREQ (slice4 と slice5 は同期)
-  channel_config_set_read_increment(&cw, true);
-  channel_config_set_write_increment(&cw, false);
-  channel_config_set_ring(&cw, false, RING_SIZE_BITS);
-  dma_channel_configure(ch_w_, &cw,
-      &pwm_hw->slice[slice_s2_].cc,  // dst: PWM5 CC (固定)
-      table_w_,                      // src: W テーブル (ring)
-      0x0FFFFFFF,
-      true);
+  // --- ch_w_: PWM5 wrap DREQ → table_w_ → PWM5 CC (W) ---
+  c = dma_channel_get_default_config(ch_w_);
+  channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+  channel_config_set_dreq(&c, pwm_get_dreq(slice_s2_));
+  channel_config_set_read_increment(&c, true);
+  channel_config_set_write_increment(&c, false);
+  channel_config_set_ring(&c, false, RING_SIZE_BITS);
+  dma_channel_configure(ch_w_, &c,
+      &pwm_hw->slice[slice_s2_].cc,
+      table_w_,
+      TABLE_SIZE,
+      false);
+  dma_hw->ch[ch_w_].transfer_count = TRANS_COUNT_TRIGGER_SELF | TABLE_SIZE;
+
+  // 両チャンネルを同時に起動 (DREQ 待機へ)
+  dma_start_channel_mask((1u << ch_uv_) | (1u << ch_w_));
 
   // 両スライスを同時に有効化してフェーズを揃える
   gpio_put(SUCTION_EN, 1);
