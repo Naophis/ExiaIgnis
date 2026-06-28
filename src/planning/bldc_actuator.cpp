@@ -148,32 +148,51 @@ void BldcActuator::disable() {
 }
 
 // ============================================================
-// test_direct: DMA を使わず Core0 から直接 PWM CC へ sine 波を書く (~1秒)
-// 回れば → ハードウェア正常、DMA が問題
-// 回らなければ → 配線 / MP6540H / 周波数の問題
+// test_direct: DMA を使わず Core0 から直接 PWM CC へ sine 波を書く (~3秒)
+//
+// 100 Hz からスタートして 1172 Hz まで周波数をランプアップし、
+// その後 2 秒間定速運転する。
+// 1172 Hz (= 35K RPM for 1PP) から突然スタートすると引き込み失敗するため
+// 低周波数スタートが必要。
+//
+// 回れば → PWM/MP6540H は正常、DMA が問題
+// 回らなければ → 配線 / EN ピン / MP6540H FAULT / モーター断線の問題
 // ============================================================
 void BldcActuator::test_direct(float amplitude_pct) {
   if (enabled_) disable();
 
-  constexpr float TWO_PI   = 2.0f * (float)M_PI;
-  constexpr float TWO_PI_3 = 2.0943951f;
-  const float half_amp = std::clamp(amplitude_pct, 0.0f, 100.0f) / 200.0f;
-  const float wu1      = (float)(wrap_ + 1u);
+  // テスト振幅でテーブルを事前計算 (sinf をループ内で呼ばない)
+  amplitude_ = std::clamp(amplitude_pct, 0.0f, 100.0f) / 100.0f;
+  rebuild_tables();
 
   gpio_put(SUCTION_EN, 1);
   pwm_set_mask_enabled((1u << slice_s1_) | (1u << slice_s2_));
 
-  // 1172 サイクル × 32 ステップ × 27µs ≈ 1 秒
-  // 各ステップで PWM CC を直接書き換える (Core0 から, IRQ 干渉なし)
-  for (int cycle = 0; cycle < 1172; cycle++) {
+  // Phase 1: 周波数ランプ 100 Hz → 1172 Hz (約 300 サイクル)
+  // 各サイクルで step_us = 1e6 / (f * TABLE_SIZE) を計算して待機
+  constexpr float F_START    = 100.0f;
+  constexpr float F_END      = 1172.0f;
+  constexpr int   RAMP_N     = 300;
+  const float df = (F_END - F_START) / RAMP_N;
+
+  float f = F_START;
+  for (int cyc = 0; cyc < RAMP_N; cyc++) {
+    uint32_t step_us = (uint32_t)(1000000.0f / (f * TABLE_SIZE));
+    if (step_us < 2) step_us = 2;
     for (int i = 0; i < TABLE_SIZE; i++) {
-      const float theta = TWO_PI * i / TABLE_SIZE;
-      const auto u = (uint16_t)((0.5f + half_amp * sinf(theta))             * wu1);
-      const auto v = (uint16_t)((0.5f + half_amp * sinf(theta - TWO_PI_3)) * wu1);
-      const auto w = (uint16_t)((0.5f + half_amp * sinf(theta + TWO_PI_3)) * wu1);
-      pwm_hw->slice[slice_s1_].cc = ((uint32_t)v << 16) | u;
-      pwm_hw->slice[slice_s2_].cc = w;
-      busy_wait_us_32(27);   // 1 PWM キャリア周期 = 1/37500 Hz ≈ 26.7µs
+      pwm_hw->slice[slice_s1_].cc = table_uv_[i];
+      pwm_hw->slice[slice_s2_].cc = table_w_[i];
+      busy_wait_us_32(step_us);
+    }
+    f += df;
+  }
+
+  // Phase 2: 1172 Hz で 2 秒間定速運転
+  for (int cycle = 0; cycle < 2344; cycle++) {
+    for (int i = 0; i < TABLE_SIZE; i++) {
+      pwm_hw->slice[slice_s1_].cc = table_uv_[i];
+      pwm_hw->slice[slice_s2_].cc = table_w_[i];
+      busy_wait_us_32(27);
     }
   }
 
