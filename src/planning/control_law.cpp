@@ -1290,7 +1290,14 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
     gain_cnt += 1.0f;
     if (gain_cnt > suction_gain)
       gain_cnt = suction_gain;
-    duty_suction_in = duty_suction_in * gain_cnt / suction_gain;
+    {
+      // 起動時ゼロ振幅問題: 線形ランプは初回 duty ≈ 0% で始まるため BLDC が
+      // 起動トルクを得られない。50% から target へ線形補間することで
+      // 第1tick から十分な振幅を確保し、確実な起動を実現する。
+      const float ratio   = gain_cnt / suction_gain;          // 0.005 → 1.0
+      const float min_pct = 50.0f;
+      duty_suction_in = min_pct + (duty_suction_in - min_pct) * ratio;
+    }
     if (duty_suction_in > 100.0f)
       duty_suction_in = 100.0f;
     if (!isfinite(duty_suction_in))

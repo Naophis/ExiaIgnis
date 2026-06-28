@@ -115,14 +115,14 @@ test: # テスト走行時に使用するパラメータ群
   ang: 3600
   search_mode: 0
   
-  suction_duty: 1.6
-  suction_duty_low: 1.35
+  suction_duty: 3.6
+  suction_duty_low: 3.35
   # Alter
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.750
   # Nova
-  suction_duty_burst: 1.25
-  suction_duty_burst_low: 1.0 # suction_duty_burst -0.25
+  suction_duty_burst: 4.25
+  suction_duty_burst_low: 4.0 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75

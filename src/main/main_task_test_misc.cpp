@@ -12,11 +12,23 @@ void MainTask::test_suction() {
 
   mp->reset_gyro_ref_with_check();
   sleep_ms(250);
+
+  // --- Step 1: DMA なしで直接 PWM CC を書いてハードウェアを確認 (~1秒) ---
+  // 回れば PWM/MP6540H は正常 → DMA 問題
+  // 回らなければ → 配線/ドライバ/周波数の問題
+  printf("== DIRECT test (no DMA) 30%% amp ~1sec ==\n");
+  planning_->bldc_.test_direct(30.0f);
+  printf("== DIRECT test done ==\n");
+  sleep_ms(200);
+
+  // --- Step 2: DMA chain 方式でのテスト ---
   planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
 
   while (!ui_->button_state()) {
-    printf("suction target=%.2fV battery=%.3fV duty=%.1f%%\n", target_v,
-           se->ego.batt_kf, planning_->tgt_val->duty_suction);
+    printf("target=%.2fV batt=%.3fV duty=%.1f%% dma=%d\n",
+           target_v, se->ego.batt_kf,
+           planning_->tgt_val->duty_suction,
+           (int)planning_->bldc_.is_dma_busy());
     sleep_ms(200);
   }
 
