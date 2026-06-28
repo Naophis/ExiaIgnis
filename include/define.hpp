@@ -38,10 +38,10 @@
 // ============================================================
 // PWM / Motor & Suction (50 kHz)
 // ============================================================
-#define M_PWM_L1      6   // PWM3 A
-#define M_PWM_L2      7   // PWM3 B
-#define M_PWM_R1      10  // PWM5 A
-#define M_PWM_R2      11  // PWM5 B
+#define M_PWM_L1      4   // PWM2 A
+#define M_PWM_L2      5   // PWM2 B
+#define M_PWM_R1      6   // PWM3 A
+#define M_PWM_R2      7   // PWM3 B
 #define SUCTION_PWM   9   // PWM4 B
 
 #define MOTOR_PWM_FREQ_HZ  37500u
