@@ -92,6 +92,7 @@ add_executable(ExiaIgnis
     src/sensing_task.cpp
     src/planning/planning_task.cpp
     src/planning/motor_actuator.cpp
+    src/planning/bldc_actuator.cpp
     src/planning/ego_estimator.cpp
     src/planning/sensor_processor.cpp
     src/planning/trajectory_generator.cpp

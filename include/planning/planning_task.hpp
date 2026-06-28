@@ -5,6 +5,7 @@
 #include "planning/astraea_types.hpp"
 #include "planning/control_law.hpp"
 #include "planning/ego_estimator.hpp"
+#include "planning/bldc_actuator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
 #include "planning/trajectory_generator.hpp"
@@ -75,6 +76,7 @@ public:
   std::shared_ptr<motion_tgt_val_t> tgt_val;
   EgoEstimator                      ego;
   MotorActuator                     motor_;
+  BldcActuator                      bldc_;
   SensorProcessor                   sensor_;
   TrajectoryGenerator               trj_;
   ControlLaw                        ctl_;

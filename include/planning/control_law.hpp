@@ -1,6 +1,7 @@
 #pragma once
 #include "gen_code_simple_pid/simple_pid_controller.h"
 #include "planning/astraea_types.hpp"
+#include "planning/bldc_actuator.hpp"
 #include "planning/ego_estimator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
@@ -14,7 +15,7 @@
 class ControlLaw {
 public:
   // ---- ライフサイクル ----
-  void init(MotorActuator *motor, SensorProcessor *sensor,
+  void init(MotorActuator *motor, BldcActuator *bldc, SensorProcessor *sensor,
             TrajectoryGenerator *trj, EgoEstimator *ego,
             std::shared_ptr<motion_tgt_val_t> tgt_val,
             std::shared_ptr<sensing_result_entity_t> sensing_result,
@@ -40,6 +41,7 @@ public:
 private:
   // ---- サブシステム参照 ----
   MotorActuator       *motor_  = nullptr;
+  BldcActuator        *bldc_   = nullptr;
   SensorProcessor     *sensor_ = nullptr;
   TrajectoryGenerator *trj_    = nullptr;
   EgoEstimator        *ego_    = nullptr;

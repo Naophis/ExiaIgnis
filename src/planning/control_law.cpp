@@ -4,12 +4,14 @@
 #include <algorithm>
 #include <cmath>
 
-void ControlLaw::init(MotorActuator *motor, SensorProcessor *sensor,
+void ControlLaw::init(MotorActuator *motor, BldcActuator *bldc,
+                      SensorProcessor *sensor,
                       TrajectoryGenerator *trj, EgoEstimator *ego,
                       std::shared_ptr<motion_tgt_val_t> tgt_val,
                       std::shared_ptr<sensing_result_entity_t> sensing_result,
                       std::shared_ptr<input_param_t> param) {
   motor_ = motor;
+  bldc_  = bldc;
   sensor_ = sensor;
   trj_ = trj;
   ego_ = ego;
@@ -1298,7 +1300,8 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
   }
 
   tgt_val_->duty_suction = duty_suction_in;
-  motor_->apply(duty_l, duty_r, duty_suction_in);
+  motor_->apply(duty_l, duty_r);
+  bldc_->set_duty(duty_suction_in);
 }
 
 void ControlLaw::pl_req_activate(const planning_req_t &pl_req) {

@@ -4,24 +4,22 @@
 #include "hardware/pwm.h"
 #include <stdint.h>
 
+// 左右駆動モーター (コアレス) の PWM 出力のみを担当。
+// 吸引 BLDC は BldcActuator が担当。
 class MotorActuator {
 public:
   // GPIO ファンクション設定・PWM スライス初期化。Core0 の main から呼ぶ。
   void init();
 
-  // duty_l/r/suction [%] を PWM ハードウェアに書き込む。
-  void apply(float duty_l, float duty_r, float duty_suction);
-  void apply_suction(float duty_suction);
+  // duty_l/r [%] を PWM ハードウェアに書き込む。
+  void apply(float duty_l, float duty_r);
 
-  void motor_enable() ;
-  void motor_disable() ;
-  void suction_enable() ;
-  void suction_disable() ;
+  void motor_enable();
+  void motor_disable();
+
 private:
-  uint slice_L_ = 0;
-  uint slice_R_ = 0;
-  uint slice_S_ = 0;
+  uint     slice_L_    = 0;
+  uint     slice_R_    = 0;
   uint32_t motor_wrap_ = 2999;
-  bool motor_en = false;
-  bool suction_en = false;
+  bool     motor_en    = false;
 };

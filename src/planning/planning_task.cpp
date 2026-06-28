@@ -43,8 +43,9 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
   sem_init(&tick_sem_, 0, 1);
   motor_.init();
+  bldc_.init();
   sensor_.init(sensing_result, param, tgt_val);
-  ctl_.init(&motor_, &sensor_, &trj_, &ego, tgt_val, sensing_result, param);
+  ctl_.init(&motor_, &bldc_, &sensor_, &trj_, &ego, tgt_val, sensing_result, param);
   ego.init(sensing_result, param, tgt_val);
   trj_.init(tgt_val, param, sensing_result);
 }
@@ -470,11 +471,11 @@ void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
 void PlanningTask::suction_enable(float duty, float duty_low) {
   suction_en = true;
   ctl_.set_suction_target(duty, duty_low);
-  motor_.suction_enable();
+  bldc_.enable();
 }
 void PlanningTask::suction_disable() {
   suction_en = false;
-  motor_.suction_disable();
+  bldc_.disable();
 }
 
 void PlanningTask::wait_tick() {
