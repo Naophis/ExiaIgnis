@@ -33,15 +33,11 @@
 // --- 右エンコーダ (AS5147P) SPI1 共有 ---
 #define ENC_R_CS_PIN 17 // GPIO17
 
-// --- 左エンコーダ (AS5147P) SPI0 ---
-#define ENC_L_SPI spi0
-#define ENC_L_MISO_PIN 4 // SPI0 RX (GPIO4)
-#define ENC_L_CS_PIN 1   // SPI0 CSn
-#define ENC_L_CLK_PIN 2  // SPI0 SCK
-#define ENC_L_MOSI_PIN 3 // SPI0 TX
+// --- 左エンコーダ (AS5147P) SPI1 共有 ---
+#define ENC_L_CS_PIN 1   // GPIO1
 
-// --- バッテリADC (ADS7042I) SPI0 共有 ---
-#define BATTERY_CS_PIN 5 // SPI0 CSn
+// --- バッテリADC (ADS7042I) SPI1 共有 ---
+#define BATTERY_CS_PIN 3 // GPIO3
 
 // static メンバの定義
 std::shared_ptr<SensingTask> SensingTask::s_instance;
@@ -359,27 +355,18 @@ void SensingTask::init() {
   enc_r_.init(GYRO_SPI, ENC_R_CS_PIN);
   enc_r_.setup();
 
-  // SPI0 バス初期化 (左エンコーダ + バッテリADC 共有)
-  spi_init(ENC_L_SPI, 10'000'000);
-  gpio_set_function(ENC_L_CLK_PIN, GPIO_FUNC_SPI);
-  gpio_set_function(ENC_L_MOSI_PIN, GPIO_FUNC_SPI);
-  gpio_set_function(ENC_L_MISO_PIN, GPIO_FUNC_SPI);
-  // MISO フローティング防止: 両デバイスの CS=HIGH 時に MISO が Hi-Z になるため
-  // pull-up で安定化
-  gpio_pull_up(ENC_L_MISO_PIN);
-
   // バッテリADC (ADS7042I) — enc_l_.setup() より前に CS HIGH に設定して bus
-  // contention を防ぐ
-  battery_.init(ENC_L_SPI, BATTERY_CS_PIN);
+  // contention を防ぐ (SPI1 バスはジャイロ init 済み)
+  battery_.init(GYRO_SPI, BATTERY_CS_PIN);
 
-  // 左エンコーダ (AS5147P) — CS のみ設定
-  enc_l_.init(ENC_L_SPI, ENC_L_CS_PIN);
+  // 左エンコーダ (AS5147P) — CS のみ設定 (SPI1 共有)
+  enc_l_.init(GYRO_SPI, ENC_L_CS_PIN);
   enc_l_.setup();
 
-  // SPI0 MISO 疎通確認: bat≠0 なら GPIO4(MISO) は生きている
+  // SPI1 MISO 疎通確認: bat≠0 なら GPIO12(MISO) は生きている
   uint16_t bat0 = battery_.read();
   uint16_t bat1 = battery_.read();
-  printf("[bat] raw0=%u raw1=%u  (SPI0 MISO %s)\n", bat0, bat1,
+  printf("[bat] raw0=%u raw1=%u  (SPI1 MISO %s)\n", bat0, bat1,
          (bat0 || bat1) ? "OK" : "STUCK LOW");
 
   init_dma();
@@ -388,8 +375,8 @@ void SensingTask::init() {
 void SensingTask::init_dma() {
   dma_tx_spi1_ = dma_claim_unused_channel(true);
   dma_rx_spi1_ = dma_claim_unused_channel(true);
-  dma_tx_spi0_ = dma_claim_unused_channel(true);
-  dma_rx_spi0_ = dma_claim_unused_channel(true);
+  dma_tx_bat_ = dma_claim_unused_channel(true);
+  dma_rx_bat_ = dma_claim_unused_channel(true);
 
   // SPI1 TX (gyro, 8-bit): バッファ → SPI DR (固定アドレス)
   dma_cfg_tx_spi1_ = dma_channel_get_default_config(dma_tx_spi1_);
@@ -405,19 +392,19 @@ void SensingTask::init_dma() {
   channel_config_set_read_increment(&dma_cfg_rx_spi1_, false);
   channel_config_set_write_increment(&dma_cfg_rx_spi1_, true);
 
-  // SPI0 TX (bat, 16-bit): 固定ゼロ値 → SPI DR
-  dma_cfg_tx_spi0_ = dma_channel_get_default_config(dma_tx_spi0_);
-  channel_config_set_transfer_data_size(&dma_cfg_tx_spi0_, DMA_SIZE_16);
-  channel_config_set_dreq(&dma_cfg_tx_spi0_, spi_get_dreq(spi0, true));
-  channel_config_set_read_increment(&dma_cfg_tx_spi0_, false);
-  channel_config_set_write_increment(&dma_cfg_tx_spi0_, false);
+  // SPI1 TX (bat, 16-bit): 固定ゼロ値 → SPI DR
+  dma_cfg_tx_bat_ = dma_channel_get_default_config(dma_tx_bat_);
+  channel_config_set_transfer_data_size(&dma_cfg_tx_bat_, DMA_SIZE_16);
+  channel_config_set_dreq(&dma_cfg_tx_bat_, spi_get_dreq(spi1, true));
+  channel_config_set_read_increment(&dma_cfg_tx_bat_, false);
+  channel_config_set_write_increment(&dma_cfg_tx_bat_, false);
 
-  // SPI0 RX (bat, 16-bit): SPI DR → 1ワードバッファ
-  dma_cfg_rx_spi0_ = dma_channel_get_default_config(dma_rx_spi0_);
-  channel_config_set_transfer_data_size(&dma_cfg_rx_spi0_, DMA_SIZE_16);
-  channel_config_set_dreq(&dma_cfg_rx_spi0_, spi_get_dreq(spi0, false));
-  channel_config_set_read_increment(&dma_cfg_rx_spi0_, false);
-  channel_config_set_write_increment(&dma_cfg_rx_spi0_, false);
+  // SPI1 RX (bat, 16-bit): SPI DR → 1ワードバッファ
+  dma_cfg_rx_bat_ = dma_channel_get_default_config(dma_rx_bat_);
+  channel_config_set_transfer_data_size(&dma_cfg_rx_bat_, DMA_SIZE_16);
+  channel_config_set_dreq(&dma_cfg_rx_bat_, spi_get_dreq(spi1, false));
+  channel_config_set_read_increment(&dma_cfg_rx_bat_, false);
+  channel_config_set_write_increment(&dma_cfg_rx_bat_, false);
 }
 
 __attribute__((noinline, section(".time_critical.sensing_irq"))) void
@@ -441,18 +428,18 @@ SensingTask::read_spi_sensors() {
   const uint64_t spi_t0 = time_us_64();
 
   // ================================================================
-  // Phase A: ジャイロ DMA (SPI1) + 左エンコーダ CPU (SPI0) を並列実行
+  // Phase A: ジャイロ DMA (SPI1, mode3)
   // ================================================================
 
-  // SPI1 を mode3 (CPOL=1, CPHA=1) に切り替え; 前回は enc_r が mode1 で終了
+  // SPI1 を mode3 (CPOL=1, CPHA=1) に切り替え; 前回は bat が mode0 で終了
   spi_set_format_safe(GYRO_SPI, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
-  busy_wait_us_32(2);  // SCK settling after mode1→mode3 switch
+  busy_wait_us_32(2);  // SCK settling after mode0→mode3 switch
 
   gyro_dma_tx_[0] = ASM330_OUTZ_L_G | 0x80;
   gyro_dma_tx_[1] = 0;
   gyro_dma_tx_[2] = 0;
 
-  // ジャイロ CS アサート → TX/RX DMA を同時スタート
+  // ジャイロ CS アサート → TX/RX DMA を同時スタート → 完了待ち
   gyro_timestamp_now = time_us_64();
   gpio_put(GYRO_CS_PIN, 0);
   dma_channel_configure(dma_tx_spi1_, &dma_cfg_tx_spi1_,
@@ -460,13 +447,6 @@ SensingTask::read_spi_sensors() {
   dma_channel_configure(dma_rx_spi1_, &dma_cfg_rx_spi1_,
                         gyro_dma_rx_, &spi_get_hw(GYRO_SPI)->dr, 3, false);
   dma_start_channel_mask((1u << dma_tx_spi1_) | (1u << dma_rx_spi1_));
-
-  // SPI0 で左エンコーダを CPU 読み取り (ジャイロ DMA と並列)
-  enc_l_timestamp_now = time_us_64();
-  auto enc_l = enc_l_.read_angle();
-  se->t_encl = (int16_t)(time_us_64() - spi_t0);
-
-  // ジャイロ DMA 完了待ち → CS デアサート → 結果取得
   dma_channel_wait_for_finish_blocking(dma_rx_spi1_);
   gpio_put(GYRO_CS_PIN, 1);
   se->t_gyro = (int16_t)(time_us_64() - spi_t0);
@@ -474,28 +454,37 @@ SensingTask::read_spi_sensors() {
       static_cast<uint16_t>(gyro_dma_rx_[2]) << 8 | gyro_dma_rx_[1]);
 
   // ================================================================
-  // Phase B: バッテリ DMA (SPI0) + 右エンコーダ CPU (SPI1) を並列実行
+  // Phase B: 左エンコーダ CPU → 右エンコーダ CPU (SPI1, mode1)
   // ================================================================
 
-  // SPI0 を mode0 (CPOL=0, CPHA=0, 16-bit) に切り替え; enc_l が mode1 で終了
-  spi_set_format_safe(ENC_L_SPI, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-  bat_dma_tx_ = 0x0000;
+  // mode3 → mode1 (CPOL=0, CPHA=1) に切り替え
+  spi_set_format_safe(GYRO_SPI, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
+  busy_wait_us_32(2);  // SCK settling after mode3→mode1 switch
 
-  // バッテリ CS アサート → TX/RX DMA を同時スタート
-  gpio_put(BATTERY_CS_PIN, 0);
-  dma_channel_configure(dma_tx_spi0_, &dma_cfg_tx_spi0_,
-                        &spi_get_hw(ENC_L_SPI)->dr, &bat_dma_tx_, 1, false);
-  dma_channel_configure(dma_rx_spi0_, &dma_cfg_rx_spi0_,
-                        &bat_dma_rx_, &spi_get_hw(ENC_L_SPI)->dr, 1, false);
-  dma_start_channel_mask((1u << dma_tx_spi0_) | (1u << dma_rx_spi0_));
+  enc_l_timestamp_now = time_us_64();
+  auto enc_l = enc_l_.read_angle();
+  se->t_encl = (int16_t)(time_us_64() - spi_t0);
 
-  // SPI1 で右エンコーダを CPU 読み取り (バッテリ DMA と並列)
+  // 左エンコーダと同一 mode1 のまま右エンコーダを読む
   enc_r_timestamp_now = time_us_64();
   auto enc_r = enc_r_.read_angle();
   se->t_encr = (int16_t)(time_us_64() - spi_t0);
 
-  // バッテリ DMA 完了待ち → CS デアサート → 結果格納
-  dma_channel_wait_for_finish_blocking(dma_rx_spi0_);
+  // ================================================================
+  // Phase C: バッテリ DMA (SPI1, mode0, 16-bit)
+  // ================================================================
+
+  // mode1 → mode0 (CPOL=0, CPHA=0, 16-bit) に切り替え
+  spi_set_format_safe(GYRO_SPI, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+  bat_dma_tx_ = 0x0000;
+
+  gpio_put(BATTERY_CS_PIN, 0);
+  dma_channel_configure(dma_tx_bat_, &dma_cfg_tx_bat_,
+                        &spi_get_hw(GYRO_SPI)->dr, &bat_dma_tx_, 1, false);
+  dma_channel_configure(dma_rx_bat_, &dma_cfg_rx_bat_,
+                        &bat_dma_rx_, &spi_get_hw(GYRO_SPI)->dr, 1, false);
+  dma_start_channel_mask((1u << dma_tx_bat_) | (1u << dma_rx_bat_));
+  dma_channel_wait_for_finish_blocking(dma_rx_bat_);
   gpio_put(BATTERY_CS_PIN, 1);
   se->battery.raw = (bat_dma_rx_ >> 2) & 0x0FFF;
   se->t_bat = (int16_t)(time_us_64() - spi_t0);

@@ -188,12 +188,14 @@ PSRAM バンプアロケータ (`psram_heap::alloc`) を使い、`std::vector<Lo
 
 ### SPI バス共有
 
-2本の SPI バスに複数デバイスが異なるモードで接続:
+SPI1 のみ使用。全デバイスが MISO=12 / CLK=14 / MOSI=15 を共有し、CS で切り替え:
 
 | バス  | デバイス | ピン |
 |-------|---------|------|
-| SPI1 | ASM330LHH ジャイロ (mode 3) + AS5147P 右エンコーダ (mode 1) | MISO=12, CS_gyro=13, CLK=14, MOSI=15, CS_enc=9 |
-| SPI0 | AS5147P 左エンコーダ (mode 1) + ADS7042I バッテリADC (mode 0) | MISO=0, CS_enc=1, CLK=2, MOSI=3, CS_bat=5 |
+| SPI1 | ASM330LHH ジャイロ (mode 3) | CS_gyro=13 |
+| SPI1 | AS5147P 右エンコーダ (mode 1) | CS_enc_r=17 |
+| SPI1 | AS5147P 左エンコーダ (mode 1) | CS_enc_l=1 |
+| SPI1 | ADS7042I バッテリADC (mode 0) | CS_bat=3 |
 
 **重要:** ARM PL022 は CPOL/CPHA 変更前に SSE=0 が必要です。同一バス上でモードを切り替える場合は、`spi_set_format()` の代わりに必ず `include/driver/spi_util.hpp` の `spi_set_format_safe()` を使用してください。
 

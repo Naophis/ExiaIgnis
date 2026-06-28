@@ -41,22 +41,22 @@ private:
     std::shared_ptr<input_param_t> param;
     ASM330LHH gyro_;
     AS5147P   enc_r_;   // 右エンコーダ (SPI1, CS=GPIO17)
-    AS5147P   enc_l_;   // 左エンコーダ (SPI0, CS=GPIO1)
-    ADS7042   battery_; // バッテリADC  (SPI0, CS=GPIO5)
+    AS5147P   enc_l_;   // 左エンコーダ (SPI1, CS=GPIO1)
+    ADS7042   battery_; // バッテリADC  (SPI1, CS=GPIO3)
 
-    // DMA channels: SPI1/SPI0 TX+RX for gyro/bat parallel transfer
+    // DMA channels: gyro (SPI1, 8-bit) / battery (SPI1, 16-bit)
     int dma_tx_spi1_ = -1;
     int dma_rx_spi1_ = -1;
-    int dma_tx_spi0_ = -1;
-    int dma_rx_spi0_ = -1;
+    int dma_tx_bat_  = -1;
+    int dma_rx_bat_  = -1;
     uint8_t  gyro_dma_tx_[3]{};
     uint8_t  gyro_dma_rx_[3]{};
     uint16_t bat_dma_tx_ = 0;
     uint16_t bat_dma_rx_ = 0;
     dma_channel_config dma_cfg_tx_spi1_{};
     dma_channel_config dma_cfg_rx_spi1_{};
-    dma_channel_config dma_cfg_tx_spi0_{};
-    dma_channel_config dma_cfg_rx_spi0_{};
+    dma_channel_config dma_cfg_tx_bat_{};
+    dma_channel_config dma_cfg_rx_bat_{};
     void init_dma();
     float w_old = 0;
     float vr_old = 0;

@@ -3,7 +3,7 @@
 #include "hardware/spi.h"
 
 // ADS7042I — 12-bit, single-channel SPI ADC
-// SPI0 をバッテリ電圧測定に使用 (SPI バスは外部で初期化済みであること)
+// SPI1 をバッテリ電圧測定に使用 (SPI バスは外部で初期化済みであること)
 class ADS7042 {
 public:
     void     init(spi_inst_t *spi, uint cs_pin);
