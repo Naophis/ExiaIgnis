@@ -139,5 +139,3 @@
 ## 備考
 
 - **SPI1 共有バス**（MISO=GPIO12 / CLK=GPIO14 / MOSI=GPIO15）にジャイロ・左右エンコーダー・バッテリーADC を CS で切り替えて接続。CLAUDE.md 記載の構成と一致
-- GPIO9 / GPIO10 が共に `suction_pwm3` — 同一信号を2ピンで駆動している可能性あり（要確認）
-- GPIO18（buzzer）は未確定
