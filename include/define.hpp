@@ -42,9 +42,9 @@
 #define M_PWM_L2      5   // PWM2 B
 #define M_PWM_R1      6   // PWM3 A
 #define M_PWM_R2      7   // PWM3 B
-#define SUCTION_PWM1  8   // PWM4 A  (3-phase BLDC phase 1)
-#define SUCTION_PWM2  9   // PWM4 B  (3-phase BLDC phase 2)
-#define SUCTION_PWM3  10  // PWM5 A  (3-phase BLDC phase 3)
-#define SUCTION_EN    11  // GPIO output — HIGH = driver enabled
+#define SUCTION_EN    8   // GPIO output — HIGH = driver enabled
+#define SUCTION_PWM1  9   // PWM4 B  (U phase)
+#define SUCTION_PWM2  10  // PWM5 A  (V phase)
+#define SUCTION_PWM3  11  // PWM5 B  (W phase)
 
 #define MOTOR_PWM_FREQ_HZ  37500u

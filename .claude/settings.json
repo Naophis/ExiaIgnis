@@ -77,7 +77,8 @@
       "Bash(cmake3 --version)",
       "Bash(~/.pico-sdk/toolchain/15_2_Rel1/bin/arm-none-eabi-g++ --version)",
       "Bash(~/.pico-sdk/toolchain/15_2_Rel1/bin/arm-none-eabi-g++ -v)",
-      "Bash(find /home/naoto -name \"timer.h\" -path \"*/pico-sdk/*\" 2>/dev/null | head -5)"
+      "Bash(find /home/naoto -name \"timer.h\" -path \"*/pico-sdk/*\" 2>/dev/null | head -5)",
+      "Bash(~/.local/bin/picotool info *)"
     ]
   }
 }
