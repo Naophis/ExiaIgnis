@@ -4,6 +4,7 @@
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
 #include "pico/stdlib.h"
+#include "pico/time.h"
 #include <cmath>
 #include <initializer_list>
 #include <stdio.h>
@@ -15,16 +16,13 @@ static constexpr float PHASE_120 = 2.0943951f;
 static constexpr float AMP_BASE        = 0.06f;
 static constexpr float AMP_BASE_HZ     = 120.0f;
 static constexpr float MAX_AMP         = 0.35f;
-// RAMP速度は BldcActuator::ramp_hz_per_sec_ メンバで管理 (set_ramp_rate()で変更可能)
 static constexpr float START_ELEC_HZ   = 1.0f;
-static constexpr float RAMP_END_HZ     = 1200.0f;  // sample/bldc.cpp の初期安定点
+static constexpr float RAMP_END_HZ     = 1200.0f;
 
-// PWM周波数はドライブモーター(MOTOR_PWM_FREQ_HZ=37500)と独立
-static constexpr uint32_t BLDC_PWM_FREQ_HZ = 80000u;  // 80kHz: wrap=1874
-
-// 600ms × 80kHz (sample/bldc.cpp の実証値)
+static constexpr uint32_t BLDC_PWM_FREQ_HZ = 80000u;
 static constexpr uint32_t ALIGN_TICKS = (uint32_t)(BldcActuator::CONTROL_HZ) * 600 / 1000;
 
+__attribute__((noinline, section(".time_critical.bldc_tick")))
 static inline float amp_from_hz(float hz, float gain) {
   if (hz <= AMP_BASE_HZ) return AMP_BASE;
   const float a = AMP_BASE * (hz / AMP_BASE_HZ) * gain;
@@ -35,17 +33,16 @@ static inline float amp_from_hz(float hz, float gain) {
 // slice_s1 = slice4 (GPIO9=PWM4B=U相)
 // slice_s2 = slice5 (GPIO10=PWM5A=V相, GPIO11=PWM5B=W相)
 // reverse=true: V/W入れ替えで回転方向反転
+__attribute__((noinline, section(".time_critical.bldc_tick")))
 static inline void write_phase(uint s1, uint s2, uint32_t wrap,
                                 float theta, float amp, bool reverse) {
   const float   wu1 = (float)(wrap + 1u);
   const uint16_t lu = (uint16_t)(wu1 * (0.5f + amp * sinf(theta)));
   const uint16_t lv = (uint16_t)(wu1 * (0.5f + amp * sinf(theta - PHASE_120)));
   const uint16_t lw = (uint16_t)(wu1 * (0.5f + amp * sinf(theta + PHASE_120)));
-  // CH_B(上位16bit) → GPIO9=U,  CH_A(下位16bit) → 未使用 (slice4)
   pwm_hw->slice[s1].cc = (uint32_t)lu << 16;
-  // CH_B(上位16bit) → GPIO11=W相,  CH_A(下位16bit) → GPIO10=V相
   pwm_hw->slice[s2].cc = reverse
-      ? (((uint32_t)lv << 16) | lw)   // V↔W入れ替え → 逆転
+      ? (((uint32_t)lv << 16) | lw)
       : (((uint32_t)lw << 16) | lv);
 }
 
@@ -72,13 +69,15 @@ void BldcActuator::init() {
 }
 
 // ============================================================
-// タイマーコールバック (Core0, 80kHz)
+// add_repeating_timer_us コールバック (sample/bldc.cpp と同方式)
 // ============================================================
 bool BldcActuator::timer_cb(repeating_timer_t *rt) {
-  static_cast<BldcActuator *>(rt->user_data)->step();
-  return true;
+  auto *self = static_cast<BldcActuator *>(rt->user_data);
+  self->step();
+  return true;  // 継続
 }
 
+__attribute__((noinline, section(".time_critical.bldc_tick")))
 void BldcActuator::step() {
   constexpr float dt = 1.0f / (float)CONTROL_HZ;
 
@@ -87,18 +86,20 @@ void BldcActuator::step() {
     break;
 
   case State::ALIGN:
-    // ロータを theta=0 に磁気ロックしてから加速する
     write_phase(slice_s1_, slice_s2_, wrap_, 0.0f, AMP_BASE, reverse_);
-    if (++state_cnt_ >= ALIGN_TICKS) {
-      state_     = State::RAMP;
-      state_cnt_ = 0u;
-      theta_     = 0.0f;
-      elec_hz_   = START_ELEC_HZ;
+    {
+      uint32_t cnt = state_cnt_ + 1u;
+      state_cnt_ = cnt;
+      if (cnt >= ALIGN_TICKS) {
+        state_     = State::RAMP;
+        state_cnt_ = 0u;
+        theta_     = 0.0f;
+        elec_hz_   = START_ELEC_HZ;
+      }
     }
     break;
 
   case State::RAMP: {
-    // sample/bldc.cpp の MOTOR_RAMP と同じ: まず 1200Hz の安定点まで上げる
     elec_hz_ += ramp_hz_per_sec_ * dt;
     if (elec_hz_ > RAMP_END_HZ) elec_hz_ = RAMP_END_HZ;
     theta_ += TWO_PI * elec_hz_ * dt;
@@ -110,7 +111,6 @@ void BldcActuator::step() {
   }
 
   case State::RUN:
-    // sample/bldc.cpp の MOTOR_RUN と同じ: target_elec_hz_ へ追従
     if (elec_hz_ < target_elec_hz_) {
       elec_hz_ += ramp_hz_per_sec_ * dt;
       if (elec_hz_ > target_elec_hz_) elec_hz_ = target_elec_hz_;
@@ -126,25 +126,24 @@ void BldcActuator::step() {
   }
 }
 
-// amp_gain_ は sample/bldc.cpp の実証値 0.10 固定。set_duty では変更しない。
 void BldcActuator::set_duty(float /*duty_pct*/) {}
 
 // ============================================================
-// enable: 非同期起動 (すぐ返る, ALIGN→RAMP→RUN はタイマーで進行)
+// enable
 // ============================================================
 void BldcActuator::enable() {
   if (enabled_) return;
-  // sample/bldc.cpp と同じ順序: theta=0を先に出力してからドライバを起こす
   pwm_set_mask_enabled((1u << slice_s1_) | (1u << slice_s2_));
   write_phase(slice_s1_, slice_s2_, wrap_, 0.0f, AMP_BASE, reverse_);
   gpio_put(SUCTION_EN, 1);
-  sleep_ms(20);  // MP6540H nSLEEP 起動待ち
+  sleep_ms(20);
   state_     = State::ALIGN;
   theta_     = 0.0f;
   elec_hz_   = 0.0f;
   state_cnt_ = 0u;
-  amp_gain_  = 0.10f;  // ファン負荷あり → 0.10(無負荷)の2倍が必要
+  amp_gain_  = 0.10f;
   enabled_   = true;
+  // sample/bldc.cpp と同じ: add_repeating_timer_us(12, cb, this, &timer)
   add_repeating_timer_us(1000000 / CONTROL_HZ, timer_cb, this, &timer_);
 }
 
@@ -170,12 +169,12 @@ void BldcActuator::test_direct(float amplitude_pct) {
   (void)amplitude_pct;
   if (enabled_) disable();
   enable();
-  sleep_ms(5000);
-  //   for (int i = 0; i < 25; ++i) {
-  //   sleep_ms(200);
-  //   printf("bldc: state=%d hz=%.0f amp=%.3f\n",
-  //          (int)state_, (double)elec_hz_,
-  //          (double)amp_from_hz(elec_hz_, amp_gain_));
-  // }
+  printf("bldc: ALIGN start (600ms)...\n");
+  sleep_ms(700);
+  printf("bldc: RAMP start, hz=%.0f\n", (double)elec_hz_);
+  sleep_ms(2000);
+  printf("bldc: RUN, hz=%.0f target=%.0f\n", (double)elec_hz_, (double)target_elec_hz_);
+  sleep_ms(2300);
+  printf("bldc: done, hz=%.0f\n", (double)elec_hz_);
   disable();
 }

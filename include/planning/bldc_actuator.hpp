@@ -3,10 +3,9 @@
 #include "pico/time.h"
 #include <stdint.h>
 
-// MP6540H 3相ブラシレスモーター吸引用ドライバ (タイマーIRQ SPWM, RP2350専用)
+// MP6540H 3相ブラシレスモーター吸引用ドライバ (alarm pool SPWM, RP2350専用)
 //
-// sample/bldc.cpp と同じタイマーIRQ方式。電気周波数を可変にすることで
-// DMA固定方式(1172Hz)では届かなかった高速域(60,000RPM相当)を実現する。
+// sample/bldc.cpp と同じ add_repeating_timer_us 方式。
 //
 // 起動シーケンス: ALIGN(600ms) → RAMP(1→1200Hz) → RUN(1200→target_elec_hz_ を追従)
 // 振幅: V/Hz制御 (AMP_BASE=0.06, AMP_BASE_HZ=120, MAX_AMP=0.35)
@@ -17,12 +16,11 @@ public:
   static constexpr int CONTROL_HZ = 80000;   // 12.5µs — 9500Hz時 8サンプル/回転
 
   void init();
-  void set_duty(float duty_pct);   // Core1 IRQ から (振幅ゲイン調整)
-  void enable();                   // Core0 から (非同期 — すぐ返る)
-  void disable();                  // Core0 から
+  void set_duty(float duty_pct);
+  void enable();
+  void disable();
   void set_direction(bool reverse) { reverse_ = reverse; }
-  void set_min_amplitude(float v)  { (void)v; }  // API互換用
-  // enable() 前に呼ぶこと。デフォルト=2000Hz/s (sample/bldc.cpp 実証値)
+  void set_min_amplitude(float v)  { (void)v; }
   void set_ramp_rate(float hz_per_sec)  { ramp_hz_per_sec_ = hz_per_sec; }
   void set_target_hz(float hz)          { target_elec_hz_  = hz; }
   void test_direct(float amplitude_pct);
@@ -46,17 +44,16 @@ private:
   uint     slice_s2_ = 0;
   uint32_t wrap_     = 0;
 
-  // timer_cb (Core0) と set_duty (Core1 IRQ) の両方からアクセス
-  volatile State    state_          = State::STOP;
-  volatile float    theta_          = 0.0f;
-  volatile float    elec_hz_        = 0.0f;
-  volatile float    amp_gain_       = 0.10f;
-  volatile uint32_t state_cnt_      = 0u;
-  volatile float    ramp_hz_per_sec_ = 2000.0f;  // set_ramp_rate()で変更可
+  volatile State    state_           = State::STOP;
+  volatile float    theta_           = 0.0f;
+  volatile float    elec_hz_         = 0.0f;
+  volatile float    amp_gain_        = 0.10f;
+  volatile uint32_t state_cnt_       = 0u;
+  volatile float    ramp_hz_per_sec_ = 2000.0f;
 
-  float target_elec_hz_ = 6000.0f;  // init()でConfigLoader("suction_bldc_hz")から上書き
-  bool  enabled_        = false;
-  bool  reverse_        = true;
+  float    target_elec_hz_ = 6000.0f;
+  bool     enabled_        = false;
+  bool     reverse_        = true;
 
-  repeating_timer_t timer_{};
+  repeating_timer_t timer_ = {};
 };
