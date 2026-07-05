@@ -80,7 +80,9 @@
       "Bash(find /home/naoto -name \"timer.h\" -path \"*/pico-sdk/*\" 2>/dev/null | head -5)",
       "Bash(~/.local/bin/picotool info *)",
       "Bash(git -C /home/naoto/Desktop/mouse/ExiaIgnis log --oneline -5 -- src/planning/bldc_actuator.cpp include/planning/bldc_actuator.hpp)",
-      "Bash(find /home/naoto -maxdepth 8 -name \"*.h\" 2>/dev/null | xargs grep -l \"USBCTRL_IRQ\" 2>/dev/null | head -5)"
+      "Bash(find /home/naoto -maxdepth 8 -name \"*.h\" 2>/dev/null | xargs grep -l \"USBCTRL_IRQ\" 2>/dev/null | head -5)",
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)"
     ]
   }
 }

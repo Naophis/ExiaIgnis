@@ -14,14 +14,14 @@ static constexpr float PHASE_120 = 2.0943951f;
 static constexpr float AMP_BASE        = 0.06f;
 static constexpr float AMP_BASE_HZ     = 120.0f;
 static constexpr float MAX_AMP         = 0.35f;
-static constexpr float RAMP_HZ_PER_SEC = 3000.0f;  // 1380Hz共振帯を素早く通過
+// RAMP速度は BldcActuator::ramp_hz_per_sec_ メンバで管理 (set_ramp_rate()で変更可能)
 static constexpr float START_ELEC_HZ   = 1.0f;
 
 // PWM周波数はドライブモーター(MOTOR_PWM_FREQ_HZ=37500)と独立
 static constexpr uint32_t BLDC_PWM_FREQ_HZ = 80000u;  // 80kHz: wrap=1874
 
-// 400ms × 80kHz
-static constexpr uint32_t ALIGN_TICKS = (uint32_t)(BldcActuator::CONTROL_HZ) * 400 / 1000;
+// 600ms × 80kHz (sample/bldc.cpp の実証値)
+static constexpr uint32_t ALIGN_TICKS = (uint32_t)(BldcActuator::CONTROL_HZ) * 600 / 1000;
 
 static inline float amp_from_hz(float hz, float gain) {
   if (hz <= AMP_BASE_HZ) return AMP_BASE;
@@ -96,7 +96,7 @@ void BldcActuator::step() {
     break;
 
   case State::RAMP: {
-    elec_hz_ += RAMP_HZ_PER_SEC * dt;
+    elec_hz_ += ramp_hz_per_sec_ * dt;
     if (elec_hz_ > TARGET_ELEC_HZ) elec_hz_ = TARGET_ELEC_HZ;
     theta_ += TWO_PI * elec_hz_ * dt;
     if (theta_ >= TWO_PI) theta_ -= TWO_PI;
@@ -117,9 +117,10 @@ void BldcActuator::step() {
 
 // ============================================================
 // set_duty: Core1 IRQ から呼ばれる振幅ゲイン更新
-// duty_pct 0-100% → amp_gain 0.06-0.10 (実証済み動作範囲)
+// ALIGN/RAMP中はサンプル実証値(0.10)を保護するため無視する
 // ============================================================
 void BldcActuator::set_duty(float duty_pct) {
+  if (state_ == State::ALIGN || state_ == State::RAMP) return;
   float gain = (duty_pct / 100.0f) * 0.10f;
   if      (gain < 0.06f) gain = 0.06f;
   else if (gain > 0.20f) gain = 0.20f;
@@ -131,9 +132,11 @@ void BldcActuator::set_duty(float duty_pct) {
 // ============================================================
 void BldcActuator::enable() {
   if (enabled_) return;
+  // sample/bldc.cpp と同じ順序: theta=0を先に出力してからドライバを起こす
+  pwm_set_mask_enabled((1u << slice_s1_) | (1u << slice_s2_));
+  write_phase(slice_s1_, slice_s2_, wrap_, 0.0f, AMP_BASE, reverse_);
   gpio_put(SUCTION_EN, 1);
   sleep_ms(20);  // MP6540H nSLEEP 起動待ち
-  pwm_set_mask_enabled((1u << slice_s1_) | (1u << slice_s2_));
   state_     = State::ALIGN;
   theta_     = 0.0f;
   elec_hz_   = 0.0f;
