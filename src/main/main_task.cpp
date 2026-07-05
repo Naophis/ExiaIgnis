@@ -43,7 +43,9 @@ bool rx_usb_cmd(char *buf, int len);
 
 void MainTask::load_param_after() {
   planning_->ctl_.set_suction_gain(sys_.test.suction_gain);
+  planning_->bldc_.set_target_hz(sys_.suction_bldc_hz);
   printf("[param] suction_gain = %f\n", sys_.test.suction_gain);
+  printf("[param] suction_bldc_hz = %.0f\n", sys_.suction_bldc_hz);
 }
 
 bool MainTask::load_params() {

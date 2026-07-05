@@ -800,6 +800,7 @@ inline void convertFromJson(JsonVariantConst src, system_t& dst) {
     from_json_field(src, "circuit_mode", dst.circuit_mode);
     from_json_nested(src, "test", dst.test);
     from_json_field(src, "hf_cl", dst.hf_cl);
+    from_json_field(src, "suction_bldc_hz", dst.suction_bldc_hz);
 }
 
 /**

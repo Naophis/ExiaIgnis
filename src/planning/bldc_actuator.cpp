@@ -6,6 +6,7 @@
 #include "pico/stdlib.h"
 #include <cmath>
 #include <initializer_list>
+#include <stdio.h>
 
 static constexpr float TWO_PI    = 6.2831853f;
 static constexpr float PHASE_120 = 2.0943951f;
@@ -97,12 +98,12 @@ void BldcActuator::step() {
 
   case State::RAMP: {
     elec_hz_ += ramp_hz_per_sec_ * dt;
-    if (elec_hz_ > TARGET_ELEC_HZ) elec_hz_ = TARGET_ELEC_HZ;
+    if (elec_hz_ > target_elec_hz_) elec_hz_ = target_elec_hz_;
     theta_ += TWO_PI * elec_hz_ * dt;
     if (theta_ >= TWO_PI) theta_ -= TWO_PI;
     write_phase(slice_s1_, slice_s2_, wrap_, theta_,
                 amp_from_hz(elec_hz_, amp_gain_), reverse_);
-    if (elec_hz_ >= TARGET_ELEC_HZ) state_ = State::RUN;
+    if (elec_hz_ >= target_elec_hz_) state_ = State::RUN;
     break;
   }
 
@@ -141,7 +142,7 @@ void BldcActuator::enable() {
   theta_     = 0.0f;
   elec_hz_   = 0.0f;
   state_cnt_ = 0u;
-  amp_gain_  = 0.10f;
+  amp_gain_  = 0.10f;  // ファン負荷あり → 0.10(無負荷)の2倍が必要
   enabled_   = true;
   add_repeating_timer_us(1000000 / CONTROL_HZ, timer_cb, this, &timer_);
 }
@@ -169,5 +170,11 @@ void BldcActuator::test_direct(float amplitude_pct) {
   if (enabled_) disable();
   enable();
   sleep_ms(5000);
+  //   for (int i = 0; i < 25; ++i) {
+  //   sleep_ms(200);
+  //   printf("bldc: state=%d hz=%.0f amp=%.3f\n",
+  //          (int)state_, (double)elec_hz_,
+  //          (double)amp_from_hz(elec_hz_, amp_gain_));
+  // }
   disable();
 }

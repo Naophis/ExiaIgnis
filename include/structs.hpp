@@ -1045,6 +1045,7 @@ typedef struct {
   int circuit_mode = 0;
   test_mode_t test;
   int hf_cl = 0;
+  float suction_bldc_hz = 6000.0f;
 } system_t;
 
 typedef struct {
