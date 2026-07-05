@@ -1,15 +1,54 @@
 #include "planning/bldc_actuator.hpp"
 #include "define.hpp"
 #include "hardware/clocks.h"
-#include "hardware/dma.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
 #include "pico/stdlib.h"
-#include <algorithm>
 #include <cmath>
+#include <initializer_list>
+
+static constexpr float TWO_PI    = 6.2831853f;
+static constexpr float PHASE_120 = 2.0943951f;
+
+// V/Hz パラメータ (sample/bldc.cpp の実証値)
+static constexpr float AMP_BASE        = 0.06f;
+static constexpr float AMP_BASE_HZ     = 120.0f;
+static constexpr float MAX_AMP         = 0.35f;
+static constexpr float RAMP_HZ_PER_SEC = 3000.0f;  // 1380Hz共振帯を素早く通過
+static constexpr float START_ELEC_HZ   = 1.0f;
+
+// PWM周波数はドライブモーター(MOTOR_PWM_FREQ_HZ=37500)と独立
+static constexpr uint32_t BLDC_PWM_FREQ_HZ = 80000u;  // 80kHz: wrap=1874
+
+// 400ms × 80kHz
+static constexpr uint32_t ALIGN_TICKS = (uint32_t)(BldcActuator::CONTROL_HZ) * 400 / 1000;
+
+static inline float amp_from_hz(float hz, float gain) {
+  if (hz <= AMP_BASE_HZ) return AMP_BASE;
+  const float a = AMP_BASE * (hz / AMP_BASE_HZ) * gain;
+  return a < AMP_BASE ? AMP_BASE : (a > MAX_AMP ? MAX_AMP : a);
+}
+
+// PWM CC レジスタに3相サイン波を書く
+// slice_s1 = slice4 (GPIO9=PWM4B=U相)
+// slice_s2 = slice5 (GPIO10=PWM5A=V相, GPIO11=PWM5B=W相)
+// reverse=true: V/W入れ替えで回転方向反転
+static inline void write_phase(uint s1, uint s2, uint32_t wrap,
+                                float theta, float amp, bool reverse) {
+  const float   wu1 = (float)(wrap + 1u);
+  const uint16_t lu = (uint16_t)(wu1 * (0.5f + amp * sinf(theta)));
+  const uint16_t lv = (uint16_t)(wu1 * (0.5f + amp * sinf(theta - PHASE_120)));
+  const uint16_t lw = (uint16_t)(wu1 * (0.5f + amp * sinf(theta + PHASE_120)));
+  // CH_B(上位16bit) → GPIO9=U,  CH_A(下位16bit) → 未使用 (slice4)
+  pwm_hw->slice[s1].cc = (uint32_t)lu << 16;
+  // CH_B(上位16bit) → GPIO11=W相,  CH_A(下位16bit) → GPIO10=V相
+  pwm_hw->slice[s2].cc = reverse
+      ? (((uint32_t)lv << 16) | lw)   // V↔W入れ替え → 逆転
+      : (((uint32_t)lw << 16) | lv);
+}
 
 // ============================================================
-// init: GPIO / PWM / DMA チャンネル確保 + ctrl ch 設定 (Core0)
+// init
 // ============================================================
 void BldcActuator::init() {
   gpio_set_function(SUCTION_PWM1, GPIO_FUNC_PWM);
@@ -19,166 +58,89 @@ void BldcActuator::init() {
   gpio_set_dir(SUCTION_EN, GPIO_OUT);
   gpio_put(SUCTION_EN, 0);
 
-  slice_s1_ = pwm_gpio_to_slice_num(SUCTION_PWM1);  // slice4: GPIO9(B)=U
-  slice_s2_ = pwm_gpio_to_slice_num(SUCTION_PWM2);  // slice5: GPIO10(A)=V, GPIO11(B)=W
-  wrap_     = (uint32_t)(clock_get_hz(clk_sys) / MOTOR_PWM_FREQ_HZ) - 1u;
+  slice_s1_ = pwm_gpio_to_slice_num(SUCTION_PWM1);
+  slice_s2_ = pwm_gpio_to_slice_num(SUCTION_PWM2);
+  wrap_ = (uint32_t)(clock_get_hz(clk_sys) / BLDC_PWM_FREQ_HZ) - 1u;  // = 1874
 
   for (uint s : {slice_s1_, slice_s2_}) {
     pwm_set_clkdiv_int_frac4(s, 1, 0);
     pwm_set_wrap(s, wrap_);
     pwm_set_enabled(s, false);
   }
-
-  amplitude_ = 0.0f;
-  rebuild_tables();
-
-  ch_uv_      = dma_claim_unused_channel(true);
-  ch_ctrl_uv_ = dma_claim_unused_channel(true);
-  ch_w_       = dma_claim_unused_channel(true);
-  ch_ctrl_w_  = dma_claim_unused_channel(true);
-  ctrl_n_     = TABLE_SIZE;
-
-  {
-    dma_channel_config c = dma_channel_get_default_config(ch_ctrl_uv_);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    channel_config_set_dreq(&c, DREQ_FORCE);
-    channel_config_set_read_increment(&c, false);
-    channel_config_set_write_increment(&c, false);
-    dma_channel_configure(ch_ctrl_uv_, &c,
-        &dma_hw->ch[ch_uv_].al1_transfer_count_trig, &ctrl_n_, 1, false);
-  }
-  {
-    dma_channel_config c = dma_channel_get_default_config(ch_ctrl_w_);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    channel_config_set_dreq(&c, DREQ_FORCE);
-    channel_config_set_read_increment(&c, false);
-    channel_config_set_write_increment(&c, false);
-    dma_channel_configure(ch_ctrl_w_, &c,
-        &dma_hw->ch[ch_w_].al1_transfer_count_trig, &ctrl_n_, 1, false);
-  }
 }
 
 // ============================================================
-// rebuild_tables: sine テーブル再計算
+// タイマーコールバック (Core0, 80kHz)
 // ============================================================
-void BldcActuator::rebuild_tables() {
-  constexpr float TWO_PI   = 2.0f * (float)M_PI;
-  constexpr float TWO_PI_3 = 2.0943951f;
-  const float half_amp = amplitude_ * 0.5f;
-  const float wu1      = (float)(wrap_ + 1u);
-  for (int i = 0; i < TABLE_SIZE; i++) {
-    const float theta = TWO_PI * i / TABLE_SIZE;
-    const auto u = (uint16_t)((0.5f + half_amp * sinf(theta))             * wu1);
-    const auto v = (uint16_t)((0.5f + half_amp * sinf(theta - TWO_PI_3)) * wu1);
-    const auto w = (uint16_t)((0.5f + half_amp * sinf(theta + TWO_PI_3)) * wu1);
-    table_uv_[i] = (uint32_t)u << 16;
-    // reverse_=true で V/W を入れ替えると回転方向が逆になる
-    table_w_[i] = reverse_ ? (((uint32_t)v << 16) | w)
-                            : (((uint32_t)w << 16) | v);
-  }
+bool BldcActuator::timer_cb(repeating_timer_t *rt) {
+  static_cast<BldcActuator *>(rt->user_data)->step();
+  return true;
 }
 
-// ============================================================
-// do_startup_ramp: 低周波から目標周波数まで直接 PWM CC を書いて引き込む
-//
-// DMA chain に引き渡す前にロータを目標速度まで加速する。
-// 1172 Hz / 586 Hz などから突然スタートすると脱調するため必要。
-// amp: 引き込みに使う振幅 (0.0〜1.0)。通常 ≥ 0.4 推奨。
-// ============================================================
-void BldcActuator::do_startup_ramp(float amp) {
-  gpio_put(SUCTION_EN, 1);
-  pwm_set_mask_enabled((1u << slice_s1_) | (1u << slice_s2_));
+void BldcActuator::step() {
+  constexpr float dt = 1.0f / (float)CONTROL_HZ;
 
-  // V/f 一定ランプ: f とともに振幅を比例増加させてトルクを維持する。
-  // 振幅固定で f だけ上げると高周波域でトルク不足 → 脱調 → ロータ固着 → 「ピ~」音。
-  constexpr float F_START   = 10.0f;  // 低い極対数でも引き込めるよう低く
-  const float     f_target  = (float)MOTOR_PWM_FREQ_HZ / TABLE_SIZE;
-  constexpr int   RAMP_N    = 300;
-  const float     df        = (f_target - F_START) / RAMP_N;
-  // サンプル実測: AMP=0.06 で起動確認。0.4 以上は磁気過結合で脱調する。
-  constexpr float AMP_FLOOR = 0.06f;
+  switch (state_) {
+  case State::STOP:
+    break;
 
-  float f = F_START;
-  for (int cyc = 0; cyc < RAMP_N; cyc++) {
-    // V/f: 振幅 = amp × (f / f_target)、ただし AMP_FLOOR 以上を保証
-    const float vf_amp = amp * (f / f_target);
-    amplitude_ = (vf_amp > AMP_FLOOR) ? vf_amp : AMP_FLOOR;
-    rebuild_tables();
-
-    const uint32_t step_us = (uint32_t)(1000000.0f / (f * TABLE_SIZE));
-    for (int i = 0; i < TABLE_SIZE; i++) {
-      pwm_hw->slice[slice_s1_].cc = table_uv_[i];
-      pwm_hw->slice[slice_s2_].cc = table_w_[i];
-      busy_wait_us_32(step_us < 2u ? 2u : step_us);
+  case State::ALIGN:
+    // ロータを theta=0 に磁気ロックしてから加速する
+    write_phase(slice_s1_, slice_s2_, wrap_, 0.0f, AMP_BASE, reverse_);
+    if (++state_cnt_ >= ALIGN_TICKS) {
+      state_     = State::RAMP;
+      state_cnt_ = 0u;
+      theta_     = 0.0f;
+      elec_hz_   = START_ELEC_HZ;
     }
-    f += df;
+    break;
+
+  case State::RAMP: {
+    elec_hz_ += RAMP_HZ_PER_SEC * dt;
+    if (elec_hz_ > TARGET_ELEC_HZ) elec_hz_ = TARGET_ELEC_HZ;
+    theta_ += TWO_PI * elec_hz_ * dt;
+    if (theta_ >= TWO_PI) theta_ -= TWO_PI;
+    write_phase(slice_s1_, slice_s2_, wrap_, theta_,
+                amp_from_hz(elec_hz_, amp_gain_), reverse_);
+    if (elec_hz_ >= TARGET_ELEC_HZ) state_ = State::RUN;
+    break;
   }
 
-  // ランプ完了。目標周波数で数サイクル定速運転してロータ位相を table[0] 基準に揃える。
-  // direct-write の最後が table[31] で終わり、DMA が table[0] から始めるため
-  // 位相連続性がないと同期外れ(即時脱調)が起きる。
-  amplitude_ = amp;
-  rebuild_tables();
-
-  const uint32_t step_us  = (uint32_t)(1000000.0f * TABLE_SIZE / MOTOR_PWM_FREQ_HZ);
-  for (int cyc = 0; cyc < 5; cyc++) {
-    for (int i = 0; i < TABLE_SIZE; i++) {
-      pwm_hw->slice[slice_s1_].cc = table_uv_[i];
-      pwm_hw->slice[slice_s2_].cc = table_w_[i];
-      busy_wait_us_32(step_us < 2u ? 2u : step_us);
-    }
+  case State::RUN:
+    theta_ += TWO_PI * elec_hz_ * dt;
+    if (theta_ >= TWO_PI) theta_ -= TWO_PI;
+    write_phase(slice_s1_, slice_s2_, wrap_, theta_,
+                amp_from_hz(elec_hz_, amp_gain_), reverse_);
+    break;
   }
-  // 最後の書き込みは table[TABLE_SIZE-1]。
-  // DMA は table[0] から始まるため、次のステップとして自然に続く。
 }
 
 // ============================================================
-// set_duty: 振幅更新 (Core1 IRQ から)
+// set_duty: Core1 IRQ から呼ばれる振幅ゲイン更新
+// duty_pct 0-100% → amp_gain 0.06-0.10 (実証済み動作範囲)
 // ============================================================
 void BldcActuator::set_duty(float duty_pct) {
-  const float d = std::clamp(duty_pct, 0.0f, 100.0f) / 100.0f;
-  // 定常運転中は min_amplitude_ を下限として脱調を防ぐ
-  amplitude_ = (enabled_ && d < min_amplitude_) ? min_amplitude_ : d;
-  if (!enabled_) return;
-  rebuild_tables();
+  float gain = (duty_pct / 100.0f) * 0.10f;
+  if      (gain < 0.06f) gain = 0.06f;
+  else if (gain > 0.20f) gain = 0.20f;
+  amp_gain_ = gain;
 }
 
 // ============================================================
-// enable: 起動ランプ → DMA chain 引き渡し (Core0)
+// enable: 非同期起動 (すぐ返る, ALIGN→RAMP→RUN はタイマーで進行)
 // ============================================================
 void BldcActuator::enable() {
-  // ランプ目標振幅: set_duty が未設定なら 90% を使う。
-  // AMP_FLOOR=0.06 が低速域を担うため、この値が直接起動振幅になるわけではない。
-  const float pull_amp = (amplitude_ > 0.9f) ? amplitude_ : 0.9f;
-  do_startup_ramp(pull_amp);
-  // ここでモーターは目標速度に到達済み。amplitude_ は Core1 が更新した値になっている。
-
-  // DMA chain 起動 (PWM/EN は do_startup_ramp 内で有効化済み)
-  {
-    dma_channel_config c = dma_channel_get_default_config(ch_uv_);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    channel_config_set_dreq(&c, pwm_get_dreq(slice_s1_));
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
-    channel_config_set_ring(&c, false, RING_BITS);
-    channel_config_set_chain_to(&c, ch_ctrl_uv_);
-    dma_channel_configure(ch_uv_, &c,
-        &pwm_hw->slice[slice_s1_].cc, table_uv_, TABLE_SIZE, false);
-  }
-  {
-    dma_channel_config c = dma_channel_get_default_config(ch_w_);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    channel_config_set_dreq(&c, pwm_get_dreq(slice_s2_));
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
-    channel_config_set_ring(&c, false, RING_BITS);
-    channel_config_set_chain_to(&c, ch_ctrl_w_);
-    dma_channel_configure(ch_w_, &c,
-        &pwm_hw->slice[slice_s2_].cc, table_w_, TABLE_SIZE, false);
-  }
-
-  dma_start_channel_mask((1u << ch_uv_) | (1u << ch_w_));
-  enabled_ = true;
+  if (enabled_) return;
+  gpio_put(SUCTION_EN, 1);
+  sleep_ms(20);  // MP6540H nSLEEP 起動待ち
+  pwm_set_mask_enabled((1u << slice_s1_) | (1u << slice_s2_));
+  state_     = State::ALIGN;
+  theta_     = 0.0f;
+  elec_hz_   = 0.0f;
+  state_cnt_ = 0u;
+  amp_gain_  = 0.10f;
+  enabled_   = true;
+  add_repeating_timer_us(1000000 / CONTROL_HZ, timer_cb, this, &timer_);
 }
 
 // ============================================================
@@ -186,11 +148,9 @@ void BldcActuator::enable() {
 // ============================================================
 void BldcActuator::disable() {
   enabled_ = false;
+  state_   = State::STOP;
+  cancel_repeating_timer(&timer_);
   gpio_put(SUCTION_EN, 0);
-  dma_channel_abort(ch_uv_);
-  dma_channel_abort(ch_ctrl_uv_);
-  dma_channel_abort(ch_w_);
-  dma_channel_abort(ch_ctrl_w_);
   pwm_set_enabled(slice_s1_, false);
   pwm_set_enabled(slice_s2_, false);
   pwm_set_chan_level(slice_s1_, PWM_CHAN_B, 0);
@@ -199,35 +159,12 @@ void BldcActuator::disable() {
 }
 
 // ============================================================
-// test_direct: V/f ランプで引き込んでから 2 秒間定速運転 (DMA なし)
-// Phase1: do_startup_ramp で V/f 一定引き込み
-// Phase2: amplitude_pct で 2 秒定速
+// test_direct: 診断用。enable()→5秒運転→disable()
 // ============================================================
 void BldcActuator::test_direct(float amplitude_pct) {
+  (void)amplitude_pct;
   if (enabled_) disable();
-
-  const float amp = std::clamp(amplitude_pct, 0.0f, 100.0f) / 100.0f;
-
-  // Phase 1: V/f ランプ。引き込み振幅は amp と 70% の大きい方。
-  do_startup_ramp((amp > 0.7f) ? amp : 0.7f);
-
-  // Phase 2: amplitude_pct で 2 秒定速運転
-  amplitude_ = amp;
-  rebuild_tables();
-
-  const float    f_target = (float)MOTOR_PWM_FREQ_HZ / TABLE_SIZE;
-  const uint32_t step_us  = (uint32_t)(1000000.0f / (f_target * TABLE_SIZE));
-  const int      n_cyc    = (int)(f_target * 2.0f);
-
-  for (int cyc = 0; cyc < n_cyc; cyc++) {
-    for (int i = 0; i < TABLE_SIZE; i++) {
-      pwm_hw->slice[slice_s1_].cc = table_uv_[i];
-      pwm_hw->slice[slice_s2_].cc = table_w_[i];
-      busy_wait_us_32(step_us);
-    }
-  }
-
-  gpio_put(SUCTION_EN, 0);
-  pwm_set_enabled(slice_s1_, false);
-  pwm_set_enabled(slice_s2_, false);
+  enable();
+  sleep_ms(5000);
+  disable();
 }

@@ -1,59 +1,53 @@
 #pragma once
-
-#include "hardware/dma.h"
 #include "hardware/pwm.h"
-#include "pico/types.h"
+#include "pico/time.h"
 #include <stdint.h>
 
-// MP6540H 3相ブラシレスモーター吸引用ドライバ (DMA SPWM, RP2350専用)
+// MP6540H 3相ブラシレスモーター吸引用ドライバ (タイマーIRQ SPWM, RP2350専用)
 //
-// DMA chain 方式: data ch → (TABLE_SIZE 転送後) → ctrl ch → data ch へ count を書き戻し再起動
-// ENDLESS / TRIGGER_SELF と違い、ring + chain の組み合わせは動作が保証されている。
+// sample/bldc.cpp と同じタイマーIRQ方式。電気周波数を可変にすることで
+// DMA固定方式(1172Hz)では届かなかった高速域(60,000RPM相当)を実現する。
 //
-// GPIO8=SUCTION_EN / GPIO9 (PWM4B)=U相 / GPIO10 (PWM5A)=V相 / GPIO11 (PWM5B)=W相
-// f_elec = MOTOR_PWM_FREQ_HZ / TABLE_SIZE = 37500/32 ≈ 1172 Hz
+// 起動シーケンス: ALIGN(400ms) → RAMP(1→TARGET_ELEC_HZ @ 3000Hz/s) → RUN
+// 振幅: V/Hz制御 (AMP_BASE=0.06, AMP_BASE_HZ=120, MAX_AMP=0.35)
+//
+// GPIO8=SUCTION_EN / GPIO9(PWM4B)=U相 / GPIO10(PWM5A)=V相 / GPIO11(PWM5B)=W相
 class BldcActuator {
 public:
-  static constexpr int TABLE_SIZE = 32;
-  static constexpr int RING_BITS  = 7;   // 2^7=128 bytes = 32 entries × 4 bytes
+  // 極対数 6 → 60,000RPM / 極対数 7 → 51,400RPM / 実機に合わせて変更
+  static constexpr float TARGET_ELEC_HZ = 6000.0f;
+  static constexpr int   CONTROL_HZ     = 80000;   // 12.5µs — 9500Hz時 8サンプル/回転
 
   void init();
-  void set_duty(float duty_pct);        // Core1 IRQ から呼ぶ
-  void enable();                        // Core0 から呼ぶ
-  void disable();                       // Core0 から呼ぶ
+  void set_duty(float duty_pct);   // Core1 IRQ から (振幅ゲイン調整)
+  void enable();                   // Core0 から (非同期 — すぐ返る)
+  void disable();                  // Core0 から
   void set_direction(bool reverse) { reverse_ = reverse; }
-  // 定常運転中の最低振幅 (0〜1)。suction_duty が低くても脱調しないよう下限を設ける。
-  void set_min_amplitude(float v) { min_amplitude_ = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; }
-
-  // ハードウェア診断: DMA を使わず Core0 から直接 PWM CC に sine 波を書く (~1秒)
-  // 回れば PWM/MP6540H は正常 → DMA 問題。回らなければ配線/ドライバ問題。
+  void set_min_amplitude(float v)  { (void)v; }  // API互換用
   void test_direct(float amplitude_pct);
 
   bool is_enabled()  const { return enabled_; }
-  bool is_dma_busy() const {
-    return dma_channel_is_busy(ch_uv_) || dma_channel_is_busy(ch_w_);
-  }
+  bool is_dma_busy() const { return false; }  // API互換用
 
 private:
-  void rebuild_tables();
-  void do_startup_ramp(float amp);  // 低周波から引き込んでから DMA へ引き渡す
+  static bool timer_cb(repeating_timer_t *rt);
+  void step();
+
+  enum class State : uint8_t { STOP, ALIGN, RAMP, RUN };
 
   uint     slice_s1_ = 0;
   uint     slice_s2_ = 0;
   uint32_t wrap_     = 0;
-  bool     enabled_       = false;
-  bool     reverse_       = true;
-  float    amplitude_     = 0.0f;
-  float    min_amplitude_ = 0.85f; // 定常運転時の最低振幅デフォルト 85%
 
-  // data ch: sine table (ring) → PWM CC, chain_to ctrl ch
-  // ctrl ch: ctrl_n_ → data ch の al1_transfer_count_trig (data ch を再起動)
-  int      ch_uv_      = -1;
-  int      ch_ctrl_uv_ = -1;
-  int      ch_w_       = -1;
-  int      ch_ctrl_w_  = -1;
-  uint32_t ctrl_n_     = TABLE_SIZE;   // ctrl ch が data ch に書く値 (= TABLE_SIZE)
+  // timer_cb (Core0) と set_duty (Core1 IRQ) の両方からアクセス
+  volatile State    state_     = State::STOP;
+  volatile float    theta_     = 0.0f;
+  volatile float    elec_hz_   = 0.0f;
+  volatile float    amp_gain_  = 0.10f;
+  volatile uint32_t state_cnt_ = 0u;
 
-  alignas(1 << RING_BITS) uint32_t table_uv_[TABLE_SIZE];
-  alignas(1 << RING_BITS) uint32_t table_w_[TABLE_SIZE];
+  bool enabled_ = false;
+  bool reverse_ = true;
+
+  repeating_timer_t timer_{};
 };
