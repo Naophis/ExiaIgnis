@@ -109,42 +109,45 @@
 //   printf("[boot] step8: MainTask start\n");
 //   MainTask::start();
 // }
-#include <stdio.h>
+
 #include <math.h>
+#include <stdio.h>
 
-#include "pico/stdlib.h"
-#include "hardware/pwm.h"
 #include "hardware/clocks.h"
+#include "hardware/pwm.h"
+#include "hardware/timer.h"
+#include "pico/stdlib.h"
 
-// ===== Pin assign =====
+// ===== ピン設定 =====
 #define U_PWM      9
 #define V_PWM      10
 #define W_PWM      11
-#define ENABLE_PIN 8   // ENA/ENB/ENC/nSLEEP common
+#define ENABLE_PIN 8
 
-// ===== PWM / control settings =====
-#define PWM_FREQ_HZ     20000u   // MP6540H入力PWM: 20kHz
-#define PWM_WRAP        4095u
-#define CONTROL_HZ      4000u    // SPWM duty更新周期。PWM周期ではない
+// ===== PWM 設定 =====
+#define PWM_FREQ_HZ  40000u                   // 40kHz: 1380Hz時 29サンプル/回転
+#define PWM_WRAP     2047u                    // 11bit: 150MHz/(40kHz*2048)=1.83分周
+#define CONTROL_HZ   40000u
+#define CONTROL_US   (1000000u / CONTROL_HZ)  // 25 us
 
-#define TWO_PI          6.2831853071795864769f
-#define PHASE_120       2.0943951023931954923f
+// ===== 数学定数 =====
+#define TWO_PI    6.2831853f
+#define PHASE_120 2.0943951f
 
-// ===== Motor start settings =====
-// 最初は弱く。BETAFPV 1103 3Sは電流が出やすいので上げすぎ注意
-#define ALIGN_MS        400
-#define ALIGN_AMP       0.06f
-#define RUN_AMP_INIT    0.08f
-#define MAX_AMP         0.25f
+// ===== モーターパラメータ =====
+#define ALIGN_MS        600
+#define START_ELEC_HZ   1.0f
+#define TARGET_ELEC_HZ  120.0f   // デフォルト。fキーで変更可能
+#define RAMP_HZ_PER_SEC 1000.0f  // 共振帯を瞬時通過
 
-// electrical Hz。極対数を考慮した機械回転数ではない。
-// mech_rpm = elec_hz * 60 / pole_pairs
-#define START_ELEC_HZ   8.0f
-#define TARGET_ELEC_HZ  120.0f
-#define RAMP_HZ_PER_SEC 180.0f
+// V/Hz 制御: 基準周波数・振幅は実証値。以降は比例スケール
+// amp = AMP_BASE * max(hz / AMP_BASE_HZ, 1.0) * g_amp_gain
+#define AMP_BASE    0.06f
+#define AMP_BASE_HZ 120.0f
+#define MAX_AMP     0.35f
 
-// 回転方向。逆なら -1.0f にするか、モーター線2本を入れ替える
-#define DIR             1.0f
+#define POLE_PAIRS 6u   // 極対数 (12極=6, 14極=7 など)
+#define DIR        1.0f
 
 typedef enum {
     MOTOR_STOP = 0,
@@ -153,149 +156,142 @@ typedef enum {
     MOTOR_RUN,
 } motor_state_t;
 
-static motor_state_t state = MOTOR_STOP;
+// IRQ と main() の両方からアクセスする変数は volatile
+static volatile motor_state_t g_state      = MOTOR_STOP;
+static volatile float         g_theta      = 0.0f;
+static volatile float         g_elec_hz    = 0.0f;
+static volatile float         g_target_hz  = TARGET_ELEC_HZ;
+static volatile float         g_amp_gain   = 0.10f; // +/-キーで調整 (実証値: 3600Hz+)
+static volatile uint32_t      g_state_cnt  = 0;
 
-static float theta = 0.0f;
-static float elec_hz = 0.0f;
-static float target_elec_hz = TARGET_ELEC_HZ;
-static float run_amp = RUN_AMP_INIT;
-static uint32_t state_count = 0;
+static repeating_timer_t g_ctrl_timer;
+static bool              g_timer_running = false;
 
-static inline float clampf(float x, float lo, float hi)
-{
-    if (x < lo) return lo;
-    if (x > hi) return hi;
-    return x;
+static inline float clampf(float x, float lo, float hi) {
+    return x < lo ? lo : x > hi ? hi : x;
 }
 
-static void pwm_write_01(uint gpio, float duty)
-{
-    duty = clampf(duty, 0.0f, 1.0f);
-
+static void pwm_write_01(uint gpio, float duty) {
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint chan  = pwm_gpio_to_channel(gpio);
-
-    // level=0で0%、level=TOP+1で100%相当だが、ここでは0..TOPに丸める
-    uint16_t level = (uint16_t)((float)PWM_WRAP * duty);
-    pwm_set_chan_level(slice, chan, level);
+    pwm_set_chan_level(slice, chan, (uint16_t)(PWM_WRAP * clampf(duty, 0.0f, 1.0f)));
 }
 
-static void set_phase_spwm(float angle, float amp)
-{
+static void set_phase_spwm(float angle, float amp) {
     amp = clampf(amp, 0.0f, MAX_AMP);
-
-    // 中心50%の三相正弦波PWM
-    // duty範囲 = 0.5 ± amp
-    float du = 0.5f + amp * sinf(angle);
-    float dv = 0.5f + amp * sinf(angle - PHASE_120);
-    float dw = 0.5f + amp * sinf(angle + PHASE_120);
-
-    pwm_write_01(U_PWM, du);
-    pwm_write_01(V_PWM, dv);
-    pwm_write_01(W_PWM, dw);
+    pwm_write_01(U_PWM, 0.5f + amp * sinf(angle));
+    pwm_write_01(V_PWM, 0.5f + amp * sinf(angle - PHASE_120));
+    pwm_write_01(W_PWM, 0.5f + amp * sinf(angle + PHASE_120));
 }
 
-static void set_all_pwm_low(void)
-{
+static void set_all_pwm_low(void) {
     pwm_write_01(U_PWM, 0.0f);
     pwm_write_01(V_PWM, 0.0f);
     pwm_write_01(W_PWM, 0.0f);
 }
 
-static void init_pwm_pin(uint gpio)
-{
+static void init_pwm_pin(uint gpio) {
     gpio_set_function(gpio, GPIO_FUNC_PWM);
-
-    uint slice = pwm_gpio_to_slice_num(gpio);
-
-    pwm_config cfg = pwm_get_default_config();
+    uint       slice = pwm_gpio_to_slice_num(gpio);
+    pwm_config cfg   = pwm_get_default_config();
     pwm_config_set_wrap(&cfg, PWM_WRAP);
-
-    float clk_hz = (float)clock_get_hz(clk_sys);
-    float div = clk_hz / ((float)PWM_FREQ_HZ * (float)(PWM_WRAP + 1u));
+    float div = (float)clock_get_hz(clk_sys) / ((float)PWM_FREQ_HZ * (PWM_WRAP + 1u));
     pwm_config_set_clkdiv(&cfg, div);
-
     pwm_init(slice, &cfg, true);
 }
 
-static void motor_stop(void)
-{
-    state = MOTOR_STOP;
-    theta = 0.0f;
-    elec_hz = 0.0f;
-    state_count = 0;
-
-    set_all_pwm_low();
-
-    // ENABLE_PINはnSLEEPも兼ねているのでLowでMP6540Hをsleepへ
-    gpio_put(ENABLE_PIN, 0);
+// V/Hz: AMP_BASE_HZ 以下は AMP_BASE 固定（起動保証）、以上は gain でスケール
+static inline float amp_from_hz(float hz) {
+    if (hz <= AMP_BASE_HZ) return AMP_BASE;
+    return clampf(AMP_BASE * (hz / AMP_BASE_HZ) * g_amp_gain, AMP_BASE, MAX_AMP);
 }
 
-static void motor_start(void)
-{
-    // Enable前にPWMを既知状態へ
-    set_phase_spwm(0.0f, ALIGN_AMP);
-
-    gpio_put(ENABLE_PIN, 1);
-
-    // nSLEEP立ち上げ後の起動待ち
-    sleep_ms(20);
-
-    state = MOTOR_ALIGN;
-    theta = 0.0f;
-    elec_hz = 0.0f;
-    state_count = 0;
-}
-
-static void motor_step(void)
-{
+// ===== 制御ループ: タイマーIRQから呼ばれる (4kHz 固定周期) =====
+static bool motor_step_cb(repeating_timer_t *rt) {
     const float dt = 1.0f / (float)CONTROL_HZ;
 
-    switch (state) {
+    switch (g_state) {
     case MOTOR_STOP:
-        return;
+        break;
 
     case MOTOR_ALIGN:
-        // 初期位置合わせ。ここで「ぐっ」と励磁感が出るはず
-        set_phase_spwm(0.0f, ALIGN_AMP);
-        state_count++;
-
-        if (state_count >= (ALIGN_MS * CONTROL_HZ / 1000u)) {
-            state = MOTOR_RAMP;
-            state_count = 0;
-            theta = 0.0f;
-            elec_hz = START_ELEC_HZ;
+        set_phase_spwm(0.0f, AMP_BASE);
+        g_state_cnt++;
+        if (g_state_cnt >= (ALIGN_MS * CONTROL_HZ / 1000u)) {
+            g_state     = MOTOR_RAMP;
+            g_state_cnt = 0;
+            g_theta     = 0.0f;
+            g_elec_hz   = START_ELEC_HZ;
         }
         break;
 
     case MOTOR_RAMP:
-        if (elec_hz < target_elec_hz) {
-            elec_hz += RAMP_HZ_PER_SEC * dt;
-            if (elec_hz > target_elec_hz) elec_hz = target_elec_hz;
-        } else {
-            state = MOTOR_RUN;
+        g_elec_hz += RAMP_HZ_PER_SEC * dt;
+        if (g_elec_hz > g_target_hz) g_elec_hz = g_target_hz;
+
+        g_theta += DIR * TWO_PI * g_elec_hz * dt;
+        if (g_theta >= TWO_PI) g_theta -= TWO_PI;
+        if (g_theta < 0.0f) g_theta += TWO_PI;
+
+        set_phase_spwm(g_theta, amp_from_hz(g_elec_hz));
+
+        if (g_elec_hz >= g_target_hz) {
+            g_state = MOTOR_RUN;
         }
-
-        theta += DIR * TWO_PI * elec_hz * dt;
-        if (theta > TWO_PI) theta -= TWO_PI;
-        if (theta < 0.0f) theta += TWO_PI;
-
-        set_phase_spwm(theta, run_amp);
         break;
 
     case MOTOR_RUN:
-        theta += DIR * TWO_PI * target_elec_hz * dt;
-        if (theta > TWO_PI) theta -= TWO_PI;
-        if (theta < 0.0f) theta += TWO_PI;
+        if (g_elec_hz < g_target_hz) {
+            g_elec_hz += RAMP_HZ_PER_SEC * dt;
+            if (g_elec_hz > g_target_hz) g_elec_hz = g_target_hz;
+        } else if (g_elec_hz > g_target_hz) {
+            g_elec_hz -= RAMP_HZ_PER_SEC * dt;
+            if (g_elec_hz < g_target_hz) g_elec_hz = g_target_hz;
+        }
 
-        elec_hz = target_elec_hz;
-        set_phase_spwm(theta, run_amp);
+        g_theta += DIR * TWO_PI * g_elec_hz * dt;
+        if (g_theta >= TWO_PI) g_theta -= TWO_PI;
+        if (g_theta < 0.0f) g_theta += TWO_PI;
+
+        set_phase_spwm(g_theta, amp_from_hz(g_elec_hz));
         break;
     }
+    return true;
 }
 
-static const char *state_name(motor_state_t s)
-{
+static void motor_start(void) {
+    if (g_timer_running) {
+        cancel_repeating_timer(&g_ctrl_timer);
+        g_timer_running = false;
+    }
+
+    set_phase_spwm(0.0f, AMP_BASE);
+    gpio_put(ENABLE_PIN, 1);
+    sleep_ms(20);  // nSLEEP 起動待ち
+
+    g_state     = MOTOR_ALIGN;
+    g_theta     = 0.0f;
+    g_elec_hz   = 0.0f;
+    g_state_cnt = 0;
+
+    add_repeating_timer_us(CONTROL_US, motor_step_cb, NULL, &g_ctrl_timer);
+    g_timer_running = true;
+}
+
+static void motor_stop(void) {
+    if (g_timer_running) {
+        cancel_repeating_timer(&g_ctrl_timer);
+        g_timer_running = false;
+    }
+    g_state   = MOTOR_STOP;
+    g_theta   = 0.0f;
+    g_elec_hz = 0.0f;
+
+    set_all_pwm_low();
+    gpio_put(ENABLE_PIN, 0);
+}
+
+static const char *state_name(motor_state_t s) {
     switch (s) {
     case MOTOR_STOP:  return "STOP";
     case MOTOR_ALIGN: return "ALIGN";
@@ -305,14 +301,12 @@ static const char *state_name(motor_state_t s)
     }
 }
 
-int main(void)
-{
+int main(void) {
     stdio_init_all();
     sleep_ms(1500);
 
-    printf("\nMP6540H BLDC SPWM test for RP2350\n");
-    printf("U=%d V=%d W=%d ENABLE=%d\n", U_PWM, V_PWM, W_PWM, ENABLE_PIN);
-    printf("keys: r=start, s=stop, +=amp up, -=amp down, f=freq up, d=freq down\n");
+    printf("\nBLDC SPWM test (RP2350)\n");
+    printf("r=start  s=stop  +/-=amp  f/d=freq\n");
 
     gpio_init(ENABLE_PIN);
     gpio_set_dir(ENABLE_PIN, GPIO_OUT);
@@ -321,13 +315,10 @@ int main(void)
     init_pwm_pin(U_PWM);
     init_pwm_pin(V_PWM);
     init_pwm_pin(W_PWM);
-
     set_all_pwm_low();
 
-    // 自動開始。怖ければコメントアウトして、USBシリアルから r を押す
     motor_start();
 
-    uint64_t next_us = time_us_64();
     uint64_t last_print_us = time_us_64();
 
     while (true) {
@@ -340,32 +331,32 @@ int main(void)
                 motor_stop();
                 printf("stop\n");
             } else if (c == '+') {
-                run_amp = clampf(run_amp + 0.01f, 0.0f, MAX_AMP);
-                printf("amp=%.3f\n", run_amp);
+                g_amp_gain = clampf(g_amp_gain + 0.01f, 0.025f, 5.0f);
+                printf("amp_gain=%.2f\n", (double)g_amp_gain);
             } else if (c == '-') {
-                run_amp = clampf(run_amp - 0.01f, 0.0f, MAX_AMP);
-                printf("amp=%.3f\n", run_amp);
+                g_amp_gain = clampf(g_amp_gain - 0.01f, 0.025f, 5.0f);
+                printf("amp_gain=%.2f\n", (double)g_amp_gain);
             } else if (c == 'f') {
-                target_elec_hz += 10.0f;
-                printf("target_elec_hz=%.1f\n", target_elec_hz);
+                g_target_hz += 10.0f;
+                printf("target_hz=%.1f\n", (double)g_target_hz);
             } else if (c == 'd') {
-                target_elec_hz -= 10.0f;
-                if (target_elec_hz < 1.0f) target_elec_hz = 1.0f;
-                printf("target_elec_hz=%.1f\n", target_elec_hz);
+                g_target_hz = clampf(g_target_hz - 10.0f, 1.0f, 10000.0f);
+                printf("target_hz=%.1f\n", (double)g_target_hz);
             }
         }
 
         uint64_t now = time_us_64();
-        if ((int64_t)(now - next_us) >= 0) {
-            next_us += 1000000u / CONTROL_HZ;
-            motor_step();
-        }
-
-        if (now - last_print_us > 500000u) {
+        if (now - last_print_us >= 500000u) {
             last_print_us = now;
-            printf("state=%s amp=%.3f elec_hz=%.1f target=%.1f enable=%d\n",
-                   state_name(state), run_amp, elec_hz, target_elec_hz,
-                   gpio_get(ENABLE_PIN));
+            // volatile 変数はローカルにコピーしてから printf
+            motor_state_t st   = g_state;
+            float         hz   = g_elec_hz;
+            float         tgt  = g_target_hz;
+            float         gain = g_amp_gain;
+            float rpm = hz * 60.0f / (float)POLE_PAIRS;
+            printf("state=%s elec_hz=%.1f target=%.1f amp=%.3f gain=%.2f rpm=%.0f\n",
+                   state_name(st), (double)hz, (double)tgt,
+                   (double)amp_from_hz(hz), (double)gain, (double)rpm);
         }
     }
 }

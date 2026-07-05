@@ -27,8 +27,15 @@ if [ ! -e "$DEVICE" ]; then
 fi
 
 echo "シリアルモニター起動: $DEVICE @ ${BAUD}bps"
-echo "終了: Ctrl+C"
+echo "終了: Ctrl+A → Ctrl+X  (picocom) / Ctrl+A → K (screen)"
 echo "---"
 
-stty -F "$DEVICE" "$BAUD" raw -echo
-cat "$DEVICE"
+if command -v picocom &>/dev/null; then
+    picocom "$DEVICE" -b "$BAUD" --omap crcrlf
+elif command -v screen &>/dev/null; then
+    screen "$DEVICE" "$BAUD"
+else
+    echo "picocom / screen が見つかりません。どちらかをインストールしてください:"
+    echo "  sudo apt install picocom"
+    exit 1
+fi
