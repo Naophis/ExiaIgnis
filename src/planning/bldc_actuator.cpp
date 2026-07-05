@@ -95,7 +95,8 @@ void BldcActuator::do_startup_ramp(float amp) {
   const float     f_target  = (float)MOTOR_PWM_FREQ_HZ / TABLE_SIZE;
   constexpr int   RAMP_N    = 300;
   const float     df        = (f_target - F_START) / RAMP_N;
-  constexpr float AMP_FLOOR = 0.4f;   // 低周波域の最低振幅 (引き込みトルク確保)
+  // サンプル実測: AMP=0.06 で起動確認。0.4 以上は磁気過結合で脱調する。
+  constexpr float AMP_FLOOR = 0.06f;
 
   float f = F_START;
   for (int cyc = 0; cyc < RAMP_N; cyc++) {
@@ -146,7 +147,8 @@ void BldcActuator::set_duty(float duty_pct) {
 // enable: 起動ランプ → DMA chain 引き渡し (Core0)
 // ============================================================
 void BldcActuator::enable() {
-  // 引き込み振幅: 最低 90% を保証。ファン負荷は RPM² で増えるため高振幅が必要。
+  // ランプ目標振幅: set_duty が未設定なら 90% を使う。
+  // AMP_FLOOR=0.06 が低速域を担うため、この値が直接起動振幅になるわけではない。
   const float pull_amp = (amplitude_ > 0.9f) ? amplitude_ : 0.9f;
   do_startup_ramp(pull_amp);
   // ここでモーターは目標速度に到達済み。amplitude_ は Core1 が更新した値になっている。

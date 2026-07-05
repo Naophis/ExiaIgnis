@@ -42,7 +42,7 @@ private:
   uint     slice_s2_ = 0;
   uint32_t wrap_     = 0;
   bool     enabled_       = false;
-  bool     reverse_       = false;
+  bool     reverse_       = true;
   float    amplitude_     = 0.0f;
   float    min_amplitude_ = 0.85f; // 定常運転時の最低振幅デフォルト 85%
 
