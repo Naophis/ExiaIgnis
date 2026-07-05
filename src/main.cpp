@@ -125,10 +125,10 @@
 #define ENABLE_PIN 8
 
 // ===== PWM 設定 =====
-#define PWM_FREQ_HZ  40000u                   // 40kHz: 1380Hz時 29サンプル/回転
-#define PWM_WRAP     2047u                    // 11bit: 150MHz/(40kHz*2048)=1.83分周
-#define CONTROL_HZ   40000u
-#define CONTROL_US   (1000000u / CONTROL_HZ)  // 25 us
+#define PWM_FREQ_HZ  80000u                   // 80kHz: 5000Hz時 16サンプル/回転
+#define PWM_WRAP     1874u                    // 150MHz / (80kHz * 1875) = 1.0 分周
+#define CONTROL_HZ   80000u
+#define CONTROL_US   12u                      // 83kHz ≈ 80kHz
 
 // ===== 数学定数 =====
 #define TWO_PI    6.2831853f
@@ -137,8 +137,8 @@
 // ===== モーターパラメータ =====
 #define ALIGN_MS        600
 #define START_ELEC_HZ   1.0f
-#define TARGET_ELEC_HZ  120.0f   // デフォルト。fキーで変更可能
-#define RAMP_HZ_PER_SEC 1000.0f  // 共振帯を瞬時通過
+#define TARGET_ELEC_HZ  1200.0f   // デフォルト。fキーで変更可能
+#define RAMP_HZ_PER_SEC 2000.0f  // 共振帯を瞬時通過
 
 // V/Hz 制御: 基準周波数・振幅は実証値。以降は比例スケール
 // amp = AMP_BASE * max(hz / AMP_BASE_HZ, 1.0) * g_amp_gain
@@ -147,7 +147,6 @@
 #define MAX_AMP     0.35f
 
 #define POLE_PAIRS 6u   // 極対数 (12極=6, 14極=7 など)
-#define DIR        1.0f
 
 typedef enum {
     MOTOR_STOP = 0,
@@ -162,6 +161,7 @@ static volatile float         g_theta      = 0.0f;
 static volatile float         g_elec_hz    = 0.0f;
 static volatile float         g_target_hz  = TARGET_ELEC_HZ;
 static volatile float         g_amp_gain   = 0.10f; // +/-キーで調整 (実証値: 3600Hz+)
+static volatile float         g_dir        = 1.0f;  // 回転方向: 1.0 or -1.0 (pキーで切替)
 static volatile uint32_t      g_state_cnt  = 0;
 
 static repeating_timer_t g_ctrl_timer;
@@ -229,7 +229,7 @@ static bool motor_step_cb(repeating_timer_t *rt) {
         g_elec_hz += RAMP_HZ_PER_SEC * dt;
         if (g_elec_hz > g_target_hz) g_elec_hz = g_target_hz;
 
-        g_theta += DIR * TWO_PI * g_elec_hz * dt;
+        g_theta += g_dir * TWO_PI * g_elec_hz * dt;
         if (g_theta >= TWO_PI) g_theta -= TWO_PI;
         if (g_theta < 0.0f) g_theta += TWO_PI;
 
@@ -249,7 +249,7 @@ static bool motor_step_cb(repeating_timer_t *rt) {
             if (g_elec_hz < g_target_hz) g_elec_hz = g_target_hz;
         }
 
-        g_theta += DIR * TWO_PI * g_elec_hz * dt;
+        g_theta += g_dir * TWO_PI * g_elec_hz * dt;
         if (g_theta >= TWO_PI) g_theta -= TWO_PI;
         if (g_theta < 0.0f) g_theta += TWO_PI;
 
@@ -336,24 +336,30 @@ int main(void) {
             } else if (c == '-') {
                 g_amp_gain = clampf(g_amp_gain - 0.01f, 0.025f, 5.0f);
                 printf("amp_gain=%.2f\n", (double)g_amp_gain);
+            } else if (c == 'p') {
+                g_dir = -g_dir;
+                printf("dir=%+.0f\n", (double)g_dir);
             } else if (c == 'f') {
-                g_target_hz += 10.0f;
+                g_target_hz += 25.0f;
                 printf("target_hz=%.1f\n", (double)g_target_hz);
             } else if (c == 'd') {
-                g_target_hz = clampf(g_target_hz - 10.0f, 1.0f, 10000.0f);
+                g_target_hz = clampf(g_target_hz - 25.0f, 1.0f, 10000.0f);
                 printf("target_hz=%.1f\n", (double)g_target_hz);
             }
         }
 
         uint64_t now = time_us_64();
-        if (now - last_print_us >= 500000u) {
+        // USB CDC の printf はスピンロックで割り込みを止めるため、
+        // STOP/ALIGN 中のみ出力し、RAMP/RUN 中は抑制する
+        motor_state_t cur_state = g_state;
+        bool can_print = (cur_state == MOTOR_STOP || cur_state == MOTOR_ALIGN);
+        if (can_print && now - last_print_us >= 500000u) {
             last_print_us = now;
-            // volatile 変数はローカルにコピーしてから printf
             motor_state_t st   = g_state;
             float         hz   = g_elec_hz;
             float         tgt  = g_target_hz;
             float         gain = g_amp_gain;
-            float rpm = hz * 60.0f / (float)POLE_PAIRS;
+            float         rpm  = hz * 60.0f / (float)POLE_PAIRS;
             printf("state=%s elec_hz=%.1f target=%.1f amp=%.3f gain=%.2f rpm=%.0f\n",
                    state_name(st), (double)hz, (double)tgt,
                    (double)amp_from_hz(hz), (double)gain, (double)rpm);
