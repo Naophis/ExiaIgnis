@@ -17,6 +17,7 @@ static constexpr float AMP_BASE_HZ     = 120.0f;
 static constexpr float MAX_AMP         = 0.35f;
 // RAMP速度は BldcActuator::ramp_hz_per_sec_ メンバで管理 (set_ramp_rate()で変更可能)
 static constexpr float START_ELEC_HZ   = 1.0f;
+static constexpr float RAMP_END_HZ     = 1200.0f;  // sample/bldc.cpp の初期安定点
 
 // PWM周波数はドライブモーター(MOTOR_PWM_FREQ_HZ=37500)と独立
 static constexpr uint32_t BLDC_PWM_FREQ_HZ = 80000u;  // 80kHz: wrap=1874
@@ -97,17 +98,26 @@ void BldcActuator::step() {
     break;
 
   case State::RAMP: {
+    // sample/bldc.cpp の MOTOR_RAMP と同じ: まず 1200Hz の安定点まで上げる
     elec_hz_ += ramp_hz_per_sec_ * dt;
-    if (elec_hz_ > target_elec_hz_) elec_hz_ = target_elec_hz_;
+    if (elec_hz_ > RAMP_END_HZ) elec_hz_ = RAMP_END_HZ;
     theta_ += TWO_PI * elec_hz_ * dt;
     if (theta_ >= TWO_PI) theta_ -= TWO_PI;
     write_phase(slice_s1_, slice_s2_, wrap_, theta_,
                 amp_from_hz(elec_hz_, amp_gain_), reverse_);
-    if (elec_hz_ >= target_elec_hz_) state_ = State::RUN;
+    if (elec_hz_ >= RAMP_END_HZ) state_ = State::RUN;
     break;
   }
 
   case State::RUN:
+    // sample/bldc.cpp の MOTOR_RUN と同じ: target_elec_hz_ へ追従
+    if (elec_hz_ < target_elec_hz_) {
+      elec_hz_ += ramp_hz_per_sec_ * dt;
+      if (elec_hz_ > target_elec_hz_) elec_hz_ = target_elec_hz_;
+    } else if (elec_hz_ > target_elec_hz_) {
+      elec_hz_ -= ramp_hz_per_sec_ * dt;
+      if (elec_hz_ < target_elec_hz_) elec_hz_ = target_elec_hz_;
+    }
     theta_ += TWO_PI * elec_hz_ * dt;
     if (theta_ >= TWO_PI) theta_ -= TWO_PI;
     write_phase(slice_s1_, slice_s2_, wrap_, theta_,
@@ -116,17 +126,8 @@ void BldcActuator::step() {
   }
 }
 
-// ============================================================
-// set_duty: Core1 IRQ から呼ばれる振幅ゲイン更新
-// ALIGN/RAMP中はサンプル実証値(0.10)を保護するため無視する
-// ============================================================
-void BldcActuator::set_duty(float duty_pct) {
-  if (state_ == State::ALIGN || state_ == State::RAMP) return;
-  float gain = (duty_pct / 100.0f) * 0.10f;
-  if      (gain < 0.06f) gain = 0.06f;
-  else if (gain > 0.20f) gain = 0.20f;
-  amp_gain_ = gain;
-}
+// amp_gain_ は sample/bldc.cpp の実証値 0.10 固定。set_duty では変更しない。
+void BldcActuator::set_duty(float /*duty_pct*/) {}
 
 // ============================================================
 // enable: 非同期起動 (すぐ返る, ALIGN→RAMP→RUN はタイマーで進行)

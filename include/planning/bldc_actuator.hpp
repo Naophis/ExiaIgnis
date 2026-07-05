@@ -8,7 +8,7 @@
 // sample/bldc.cpp と同じタイマーIRQ方式。電気周波数を可変にすることで
 // DMA固定方式(1172Hz)では届かなかった高速域(60,000RPM相当)を実現する。
 //
-// 起動シーケンス: ALIGN(600ms) → RAMP(1→target_elec_hz_ @ ramp_hz_per_sec_) → RUN
+// 起動シーケンス: ALIGN(600ms) → RAMP(1→1200Hz) → RUN(1200→target_elec_hz_ を追従)
 // 振幅: V/Hz制御 (AMP_BASE=0.06, AMP_BASE_HZ=120, MAX_AMP=0.35)
 //
 // GPIO8=SUCTION_EN / GPIO9(PWM4B)=U相 / GPIO10(PWM5A)=V相 / GPIO11(PWM5B)=W相
@@ -28,7 +28,10 @@ public:
   void test_direct(float amplitude_pct);
 
   bool  is_enabled()   const { return enabled_; }
-  bool  is_ramping()   const { return state_ == State::ALIGN || state_ == State::RAMP; }
+  bool  is_ramping()   const {
+    return state_ == State::ALIGN || state_ == State::RAMP ||
+           (state_ == State::RUN && elec_hz_ < target_elec_hz_ - 1.0f);
+  }
   bool  is_dma_busy()  const { return false; }
   float get_elec_hz()  const { return elec_hz_; }
   float get_target_hz() const { return target_elec_hz_; }
