@@ -246,14 +246,8 @@ void BldcActuator::write_direct_raw(float du, float dv, float dw) {
 }
 
 // ============================================================
-// add_repeating_timer_us コールバック (1kHz planning tick)
+// PlanningTask::tick() (core1, TIMER0 alarm直叩き, 1kHz) から毎tick呼ばれる。
 // ============================================================
-bool BldcActuator::timer_cb(repeating_timer_t *rt) {
-  auto *self = static_cast<BldcActuator *>(rt->user_data);
-  self->tick();
-  return true;  // 継続
-}
-
 void BldcActuator::tick() {
   constexpr float dt = 1.0f / (float)PLANNING_HZ;
 
@@ -343,9 +337,7 @@ void BldcActuator::enable() {
   // 保持するため(以前はここで0.10f等に毎回巻き戻していたのが、外部設定を
   // 無効化してしまう原因になっていた)。
   enabled_   = true;
-  // 1kHz planning tick。sector切替(最大数万Hz)はPWM+DMAが自律的に行うため、
-  // CPU割り込みはこの1kHzだけで済む。
-  add_repeating_timer_us(-(int32_t)(1000000 / PLANNING_HZ), timer_cb, this, &timer_);
+  // 1kHzのtick駆動はPlanningTask::tick()側が行う(クラスコメント参照)。
 }
 
 // ============================================================
@@ -354,7 +346,6 @@ void BldcActuator::enable() {
 void BldcActuator::disable() {
   enabled_ = false;
   state_   = State::STOP;
-  cancel_repeating_timer(&timer_);
   stop_dma();
   gpio_put(SUCTION_EN, 0);
   pwm_set_enabled(slice_s1_, false);

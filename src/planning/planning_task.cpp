@@ -102,6 +102,14 @@ void PlanningTask::timer_irq_handler() {
   const uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;
   self->prev_ts_ = now;
 
+  // BLDC吸引モーターのsectorテーブル/ペーシング更新。以前はBldcActuator
+  // 自身がadd_repeating_timer_us()で独自の1kHzタイマー(SDKのデフォルト
+  // alarm_pool = core0固定)を持っていたが、core0のUI/ボタン/USB/printf
+  // 処理と割り込みを奪い合いジッタの原因になっていたため、他のセンサー/
+  // 制御処理と同じくこのalarm_poolを介さない直接ハードウェアアラームIRQへ
+  // 統合した。
+  self->bldc_.tick();
+
   self->tick(dt_us);
   sem_release(&self->tick_sem_);
 }

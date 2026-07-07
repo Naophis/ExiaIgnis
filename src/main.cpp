@@ -34,6 +34,7 @@ std::shared_ptr<motion_tgt_val_t> tgt_val;
 
 static void rt_core1_entry() {
   flash_safe_execute_core_init();
+
   s_rt_sensing->start_irq();  // TIMER0 IRQ → Core1
   s_rt_planning->start_irq(); // TIMER1 IRQ → Core1
   while (true)

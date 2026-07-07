@@ -1,6 +1,5 @@
 #pragma once
 #include "hardware/pwm.h"
-#include "pico/time.h"
 #include <stdint.h>
 
 // MP6540H 3相ブラシレスモーター吸引用ドライバ (PWM+DMA自己ループ, RP2350専用)
@@ -12,6 +11,16 @@
 // 処理を圧迫するため不採用となり、CPU割り込みを1kHzのplanning tickのみに
 // 抑え、sector切替(6-step commutation, 最大数万Hz)は完全にPWM+DMAへ
 // 自律的に任せる構成にした。
+//
+// [重要] tick() は PlanningTask::timer_irq_handler() (core1, TIMER0 alarm
+// 直叩き) から毎tick呼び出すこと。以前は enable() 内で
+// add_repeating_timer_us() を使い独自の1kHzタイマーを持たせていたが、これは
+// SDKのデフォルトalarm_pool(crt0を実行したcore=core0に固定)経由で動くため、
+// core0のUI/ボタン/USB/printf処理と割り込みを奪い合いジッタの原因になって
+// いた(sample/bldc_pioは他に何も動いていない単一コアだったため問題化しな
+// かった)。alarm_pool経由をやめてPlanningTaskに統合したことで、
+// sensing_task.cpp と同じ「alarm_poolを介さない直接ハードウェアアラーム」
+// 方式になり、ジッタ要因が排除される。
 //
 // 波形自体(HIGH=0.5+amp/LOW=0.5-amp/FLOAT=0.5、60°ごとに役割を入れ替える
 // 教科書通りの台形波)は変わっていない。1〜2相をGNDに固定する疑似6-stepは
@@ -46,6 +55,11 @@ public:
   }
   void test_direct(float amplitude_pct);
 
+  // PlanningTask::timer_irq_handler() (core1, TIMER0 alarm, 1kHz) から
+  // 毎tick呼ぶこと。BldcActuator自身はもうタイマーを持たない
+  // (上記クラスコメント参照)。
+  void tick();
+
   // [診断用] RAMP/RUN中でも安全なトレース機能。printfは1kHz tickを遅延させ
   // 脱調の原因になり得るため使えない。代わりに10ms間隔でelec_hz/stateを
   // 軽量バッファへ記録しておき、is_ramping()==falseになってから(=安全な
@@ -65,9 +79,6 @@ public:
   float get_ramp_rate() const { return ramp_hz_per_sec_; }
 
 private:
-  static bool timer_cb(repeating_timer_t *rt);
-  void tick();  // 1kHz planning tick
-
   void setup_dma();
   void configure_phase_dma(int data_ch, int reload_a_ch, int reload_b_ch,
                             volatile uint32_t *cc_reg, uint32_t *table,
@@ -116,6 +127,4 @@ private:
   float    target_elec_hz_ = 6000.0f;
   bool     enabled_        = false;
   bool     reverse_        = true;
-
-  repeating_timer_t timer_ = {};
 };
