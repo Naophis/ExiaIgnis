@@ -5,14 +5,13 @@
 #include "hardware/pwm.h"
 #include "pico/stdlib.h"
 #include "pico/time.h"
-#include <cmath>
 #include <initializer_list>
 #include <stdio.h>
 
-static constexpr float TWO_PI    = 6.2831853f;
-static constexpr float PHASE_120 = 2.0943951f;
+static constexpr float TWO_PI = 6.2831853f;
 
-// V/Hz パラメータ (sample/bldc.cpp の実証値)
+// V/Hz パラメータ (sample/bldc_pio での実機検証値。ALIGN/低速域はAMP_BASE、
+// それ以上はhzに比例させ、MAX_AMPでクランプする点はsine版と同じ考え方)
 static constexpr float AMP_BASE        = 0.06f;
 static constexpr float AMP_BASE_HZ     = 120.0f;
 static constexpr float MAX_AMP         = 0.35f;
@@ -22,6 +21,23 @@ static constexpr float RAMP_END_HZ     = 1200.0f;
 static constexpr uint32_t BLDC_PWM_FREQ_HZ = 80000u;
 static constexpr uint32_t ALIGN_TICKS = (uint32_t)(BldcActuator::CONTROL_HZ) * 600 / 1000;
 
+// [実機知見] 1〜2相をGNDに固定する疑似6-step(旧方式)は実機で全く回転せず、
+// 全相を常に50%中心(HIGH=0.5+amp/LOW=0.5-amp/FLOAT=0.5)でチョップし続ける
+// 教科書通りの台形波駆動でのみ回転できることが sample/bldc_pio で確認できた。
+// GND固定を一切作らないことが肝(sample/bldc.cppのsine駆動と同じ電気的性質)。
+enum class PhaseRole : uint8_t { ROLE_LOW = 0, ROLE_FLOAT = 1, ROLE_HIGH = 2 };
+
+// [sector][U,V,W] のロール表。standard 6-step commutation table
+// (常にHIGH1相・LOW1相・FLOAT1相)。
+static constexpr PhaseRole SECTOR_ROLE[6][3] = {
+    {PhaseRole::ROLE_HIGH,  PhaseRole::ROLE_LOW,   PhaseRole::ROLE_FLOAT},  // sector0
+    {PhaseRole::ROLE_HIGH,  PhaseRole::ROLE_FLOAT, PhaseRole::ROLE_LOW},    // sector1
+    {PhaseRole::ROLE_FLOAT, PhaseRole::ROLE_HIGH,  PhaseRole::ROLE_LOW},    // sector2
+    {PhaseRole::ROLE_LOW,   PhaseRole::ROLE_HIGH,  PhaseRole::ROLE_FLOAT},  // sector3
+    {PhaseRole::ROLE_LOW,   PhaseRole::ROLE_FLOAT, PhaseRole::ROLE_HIGH},   // sector4
+    {PhaseRole::ROLE_FLOAT, PhaseRole::ROLE_LOW,   PhaseRole::ROLE_HIGH},   // sector5
+};
+
 __attribute__((noinline, section(".time_critical.bldc_tick")))
 static inline float amp_from_hz(float hz, float gain) {
   if (hz <= AMP_BASE_HZ) return AMP_BASE;
@@ -29,17 +45,33 @@ static inline float amp_from_hz(float hz, float gain) {
   return a < AMP_BASE ? AMP_BASE : (a > MAX_AMP ? MAX_AMP : a);
 }
 
-// PWM CC レジスタに3相サイン波を書く
+static inline int sector_of(float theta) {
+  int s = (int)(theta / (TWO_PI / 6.0f));
+  if (s < 0) s = 0;
+  if (s > 5) s = 5;
+  return s;
+}
+
+static inline float role_duty(PhaseRole role, float amp) {
+  switch (role) {
+  case PhaseRole::ROLE_HIGH: return 0.5f + amp;
+  case PhaseRole::ROLE_LOW:  return 0.5f - amp;
+  default:                   return 0.5f;
+  }
+}
+
+// PWM CC レジスタに3相台形波を書く
 // slice_s1 = slice4 (GPIO9=PWM4B=U相)
 // slice_s2 = slice5 (GPIO10=PWM5A=V相, GPIO11=PWM5B=W相)
 // reverse=true: V/W入れ替えで回転方向反転
 __attribute__((noinline, section(".time_critical.bldc_tick")))
 static inline void write_phase(uint s1, uint s2, uint32_t wrap,
                                 float theta, float amp, bool reverse) {
+  const PhaseRole *role = SECTOR_ROLE[sector_of(theta)];
   const float   wu1 = (float)(wrap + 1u);
-  const uint16_t lu = (uint16_t)(wu1 * (0.5f + amp * sinf(theta)));
-  const uint16_t lv = (uint16_t)(wu1 * (0.5f + amp * sinf(theta - PHASE_120)));
-  const uint16_t lw = (uint16_t)(wu1 * (0.5f + amp * sinf(theta + PHASE_120)));
+  const uint16_t lu = (uint16_t)(wu1 * role_duty(role[0], amp));
+  const uint16_t lv = (uint16_t)(wu1 * role_duty(role[1], amp));
+  const uint16_t lw = (uint16_t)(wu1 * role_duty(role[2], amp));
   pwm_hw->slice[s1].cc = (uint32_t)lu << 16;
   pwm_hw->slice[s2].cc = reverse
       ? (((uint32_t)lv << 16) | lw)

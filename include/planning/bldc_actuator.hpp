@@ -3,9 +3,13 @@
 #include "pico/time.h"
 #include <stdint.h>
 
-// MP6540H 3相ブラシレスモーター吸引用ドライバ (alarm pool SPWM, RP2350専用)
+// MP6540H 3相ブラシレスモーター吸引用ドライバ (alarm pool 台形波PWM, RP2350専用)
 //
-// sample/bldc.cpp と同じ add_repeating_timer_us 方式。
+// add_repeating_timer_us 方式は sample/bldc.cpp と同じ。波形は当初サイン波
+// (SPWM) だったが、sample/bldc_pio での実機検証の結果、1〜2相をGNDに固定する
+// 疑似6-stepでは全く回転せず、全相を常に50%中心でチョップし続ける教科書通りの
+// 台形波駆動(HIGH=0.5+amp/LOW=0.5-amp/FLOAT=0.5、60°ごとに役割を入れ替え)
+// でのみ回転することが確認できたため、その方式に置き換えた。
 //
 // 起動シーケンス: ALIGN(600ms) → RAMP(1→1200Hz) → RUN(1200→target_elec_hz_ を追従)
 // 振幅: V/Hz制御 (AMP_BASE=0.06, AMP_BASE_HZ=120, MAX_AMP=0.35)

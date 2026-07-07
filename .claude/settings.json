@@ -83,7 +83,17 @@
       "Bash(find /home/naoto -maxdepth 8 -name \"*.h\" 2>/dev/null | xargs grep -l \"USBCTRL_IRQ\" 2>/dev/null | head -5)",
       "Skill(artifact-design)",
       "Skill(artifact-design:*)",
-      "Bash(find /home/naoto -name \"timer.h\" -path \"*/hardware/*\" 2>/dev/null | head -5)"
+      "Bash(find /home/naoto -name \"timer.h\" -path \"*/hardware/*\" 2>/dev/null | head -5)",
+      "Bash(/home/naoto/.pico-sdk/tools/2.2.0/pioasm/pioasm --help)",
+      "Bash(mkdir -p /tmp/claude-1000/-home-naoto-Desktop-mouse-ExiaIgnis/9ee7094c-b5d5-439a-81a0-fca2da48ff1a/scratchpad/bldc_pio_test)",
+      "Bash(/home/naoto/.pico-sdk/tools/2.2.0/pioasm/pioasm -o hex bldc_6step.pio -)",
+      "Bash(/home/naoto/.pico-sdk/tools/2.2.0/pioasm/pioasm -o c-sdk bldc_6step.pio -)",
+      "Bash(mkdir -p /home/naoto/Desktop/mouse/ExiaIgnis/sample/bldc_pio)",
+      "Bash(/home/naoto/.pico-sdk/tools/2.2.0/pioasm/pioasm -o c-sdk /home/naoto/Desktop/mouse/ExiaIgnis/sample/bldc_pio/bldc_6step.pio -)",
+      "Bash(git check-ignore *)"
+    ],
+    "additionalDirectories": [
+      "/home/naoto/Desktop/mouse/ExiaIgnis/sample"
     ]
   }
 }
