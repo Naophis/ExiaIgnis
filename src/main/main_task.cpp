@@ -43,9 +43,25 @@ bool rx_usb_cmd(char *buf, int len);
 
 void MainTask::load_param_after() {
   planning_->ctl_.set_suction_gain(sys_.test.suction_gain);
-  planning_->bldc_.set_target_hz(sys_.suction_bldc_hz);
+
+  // sys_.test.suction_bldc_hz / suction_gain (tools/param_tuner での調整用)
+  // が設定されていれば(0より大きければ)、BldcActuatorの目標回転数・
+  // 加速度(ramp_hz_per_sec_)を上書きする。0は「未設定」を意味し、その場合は
+  // 既定値(sys_.suction_bldc_hz / bldc_actuator.cpp内のデフォルト加速度)
+  // を使う。
+  float target_hz = sys_.suction_bldc_hz;
+  if (sys_.test.suction_bldc_hz > 0.0f) {
+    target_hz = sys_.test.suction_bldc_hz;
+  }
+  planning_->bldc_.set_target_hz(target_hz);
+
+  if (sys_.test.suction_gain > 0.0f) {
+    planning_->bldc_.set_ramp_rate(sys_.test.suction_gain);
+  }
+
   printf("[param] suction_gain = %f\n", sys_.test.suction_gain);
-  printf("[param] suction_bldc_hz = %.0f\n", sys_.suction_bldc_hz);
+  printf("[param] suction_bldc_hz = %.0f (test override = %.0f)\n", target_hz,
+         sys_.test.suction_bldc_hz);
 }
 
 bool MainTask::load_params() {

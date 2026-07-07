@@ -117,7 +117,7 @@ test: # テスト走行時に使用するパラメータ群
   
   suction_duty: 9.0
   suction_duty_low: 9.0
-  suction_bldc_hz: 8000
+  suction_bldc_hz: 4000
 
   # Alter
   # suction_duty_burst: 4.0
@@ -129,7 +129,7 @@ test: # テスト走行時に使用するパラメータ群
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
 
-  suction_gain: 1500
+  suction_gain: 2200
   # suction_duty: 3.25
   file_idx: 4
   sla_dist: 90

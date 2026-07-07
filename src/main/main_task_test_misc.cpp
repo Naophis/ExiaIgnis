@@ -13,6 +13,16 @@ void MainTask::test_suction() {
   mp->reset_gyro_ref_with_check();
   sleep_ms(250);
 
+  // --- 実行前に BLDC 関連パラメータをダンプ ---
+  printf("== BLDC params ==\n");
+  printf("suction_bldc_hz(base)=%.0f  test.suction_bldc_hz=%.0f  "
+         "-> target_hz=%.0f\n",
+         sys_.suction_bldc_hz, sys_.test.suction_bldc_hz,
+         planning_->bldc_.get_target_hz());
+  printf("test.suction_gain=%.1f\n", sys_.test.suction_gain);
+  printf("test.suction_duty=%.2f  test.suction_duty_low=%.2f\n",
+         sys_.test.suction_duty, sys_.test.suction_duty_low);
+
   // --- Step 1: ALIGN→RAMP→RUN を5秒間確認 ---
   printf("== BLDC test start (5sec) ==\n");
 //   planning_->bldc_.test_direct(30.0f);

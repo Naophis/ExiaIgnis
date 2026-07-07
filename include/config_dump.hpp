@@ -511,6 +511,7 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["suction_duty_low"]    = src.suction_duty_low;
     dst["suction_duty_burst"]  = src.suction_duty_burst;
     dst["suction_duty_burst_low"] = src.suction_duty_burst_low;
+    dst["suction_bldc_hz"]     = src.suction_bldc_hz;
     dst["suction_gain"]        = src.suction_gain;
     dst["sla_dist"]            = src.sla_dist;
     dst["file_idx"]            = src.file_idx;
