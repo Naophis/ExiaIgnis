@@ -19,7 +19,12 @@ void MainTask::test_suction() {
          "-> target_hz=%.0f\n",
          sys_.suction_bldc_hz, sys_.test.suction_bldc_hz,
          planning_->bldc_.get_target_hz());
-  printf("test.suction_gain=%.1f\n", sys_.test.suction_gain);
+  printf("test.suction_gain=%.1f -> ramp_rate=%.0f\n", sys_.test.suction_gain,
+         planning_->bldc_.get_ramp_rate());
+  printf("test.suction_amp_gain=%.3f test.suction_max_amp=%.3f "
+         "-> amp_gain=%.3f max_amp=%.3f\n",
+         sys_.test.suction_amp_gain, sys_.test.suction_max_amp,
+         planning_->bldc_.get_amp_gain(), planning_->bldc_.get_max_amp());
   printf("test.suction_duty=%.2f  test.suction_duty_low=%.2f\n",
          sys_.test.suction_duty, sys_.test.suction_duty_low);
 
@@ -43,6 +48,9 @@ void MainTask::test_suction() {
 
   planning_->suction_disable();
   printf("suction stopped\n");
+
+  // disable()で1kHz tick自体が止まっているので、ここでのprintfは安全。
+  planning_->bldc_.dump_trace();
 }
 
 void MainTask::dump1() {

@@ -1024,6 +1024,8 @@ typedef struct {
   float suction_duty_burst_low = 0;
   float suction_bldc_hz = 0;
   float suction_gain = 0;
+  float suction_amp_gain = 0;
+  float suction_max_amp = 0;
   float sla_dist = 0;
   int file_idx = 0;
   int sla_type = 0;

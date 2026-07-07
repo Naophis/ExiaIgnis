@@ -10,10 +10,13 @@
 #include <stdio.h>
 
 // V/Hz パラメータ (sample/bldc_pio での実機検証値。ALIGN/低速域はAMP_BASE、
-// それ以上はhzに比例させ、MAX_AMPでクランプする点は旧sine版と同じ考え方)
+// それ以上はhzに比例させ、max_amp_でクランプする点は旧sine版と同じ考え方)。
+// amp_gain_ と max_amp_ はメンバ変数(BldcActuator::set_amp_gain/set_max_amp)
+// で外部(sys_.test.suction_amp_gain 等)から上書きできる。固定値のままだと
+// sample/bldc_pioでライブ調整して見つけた実際の動作値と食い違い、
+// 特に高hz域でamp不足による脱調の原因になる。
 static constexpr float AMP_BASE        = 0.06f;
 static constexpr float AMP_BASE_HZ     = 120.0f;
-static constexpr float MAX_AMP         = 0.35f;
 // [重要] ペーシングPWM slice(整数clkdiv 1-255 x wrap 16bit)で表現できる
 // 最小sector周波数は概ね clk_sys/(255*65536)≈9Hz。elec_hz=sector_hz/6 なので、
 // START_ELEC_HZ はこれより十分高い値にする必要がある(旧CPUタイマー方式の
@@ -45,10 +48,10 @@ static constexpr PhaseRole SECTOR_ROLE[6][3] = {
     {PhaseRole::ROLE_FLOAT, PhaseRole::ROLE_LOW,   PhaseRole::ROLE_HIGH},   // sector5
 };
 
-static inline float amp_from_hz(float hz, float gain) {
+static inline float amp_from_hz(float hz, float gain, float max_amp) {
   if (hz <= AMP_BASE_HZ) return AMP_BASE;
   const float a = AMP_BASE * (hz / AMP_BASE_HZ) * gain;
-  return a < AMP_BASE ? AMP_BASE : (a > MAX_AMP ? MAX_AMP : a);
+  return a < AMP_BASE ? AMP_BASE : (a > max_amp ? max_amp : a);
 }
 
 static inline float role_duty(PhaseRole role, float amp) {
@@ -56,6 +59,17 @@ static inline float role_duty(PhaseRole role, float amp) {
   case PhaseRole::ROLE_HIGH: return 0.5f + amp;
   case PhaseRole::ROLE_LOW:  return 0.5f - amp;
   default:                   return 0.5f;
+  }
+}
+
+// [診断用] state_ の数値(STOP=0,ALIGN=1,RAMP=2,RUN=3)を文字列に変換する。
+static const char *trace_state_name(uint8_t s) {
+  switch (s) {
+  case 0: return "STOP";
+  case 1: return "ALIGN";
+  case 2: return "RAMP";
+  case 3: return "RUN";
+  default: return "?";
   }
 }
 
@@ -164,7 +178,7 @@ void BldcActuator::stop_dma() {
 
 // ALIGN終了時、初めてDMAループを開始する。
 void BldcActuator::start_dma_ramp() {
-  recompute_tables(amp_from_hz(elec_hz_, amp_gain_));
+  recompute_tables(amp_from_hz(elec_hz_, amp_gain_, max_amp_));
   set_pacing_freq(6.0f * elec_hz_);
 
   dma_channel_set_read_addr(ch_u_data_, u_table_, false);
@@ -180,7 +194,7 @@ void BldcActuator::start_dma_ramp() {
 // RAMP/RUN中、1kHzごとにテーブルとペーシング周波数だけを更新する
 // (DMAループそのものは止めない・触らない)。
 void BldcActuator::update_running(float hz) {
-  recompute_tables(amp_from_hz(hz, amp_gain_));
+  recompute_tables(amp_from_hz(hz, amp_gain_, max_amp_));
   set_pacing_freq(6.0f * hz);
 }
 
@@ -261,12 +275,21 @@ void BldcActuator::tick() {
     }
     break;
 
-  case State::RAMP:
+  case State::RAMP: {
+    // [重要] RAMPはtarget_elec_hz_を無視してRAMP_END_HZまで無条件に加速する
+    // バグがあった(RAMP_END_HZだけをsample側の高速テスト用に16000等へ
+    // 上げると、本体側でtarget_hzがそれより低い場合(例:4000)でも
+    // RAMPが16000近くまで暴走し、目標を大幅に超過して脱調していた)。
+    // RAMP_END_HZとtarget_elec_hz_の低い方を上限にすることで、target_hzが
+    // RAMP_END_HZ未満でも正しくその手前で頭打ちになるようにする。
+    const float ramp_ceiling =
+        target_elec_hz_ < RAMP_END_HZ ? target_elec_hz_ : RAMP_END_HZ;
     elec_hz_ += ramp_hz_per_sec_ * dt;
-    if (elec_hz_ > RAMP_END_HZ) elec_hz_ = RAMP_END_HZ;
+    if (elec_hz_ > ramp_ceiling) elec_hz_ = ramp_ceiling;
     update_running(elec_hz_);
-    if (elec_hz_ >= RAMP_END_HZ) state_ = State::RUN;
+    if (elec_hz_ >= ramp_ceiling) state_ = State::RUN;
     break;
+  }
 
   case State::RUN:
     if (elec_hz_ < target_elec_hz_) {
@@ -278,6 +301,19 @@ void BldcActuator::tick() {
     }
     update_running(elec_hz_);
     break;
+  }
+
+  // [診断用トレース] 10ms(=10 tick)間隔でelec_hz/stateを記録するだけ。
+  // printfは使わないので1kHz tickへの影響は無視できる。
+  if (++trace_div_cnt_ >= 10u) {
+    trace_div_cnt_ = 0u;
+    trace_hz_[trace_idx_]    = elec_hz_;
+    trace_state_[trace_idx_] = (uint8_t)state_;
+    trace_idx_++;
+    if (trace_idx_ >= TRACE_LEN) {
+      trace_idx_  = 0;
+      trace_full_ = true;
+    }
   }
 }
 
@@ -297,7 +333,13 @@ void BldcActuator::enable() {
   state_     = State::ALIGN;
   elec_hz_   = 0.0f;
   state_cnt_ = 0u;
-  amp_gain_  = 0.12f;
+  trace_idx_     = 0;
+  trace_full_    = false;
+  trace_div_cnt_ = 0u;
+  // amp_gain_/max_amp_はここでリセットしない。load_param_after()での外部
+  // 設定(sys_.test.suction_amp_gain等)を enable()/disable() を跨いで
+  // 保持するため(以前はここで0.10f等に毎回巻き戻していたのが、外部設定を
+  // 無効化してしまう原因になっていた)。
   enabled_   = true;
   // 1kHz planning tick。sector切替(最大数万Hz)はPWM+DMAが自律的に行うため、
   // CPU割り込みはこの1kHzだけで済む。
@@ -335,4 +377,21 @@ void BldcActuator::test_direct(float amplitude_pct) {
   sleep_ms(2300);
   printf("bldc: done, hz=%.0f\n", (double)elec_hz_);
   disable();
+}
+
+// ============================================================
+// dump_trace: 診断用。is_ramping()==false(=1kHz tickへの割り込みが
+// クリティカルでないタイミング)で呼ぶこと。RAMP/RUN中に呼ぶとprintfが
+// 1kHz tickを遅延させ、脱調の原因になり得る。
+// ============================================================
+void BldcActuator::dump_trace() const {
+  const int count = trace_full_ ? TRACE_LEN : trace_idx_;
+  const int start = trace_full_ ? trace_idx_ : 0;
+  printf("=== bldc trace (10ms間隔, %d件, state/elec_hz) ===\n", count);
+  for (int i = 0; i < count; i++) {
+    const int idx = (start + i) % TRACE_LEN;
+    printf("%4d: %-5s %.1f\n", i, trace_state_name(trace_state_[idx]),
+           (double)trace_hz_[idx]);
+  }
+  printf("=== bldc trace end ===\n");
 }

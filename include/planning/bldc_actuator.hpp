@@ -35,7 +35,18 @@ public:
   void set_min_amplitude(float v)  { (void)v; }
   void set_ramp_rate(float hz_per_sec)  { ramp_hz_per_sec_ = hz_per_sec; }
   void set_target_hz(float hz)          { target_elec_hz_  = hz; }
+  // V/Hzカーブのゲイン(sample/bldc_pioのg_amp_gainに相当)。amp_from_hzの
+  // 傾きを決める。enable()では上書きしない(電源投入後は外部設定を保持)。
+  void set_amp_gain(float gain)         { amp_gain_ = gain; }
+  // 振幅上限(sample/bldc_pioのg_max_ampに相当)。高hzでの飽和先を決める。
+  void set_max_amp(float v)             { max_amp_  = v; }
   void test_direct(float amplitude_pct);
+
+  // [診断用] RAMP/RUN中でも安全なトレース機能。printfは1kHz tickを遅延させ
+  // 脱調の原因になり得るため使えない。代わりに10ms間隔でelec_hz/stateを
+  // 軽量バッファへ記録しておき、is_ramping()==falseになってから(=安全な
+  // タイミングで) dump_trace() でまとめて出力する。
+  void dump_trace() const;
 
   bool  is_enabled()   const { return enabled_; }
   bool  is_ramping()   const {
@@ -43,8 +54,11 @@ public:
            (state_ == State::RUN && elec_hz_ < target_elec_hz_ - 1.0f);
   }
   bool  is_dma_busy()  const { return state_ == State::RAMP || state_ == State::RUN; }
-  float get_elec_hz()  const { return elec_hz_; }
+  float get_elec_hz()   const { return elec_hz_; }
   float get_target_hz() const { return target_elec_hz_; }
+  float get_amp_gain()  const { return amp_gain_; }
+  float get_max_amp()   const { return max_amp_; }
+  float get_ramp_rate() const { return ramp_hz_per_sec_; }
 
 private:
   static bool timer_cb(repeating_timer_t *rt);
@@ -79,9 +93,19 @@ private:
   uint32_t u_table_addr_  = 0;
   uint32_t vw_table_addr_ = 0;
 
+  // [診断用トレース] 10ms間隔 x 600件 = 6秒分。printfを使わず記録するだけ
+  // なので1kHz tickへの影響は無視できる。
+  static constexpr int TRACE_LEN = 600;
+  float   trace_hz_[TRACE_LEN]    = {};
+  uint8_t trace_state_[TRACE_LEN] = {};
+  int     trace_idx_    = 0;
+  bool    trace_full_   = false;
+  uint32_t trace_div_cnt_ = 0;
+
   volatile State    state_           = State::STOP;
   volatile float    elec_hz_         = 0.0f;
   volatile float    amp_gain_        = 0.10f;
+  volatile float    max_amp_         = 0.35f;
   volatile uint32_t state_cnt_       = 0u;
   volatile float    ramp_hz_per_sec_ = 2000.0f;
 

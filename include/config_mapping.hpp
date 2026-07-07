@@ -775,6 +775,8 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "suction_duty_burst_low", dst.suction_duty_burst_low);
     from_json_field(src, "suction_bldc_hz", dst.suction_bldc_hz);
     from_json_field(src, "suction_gain", dst.suction_gain);
+    from_json_field(src, "suction_amp_gain", dst.suction_amp_gain);
+    from_json_field(src, "suction_max_amp", dst.suction_max_amp);
     from_json_field(src, "sla_dist", dst.sla_dist);
     from_json_field(src, "file_idx", dst.file_idx);
     from_json_field(src, "sla_type", dst.sla_type);
