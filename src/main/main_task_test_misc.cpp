@@ -15,7 +15,7 @@ void MainTask::test_suction() {
 
   // --- Step 1: ALIGN→RAMP→RUN を5秒間確認 ---
   printf("== BLDC test start (5sec) ==\n");
-  planning_->bldc_.test_direct(30.0f);
+//   planning_->bldc_.test_direct(30.0f);
   printf("== BLDC test done ==\n");
   sleep_ms(200);
 

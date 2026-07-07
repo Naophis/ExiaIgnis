@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN_FILE="$SCRIPT_DIR/build/ExiaIgnis.bin"
+# BIN_FILE="$SCRIPT_DIR/sample/bldc_pio/build/bldc_pio.bin"
 PICOTOOL="$HOME/.local/bin/picotool"
 # RP2350 flash base address
 FLASH_OFFSET="0x10000000"
