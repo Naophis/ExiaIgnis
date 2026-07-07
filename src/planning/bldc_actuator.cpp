@@ -326,10 +326,12 @@ void BldcActuator::enable() {
   if (enabled_) return;
   stop_dma();
 
+  // sample/bldc_pioと同じ順序に統一: EN有効化→20ms待機→duty書き込み
+  // (以前はduty書き込みが先だったが、機能的な違いはないはずなので念のため揃える)
   pwm_set_mask_enabled((1u << slice_s1_) | (1u << slice_s2_));
-  write_direct(0, AMP_BASE);
   gpio_put(SUCTION_EN, 1);
   sleep_ms(20);
+  write_direct(0, AMP_BASE);
   state_     = State::ALIGN;
   elec_hz_   = 0.0f;
   state_cnt_ = 0u;

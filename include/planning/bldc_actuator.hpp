@@ -39,7 +39,11 @@ public:
   // 傾きを決める。enable()では上書きしない(電源投入後は外部設定を保持)。
   void set_amp_gain(float gain)         { amp_gain_ = gain; }
   // 振幅上限(sample/bldc_pioのg_max_ampに相当)。高hzでの飽和先を決める。
-  void set_max_amp(float v)             { max_amp_  = v; }
+  // 0.5=100%duty(片側が完全に0または1に張り付く)なので、configの誤入力
+  // で0.5を超えないよう安全マージンを残してクランプする。
+  void set_max_amp(float v) {
+    max_amp_ = v < 0.10f ? 0.10f : (v > 0.48f ? 0.48f : v);
+  }
   void test_direct(float amplitude_pct);
 
   // [診断用] RAMP/RUN中でも安全なトレース機能。printfは1kHz tickを遅延させ
