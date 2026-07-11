@@ -21,10 +21,13 @@ void MainTask::test_suction() {
          planning_->bldc_.get_target_hz());
   printf("test.suction_gain=%.1f -> ramp_rate=%.0f\n", sys_.test.suction_gain,
          planning_->bldc_.get_ramp_rate());
-  printf("test.suction_amp_gain=%.3f test.suction_max_amp=%.3f "
-         "-> amp_gain=%.3f max_amp=%.3f\n",
-         sys_.test.suction_amp_gain, sys_.test.suction_max_amp,
-         planning_->bldc_.get_amp_gain(), planning_->bldc_.get_max_amp());
+  printf("batt LUT(%d pts):", planning_->bldc_.get_batt_table_len());
+  for (int i = 0; i < planning_->bldc_.get_batt_table_len(); i++) {
+    printf(" %.1fV(gain=%.4f,max_amp=%.3f)", planning_->bldc_.get_batt_v_bp(i),
+           planning_->bldc_.get_batt_gain_point(i),
+           planning_->bldc_.get_batt_max_amp_point(i));
+  }
+  printf("\n");
   printf("test.suction_duty=%.2f  test.suction_duty_low=%.2f\n",
          sys_.test.suction_duty, sys_.test.suction_duty_low);
 

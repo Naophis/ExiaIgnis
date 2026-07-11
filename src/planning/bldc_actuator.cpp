@@ -9,12 +9,8 @@
 #include <initializer_list>
 #include <stdio.h>
 
-// V/Hz パラメータ (sample/bldc_pio での実機検証値。ALIGN/低速域はAMP_BASE、
-// それ以上はhzに比例させ、max_amp_でクランプする点は旧sine版と同じ考え方)。
-// amp_gain_ と max_amp_ はメンバ変数(BldcActuator::set_amp_gain/set_max_amp)
-// で外部(sys_.test.suction_amp_gain 等)から上書きできる。固定値のままだと
-// sample/bldc_pioでライブ調整して見つけた実際の動作値と食い違い、
-// 特に高hz域でamp不足による脱調の原因になる。
+// V/Hz比例式のパラメータ。ALIGN/低速域はAMP_BASE固定、それ以上はhzに比例
+// させ、battery_v→max_amp LUT(batt_max_amp_table_)でクランプする。
 static constexpr float AMP_BASE        = 0.06f;
 static constexpr float AMP_BASE_HZ     = 120.0f;
 // [重要] ペーシングPWM slice(整数clkdiv 1-255 x wrap 16bit)で表現できる
@@ -48,10 +44,17 @@ static constexpr PhaseRole SECTOR_ROLE[6][3] = {
     {PhaseRole::ROLE_FLOAT, PhaseRole::ROLE_LOW,   PhaseRole::ROLE_HIGH},   // sector5
 };
 
-static inline float amp_from_hz(float hz, float gain, float max_amp) {
-  if (hz <= AMP_BASE_HZ) return AMP_BASE;
-  const float a = AMP_BASE * (hz / AMP_BASE_HZ) * gain;
-  return a < AMP_BASE ? AMP_BASE : (a > max_amp ? max_amp : a);
+// 区分線形補間。x が範囲外なら両端の値でクランプする(rangeの外に暴走しない)。
+static float interp(const float *xs, const float *ys, int n, float x) {
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[n - 1]) return ys[n - 1];
+  for (int i = 0; i < n - 1; i++) {
+    if (x <= xs[i + 1]) {
+      const float t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+      return ys[i] + t * (ys[i + 1] - ys[i]);
+    }
+  }
+  return ys[n - 1];
 }
 
 static inline float role_duty(PhaseRole role, float amp) {
@@ -178,7 +181,7 @@ void BldcActuator::stop_dma() {
 
 // ALIGN終了時、初めてDMAループを開始する。
 void BldcActuator::start_dma_ramp() {
-  recompute_tables(amp_from_hz(elec_hz_, amp_gain_, max_amp_));
+  recompute_tables(compensated_amp(elec_hz_));
   set_pacing_freq(6.0f * elec_hz_);
 
   dma_channel_set_read_addr(ch_u_data_, u_table_, false);
@@ -194,8 +197,21 @@ void BldcActuator::start_dma_ramp() {
 // RAMP/RUN中、1kHzごとにテーブルとペーシング周波数だけを更新する
 // (DMAループそのものは止めない・触らない)。
 void BldcActuator::update_running(float hz) {
-  recompute_tables(amp_from_hz(hz, amp_gain_, max_amp_));
+  recompute_tables(compensated_amp(hz));
   set_pacing_freq(6.0f * hz);
+}
+
+// V/Hz比例式のgain・max_ampを battery_v→{gain, max_amp} LUT から区分線形
+// 補間で求め、amp_from_hz に適用する(bldc_actuator.hppのクラスコメント
+// 参照)。interp()は範囲外を両端値でクランプするため、battery_lpが起動
+// 直後の0付近でも暴走しない。
+float BldcActuator::compensated_amp(float hz) const {
+  const int n = (int)batt_v_bp_.size();
+  const float gain = interp(batt_v_bp_.data(), batt_gain_table_.data(), n, battery_v_);
+  const float max_amp = interp(batt_v_bp_.data(), batt_max_amp_table_.data(), n, battery_v_);
+  if (hz <= AMP_BASE_HZ) return AMP_BASE;
+  const float a = AMP_BASE * (hz / AMP_BASE_HZ) * gain;
+  return a < AMP_BASE ? AMP_BASE : (a > max_amp ? max_amp : a);
 }
 
 void BldcActuator::recompute_tables(float amp) {
@@ -247,9 +263,11 @@ void BldcActuator::write_direct_raw(float du, float dv, float dw) {
 
 // ============================================================
 // PlanningTask::tick() (core1, TIMER0 alarm直叩き, 1kHz) から毎tick呼ばれる。
+// battery_v は se->ego.battery_lp (電圧フィードフォワード補正用)。
 // ============================================================
-void BldcActuator::tick() {
+void BldcActuator::tick(float battery_v) {
   constexpr float dt = 1.0f / (float)PLANNING_HZ;
+  battery_v_ = battery_v;
 
   switch (state_) {
   case State::STOP:
@@ -332,10 +350,10 @@ void BldcActuator::enable() {
   trace_idx_     = 0;
   trace_full_    = false;
   trace_div_cnt_ = 0u;
-  // amp_gain_/max_amp_はここでリセットしない。load_param_after()での外部
-  // 設定(sys_.test.suction_amp_gain等)を enable()/disable() を跨いで
-  // 保持するため(以前はここで0.10f等に毎回巻き戻していたのが、外部設定を
-  // 無効化してしまう原因になっていた)。
+  // batt_v_bp_/batt_gain_table_/batt_max_amp_table_はここでリセットしない。
+  // load_param_after()での外部設定(sys_.test.suction_batt_*_table等)を
+  // enable()/disable() を跨いで保持するため(以前はここで固定値に毎回
+  // 巻き戻していたのが、外部設定を無効化してしまう原因になっていた)。
   enabled_   = true;
   // 1kHzのtick駆動はPlanningTask::tick()側が行う(クラスコメント参照)。
 }

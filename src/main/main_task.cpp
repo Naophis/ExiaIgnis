@@ -59,22 +59,22 @@ void MainTask::load_param_after() {
     planning_->bldc_.set_ramp_rate(sys_.test.suction_gain);
   }
 
-  // amp_gain_/max_amp_ (V/Hzカーブのゲインと振幅上限)。sample/bldc_pioで
-  // ライブ調整して見つけた値をここで反映しないと、本体側は固定の初期値
-  // (amp_gain_=0.10, max_amp_=0.35)のままになり、高hz域で振幅不足による
-  // 脱調の原因になる。
-  if (sys_.test.suction_amp_gain > 0.0f) {
-    planning_->bldc_.set_amp_gain(sys_.test.suction_amp_gain);
-  }
-  if (sys_.test.suction_max_amp > 0.0f) {
-    planning_->bldc_.set_max_amp(sys_.test.suction_max_amp);
-  }
+  // battery_v→{gain, max_amp} LUT(可変長、system.yamlの値をそのまま使う。
+  // bldc_actuator.hppのクラスコメント参照)。
+  planning_->bldc_.set_batt_tables(sys_.test.suction_batt_v_table,
+                                    sys_.test.suction_batt_gain_table,
+                                    sys_.test.suction_batt_max_amp_table);
 
   printf("[param] suction_gain = %f\n", sys_.test.suction_gain);
   printf("[param] suction_bldc_hz = %.0f (test override = %.0f)\n", target_hz,
          sys_.test.suction_bldc_hz);
-  printf("[param] suction_amp_gain = %.3f  suction_max_amp = %.3f\n",
-         planning_->bldc_.get_amp_gain(), planning_->bldc_.get_max_amp());
+  printf("[param] batt LUT(%d pts):", planning_->bldc_.get_batt_table_len());
+  for (int i = 0; i < planning_->bldc_.get_batt_table_len(); i++) {
+    printf(" %.1fV(gain=%.4f,max_amp=%.3f)", planning_->bldc_.get_batt_v_bp(i),
+           planning_->bldc_.get_batt_gain_point(i),
+           planning_->bldc_.get_batt_max_amp_point(i));
+  }
+  printf("\n");
 }
 
 bool MainTask::load_params() {

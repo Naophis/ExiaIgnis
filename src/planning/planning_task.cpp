@@ -107,8 +107,9 @@ void PlanningTask::timer_irq_handler() {
   // alarm_pool = core0固定)を持っていたが、core0のUI/ボタン/USB/printf
   // 処理と割り込みを奪い合いジッタの原因になっていたため、他のセンサー/
   // 制御処理と同じくこのalarm_poolを介さない直接ハードウェアアラームIRQへ
-  // 統合した。
-  self->bldc_.tick();
+  // 統合した。battery_lpを渡すことでamp_gain/max_ampをバッテリー電圧に
+  // 依らず一定の実電圧になるよう補正する(bldc_actuator.hpp参照)。
+  self->bldc_.tick(self->sensing_result->ego.battery_lp);
 
   self->tick(dt_us);
   sem_release(&self->tick_sem_);

@@ -64,11 +64,11 @@ hf_cl: 0 # half(0) or classic(1)
 # mode: 0 # メイン
 # mode: 1 # 最短スローム
 # mode: 2 # 直進
-# mode: 3 # 超信地
+mode: 3 # 超信地
 # mode: 5 # 探索スラローム sla_wall_ref_l/r
 # mode: 7 # front ctrl
 # mode: 9 # wall off, search_mode(1)->search_wall_off, 0->fast_run_wall_off
-mode: 11 # vacume/suction test
+# mode: 11 # vacume/suction test
 # mode: 12 # silent_keep
 # mode: 13 # keep_pos
 # mode: 14 # sensing
@@ -128,10 +128,16 @@ test: # テスト走行時に使用するパラメータ群
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
 
-  suction_bldc_hz: 9600
-  suction_gain: 4200
-  suction_amp_gain: 0.12  # BldcActuatorのV/Hzカーブのゲイン(sample/bldc_pioのg_amp_gain相当)
-  suction_max_amp: 0.35   # BldcActuatorの振幅上限(sample/bldc_pioで実機検証済みの値。0.48は未検証域で脱調した)
+  suction_bldc_hz: 9200
+  suction_gain: 4000
+  # バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長。3配列とも
+  # 同じ長さ・昇順で指定すること)。amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain の
+  # V/Hz比例式に使うgainと、そのクランプ上限max_amp(0.48は未検証域で脱調
+  # した。実機検証済みの0.35が安全)を、どちらもバッテリー電圧ごとに
+  # 個別調整する(点を増やしたい場合はここに追加すればよい)。
+  suction_batt_v_table:      [11.1,   12.0,   12.6   ]
+  suction_batt_gain_table:   [0.120,  0.120,  0.1175]
+  suction_batt_max_amp_table: [0.37,   0.35,   0.34   ]
   # suction_duty: 3.25
   file_idx: 4
   sla_dist: 90
