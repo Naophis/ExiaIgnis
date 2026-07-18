@@ -664,8 +664,12 @@ typedef struct {
   float pivot_back_dist1 = 0;
   int sen_log_size = 100;
   int sen_log_size2 = 100;
+  // LED点灯後の安定待ち時間(us) = カウント値 × led_light_delay_us_per_cnt。
+  // led_light_delay_cnt: R90/L90/R45(LED1のみ)/L45(LED1のみ)の単発点灯ステップ
+  // led_light_delay_cnt2: R45/L45のLED1+LED2拡張ステップ(WALL_OFF等でのみ発生)
   int led_light_delay_cnt = 1000;
   int led_light_delay_cnt2 = 1000;
+  float led_light_delay_us_per_cnt = 1.0f;
   bool set_param = false;
   float logging_time = 4.0;
   float offset_after_turn_l2 = 0.0;

@@ -371,6 +371,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["sen_log_size2"]            = src.sen_log_size2;
     dst["led_light_delay_cnt"]      = src.led_light_delay_cnt;
     dst["led_light_delay_cnt2"]     = src.led_light_delay_cnt2;
+    dst["led_light_delay_us_per_cnt"] = src.led_light_delay_us_per_cnt;
     dst["set_param"]                = src.set_param;
     dst["logging_time"]             = src.logging_time;
     dst["offset_after_turn_l2"]     = src.offset_after_turn_l2;

@@ -50,8 +50,7 @@ std::shared_ptr<SensingTask> SensingTask::create() {
   return s_instance;
 }
 
-void SensingTask::configure(uint32_t led_settle_us, uint32_t interval_us) {
-  led_settle_us_ = led_settle_us;
+void SensingTask::configure(uint32_t interval_us) {
   interval_us_ = interval_us;
 }
 
@@ -173,7 +172,11 @@ void SensingTask::timer_b_irq_handler() {
   }
   se->t_ambient = (int16_t)(time_us_64() - sense_start);
 
-  // 2. LED点灯 + ADC取得
+  // 2. LED点灯 + ADC取得 (alarm 2 駆動の非同期ステートマシンに委譲)
+  //    busy_wait_us_32()でスピンする代わりに、ここでは最初の
+  //    ステップだけ着手してISRをreturnする。続きはled_seq_advance()
+  //    (led_seq_irq_handler経由)が担う。led_on==falseの場合は元々waitが
+  //    一切発生しない処理だったので、そのまま同期的にfinalizeする。
   bool led_on = true;
   if (tv->motion_type == MotionType::PIVOT) {
     led_on = false;
@@ -182,87 +185,220 @@ void SensingTask::timer_b_irq_handler() {
     led_on = true;
   }
 
-  if (led_on) {
-    // R90
-    if (r90) {
-      gpio_put(R90_LED_PIN, 1);
-      busy_wait_us_32(self->led_settle_us_);
-      adc_select_input(0);
-      se->led_sen_after.right90.raw = adc_read();
-      gpio_put(R90_LED_PIN, 0);
-    } else {
-      se->led_sen_after.right90.raw = 0;
-    }
-    se->t_r90 = (int16_t)(time_us_64() - sense_start);
+  self->seq_sense_start_ = sense_start;
+  self->seq_r90_ = r90;
+  self->seq_l90_ = l90;
+  self->seq_r45_ = r45;
+  self->seq_l45_ = l45;
+  self->seq_extended_ = (tv->motion_type == MotionType::WALL_OFF ||
+                        tv->motion_type == MotionType::WALL_OFF_DIA ||
+                        tv->motion_type == MotionType::SENSING_DUMP ||
+                        tv->motion_type == MotionType::SLA_BACK_STR);
 
-    // L90
-    if (l90) {
-      gpio_put(L90_LED_PIN, 1);
-      busy_wait_us_32(self->led_settle_us_);
-      adc_select_input(3);
-      se->led_sen_after.left90.raw = adc_read();
-      gpio_put(L90_LED_PIN, 0);
-    } else {
-      se->led_sen_after.left90.raw = 0;
-    }
-    se->t_l90 = (int16_t)(time_us_64() - sense_start);
-
-    // R45
-    if (r45) {
-      adc_select_input(1);
-      gpio_put(R45_LED_PIN, 1); // LED1 ON
-      busy_wait_us_32(self->led_settle_us_);
-      se->led_sen_after.right45.raw = adc_read(); // LED1 single
-      if (tv->motion_type == MotionType::WALL_OFF ||
-          tv->motion_type == MotionType::WALL_OFF_DIA ||
-          tv->motion_type == MotionType::SENSING_DUMP ||
-          tv->motion_type == MotionType::SLA_BACK_STR) {
-        gpio_put(R45_LED_PIN2, 1); // LED2 ON (LED1 still on)
-        busy_wait_us_32(self->led_settle_us_);
-        se->led_sen_after.right45_2.raw = adc_read(); // LED1 + LED2
-        gpio_put(R45_LED_PIN, 0);                     // LED1 OFF
-        busy_wait_us_32(self->led_settle_us_);
-        se->led_sen_after.right45_3.raw = adc_read(); // LED2 single
-        gpio_put(R45_LED_PIN2, 0);
-      } else {
-        gpio_put(R45_LED_PIN, 0);
-        se->led_sen_after.right45_2.raw = se->led_sen_after.right45_3.raw = 0;
-      }
-    } else {
-      se->led_sen_after.right45.raw = se->led_sen_after.right45_2.raw =
-          se->led_sen_after.right45_3.raw = 0;
-    }
-    se->t_r45 = (int16_t)(time_us_64() - sense_start);
-
-    // L45
-    if (l45) {
-      adc_select_input(2);
-      gpio_put(L45_LED_PIN, 1); // LED1 ON
-      busy_wait_us_32(self->led_settle_us_);
-      se->led_sen_after.left45.raw = adc_read(); // LED1 single
-      if (tv->motion_type == MotionType::WALL_OFF ||
-          tv->motion_type == MotionType::WALL_OFF_DIA ||
-          tv->motion_type == MotionType::SENSING_DUMP ||
-          tv->motion_type == MotionType::SLA_BACK_STR) {
-        gpio_put(L45_LED_PIN2, 1); // LED2 ON (LED1 still on)
-        busy_wait_us_32(self->led_settle_us_);
-        se->led_sen_after.left45_2.raw = adc_read(); // LED1 + LED2
-        gpio_put(L45_LED_PIN, 0);                    // LED1 OFF
-        busy_wait_us_32(self->led_settle_us_);
-        se->led_sen_after.left45_3.raw = adc_read(); // LED2 single
-        gpio_put(L45_LED_PIN2, 0);
-      } else {
-        gpio_put(L45_LED_PIN, 0);
-        se->led_sen_after.left45_2.raw = se->led_sen_after.left45_3.raw = 0;
-      }
-    } else {
-      se->led_sen_after.left45.raw = se->led_sen_after.left45_2.raw =
-          se->led_sen_after.left45_3.raw = 0;
-    }
-    se->t_l45 = (int16_t)(time_us_64() - sense_start);
+  if (!led_on) {
+    self->finalize_sensing(false);
+    return;
   }
+  self->led_seq_start();
+}
 
-  // 3. diff 計算 (負になる場合は 0 にクランプ)
+// ============================================================
+// LED点灯シーケンス 非同期ステートマシン (alarm 2, TIMER0_IRQ_2)
+// ============================================================
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::led_seq_irq_handler() {
+  timer_hw->intr = 1u << 2;
+  s_instance->led_seq_advance();
+}
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+uint32_t SensingTask::wait_us_single() const {
+  return (uint32_t)(param->led_light_delay_cnt * param->led_light_delay_us_per_cnt);
+}
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+uint32_t SensingTask::wait_us_extended() const {
+  return (uint32_t)(param->led_light_delay_cnt2 * param->led_light_delay_us_per_cnt);
+}
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+bool SensingTask::try_start_r90() {
+  if (!seq_r90_) {
+    sensing_result->led_sen_after.right90.raw = 0;
+    return false;
+  }
+  gpio_put(R90_LED_PIN, 1);
+  adc_select_input(0);
+  led_step_ = LedStep::R90;
+  timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
+  return true;
+}
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+bool SensingTask::try_start_l90() {
+  if (!seq_l90_) {
+    sensing_result->led_sen_after.left90.raw = 0;
+    return false;
+  }
+  gpio_put(L90_LED_PIN, 1);
+  adc_select_input(3);
+  led_step_ = LedStep::L90;
+  timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
+  return true;
+}
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+bool SensingTask::try_start_r45() {
+  if (!seq_r45_) {
+    auto &se = sensing_result;
+    se->led_sen_after.right45.raw = se->led_sen_after.right45_2.raw =
+        se->led_sen_after.right45_3.raw = 0;
+    return false;
+  }
+  adc_select_input(1);
+  gpio_put(R45_LED_PIN, 1); // LED1 ON
+  led_step_ = LedStep::R45_1;
+  timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
+  return true;
+}
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+bool SensingTask::try_start_l45() {
+  if (!seq_l45_) {
+    auto &se = sensing_result;
+    se->led_sen_after.left45.raw = se->led_sen_after.left45_2.raw =
+        se->led_sen_after.left45_3.raw = 0;
+    return false;
+  }
+  adc_select_input(2);
+  gpio_put(L45_LED_PIN, 1); // LED1 ON
+  led_step_ = LedStep::L45_1;
+  timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
+  return true;
+}
+
+// ambient読み取り後、timer_b_irq_handlerから呼ばれる初回エントリ。
+// r90→l90→r45→l45の順で該当する最初のステップを開始する。
+// 該当ステップが1つもなければ(全フラグfalse)待たずにfinalizeする。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::led_seq_start() {
+  if (try_start_r90()) return;
+  sensing_result->t_r90 = (int16_t)(time_us_64() - seq_sense_start_);
+  if (try_start_l90()) return;
+  sensing_result->t_l90 = (int16_t)(time_us_64() - seq_sense_start_);
+  if (try_start_r45()) return;
+  sensing_result->t_r45 = (int16_t)(time_us_64() - seq_sense_start_);
+  if (try_start_l45()) return;
+  sensing_result->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
+  finalize_sensing(true);
+}
+
+// alarm 2 発火時 (=led_step_の待ち時間経過後) に呼ばれる。
+// 直前ステップのADC読み取り+LED後処理を行い、次のステップへ進む。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::led_seq_advance() {
+  const auto &se = sensing_result;
+  const uint64_t now = time_us_64();
+
+  switch (led_step_) {
+  case LedStep::R90:
+    se->led_sen_after.right90.raw = adc_read();
+    gpio_put(R90_LED_PIN, 0);
+    se->t_r90 = (int16_t)(now - seq_sense_start_);
+    if (try_start_l90()) return;
+    se->t_l90 = (int16_t)(time_us_64() - seq_sense_start_);
+    if (try_start_r45()) return;
+    se->t_r45 = (int16_t)(time_us_64() - seq_sense_start_);
+    if (try_start_l45()) return;
+    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
+    finalize_sensing(true);
+    return;
+
+  case LedStep::L90:
+    se->led_sen_after.left90.raw = adc_read();
+    gpio_put(L90_LED_PIN, 0);
+    se->t_l90 = (int16_t)(now - seq_sense_start_);
+    if (try_start_r45()) return;
+    se->t_r45 = (int16_t)(time_us_64() - seq_sense_start_);
+    if (try_start_l45()) return;
+    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
+    finalize_sensing(true);
+    return;
+
+  case LedStep::R45_1:
+    se->led_sen_after.right45.raw = adc_read(); // LED1 single
+    if (seq_extended_) {
+      gpio_put(R45_LED_PIN2, 1); // LED2 ON (LED1 still on)
+      adc_select_input(1);
+      led_step_ = LedStep::R45_2;
+      timer_hw->alarm[2] = (uint32_t)now + wait_us_extended();
+      return;
+    }
+    gpio_put(R45_LED_PIN, 0);
+    se->led_sen_after.right45_2.raw = se->led_sen_after.right45_3.raw = 0;
+    se->t_r45 = (int16_t)(now - seq_sense_start_);
+    if (try_start_l45()) return;
+    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
+    finalize_sensing(true);
+    return;
+
+  case LedStep::R45_2:
+    se->led_sen_after.right45_2.raw = adc_read(); // LED1 + LED2
+    gpio_put(R45_LED_PIN, 0);                     // LED1 OFF
+    adc_select_input(1);
+    led_step_ = LedStep::R45_3;
+    timer_hw->alarm[2] = (uint32_t)now + wait_us_extended();
+    return;
+
+  case LedStep::R45_3:
+    se->led_sen_after.right45_3.raw = adc_read(); // LED2 single
+    gpio_put(R45_LED_PIN2, 0);
+    se->t_r45 = (int16_t)(now - seq_sense_start_);
+    if (try_start_l45()) return;
+    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
+    finalize_sensing(true);
+    return;
+
+  case LedStep::L45_1:
+    se->led_sen_after.left45.raw = adc_read(); // LED1 single
+    if (seq_extended_) {
+      gpio_put(L45_LED_PIN2, 1); // LED2 ON (LED1 still on)
+      adc_select_input(2);
+      led_step_ = LedStep::L45_2;
+      timer_hw->alarm[2] = (uint32_t)now + wait_us_extended();
+      return;
+    }
+    gpio_put(L45_LED_PIN, 0);
+    se->led_sen_after.left45_2.raw = se->led_sen_after.left45_3.raw = 0;
+    se->t_l45 = (int16_t)(now - seq_sense_start_);
+    finalize_sensing(true);
+    return;
+
+  case LedStep::L45_2:
+    se->led_sen_after.left45_2.raw = adc_read(); // LED1 + LED2
+    gpio_put(L45_LED_PIN, 0);                    // LED1 OFF
+    adc_select_input(2);
+    led_step_ = LedStep::L45_3;
+    timer_hw->alarm[2] = (uint32_t)now + wait_us_extended();
+    return;
+
+  case LedStep::L45_3:
+    se->led_sen_after.left45_3.raw = adc_read(); // LED2 single
+    gpio_put(L45_LED_PIN2, 0);
+    se->t_l45 = (int16_t)(now - seq_sense_start_);
+    finalize_sensing(true);
+    return;
+  }
+}
+
+// diff計算・battery計算・calc_time2 (旧timer_b_irq_handler末尾)。
+// led_on==falseの場合はled_sen_afterに触れず(元の実装通り)led_senのみ0クランプする。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::finalize_sensing(bool led_on) {
+  const auto &se = sensing_result;
+
+  // diff 計算 (負になる場合は 0 にクランプ)
   if (led_on) {
     se->led_sen.right90.raw = std::max(
         se->led_sen_after.right90.raw - se->led_sen_before.right90.raw, 0);
@@ -291,8 +427,8 @@ void SensingTask::timer_b_irq_handler() {
   }
 
   // se->battery.raw = self->battery_.read();
-  se->battery.data = self->param->battery_gain * 4 * se->battery.raw / 4096;
-  se->calc_time2 = (uint32_t)(time_us_64() - sense_start);
+  se->battery.data = param->battery_gain * 4 * se->battery.raw / 4096;
+  se->calc_time2 = (uint32_t)(time_us_64() - seq_sense_start_);
 }
 
 // ============================================================
@@ -307,6 +443,12 @@ void SensingTask::start_irq() {
   irq_set_enabled(TIMER0_IRQ_1, true);
 
   hw_set_bits(&timer_hw->inte, 1u << 1);
+
+  // alarm 2: LED点灯シーケンスの非同期継続 (led_seq_start/advance が使う)
+  irq_set_exclusive_handler(TIMER0_IRQ_2, led_seq_irq_handler);
+  irq_set_priority(TIMER0_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
+  irq_set_enabled(TIMER0_IRQ_2, true);
+  hw_set_bits(&timer_hw->inte, 1u << 2);
 
   next_alarm_a_ = (uint32_t)time_us_64() + interval_us_;
   timer_hw->alarm[1] = next_alarm_a_;

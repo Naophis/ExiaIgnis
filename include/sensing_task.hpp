@@ -25,7 +25,7 @@ public:
     static void core1_entry();
 
     // multicore_launch_core1 より前に呼ぶこと
-    void configure(uint32_t led_settle_us, uint32_t interval_us);
+    void configure(uint32_t interval_us);
 
     void set_sensing_entity(std::shared_ptr<sensing_result_entity_t> &_entity);
     void set_input_param_entity(std::shared_ptr<input_param_t> &_param);
@@ -73,7 +73,40 @@ private:
     static void timer_b_irq_handler();  // alarm 1: 1kHz 定周期 + センサー読み取り
     void calc_vel(float gyro_dt, float enc_l_dt, float enc_r_dt);
 
-    uint32_t led_settle_us_ = 18;    // LED 点灯後の安定待ち時間
+    // ============================================================
+    // LED点灯シーケンス 非同期ステートマシン (alarm 2)
+    // busy_wait_us_32()でCPUをスピンさせる代わりに、
+    // 「LED ON→アラームを待ち時間後にセット→ISR return」を1ステップ
+    // ずつ繰り返す。待ち時間中にCPUが解放されるため、同一優先度で
+    // プリエンプトされないPlanningTaskのIRQ(TIMER0_IRQ_0)が足止めされない。
+    // ============================================================
+    enum class LedStep : uint8_t { R90, L90, R45_1, R45_2, R45_3, L45_1, L45_2, L45_3 };
+    static void led_seq_irq_handler();  // alarm 2: LEDシーケンスの非同期継続
+    void led_seq_start();               // ambient読み取り後、最初のステップを開始
+    void led_seq_advance();             // alarm 2 発火時: 直前ステップの読み取り+次の準備
+    void finalize_sensing(bool led_on); // diff計算・battery計算・calc_time2 (元timer_b_irq_handler末尾)
+
+    // try_start_*: 該当フラグがtrueならLED ON+ADCチャンネル選択+アラームセットして
+    // true(=呼び出し元はreturnして待つ)を返す。falseならraw値を0埋めして直ちにfalseを返す
+    // (=呼び出し元は待たずに次のステップへ進んでよい)。
+    bool try_start_r90();
+    bool try_start_l90();
+    bool try_start_r45();
+    bool try_start_l45();
+
+    // 待ち時間[us] = カウント値(param->led_light_delay_cnt(_2)) *
+    // param->led_light_delay_us_per_cnt (hardware.yaml、USB経由でホット
+    // リロード可能)。
+    // single  = R90/L90/R45(LED1のみ)/L45(LED1のみ)
+    // extended= R45/L45のLED1+LED2拡張ステップ(WALL_OFF等でのみ発生)
+    uint32_t wait_us_single() const;
+    uint32_t wait_us_extended() const;
+
+    LedStep  led_step_{};
+    bool     seq_r90_ = false, seq_l90_ = false, seq_r45_ = false, seq_l45_ = false;
+    bool     seq_extended_ = false;   // R45/L45でLED1+LED2の3ステップ読み取りが必要か
+    uint64_t seq_sense_start_ = 0;    // t_r90等のタイムスタンプ基準 (=timer_b_irq_handlerのsense_start)
+
     uint32_t interval_us_   = 1000;  // サンプリング周期
 
     bool     skip_sensing_ = false;  // R90/L90とR45/L45のambient ADCを交互取得

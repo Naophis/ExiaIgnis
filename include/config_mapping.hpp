@@ -651,6 +651,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "sen_log_size2", dst.sen_log_size2);
     from_json_field(src, "led_light_delay_cnt", dst.led_light_delay_cnt);
     from_json_field(src, "led_light_delay_cnt2", dst.led_light_delay_cnt2);
+    from_json_field(src, "led_light_delay_us_per_cnt", dst.led_light_delay_us_per_cnt);
     from_json_field(src, "set_param", dst.set_param);
     from_json_field(src, "logging_time", dst.logging_time);
     from_json_field(src, "offset_after_turn_l2", dst.offset_after_turn_l2);

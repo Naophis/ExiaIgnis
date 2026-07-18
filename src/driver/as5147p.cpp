@@ -29,25 +29,6 @@ static bool _spiCalcEvenParity(uint16_t value) {
   return even;
 }
 
-// 16bit ワードを 8bit×2 で送受信 (sample/test.cpp と同じ方式)
-static int32_t spi_transfer16(spi_inst_t *spi, uint cs, uint16_t tx_word) {
-    uint8_t tx[2] = {
-        (uint8_t)(tx_word >> 8),
-        (uint8_t)(tx_word & 0xFF)
-    };
-    uint8_t rx[2] = {0, 0};
-
-    gpio_put(cs, 0);
-    sleep_us(2);
-    spi_write_read_blocking(spi, tx, rx, 2);
-    sleep_us(1);
-    gpio_put(cs, 1);
-
-    uint16_t raw = ((uint16_t)rx[0] << 8) | rx[1];
-
-    return raw;
-}
-
 void AS5147P::init(spi_inst_t *spi, uint cs_pin) {
     spi_ = spi;
     cs_  = cs_pin;
@@ -55,6 +36,42 @@ void AS5147P::init(spi_inst_t *spi, uint cs_pin) {
     gpio_init(cs_);
     gpio_set_dir(cs_, GPIO_OUT);
     gpio_put(cs_, 1);
+
+    dma_tx_ = dma_claim_unused_channel(true);
+    dma_rx_ = dma_claim_unused_channel(true);
+
+    dma_cfg_tx_ = dma_channel_get_default_config(dma_tx_);
+    channel_config_set_transfer_data_size(&dma_cfg_tx_, DMA_SIZE_8);
+    channel_config_set_dreq(&dma_cfg_tx_, spi_get_dreq(spi_, true));
+    channel_config_set_read_increment(&dma_cfg_tx_, true);
+    channel_config_set_write_increment(&dma_cfg_tx_, false);
+
+    dma_cfg_rx_ = dma_channel_get_default_config(dma_rx_);
+    channel_config_set_transfer_data_size(&dma_cfg_rx_, DMA_SIZE_8);
+    channel_config_set_dreq(&dma_cfg_rx_, spi_get_dreq(spi_, false));
+    channel_config_set_read_increment(&dma_cfg_rx_, false);
+    channel_config_set_write_increment(&dma_cfg_rx_, true);
+}
+
+// 16bit ワードを 8bit×2 で DMA 送受信する。CS制御とt_CSn待ちは維持したまま、
+// spi_write_read_blocking() のCPUポーリングをDMA転送に置き換える。
+__attribute__((noinline, section(".time_critical.sensing.as5147p_read")))
+int32_t AS5147P::spi_transfer16(uint16_t tx_word) {
+    dma_tx_buf_[0] = (uint8_t)(tx_word >> 8);
+    dma_tx_buf_[1] = (uint8_t)(tx_word & 0xFF);
+
+    gpio_put(cs_, 0);
+    sleep_us(2);
+    dma_channel_configure(dma_tx_, &dma_cfg_tx_, &spi_get_hw(spi_)->dr,
+                          dma_tx_buf_, 2, false);
+    dma_channel_configure(dma_rx_, &dma_cfg_rx_, dma_rx_buf_,
+                          &spi_get_hw(spi_)->dr, 2, false);
+    dma_start_channel_mask((1u << dma_tx_) | (1u << dma_rx_));
+    dma_channel_wait_for_finish_blocking(dma_rx_);
+    sleep_us(1);
+    gpio_put(cs_, 1);
+
+    return ((int32_t)dma_rx_buf_[0] << 8) | dma_rx_buf_[1];
 }
 
 // addr を読んで生の 16bit 値を返す (EF・パリティビット含む)
@@ -66,12 +83,12 @@ int32_t AS5147P::read_reg(uint16_t addr) {
     uint16_t nop = make_cmd(1u << 14);  // READ NOP (addr=0x0000, bit14=1=READ)
 
     // Frame 1: コマンド送信 (レスポンスは破棄)
-    spi_transfer16(spi_, cs_, cmd);
+    spi_transfer16(cmd);
 
     busy_wait_us_32(1);  // t_CSn: CS HIGH 時間確保
 
     // Frame 2: NOP 送信、Frame1 へのレスポンス受信
-    return spi_transfer16(spi_, cs_, nop);
+    return spi_transfer16(nop);
 }
 
 void AS5147P::setup() {

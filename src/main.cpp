@@ -62,6 +62,35 @@ int main() {
   gpio_pull_up(BTN_PIN);
 
   sleep_ms(1500);
+
+  // // M_PWM_L1, M_PWM_L2, M_PWM_R1, M_PWM_R2
+  // gpio_init(M_PWM_L1);
+  // gpio_set_dir(M_PWM_L1, GPIO_OUT);
+  // gpio_init(M_PWM_L2);
+  // gpio_set_dir(M_PWM_L2, GPIO_OUT);
+  // gpio_init(M_PWM_R1);
+  // gpio_set_dir(M_PWM_R1, GPIO_OUT);
+  // gpio_init(M_PWM_R2);
+  // gpio_set_dir(M_PWM_R2, GPIO_OUT);
+
+  // while (1) {
+  //   printf("SW1 pressed: wait release\n");
+  //   sleep_ms(100);
+  //   if (gpio_get(BTN_PIN) == 0) {
+  //     printf("SW1 pressed: motor active\n");
+  //     gpio_put(M_PWM_L1, 1);
+  //     gpio_put(M_PWM_L2, 0);
+  //     gpio_put(M_PWM_R1, 1);
+  //     gpio_put(M_PWM_R2, 0);
+  //   } else {
+  //     printf("SW1 released: motor inactive\n");
+  //     gpio_put(M_PWM_L1, 0);
+  //     gpio_put(M_PWM_L2, 0);
+  //     gpio_put(M_PWM_R1, 0);
+  //     gpio_put(M_PWM_R2, 0);
+  //   }
+  // }
+
   // 設定ファイル読み込み (multicore 起動前に実施)
   ConfigLoader::init();
 
@@ -76,7 +105,7 @@ int main() {
   sensing->set_tgt_val(tgt_val);
   printf("[boot] step3: sensing init\n");
   sensing->init();
-  sensing->configure(22, 1000); // LED安定待ち 22us, サンプリング周期 1000us
+  sensing->configure(1000); // サンプリング周期 1000us (LED安定待ちはparam->led_light_delay_cnt(_2)*led_light_delay_us_per_cntで指定)
 
   printf("[boot] step4: planning init\n");
   planning->set_sensing_entity(sensing_entity);
@@ -105,7 +134,8 @@ int main() {
   printf("[boot] step7: multicore_launch_core1\n");
   s_rt_sensing = sensing.get();
   s_rt_planning = planning.get();
-  multicore_launch_core1_with_stack(rt_core1_entry, g_core1_stack, sizeof(g_core1_stack));
+  multicore_launch_core1_with_stack(rt_core1_entry, g_core1_stack,
+                                    sizeof(g_core1_stack));
 
   printf("[boot] step8: MainTask start\n");
   MainTask::start();
