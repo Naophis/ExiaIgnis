@@ -61,6 +61,12 @@ void MotorActuator::motor_enable() {
 
 void MotorActuator::motor_disable() {
   motor_en = false;
+  // pwm_set_enabled(false) はカウンタを即座に止めるため、直前の duty の
+  // 位相によっては出力ピンが HIGH のまま固定されてしまう（duty=0 の CC 値は
+  // 次の wrap まで反映されない）。先に duty=0 を書き込み、1 周期分待って
+  // 出力が確実に LOW に落ちてから PWM を止める。
+  apply(0.0f, 0.0f);
+  // busy_wait_us(2u * 1000000u / MOTOR_PWM_FREQ_HZ);
   pwm_set_enabled(slice_L_, false);
   pwm_set_enabled(slice_R_, false);
 }

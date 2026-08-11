@@ -475,6 +475,11 @@ void PlanningTask::motor_enable() {
 }
 void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
   motor_en = false;
+  // Core1 の 1kHz tick が motor_en=false を検知して set_next_duty() で
+  // duty=0 を確定させるまで待つ。待たずに PWM を disable すると、Core1 が
+  // まだ非ゼロ duty を computing/apply 中の可能性があり、その位相で出力が
+  // 固定されてモーターが止まらないことがある。
+  // sleep_ms(1);
   motor_.motor_disable();
 }
 void PlanningTask::suction_enable(float duty, float duty_low) {
