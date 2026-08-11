@@ -17,11 +17,17 @@ void MainTask::test_run() {
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    sleep_ms(3200);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    sleep_ms(3200);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   }
   if (param_->test_log_enable > 0) {
     lt_->start();

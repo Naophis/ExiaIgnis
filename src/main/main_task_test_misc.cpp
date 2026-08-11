@@ -45,14 +45,21 @@ void MainTask::test_suction() {
   sleep_ms(200);
 
   // --- Step 2: ControlLaw 経由で運転 (RAMP 中は printf 抑制) ---
+  const uint64_t t_suction_start = time_us_64();
   planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
 
+  while (planning_->bldc_.is_ramping()) {
+    sleep_ms(5);
+  }
+  const uint64_t t_ramp_done = time_us_64();
+  printf("ramp done: %.1fms (target_hz=%.0f)\n",
+         (double)(t_ramp_done - t_suction_start) / 1000.0,
+         planning_->bldc_.get_target_hz());
+
   while (!ui_->button_state()) {
-    if (!planning_->bldc_.is_ramping()) {
-      printf("batt=%.3fV duty=%.1f%%\n",
-             se->ego.batt_kf,
-             planning_->tgt_val->duty_suction);
-    }
+    printf("batt=%.3fV duty=%.1f%%\n",
+           se->ego.batt_kf,
+           planning_->tgt_val->duty_suction);
     sleep_ms(200);
   }
 
