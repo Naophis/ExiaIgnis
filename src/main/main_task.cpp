@@ -51,24 +51,34 @@ void MainTask::load_param_after() {
   }
   planning_->bldc_.set_target_hz(target_hz);
 
-  // battery_v→{gain, max_amp, ramp_gain} LUT(可変長、system.yamlの値を
-  // そのまま使う。bldc_actuator.hppのクラスコメント参照)。ramp_gainは
-  // 起動ランプ速度(elec_hz/sec)であり、ControlLawのdutyランプ tick数にも
-  // bldc_.get_ramp_rate() 経由でそのまま共有される。
+  // battery_v→{gain, max_amp} LUT(可変長、system.yamlの値をそのまま使う。
+  // bldc_actuator.hppのクラスコメント参照)。
   planning_->bldc_.set_batt_tables(sys_.test.suction_batt_v_table,
                                     sys_.test.suction_batt_gain_table,
-                                    sys_.test.suction_batt_max_amp_table,
-                                    sys_.test.suction_batt_ramp_gain_table);
+                                    sys_.test.suction_batt_max_amp_table);
+
+  // elec_hz→ramp_gain LUT(可変長、system.yamlの値をそのまま使う)。
+  // ramp_gainは起動ランプ速度(elec_hz/sec)であり、ControlLawのduty
+  // ランプ tick数にも bldc_.get_ramp_rate() 経由でそのまま共有される。
+  planning_->bldc_.set_ramp_gain_hz_table(
+      sys_.test.suction_batt_ramp_gain_table_hz,
+      sys_.test.suction_batt_ramp_gain_table_val);
 
   printf("[param] suction_bldc_hz = %.0f (test override = %.0f)\n", target_hz,
          sys_.test.suction_bldc_hz);
   printf("[param] batt LUT(%d pts):", planning_->bldc_.get_batt_table_len());
   for (int i = 0; i < planning_->bldc_.get_batt_table_len(); i++) {
-    printf(" %.1fV(gain=%.4f,max_amp=%.3f,ramp_gain=%.0f)",
+    printf(" %.1fV(gain=%.4f,max_amp=%.3f)",
            planning_->bldc_.get_batt_v_bp(i),
            planning_->bldc_.get_batt_gain_point(i),
-           planning_->bldc_.get_batt_max_amp_point(i),
-           planning_->bldc_.get_batt_ramp_gain_point(i));
+           planning_->bldc_.get_batt_max_amp_point(i));
+  }
+  printf("\n");
+  printf("[param] ramp_gain LUT(%d pts):",
+         planning_->bldc_.get_ramp_gain_hz_table_len());
+  for (int i = 0; i < planning_->bldc_.get_ramp_gain_hz_table_len(); i++) {
+    printf(" %.0fHz(ramp_gain=%.0f)", planning_->bldc_.get_ramp_gain_hz_bp(i),
+           planning_->bldc_.get_ramp_gain_hz_point(i));
   }
   printf("\n");
 }

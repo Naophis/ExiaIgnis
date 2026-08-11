@@ -1027,18 +1027,23 @@ typedef struct {
   float suction_duty_burst = 0;
   float suction_duty_burst_low = 0;
   float suction_bldc_hz = 0;
-  // BldcActuatorのbattery_v→{gain, max_amp, ramp_gain} LUT(可変長、区分
-  // 線形補間)。amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain のV/Hz比例式に使うgain、
-  // そのクランプ上限max_amp、および起動ランプ速度(elec_hz/sec、
-  // ControlLawのデューティランプ tick 数にも兼用)ramp_gain を、いずれも
-  // バッテリー電圧ごとに個別調整する。suction_batt_v_table(電圧、昇順)・
-  // suction_batt_gain_table・suction_batt_max_amp_table・
-  // suction_batt_ramp_gain_table は同じ長さで指定すること。空(未指定)なら
+  // BldcActuatorのbattery_v→{gain, max_amp} LUT(可変長、区分線形補間)。
+  // amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain のV/Hz比例式に使うgainと、その
+  // クランプ上限max_ampを、バッテリー電圧ごとに個別調整する。
+  // suction_batt_v_table(電圧、昇順)・suction_batt_gain_table・
+  // suction_batt_max_amp_table は同じ長さで指定すること。空(未指定)なら
   // BldcActuator側のデフォルト3点のまま。
   std::vector<float> suction_batt_v_table;
   std::vector<float> suction_batt_gain_table;
   std::vector<float> suction_batt_max_amp_table;
-  std::vector<float> suction_batt_ramp_gain_table;
+  // BldcActuatorの起動ランプ速度(elec_hz/sec、ControlLawのデューティランプ
+  // tick数にも兼用)は、バッテリー電圧ではなく現在の回転数推定値(elec_hz)を
+  // X軸とするLUT(可変長、区分線形補間)から都度決める。回転数が上がるほど
+  // 脱調しやすくなるため、hzに応じてランプ速度を徐々に減衰させる用途。
+  // suction_batt_ramp_gain_table_hz(elec_hz、昇順)・
+  // suction_batt_ramp_gain_table_val は同じ長さで指定すること。
+  std::vector<float> suction_batt_ramp_gain_table_hz;
+  std::vector<float> suction_batt_ramp_gain_table_val;
   float sla_dist = 0;
   int file_idx = 0;
   int sla_type = 0;

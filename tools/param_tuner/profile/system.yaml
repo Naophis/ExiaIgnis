@@ -128,21 +128,21 @@ test: # テスト走行時に使用するパラメータ群
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
 
-  suction_bldc_hz: 2600
-  # バッテリー電圧→{gain, max_amp, ramp_gain} LUT(区分線形補間、可変長。
-  # 4配列とも同じ長さ・昇順で指定すること)。amp = AMP_BASE*(hz/AMP_BASE_HZ)
-  # *gain のV/Hz比例式に使うgainと、そのクランプ上限max_amp(0.48は未検証域
-  # で脱調した。実機検証済みの0.35が安全)、および起動ランプ速度
-  # ramp_gain(elec_hz/sec。ControlLawのdutyランプ速度にも兼用)を、いずれも
-  # バッテリー電圧ごとに個別調整する(点を増やしたい場合はここに追加すれば
-  # よい)。ramp_gainは旧suction_gain(全電圧共通3000)を暫定的にそのまま
-  # 3点へ複製しただけなので、電圧ごとの脱調有無を見ながら要調整。
+  suction_bldc_hz: 9200
+  # バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長。3配列とも同じ
+  # 長さ・昇順で指定すること)。amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain の
+  # V/Hz比例式に使うgainと、そのクランプ上限max_amp(0.48は未検証域で脱調
+  # した。実機検証済みの0.35が安全)を、バッテリー電圧ごとに個別調整する
+  # (点を増やしたい場合はここに追加すればよい)。
   suction_batt_v_table:      [11.1,   12.0,   12.6   ]
   suction_batt_gain_table:   [0.120,  0.120,  0.1175]
   suction_batt_max_amp_table: [0.35,   0.34,   0.34   ]
-  suction_batt_ramp_gain_table: [3000,   3000,   3000   ]
-  suction_batt_ramp_gain_table_hz: [1600,   2500  , 3000 ]
-  suction_batt_ramp_gain_table_val: [5000,   4250,   4000   ]
+  # 起動ランプ速度(elec_hz/sec。ControlLawのdutyランプ速度にも兼用)は、
+  # バッテリー電圧ではなく現在の回転数推定値(elec_hz)→ramp_gainのLUT
+  # (区分線形補間、可変長・昇順)から都度決める。回転数が上がるほど脱調
+  # しやすくなるため、hzに応じてランプ速度を徐々に減衰させる。
+  suction_batt_ramp_gain_table_hz:  [1600,   2500,   3000, 4000, 5000 , 7000  , 8000  , 9000   ]
+  suction_batt_ramp_gain_table_val: [4500,   4250,   4000, 3750, 3500, 3500, 3500, 3000   ]
   # suction_duty: 3.25
   file_idx: 4
   sla_dist: 90

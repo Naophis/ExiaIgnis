@@ -43,13 +43,21 @@
 // battery_v共通)を区分線形補間して都度求める。満充電(12.6V)と使用後
 // (11V台)とでは実電圧が10%以上変わり、同じgain/max_ampのままだと同期を
 // 保つトルク角のマージンが変動して脱調しやすくなるため、実測でバッテリー
-// 電圧ごとに個別調整できるようにしている。起動ランプ速度(ramp_hz_per_sec_,
-// elec_hz/sec)も同じ理由で脱調しやすさが電圧に依存するため、同一のX軸
-// (battery_v)上のLUTとして扱う。X軸(電圧)・Y軸(gain/max_amp/ramp_gain)は
+// 電圧ごとに個別調整できるようにしている。X軸(電圧)・Y軸(gain/max_amp)は
 // sys_.test.suction_batt_v_table / suction_batt_gain_table /
-// suction_batt_max_amp_table / suction_batt_ramp_gain_table (system.yaml)
-// をそのまま保持する。電圧側は昇順、4配列は同じ長さで指定すること
-// (config_mapping.hpp参照。長さが合わない場合の後始末はしない)。
+// suction_batt_max_amp_table (system.yaml) をそのまま保持する。電圧側は
+// 昇順、3配列は同じ長さで指定すること(config_mapping.hpp参照。長さが
+// 合わない場合の後始末はしない)。
+//
+// 起動ランプ速度(ramp_hz_per_sec_, elec_hz/sec)は電圧ではなく、現在の
+// 回転数推定値(elec_hz_)をX軸とする別のLUT(elec_hz→ramp_gain)を区分線形
+// 補間して都度求める。回転数が上がるほど同期を保つトルク角のマージンが
+// 減り脱調しやすくなるため、hzが上がるにつれてランプ速度を徐々に減衰
+// させる用途(以前はbattery_v軸のLUTだったが、電圧よりも回転数そのものの
+// 方が脱調しやすさと直接相関するため乗り換えた)。X軸(elec_hz)・
+// Y軸(ramp_gain)は sys_.test.suction_batt_ramp_gain_table_hz /
+// suction_batt_ramp_gain_table_val (system.yaml) をそのまま保持する。
+// elec_hz側は昇順、2配列は同じ長さで指定すること。
 //
 // GPIO8=SUCTION_EN / GPIO9(PWM4B)=U相 / GPIO10(PWM5A)=V相 / GPIO11(PWM5B)=W相
 class BldcActuator {
@@ -64,27 +72,36 @@ public:
   void set_direction(bool reverse) { reverse_ = reverse; }
   void set_min_amplitude(float v)  { (void)v; }
   void set_target_hz(float hz)          { target_elec_hz_  = hz; }
-  // battery_v→{gain, max_amp, ramp_gain} LUTを丸ごと差し替える(区分線形
-  // 補間、電圧は昇順で渡すこと)。v_bpが空なら何もしない。max_ampは
-  // 0.5=100%duty(片側が完全に0または1に張り付く)に対する安全マージンとして
-  // [0.10, 0.48]に、ramp_gain(elec_hz/sec)はゼロ割/暴走防止として
-  // [50, 20000]に、それぞれ各要素クランプする(configの誤入力対策)。
+  // battery_v→{gain, max_amp} LUTを丸ごと差し替える(区分線形補間、電圧は
+  // 昇順で渡すこと)。v_bpが空なら何もしない。max_ampは0.5=100%duty(片側が
+  // 完全に0または1に張り付く)に対する安全マージンとして[0.10, 0.48]に
+  // 各要素クランプする(configの誤入力対策)。
   void set_batt_tables(std::vector<float> v_bp, std::vector<float> gain,
-                        std::vector<float> max_amp,
-                        std::vector<float> ramp_gain) {
+                        std::vector<float> max_amp) {
     if (v_bp.empty()) return;
     for (float &v : max_amp) v = v < 0.10f ? 0.10f : (v > 0.48f ? 0.48f : v);
-    for (float &v : ramp_gain) v = v < 50.0f ? 50.0f : (v > 20000.0f ? 20000.0f : v);
     batt_v_bp_ = std::move(v_bp);
     batt_gain_table_ = std::move(gain);
     batt_max_amp_table_ = std::move(max_amp);
-    batt_ramp_gain_table_ = std::move(ramp_gain);
   }
   int   get_batt_table_len()      const { return (int)batt_v_bp_.size(); }
   float get_batt_v_bp(int idx)    const { return batt_v_bp_[idx]; }
   float get_batt_gain_point(int idx) const { return batt_gain_table_[idx]; }
   float get_batt_max_amp_point(int idx) const { return batt_max_amp_table_[idx]; }
-  float get_batt_ramp_gain_point(int idx) const { return batt_ramp_gain_table_[idx]; }
+
+  // elec_hz→ramp_gain LUTを丸ごと差し替える(区分線形補間、hzは昇順で
+  // 渡すこと)。hz_bpが空なら何もしない。ramp_gain(elec_hz/sec)はゼロ割/
+  // 暴走防止として[50, 20000]に各要素クランプする(configの誤入力対策)。
+  void set_ramp_gain_hz_table(std::vector<float> hz_bp,
+                               std::vector<float> ramp_gain) {
+    if (hz_bp.empty()) return;
+    for (float &v : ramp_gain) v = v < 50.0f ? 50.0f : (v > 20000.0f ? 20000.0f : v);
+    ramp_gain_hz_bp_ = std::move(hz_bp);
+    ramp_gain_by_hz_table_ = std::move(ramp_gain);
+  }
+  int   get_ramp_gain_hz_table_len()   const { return (int)ramp_gain_hz_bp_.size(); }
+  float get_ramp_gain_hz_bp(int idx)   const { return ramp_gain_hz_bp_[idx]; }
+  float get_ramp_gain_hz_point(int idx) const { return ramp_gain_by_hz_table_[idx]; }
   void test_direct(float amplitude_pct);
 
   // PlanningTask::timer_irq_handler() (core1, TIMER0 alarm, 1kHz) から
@@ -118,7 +135,7 @@ private:
   void start_dma_ramp();
   void update_running(float hz);
   float compensated_amp(float hz) const;
-  float compensated_ramp_rate() const;
+  float compensated_ramp_rate(float hz) const;
   void recompute_tables(float amp);
   void set_pacing_freq(float sector_hz);
   void write_direct(uint8_t sector, float amp);
@@ -161,15 +178,19 @@ private:
   bool     enabled_        = false;
   bool     reverse_        = true;
 
-  // バッテリー電圧→{gain, max_amp, ramp_gain} LUT(区分線形補間、可変長)。
-  // X/Yとも set_batt_tables() で丸ごと差し替え可能(上記クラスコメント参照)。
+  // バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長)。X/Yとも
+  // set_batt_tables() で丸ごと差し替え可能(上記クラスコメント参照)。
   // デフォルトは11.1V基準gain=0.1195を(11.1/battery_v)で比例配分した3点、
-  // max_ampは旧固定値0.35のまま、ramp_gainも旧固定値2000のまま(いずれも
-  // 電圧に依らずフラット)。
+  // max_ampは旧固定値0.35のまま(電圧に依らずフラット)。
   std::vector<float> batt_v_bp_          = {9.9f, 11.1f, 12.6f};
   std::vector<float> batt_gain_table_    = {0.1340f, 0.1195f, 0.1053f};
   std::vector<float> batt_max_amp_table_ = {0.35f, 0.35f, 0.35f};
-  std::vector<float> batt_ramp_gain_table_ = {2000.0f, 2000.0f, 2000.0f};
+
+  // elec_hz→ramp_gain LUT(区分線形補間、可変長)。X/Yとも
+  // set_ramp_gain_hz_table() で丸ごと差し替え可能(上記クラスコメント参照)。
+  // デフォルトは旧固定値2000のまま、0〜16000Hzでフラット。
+  std::vector<float> ramp_gain_hz_bp_        = {0.0f, 8000.0f, 16000.0f};
+  std::vector<float> ramp_gain_by_hz_table_  = {2000.0f, 2000.0f, 2000.0f};
 
   // battery_v_ はtick()毎にse->ego.battery_lpで更新される。起動直後で
   // まだセンシング値が来ていない場合は11.1V相当(=無補正)にフォールバック。

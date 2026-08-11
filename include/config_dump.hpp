@@ -526,8 +526,12 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
         for (float v : src.suction_batt_max_amp_table) a.add(v);
     }
     {
-        JsonArray a = dst["suction_batt_ramp_gain_table"].to<JsonArray>();
-        for (float v : src.suction_batt_ramp_gain_table) a.add(v);
+        JsonArray a = dst["suction_batt_ramp_gain_table_hz"].to<JsonArray>();
+        for (float v : src.suction_batt_ramp_gain_table_hz) a.add(v);
+    }
+    {
+        JsonArray a = dst["suction_batt_ramp_gain_table_val"].to<JsonArray>();
+        for (float v : src.suction_batt_ramp_gain_table_val) a.add(v);
     }
     dst["sla_dist"]            = src.sla_dist;
     dst["file_idx"]            = src.file_idx;
