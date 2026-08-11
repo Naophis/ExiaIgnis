@@ -214,6 +214,13 @@ float BldcActuator::compensated_amp(float hz) const {
   return a < AMP_BASE ? AMP_BASE : (a > max_amp ? max_amp : a);
 }
 
+// 起動ランプ速度(elec_hz/sec)を battery_v→ramp_gain LUT から区分線形補間で
+// 求める(compensated_amp()と同じX軸battery_v_を使う)。
+float BldcActuator::compensated_ramp_rate() const {
+  const int n = (int)batt_v_bp_.size();
+  return interp(batt_v_bp_.data(), batt_ramp_gain_table_.data(), n, battery_v_);
+}
+
 void BldcActuator::recompute_tables(float amp) {
   const float wu1 = (float)(wrap_ + 1u);
   for (int s = 0; s < 6; s++) {
@@ -268,6 +275,7 @@ void BldcActuator::write_direct_raw(float du, float dv, float dw) {
 void BldcActuator::tick(float battery_v) {
   constexpr float dt = 1.0f / (float)PLANNING_HZ;
   battery_v_ = battery_v;
+  ramp_hz_per_sec_ = compensated_ramp_rate();
 
   switch (state_) {
   case State::STOP:
@@ -350,7 +358,8 @@ void BldcActuator::enable() {
   trace_idx_     = 0;
   trace_full_    = false;
   trace_div_cnt_ = 0u;
-  // batt_v_bp_/batt_gain_table_/batt_max_amp_table_はここでリセットしない。
+  // batt_v_bp_/batt_gain_table_/batt_max_amp_table_/batt_ramp_gain_table_は
+  // ここでリセットしない。
   // load_param_after()での外部設定(sys_.test.suction_batt_*_table等)を
   // enable()/disable() を跨いで保持するため(以前はここで固定値に毎回
   // 巻き戻していたのが、外部設定を無効化してしまう原因になっていた)。

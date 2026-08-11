@@ -43,11 +43,13 @@
 // battery_v共通)を区分線形補間して都度求める。満充電(12.6V)と使用後
 // (11V台)とでは実電圧が10%以上変わり、同じgain/max_ampのままだと同期を
 // 保つトルク角のマージンが変動して脱調しやすくなるため、実測でバッテリー
-// 電圧ごとに個別調整できるようにしている。X軸(電圧)・Y軸(gain/max_amp)は
+// 電圧ごとに個別調整できるようにしている。起動ランプ速度(ramp_hz_per_sec_,
+// elec_hz/sec)も同じ理由で脱調しやすさが電圧に依存するため、同一のX軸
+// (battery_v)上のLUTとして扱う。X軸(電圧)・Y軸(gain/max_amp/ramp_gain)は
 // sys_.test.suction_batt_v_table / suction_batt_gain_table /
-// suction_batt_max_amp_table (system.yaml) をそのまま保持する。電圧側は
-// 昇順、3配列は同じ長さで指定すること(config_mapping.hpp参照。長さが
-// 合わない場合の後始末はしない)。
+// suction_batt_max_amp_table / suction_batt_ramp_gain_table (system.yaml)
+// をそのまま保持する。電圧側は昇順、4配列は同じ長さで指定すること
+// (config_mapping.hpp参照。長さが合わない場合の後始末はしない)。
 //
 // GPIO8=SUCTION_EN / GPIO9(PWM4B)=U相 / GPIO10(PWM5A)=V相 / GPIO11(PWM5B)=W相
 class BldcActuator {
@@ -61,24 +63,28 @@ public:
   void disable();
   void set_direction(bool reverse) { reverse_ = reverse; }
   void set_min_amplitude(float v)  { (void)v; }
-  void set_ramp_rate(float hz_per_sec)  { ramp_hz_per_sec_ = hz_per_sec; }
   void set_target_hz(float hz)          { target_elec_hz_  = hz; }
-  // battery_v→{gain, max_amp} LUTを丸ごと差し替える(区分線形補間、電圧は
-  // 昇順で渡すこと)。v_bpが空なら何もしない。max_ampは0.5=100%duty(片側が
-  // 完全に0または1に張り付く)に対する安全マージンとして[0.10, 0.48]に
-  // 各要素クランプする(configの誤入力対策)。
+  // battery_v→{gain, max_amp, ramp_gain} LUTを丸ごと差し替える(区分線形
+  // 補間、電圧は昇順で渡すこと)。v_bpが空なら何もしない。max_ampは
+  // 0.5=100%duty(片側が完全に0または1に張り付く)に対する安全マージンとして
+  // [0.10, 0.48]に、ramp_gain(elec_hz/sec)はゼロ割/暴走防止として
+  // [50, 20000]に、それぞれ各要素クランプする(configの誤入力対策)。
   void set_batt_tables(std::vector<float> v_bp, std::vector<float> gain,
-                        std::vector<float> max_amp) {
+                        std::vector<float> max_amp,
+                        std::vector<float> ramp_gain) {
     if (v_bp.empty()) return;
     for (float &v : max_amp) v = v < 0.10f ? 0.10f : (v > 0.48f ? 0.48f : v);
+    for (float &v : ramp_gain) v = v < 50.0f ? 50.0f : (v > 20000.0f ? 20000.0f : v);
     batt_v_bp_ = std::move(v_bp);
     batt_gain_table_ = std::move(gain);
     batt_max_amp_table_ = std::move(max_amp);
+    batt_ramp_gain_table_ = std::move(ramp_gain);
   }
   int   get_batt_table_len()      const { return (int)batt_v_bp_.size(); }
   float get_batt_v_bp(int idx)    const { return batt_v_bp_[idx]; }
   float get_batt_gain_point(int idx) const { return batt_gain_table_[idx]; }
   float get_batt_max_amp_point(int idx) const { return batt_max_amp_table_[idx]; }
+  float get_batt_ramp_gain_point(int idx) const { return batt_ramp_gain_table_[idx]; }
   void test_direct(float amplitude_pct);
 
   // PlanningTask::timer_irq_handler() (core1, TIMER0 alarm, 1kHz) から
@@ -112,6 +118,7 @@ private:
   void start_dma_ramp();
   void update_running(float hz);
   float compensated_amp(float hz) const;
+  float compensated_ramp_rate() const;
   void recompute_tables(float amp);
   void set_pacing_freq(float sector_hz);
   void write_direct(uint8_t sector, float amp);
@@ -146,19 +153,23 @@ private:
   volatile State    state_           = State::STOP;
   volatile float    elec_hz_         = 0.0f;
   volatile uint32_t state_cnt_       = 0u;
+  // tick()毎にcompensated_ramp_rate()でbattery_v_から再計算されるキャッシュ
+  // (get_ramp_rate()診断用も兼ねる)。初期値は最初のtick()までのフォールバック。
   volatile float    ramp_hz_per_sec_ = 2000.0f;
 
   float    target_elec_hz_ = 6000.0f;
   bool     enabled_        = false;
   bool     reverse_        = true;
 
-  // バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長)。X/Yとも
-  // set_batt_tables() で丸ごと差し替え可能(上記クラスコメント参照)。
+  // バッテリー電圧→{gain, max_amp, ramp_gain} LUT(区分線形補間、可変長)。
+  // X/Yとも set_batt_tables() で丸ごと差し替え可能(上記クラスコメント参照)。
   // デフォルトは11.1V基準gain=0.1195を(11.1/battery_v)で比例配分した3点、
-  // max_ampは旧固定値0.35のまま(電圧に依らずフラット)。
+  // max_ampは旧固定値0.35のまま、ramp_gainも旧固定値2000のまま(いずれも
+  // 電圧に依らずフラット)。
   std::vector<float> batt_v_bp_          = {9.9f, 11.1f, 12.6f};
   std::vector<float> batt_gain_table_    = {0.1340f, 0.1195f, 0.1053f};
   std::vector<float> batt_max_amp_table_ = {0.35f, 0.35f, 0.35f};
+  std::vector<float> batt_ramp_gain_table_ = {2000.0f, 2000.0f, 2000.0f};
 
   // battery_v_ はtick()毎にse->ego.battery_lpで更新される。起動直後で
   // まだセンシング値が来ていない場合は11.1V相当(=無補正)にフォールバック。

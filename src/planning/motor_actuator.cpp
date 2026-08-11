@@ -27,19 +27,30 @@ void MotorActuator::init() {
 }
 
 void MotorActuator::apply(float duty_l, float duty_r) {
-  auto set_drive = [&](uint slice, float duty) {
+  auto set_drive_l = [&](uint slice, float duty) {
     uint16_t level = (uint16_t)((float)(motor_wrap_ + 1u) * std::fabs(duty) / 100.0f);
     if (duty >= 0.0f) {
-      pwm_set_chan_level(slice, PWM_CHAN_A, level);
-      pwm_set_chan_level(slice, PWM_CHAN_B, 0);
-    } else {
       pwm_set_chan_level(slice, PWM_CHAN_A, 0);
       pwm_set_chan_level(slice, PWM_CHAN_B, level);
+    } else {
+      pwm_set_chan_level(slice, PWM_CHAN_A, level);
+      pwm_set_chan_level(slice, PWM_CHAN_B, 0);
     }
   };
 
-  set_drive(slice_L_, duty_l);
-  set_drive(slice_R_, duty_r);
+    auto set_drive_r = [&](uint slice, float duty) {
+    uint16_t level = (uint16_t)((float)(motor_wrap_ + 1u) * std::fabs(duty) / 100.0f);
+    if (duty >= 0.0f) {
+      pwm_set_chan_level(slice, PWM_CHAN_A, 0);
+      pwm_set_chan_level(slice, PWM_CHAN_B, level);
+    } else {
+      pwm_set_chan_level(slice, PWM_CHAN_A, level);
+      pwm_set_chan_level(slice, PWM_CHAN_B, 0);
+    }
+  };
+
+  set_drive_l(slice_L_, duty_l);
+  set_drive_r(slice_R_, duty_r);
 }
 
 void MotorActuator::motor_enable() {

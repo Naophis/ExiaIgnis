@@ -33,7 +33,6 @@ public:
     tgt_duty.duty_suction     = duty;
     tgt_duty.duty_suction_low = duty_low;
   }
-  void set_suction_gain(float gain) { suction_gain = gain; }
 
   // ---- 公開データ ----
   std::shared_ptr<pid_error_entity_t> ee;
@@ -62,7 +61,9 @@ private:
   Simple_PID_Controller gyro_pid;
 
   // ---- 吸引制御 ----
-  float  suction_gain = 200.0f;
+  // duty ランプの目標速度(elec_hz/sec相当のticks)は BldcActuator の
+  // battery_v→ramp_gain LUT (get_ramp_rate()) をそのまま共有する
+  // (両者はもともと同じ sys_.test.suction_gain 値を使っていたため)。
   float  gain_cnt     = 0.0f;
   duty_t tgt_duty{};
 

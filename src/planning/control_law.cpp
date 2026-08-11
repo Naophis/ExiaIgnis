@@ -1287,6 +1287,7 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
     if (duty_suction_in > 100.0f)
       duty_suction_in = 100.0f;
 
+    const float suction_gain = bldc_->get_ramp_rate();
     gain_cnt += 1.0f;
     if (gain_cnt > suction_gain)
       gain_cnt = suction_gain;

@@ -513,7 +513,6 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["suction_duty_burst"]  = src.suction_duty_burst;
     dst["suction_duty_burst_low"] = src.suction_duty_burst_low;
     dst["suction_bldc_hz"]     = src.suction_bldc_hz;
-    dst["suction_gain"]        = src.suction_gain;
     {
         JsonArray a = dst["suction_batt_v_table"].to<JsonArray>();
         for (float v : src.suction_batt_v_table) a.add(v);
@@ -525,6 +524,10 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     {
         JsonArray a = dst["suction_batt_max_amp_table"].to<JsonArray>();
         for (float v : src.suction_batt_max_amp_table) a.add(v);
+    }
+    {
+        JsonArray a = dst["suction_batt_ramp_gain_table"].to<JsonArray>();
+        for (float v : src.suction_batt_ramp_gain_table) a.add(v);
     }
     dst["sla_dist"]            = src.sla_dist;
     dst["file_idx"]            = src.file_idx;

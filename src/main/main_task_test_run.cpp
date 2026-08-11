@@ -12,14 +12,16 @@ void MainTask::test_run() {
   reset_ego_data();
   planning_->motor_enable();
 
+  // float time = sys_.test.suction_bldc_hz /
+  //              sys_.test.suction_batt_ramp_gain_table[0] * 1000;
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    sleep_ms(500);
+    sleep_ms(3200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    sleep_ms(500);
+    sleep_ms(3200);
   }
   if (param_->test_log_enable > 0) {
     lt_->start();
