@@ -141,8 +141,8 @@ test: # テスト走行時に使用するパラメータ群
   # バッテリー電圧ではなく現在の回転数推定値(elec_hz)→ramp_gainのLUT
   # (区分線形補間、可変長・昇順)から都度決める。回転数が上がるほど脱調
   # しやすくなるため、hzに応じてランプ速度を徐々に減衰させる。
-  suction_batt_ramp_gain_table_hz:  [1600,   2500,   3000, 4000, 5000 , 7000  , 8000  , 9000   ]
-  suction_batt_ramp_gain_table_val: [4500,   4250,   4000, 3750, 3500, 3500, 3500, 3000   ]
+  suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
+  suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4500, 4500, 4000, 3750, 3000   ]
   # suction_duty: 3.25
   file_idx: 4
   sla_dist: 90

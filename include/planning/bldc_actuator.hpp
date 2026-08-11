@@ -176,7 +176,7 @@ private:
 
   float    target_elec_hz_ = 6000.0f;
   bool     enabled_        = false;
-  bool     reverse_        = true;
+  bool     reverse_        = false;
 
   // バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長)。X/Yとも
   // set_batt_tables() で丸ごと差し替え可能(上記クラスコメント参照)。
