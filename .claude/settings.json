@@ -90,7 +90,27 @@
       "Bash(/home/naoto/.pico-sdk/tools/2.2.0/pioasm/pioasm -o c-sdk bldc_6step.pio -)",
       "Bash(mkdir -p /home/naoto/Desktop/mouse/ExiaIgnis/sample/bldc_pio)",
       "Bash(/home/naoto/.pico-sdk/tools/2.2.0/pioasm/pioasm -o c-sdk /home/naoto/Desktop/mouse/ExiaIgnis/sample/bldc_pio/bldc_6step.pio -)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(python3 -c \"import tkinter\")",
+      "Bash(echo \"exit:$?\")",
+      "Bash(pip3 --version)",
+      "Bash(pip3 install *)",
+      "Bash(apt list *)",
+      "Bash(python3 -c \"import numpy; print\\('numpy ok', numpy.__version__\\)\")",
+      "Bash(python3 -c \"import matplotlib; print\\('matplotlib ok', matplotlib.__version__\\)\")",
+      "Bash(python3 -c \"import pandas\")",
+      "Bash(apt-cache policy *)",
+      "Bash(dpkg -l)",
+      "Bash(python3 plot_gui.py)",
+      "Bash(git -C /home/naoto/Desktop/mouse/ExiaIgnis diff --stat)",
+      "Bash(git -C /home/naoto/Desktop/mouse/ExiaIgnis diff -- plot_gui.py)",
+      "Bash(git -C /home/naoto/Desktop/mouse/ExiaIgnis diff -- .claude/settings.json)",
+      "Bash(xrandr --query)",
+      "Bash(gsettings get *)",
+      "Bash(xdpyinfo)",
+      "Bash(git -C /home/naoto/Desktop/mouse/ExiaIgnis diff -- plot_gui.py README.md)",
+      "Bash(python3 -)",
+      "Bash(pkill -f plotjuggler)"
     ],
     "additionalDirectories": [
       "/home/naoto/Desktop/mouse/ExiaIgnis/sample"

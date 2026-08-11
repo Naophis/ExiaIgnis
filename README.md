@@ -63,6 +63,35 @@ stdio は USB CDC のみ（UART 無効）。
 
 ---
 
+## ログ可視化 (`plot_gui.py`)
+
+`tools/param_tuner/logs/` 配下の走行ログ CSV を選択し、位置・センサー軌跡を GUI 表示するツールです。
+
+### 前提（Ubuntu 24.04）
+
+```bash
+sudo apt install python3-pandas
+```
+
+`numpy` / `matplotlib` / `tkinter` は他パッケージの依存関係として apt で自動導入済みのことが多いため、
+起動時に `ModuleNotFoundError` が出た場合は該当パッケージ（`python3-numpy` / `python3-matplotlib` / `python3-tk`）も
+同様に `apt install` してください。Ubuntu 24.04 以降は PEP 668 により `pip install` がシステム全体には行えないため、
+`pip` ではなく `apt` でのインストールを推奨します。
+
+### 起動
+
+```bash
+python3 plot_gui.py
+```
+
+PlotJuggler 連携（`Open PlotJuggler` ボタン）には `plotjuggler` コマンドが PATH 上に必要です:
+
+```bash
+sudo snap install plotjuggler
+```
+
+---
+
 ## アーキテクチャ概要
 
 ### マルチコア構成

@@ -3,18 +3,25 @@ from tkinter import ttk
 import os
 import subprocess
 import glob
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.cm import get_cmap
 from matplotlib.ticker import MultipleLocator
 
 class PlotGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("PlotJuggler GUI")
-        self.root.geometry("1000x600")
+        # geometry() is in raw pixels and ignores GNOME's fractional display
+        # scaling, so a fixed "1000x600" renders tiny on HiDPI monitors.
+        # Scale the default size using Tk's own DPI reading instead.
+        dpi_scale = self.root.winfo_fpixels('1i') / 96.0
+        win_w = min(int(1400 * dpi_scale), 1900)
+        win_h = min(int(900 * dpi_scale), 1200)
+        self.root.geometry(f"{win_w}x{win_h}")
+        self.root.minsize(800, 500)
         self.last_file_state = {}
         
         # Store current data for click events
@@ -116,7 +123,6 @@ class PlotGUI:
             for f in files:
                 filename = os.path.basename(f)
                 mod_time = os.path.getmtime(f)
-                from datetime import datetime
                 date_str = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M')
                 self.tree.insert("", tk.END, values=(filename, date_str))
             
@@ -146,6 +152,41 @@ class PlotGUI:
         filename = self.tree.item(selected_item)['values'][0]
         file_path = os.path.join(self.log_dir, filename)
         self.plot_file(file_path)
+
+    def _plot_wall_sensor(self, ax, group, color, column, show, side_sign, marker,
+                           sen_min, sen_max, sensor_x_offset, sensor_angle_rad):
+        """Plot detected wall points for one 45deg sensor (left45_d/right45_d).
+
+        Sensor is mounted `sensor_x_offset` mm forward, at `sensor_angle_rad`.
+        side_sign flips the perpendicular offset direction: +1 = left, -1 = right.
+        """
+        if not show or column not in group.columns or 'angle_corrected' not in group.columns:
+            return
+
+        sensor_d = group[column].to_numpy()
+        angle = group['angle_corrected'].to_numpy()
+        x = group['x'].to_numpy()
+        y = group['y'].to_numpy()
+
+        valid_mask = (sensor_d >= sen_min) & (sensor_d < sen_max)
+        if not np.any(valid_mask):
+            return
+
+        # y / x = tan(sensor_angle), so x = y / tan(sensor_angle)
+        sensor_y = sensor_d[valid_mask]  # perpendicular distance to wall
+        sensor_x = sensor_y / np.tan(sensor_angle_rad)  # forward distance from sensor mount
+
+        sensor_mount_x = x[valid_mask] + sensor_x_offset * np.cos(angle[valid_mask])
+        sensor_mount_y = y[valid_mask] + sensor_x_offset * np.sin(angle[valid_mask])
+
+        # Wall position in robot frame (forward by sensor_x, side by sensor_y), transformed to global frame
+        wall_x = (sensor_mount_x + sensor_x * np.cos(angle[valid_mask])
+                  - side_sign * sensor_y * np.sin(angle[valid_mask]) + 45 - 9)
+        wall_y = (sensor_mount_y + sensor_x * np.sin(angle[valid_mask])
+                  + side_sign * sensor_y * np.cos(angle[valid_mask]))
+
+        ax.plot(wall_x, wall_y, marker, markersize=6, color=color, alpha=0.6,
+                 markeredgecolor='white', markeredgewidth=0.5)
 
     def plot_file(self, file_path):
         self.figure.clear()
@@ -222,7 +263,7 @@ class PlotGUI:
                         
                         unique_states = filtered_data['timestamp'].unique()
                         num_states = len(unique_states)
-                        cmap = get_cmap('viridis', num_states) if num_states > 0 else 'viridis'
+                        cmap = plt.get_cmap('viridis').resampled(num_states) if num_states > 0 else plt.get_cmap('viridis')
 
                         for i, (state, group) in enumerate(filtered_data.groupby('timestamp')):
                             pos_x = group['x'] + 45 - 9
@@ -230,67 +271,15 @@ class PlotGUI:
                             color = cmap(i / num_states) if num_states > 0 else 'cyan'
                             ax.plot(pos_x.to_numpy(), pos_y.to_numpy(), ".", markersize=4, color=color, label=f'State {state}')
                             
-                            # Plot left45_d sensor positions if available and enabled
-                            if self.show_left45_var.get() and 'left45_d' in group.columns and 'angle_corrected' in group.columns:
-                                left45_d = group['left45_d'].to_numpy()
-                                angle = group['angle_corrected'].to_numpy()
-                                x = group['x'].to_numpy()
-                                y = group['y'].to_numpy()
-
-                                # Filter: only plot when left45_d is between sen_min and sen_max
-                                valid_mask = (left45_d >= sen_min) & (left45_d < sen_max)
-
-                                if np.any(valid_mask):
-                                    # Calculate left45_d sensor coordinates
-                                    # Sensor is mounted at 29.7mm forward, at 58deg angle
-                                    # y / x = tan(58deg), so x = y / tan(58deg)
-                                    sensor_y = left45_d[valid_mask]  # perpendicular distance to wall
-                                    sensor_x = sensor_y / np.tan(sensor_angle_rad)  # forward distance from sensor mount
-
-                                    # Sensor mount position (29.7mm forward from robot center)
-                                    sensor_mount_x = x[valid_mask] + sensor_x_offset * np.cos(angle[valid_mask])
-                                    sensor_mount_y = y[valid_mask] + sensor_x_offset * np.sin(angle[valid_mask])
-
-                                    # Wall position in robot frame: forward by sensor_x, left by sensor_y
-                                    # Transform to global frame
-                                    left45_d_x = sensor_mount_x + sensor_x * np.cos(angle[valid_mask]) - sensor_y * np.sin(angle[valid_mask]) + 45 - 9
-                                    left45_d_y = sensor_mount_y + sensor_x * np.sin(angle[valid_mask]) + sensor_y * np.cos(angle[valid_mask])
-
-                                    # Plot sensor positions with different marker
-                                    ax.plot(left45_d_x, left45_d_y, "o", markersize=6,
-                                           color=color, alpha=0.6, markeredgecolor='white',
-                                           markeredgewidth=0.5)
-                            
-                            # Plot right45_d sensor positions if available and enabled
-                            if self.show_right45_var.get() and 'right45_d' in group.columns and 'angle_corrected' in group.columns:
-                                right45_d = group['right45_d'].to_numpy()
-                                angle = group['angle_corrected'].to_numpy()
-                                x = group['x'].to_numpy()
-                                y = group['y'].to_numpy()
-
-                                # Filter: only plot when right45_d is between sen_min and sen_max
-                                valid_mask = (right45_d >= sen_min) & (right45_d < sen_max)
-
-                                if np.any(valid_mask):
-                                    # Calculate right45_d sensor coordinates
-                                    # Sensor is mounted at 29.7mm forward, at 58deg angle
-                                    # y / x = tan(58deg), so x = y / tan(58deg)
-                                    sensor_y = right45_d[valid_mask]  # perpendicular distance to wall
-                                    sensor_x = sensor_y / np.tan(sensor_angle_rad)  # forward distance from sensor mount
-
-                                    # Sensor mount position (29.7mm forward from robot center)
-                                    sensor_mount_x = x[valid_mask] + sensor_x_offset * np.cos(angle[valid_mask])
-                                    sensor_mount_y = y[valid_mask] + sensor_x_offset * np.sin(angle[valid_mask])
-
-                                    # Wall position in robot frame: forward by sensor_x, right by sensor_y (negative y)
-                                    # Transform to global frame
-                                    right45_d_x = sensor_mount_x + sensor_x * np.cos(angle[valid_mask]) + sensor_y * np.sin(angle[valid_mask]) + 45 - 9
-                                    right45_d_y = sensor_mount_y + sensor_x * np.sin(angle[valid_mask]) - sensor_y * np.cos(angle[valid_mask])
-
-                                    # Plot sensor positions with different marker (square for right sensor)
-                                    ax.plot(right45_d_x, right45_d_y, "s", markersize=6,
-                                           color=color, alpha=0.6, markeredgecolor='white',
-                                           markeredgewidth=0.5)
+                            # Plot left45_d / right45_d sensor positions if available and enabled
+                            self._plot_wall_sensor(
+                                ax, group, color, column='left45_d', show=self.show_left45_var.get(),
+                                side_sign=1, marker='o', sen_min=sen_min, sen_max=sen_max,
+                                sensor_x_offset=sensor_x_offset, sensor_angle_rad=sensor_angle_rad)
+                            self._plot_wall_sensor(
+                                ax, group, color, column='right45_d', show=self.show_right45_var.get(),
+                                side_sign=-1, marker='s', sen_min=sen_min, sen_max=sen_max,
+                                sensor_x_offset=sensor_x_offset, sensor_angle_rad=sensor_angle_rad)
                     
                     ax.set_title('Position Plot (with Left45 & Right45 Sensors)', color='white')
                     ax.set_xlabel('x', color='white')
@@ -399,11 +388,10 @@ class PlotGUI:
         file_path = os.path.join(self.log_dir, filename)
         
         cmd = [
-            "ros2", "run", "plotjuggler", "plotjuggler",
+            "plotjuggler",
             "-d", file_path,
             "-l", self.profile_path
         ]
-        self.status_label.config(text=f"Opening {filename} in PlotJuggler...")
         self.status_label.config(text=f"Opening {filename} in PlotJuggler...")
         try:
             if self.show_output_var.get():
