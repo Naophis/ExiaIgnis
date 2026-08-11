@@ -110,7 +110,11 @@
       "Bash(xdpyinfo)",
       "Bash(git -C /home/naoto/Desktop/mouse/ExiaIgnis diff -- plot_gui.py README.md)",
       "Bash(python3 -)",
-      "Bash(pkill -f plotjuggler)"
+      "Bash(pkill -f plotjuggler)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('plot_gui.py'\\).read\\(\\)\\); print\\('syntax ok'\\)\")",
+      "Bash(timeout 4 python3 plot_gui.py)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('/home/naoto/Desktop/mouse/ExiaIgnis/plot_gui.py'\\).read\\(\\)\\); print\\('syntax ok'\\)\")",
+      "Bash(timeout 4 python3 /home/naoto/Desktop/mouse/ExiaIgnis/plot_gui.py)"
     ],
     "additionalDirectories": [
       "/home/naoto/Desktop/mouse/ExiaIgnis/sample"

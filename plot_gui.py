@@ -14,14 +14,7 @@ class PlotGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("PlotJuggler GUI")
-        # geometry() is in raw pixels and ignores GNOME's fractional display
-        # scaling, so a fixed "1000x600" renders tiny on HiDPI monitors.
-        # Scale the default size using Tk's own DPI reading instead.
-        dpi_scale = self.root.winfo_fpixels('1i') / 96.0
-        win_w = min(int(1400 * dpi_scale), 1900)
-        win_h = min(int(900 * dpi_scale), 1200)
-        self.root.geometry(f"{win_w}x{win_h}")
-        self.root.minsize(800, 500)
+        self.root.geometry("2840x1600")  # adjust default window size here
         self.last_file_state = {}
         
         # Store current data for click events
@@ -51,39 +44,54 @@ class PlotGUI:
         self.scrollbar = ttk.Scrollbar(self.left_frame)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        # Bigger row height/font so rows aren't cramped on a large window;
+        # columns keep a fixed (non-stretching) width instead of filling the pane.
+        ttk.Style().configure("Treeview", rowheight=32, font=('TkDefaultFont', 11))
+        ttk.Style().configure("Treeview.Heading", font=('TkDefaultFont', 11, 'bold'))
+
         self.tree = ttk.Treeview(self.left_frame, columns=("Filename", "Date"), show="headings", yscrollcommand=self.scrollbar.set)
         self.tree.heading("Filename", text="Filename")
         self.tree.heading("Date", text="Date")
-        self.tree.column("Filename", width=200)
-        self.tree.column("Date", width=120)
+        self.tree.column("Filename", width=360, stretch=False)
+        self.tree.column("Date", width=270, stretch=False)
         self.tree.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         
         self.scrollbar.config(command=self.tree.yview)
 
+        # Three rows so the left pane doesn't need to be wide to fit every control.
         self.btn_frame = ttk.Frame(self.left_frame)
         self.btn_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        self.refresh_btn = ttk.Button(self.btn_frame, text="Refresh", command=self.load_files)
+        self.btn_row1 = ttk.Frame(self.btn_frame)
+        self.btn_row1.pack(side=tk.TOP, fill=tk.X)
+
+        self.refresh_btn = ttk.Button(self.btn_row1, text="Refresh", command=self.load_files)
         self.refresh_btn.pack(side=tk.LEFT, padx=2)
 
-        self.pj_btn = ttk.Button(self.btn_frame, text="Open PlotJuggler", command=self.run_plotjuggler)
-        self.pj_btn.pack(side=tk.RIGHT, padx=2)
+        self.kill_pj_btn = ttk.Button(self.btn_row1, text="Kill PJ", command=self.kill_plotjuggler)
+        self.kill_pj_btn.pack(side=tk.LEFT, padx=2)
 
-        self.kill_pj_btn = ttk.Button(self.btn_frame, text="Kill PJ", command=self.kill_plotjuggler)
-        self.kill_pj_btn.pack(side=tk.RIGHT, padx=2)
+        self.btn_row2 = ttk.Frame(self.btn_frame)
+        self.btn_row2.pack(side=tk.TOP, fill=tk.X, pady=(4, 0))
+
+        self.pj_btn = ttk.Button(self.btn_row2, text="Open PlotJuggler", command=self.run_plotjuggler)
+        self.pj_btn.pack(side=tk.LEFT, padx=2)
+
+        self.btn_row3 = ttk.Frame(self.btn_frame)
+        self.btn_row3.pack(side=tk.TOP, fill=tk.X, pady=(4, 0))
 
         self.show_output_var = tk.BooleanVar(value=True)
-        self.output_chk = ttk.Checkbutton(self.btn_frame, text="Show Output", variable=self.show_output_var)
-        self.output_chk.pack(side=tk.RIGHT, padx=5)
+        self.output_chk = ttk.Checkbutton(self.btn_row3, text="Show Output", variable=self.show_output_var)
+        self.output_chk.pack(side=tk.LEFT, padx=2)
 
         # Sensor visibility controls
         self.show_left45_var = tk.BooleanVar(value=True)
-        self.left45_chk = ttk.Checkbutton(self.btn_frame, text="Left45", variable=self.show_left45_var, command=self.on_sensor_toggle)
-        self.left45_chk.pack(side=tk.RIGHT, padx=5)
+        self.left45_chk = ttk.Checkbutton(self.btn_row3, text="Left45", variable=self.show_left45_var, command=self.on_sensor_toggle)
+        self.left45_chk.pack(side=tk.LEFT, padx=2)
 
         self.show_right45_var = tk.BooleanVar(value=True)
-        self.right45_chk = ttk.Checkbutton(self.btn_frame, text="Right45", variable=self.show_right45_var, command=self.on_sensor_toggle)
-        self.right45_chk.pack(side=tk.RIGHT, padx=5)
+        self.right45_chk = ttk.Checkbutton(self.btn_row3, text="Right45", variable=self.show_right45_var, command=self.on_sensor_toggle)
+        self.right45_chk.pack(side=tk.LEFT, padx=2)
 
         self.status_label = ttk.Label(self.left_frame, text="Ready", wraplength=300)
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=2)
@@ -98,6 +106,13 @@ class PlotGUI:
         # Bindings
         self.tree.bind("<<TreeviewSelect>>", self.on_file_select)
         self.tree.bind("<Double-1>", self.run_plotjuggler)
+
+        # Pin the pane split so the file list doesn't default to a wide,
+        # mostly-empty pane on large windows. Size it from the left pane's own
+        # requested width (font/DPI scaling varies a lot across machines) rather
+        # than a hardcoded pixel guess, with a small margin so nothing clips.
+        self.root.update_idletasks()
+        self.paned_window.sashpos(0, self.left_frame.winfo_reqwidth() + 20)
 
         self.load_files()
         self.auto_refresh()
