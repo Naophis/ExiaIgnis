@@ -84,11 +84,17 @@ sudo apt install python3-pandas
 python3 plot_gui.py
 ```
 
-PlotJuggler 連携（`Open PlotJuggler` ボタン）には `plotjuggler` コマンドが PATH 上に必要です:
+PlotJuggler 連携（`Open PlotJuggler` / `Kill PJ` ボタン）には ROS 2 Jazzy + `ros-jazzy-plotjuggler` /
+`ros-jazzy-plotjuggler-ros`（apt 版）が必要です:
 
 ```bash
-sudo snap install plotjuggler
+sudo apt install ros-jazzy-desktop ros-jazzy-plotjuggler ros-jazzy-plotjuggler-ros
 ```
+
+snap 版の PlotJuggler は strict confinement のため、Ubuntu 24.04 の AppArmor が VSCode の統合ターミナル等から
+起動したプロセスへのシグナル送信（`pkill`）を拒否し、`Kill PJ` が効かない問題がありました。apt 版（ROS 2 経由）は
+confinement されないため `pkill` が正常に機能します。snap 版を入れている場合は `sudo snap remove plotjuggler` で
+削除してください。
 
 ---
 

@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import os
+import shlex
 import subprocess
 import glob
 from datetime import datetime
@@ -402,11 +403,13 @@ class PlotGUI:
         filename = self.tree.item(selected_item)['values'][0]
         file_path = os.path.join(self.log_dir, filename)
         
-        cmd = [
-            "plotjuggler",
-            "-d", file_path,
-            "-l", self.profile_path
-        ]
+        # Run through a login shell that sources the ROS 2 environment, since
+        # `ros2` isn't on PATH otherwise. The deb-packaged (apt) plotjuggler
+        # isn't strict-confined like the snap build, so "Kill PJ" (pkill) can
+        # actually signal it afterwards.
+        ros_cmd = "ros2 run plotjuggler plotjuggler -d {} -l {}".format(
+            shlex.quote(file_path), shlex.quote(self.profile_path))
+        cmd = ["bash", "-lc", "source /opt/ros/jazzy/setup.bash && " + ros_cmd]
         self.status_label.config(text=f"Opening {filename} in PlotJuggler...")
         try:
             if self.show_output_var.get():
@@ -418,8 +421,20 @@ class PlotGUI:
 
     def kill_plotjuggler(self):
         try:
-            subprocess.run(["pkill", "-f", "plotjuggler"])
-            self.status_label.config(text="Killed all PlotJuggler instances.")
+            result = subprocess.run(["pkill", "-f", "plotjuggler"], capture_output=True, text=True)
+            stderr = result.stderr.strip()
+            if result.returncode == 0:
+                self.status_label.config(text="Killed all PlotJuggler instances.")
+            elif result.returncode == 1 and not stderr:
+                self.status_label.config(text="No PlotJuggler instances found.")
+            else:
+                # e.g. AppArmor denying the signal (common when launched from
+                # VSCode's integrated terminal on Ubuntu 24.04, which runs under
+                # a restrictive apparmor profile that can't signal snap-confined
+                # apps): pkill exits nonzero and reports "Permission denied"
+                # per PID on stderr instead of raising a Python exception.
+                detail = stderr or f"pkill exited {result.returncode}"
+                self.status_label.config(text=f"Failed to kill PlotJuggler: {detail}")
         except Exception as e:
             self.status_label.config(text=f"Error killing PlotJuggler: {e}")
 
