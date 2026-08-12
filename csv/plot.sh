@@ -1,1 +1,1 @@
-python pyplot.py
+python3 pyplot.py
