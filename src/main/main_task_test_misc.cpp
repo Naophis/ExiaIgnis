@@ -22,10 +22,11 @@ void MainTask::test_suction() {
   printf("ramp_rate=%.0f\n", planning_->bldc_.get_ramp_rate());
   printf("batt LUT(%d pts):", planning_->bldc_.get_batt_table_len());
   for (int i = 0; i < planning_->bldc_.get_batt_table_len(); i++) {
-    printf(" %.1fV(gain=%.4f,max_amp=%.3f)",
+    printf(" %.1fV(gain=%.4f,max_amp=%.3f,ramp_gain_mul=%.3f)",
            planning_->bldc_.get_batt_v_bp(i),
            planning_->bldc_.get_batt_gain_point(i),
-           planning_->bldc_.get_batt_max_amp_point(i));
+           planning_->bldc_.get_batt_max_amp_point(i),
+           planning_->bldc_.get_batt_max_amp_gain_point(i));
   }
   printf("\n");
   printf("ramp_gain LUT(%d pts):",

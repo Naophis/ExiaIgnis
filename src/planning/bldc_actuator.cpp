@@ -214,12 +214,20 @@ float BldcActuator::compensated_amp(float hz) const {
   return a < AMP_BASE ? AMP_BASE : (a > max_amp ? max_amp : a);
 }
 
-// 起動ランプ速度(elec_hz/sec)を elec_hz→ramp_gain LUT から区分線形補間で
-// 求める(bldc_actuator.hppのクラスコメント参照。X軸はbattery_vではなく
-// 現在の回転数推定値hz)。
+// 起動ランプ速度(elec_hz/sec)を elec_hz→ramp_gain LUT(区分線形補間、X軸は
+// battery_vではなく現在の回転数推定値hz)から求めたベース値に、
+// battery_v→max_amp LUT(compensated_amp()と同じテーブル)から区分線形補間
+// で求めた値をgain係数として掛けて最終値とする(bldc_actuator.hppのクラス
+// コメント参照)。満充電/使用後で変わる脱調マージンをここでも反映する。
 float BldcActuator::compensated_ramp_rate(float hz) const {
-  const int n = (int)ramp_gain_hz_bp_.size();
-  return interp(ramp_gain_hz_bp_.data(), ramp_gain_by_hz_table_.data(), n, hz);
+  const int n_hz = (int)ramp_gain_hz_bp_.size();
+  const float base = interp(ramp_gain_hz_bp_.data(), ramp_gain_by_hz_table_.data(), n_hz, hz);
+  const int n_v = (int)batt_v_bp_.size();
+  // compensated_amp()用のクランプ済みbatt_max_amp_table_ではなく、生値の
+  // batt_max_amp_gain_table_を使う(1.0=無減衰を指定できるようにするため。
+  // bldc_actuator.hppのset_batt_tables()コメント参照)。
+  const float v_gain = interp(batt_v_bp_.data(), batt_max_amp_gain_table_.data(), n_v, battery_v_);
+  return base * v_gain;
 }
 
 void BldcActuator::recompute_tables(float amp) {
@@ -359,8 +367,8 @@ void BldcActuator::enable() {
   trace_idx_     = 0;
   trace_full_    = false;
   trace_div_cnt_ = 0u;
-  // batt_v_bp_/batt_gain_table_/batt_max_amp_table_/ramp_gain_hz_bp_/
-  // ramp_gain_by_hz_table_はここでリセットしない。
+  // batt_v_bp_/batt_gain_table_/batt_max_amp_table_/batt_max_amp_gain_table_/
+  // ramp_gain_hz_bp_/ramp_gain_by_hz_table_はここでリセットしない。
   // load_param_after()での外部設定(sys_.test.suction_batt_*_table等)を
   // enable()/disable() を跨いで保持するため(以前はここで固定値に毎回
   // 巻き戻していたのが、外部設定を無効化してしまう原因になっていた)。

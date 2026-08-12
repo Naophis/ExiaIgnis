@@ -49,15 +49,18 @@
 // 昇順、3配列は同じ長さで指定すること(config_mapping.hpp参照。長さが
 // 合わない場合の後始末はしない)。
 //
-// 起動ランプ速度(ramp_hz_per_sec_, elec_hz/sec)は電圧ではなく、現在の
-// 回転数推定値(elec_hz_)をX軸とする別のLUT(elec_hz→ramp_gain)を区分線形
-// 補間して都度求める。回転数が上がるほど同期を保つトルク角のマージンが
-// 減り脱調しやすくなるため、hzが上がるにつれてランプ速度を徐々に減衰
-// させる用途(以前はbattery_v軸のLUTだったが、電圧よりも回転数そのものの
-// 方が脱調しやすさと直接相関するため乗り換えた)。X軸(elec_hz)・
-// Y軸(ramp_gain)は sys_.test.suction_batt_ramp_gain_table_hz /
-// suction_batt_ramp_gain_table_val (system.yaml) をそのまま保持する。
-// elec_hz側は昇順、2配列は同じ長さで指定すること。
+// 起動ランプ速度(ramp_hz_per_sec_, elec_hz/sec)は、現在の回転数推定値
+// (elec_hz_)をX軸とするLUT(elec_hz→ramp_gain)を区分線形補間して求めた
+// ベース値に、battery_v→max_amp LUT(compensated_amp()のmax_ampと同じテー
+// ブル)から区分線形補間で求めた値をgain係数として掛けて最終値とする
+// (compensated_ramp_rate()参照)。回転数が上がるほど同期を保つトルク角の
+// マージンが減り脱調しやすくなるため、hzが上がるにつれてベースのランプ
+// 速度を徐々に減衰させつつ、満充電/使用後で変わる脱調マージンも
+// battery_v側のgain係数として反映する。X軸(elec_hz)・Y軸(ramp_gain)は
+// sys_.test.suction_batt_ramp_gain_table_hz / suction_batt_ramp_gain_table_val
+// (system.yaml)をそのまま保持する。elec_hz側は昇順、2配列は同じ長さで
+// 指定すること。gain係数側は sys_.test.suction_batt_v_table /
+// suction_batt_max_amp_table (system.yaml) を compensated_amp() と共用する。
 //
 // GPIO8=SUCTION_EN / GPIO9(PWM4B)=U相 / GPIO10(PWM5A)=V相 / GPIO11(PWM5B)=W相
 class BldcActuator {
@@ -75,19 +78,25 @@ public:
   // battery_v→{gain, max_amp} LUTを丸ごと差し替える(区分線形補間、電圧は
   // 昇順で渡すこと)。v_bpが空なら何もしない。max_ampは0.5=100%duty(片側が
   // 完全に0または1に張り付く)に対する安全マージンとして[0.10, 0.48]に
-  // 各要素クランプする(configの誤入力対策)。
+  // 各要素クランプした上でcompensated_amp()用のbatt_max_amp_table_へ格納
+  // する(configの誤入力対策)。compensated_ramp_rate()のgain係数はamp用の
+  // クランプ(0.48)に引っ張られると1.0倍(無減衰)を指定できなくなるため、
+  // クランプ前の生値をbatt_max_amp_gain_table_へ別途保持し、そちらを使う。
   void set_batt_tables(std::vector<float> v_bp, std::vector<float> gain,
                         std::vector<float> max_amp) {
     if (v_bp.empty()) return;
+    std::vector<float> max_amp_raw = max_amp;
     for (float &v : max_amp) v = v < 0.10f ? 0.10f : (v > 0.48f ? 0.48f : v);
     batt_v_bp_ = std::move(v_bp);
     batt_gain_table_ = std::move(gain);
     batt_max_amp_table_ = std::move(max_amp);
+    batt_max_amp_gain_table_ = std::move(max_amp_raw);
   }
   int   get_batt_table_len()      const { return (int)batt_v_bp_.size(); }
   float get_batt_v_bp(int idx)    const { return batt_v_bp_[idx]; }
   float get_batt_gain_point(int idx) const { return batt_gain_table_[idx]; }
   float get_batt_max_amp_point(int idx) const { return batt_max_amp_table_[idx]; }
+  float get_batt_max_amp_gain_point(int idx) const { return batt_max_amp_gain_table_[idx]; }
 
   // elec_hz→ramp_gain LUTを丸ごと差し替える(区分線形補間、hzは昇順で
   // 渡すこと)。hz_bpが空なら何もしない。ramp_gain(elec_hz/sec)はゼロ割/
@@ -185,6 +194,9 @@ private:
   std::vector<float> batt_v_bp_          = {9.9f, 11.1f, 12.6f};
   std::vector<float> batt_gain_table_    = {0.1340f, 0.1195f, 0.1053f};
   std::vector<float> batt_max_amp_table_ = {0.35f, 0.35f, 0.35f};
+  // compensated_ramp_rate()専用: batt_max_amp_table_と同じ入力から作るが、
+  // [0.10, 0.48]クランプを掛けない生値(1.0=無減衰を指定できるようにする)。
+  std::vector<float> batt_max_amp_gain_table_ = {0.35f, 0.35f, 0.35f};
 
   // elec_hz→ramp_gain LUT(区分線形補間、可変長)。X/Yとも
   // set_ramp_gain_hz_table() で丸ごと差し替え可能(上記クラスコメント参照)。
