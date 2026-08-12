@@ -1372,7 +1372,10 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
   pt->motor_enable();
   if (p_set.suction) {
     pt->suction_enable(p_set.suction_duty, p_set.suction_duty_low);
-    sleep_ms(700);
+    while (pt->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   }
   if (param->fast_log_enable > 0) {
     tgt_val->global_pos.ang = 0;

@@ -54,11 +54,17 @@ void MainTask::test_sla() {
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    sleep_ms(1000);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    sleep_ms(500);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   }
 
   reset_tgt_data();
@@ -253,11 +259,17 @@ void MainTask::test_run_sla() {
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    sleep_ms(500);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    sleep_ms(500);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   }
 
   reset_tgt_data();
@@ -455,11 +467,17 @@ void MainTask::test_sla_walloff() {
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    sleep_ms(500);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    sleep_ms(500);
+    while (planning_->bldc_.is_ramping()) {
+      sleep_ms(10);
+    }
+    sleep_ms(200);
   }
 
   reset_tgt_data();
