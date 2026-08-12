@@ -158,6 +158,13 @@ void PlanningTask::tick(uint32_t dt_us) {
   // T1 以降: コマンド受信で cmd_log_remain が更新された後に評価
   const bool do_log = false; // (tick_num <= 30) || (cmd_log_remain > 0);
 
+  // Core0 からの停止要求を Core1 側で確定させる。この tick の
+  // ego.update()/ctl_.calc() 双方が motor_en=false を見るので、
+  // 直後の set_next_duty() で duty=0 が必ず適用される。
+  if (motor_stop_req_.load(std::memory_order_acquire)) {
+    motor_en = false;
+  }
+
   if (do_log) g_irq_log.push("T1"); // pre ego.update
   ego.update(motor_en);
   {
@@ -224,6 +231,15 @@ void PlanningTask::tick(uint32_t dt_us) {
   {
     uint64_t t_now = time_us_64();
     tgt_val->pln_t_ctl = (int16_t)(t_now - t_prev);
+  }
+
+  // duty=0 を apply した直後、同一 tick・同一コア (Core1) で PWM を
+  // 物理的に disable する。Core0 はこの ack を待つだけで、PWM レジスタに
+  // 直接触れない。one-shot ラッチとして motor_stopped_ack_ で多重実行を防ぐ。
+  if (motor_stop_req_.load(std::memory_order_acquire) &&
+      !motor_stopped_ack_.load(std::memory_order_relaxed)) {
+    motor_.motor_disable();
+    motor_stopped_ack_.store(true, std::memory_order_release);
   }
 
   if (do_log) g_irq_log.push("T7"); // tick complete
@@ -474,13 +490,23 @@ void PlanningTask::motor_enable() {
   motor_.motor_enable();
 }
 void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
-  motor_en = false;
-  // Core1 の 1kHz tick が motor_en=false を検知して set_next_duty() で
-  // duty=0 を確定させるまで待つ。待たずに PWM を disable すると、Core1 が
-  // まだ非ゼロ duty を computing/apply 中の可能性があり、その位相で出力が
-  // 固定されてモーターが止まらないことがある。
-  // sleep_ms(1);
-  motor_.motor_disable();
+  // PWM ハードウェアの disable は Core1 の tick() 内でのみ行う
+  // (duty=0 適用と同一 tick・同一コアで実行することでレースを排除)。
+  // ここでは要求を出して Core1 からの完了 ack をタイムアウト付きで待つだけ。
+  motor_stopped_ack_.store(false, std::memory_order_relaxed);
+  motor_stop_req_.store(true, std::memory_order_release);
+
+  const uint32_t t0 = to_ms_since_boot(get_absolute_time());
+  while (!motor_stopped_ack_.load(std::memory_order_acquire)) {
+    if (to_ms_since_boot(get_absolute_time()) - t0 > 20) {
+      // Core1 の tick が想定外に止まっている等の異常系向けフォールバック。
+      // 通常経路では 1tick (~1ms) 以内に ack されるはず。
+      motor_.motor_disable();
+      break;
+    }
+    sleep_us(100);
+  }
+  motor_stop_req_.store(false, std::memory_order_relaxed);
 }
 void PlanningTask::suction_enable(float duty, float duty_low) {
   suction_en = true;

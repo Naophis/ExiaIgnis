@@ -90,8 +90,8 @@ test: # テスト走行時に使用するパラメータ群
   suction_active: 0
 
   # v_max: 7500
-  # accl: 52500
-  # decel: -52500
+  # accl: 42500
+  # decel: -42500
   # # accl: 22500
   # # decel: -22500
   # dia_accl: 45000
@@ -128,7 +128,7 @@ test: # テスト走行時に使用するパラメータ群
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
 
-  suction_bldc_hz: 9200
+  suction_bldc_hz: 8200
   # バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長。3配列とも同じ
   # 長さ・昇順で指定すること)。amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain の
   # V/Hz比例式に使うgainと、そのクランプ上限max_amp(0.48は未検証域で脱調

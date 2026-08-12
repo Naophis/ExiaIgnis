@@ -114,7 +114,17 @@
       "Bash(python3 -c \"import ast; ast.parse\\(open\\('plot_gui.py'\\).read\\(\\)\\); print\\('syntax ok'\\)\")",
       "Bash(timeout 4 python3 plot_gui.py)",
       "Bash(python3 -c \"import ast; ast.parse\\(open\\('/home/naoto/Desktop/mouse/ExiaIgnis/plot_gui.py'\\).read\\(\\)\\); print\\('syntax ok'\\)\")",
-      "Bash(timeout 4 python3 /home/naoto/Desktop/mouse/ExiaIgnis/plot_gui.py)"
+      "Bash(timeout 4 python3 /home/naoto/Desktop/mouse/ExiaIgnis/plot_gui.py)",
+      "Bash(snap list *)",
+      "Bash(snap info *)",
+      "Read(//snap/bin/**)",
+      "Read(//proc/33649/attr/**)",
+      "WebFetch(domain:www.monolithicpower.com)",
+      "WebFetch(domain:download.mikroe.com)",
+      "Bash(sudo -n aa-status)",
+      "Read(//etc/apparmor.d/**)",
+      "Bash(echo \"RC=$?\")",
+      "Bash(echo \"pkill_rc=$?\")"
     ],
     "additionalDirectories": [
       "/home/naoto/Desktop/mouse/ExiaIgnis/sample"

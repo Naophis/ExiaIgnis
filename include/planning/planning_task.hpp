@@ -98,10 +98,20 @@ private:
   std::shared_ptr<sensing_result_entity_t> get_sensing_entity();
 
   // ---- 制御フラグ ----
-  bool          motor_en    = false;
+  bool          motor_en    = false; // Core1 専用 (tick() 内でのみ書き込む)
   bool          suction_en  = false;
   bool          search_mode = false;
   unsigned char w_reset     = 0;
+
+  // ---- motor_disable() 用 Core0<->Core1 ハンドシェイク ----
+  // Core0 が PWM ハードウェアへ直接触れると、Core1 の 1kHz tick が
+  // 同じレジスタへ書き込み中に競合し、出力が HIGH のまま固着して
+  // モーターが止まらなくなることがあった。停止要求は atomic で Core1 に
+  // 伝え、実際の motor_.motor_disable() 呼び出しは Core1 の tick() 内、
+  // duty=0 を apply した直後（同一 tick・同一コア）でのみ行うことで
+  // レースを排除する。
+  std::atomic<bool> motor_stop_req_{false};   // Core0 -> Core1: 停止要求
+  std::atomic<bool> motor_stopped_ack_{false}; // Core1 -> Core0: 停止完了通知
 
   // ---- 共有エンティティ ----
   std::shared_ptr<SensingTask>              sensing_;
