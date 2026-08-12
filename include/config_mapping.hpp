@@ -744,6 +744,9 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_vector(src, "axel_degenerate_y",          dst.axel_degenerate_y);
     from_json_vector(src, "axel_degenerate_dia_x",      dst.axel_degenerate_dia_x);
     from_json_vector(src, "axel_degenerate_dia_y",      dst.axel_degenerate_dia_y);
+    // 速度→加速度テーブル (hardware.yaml: accl_v_*)
+    from_json_vector(src, "accl_v_x",                   dst.accl_v_x);
+    from_json_vector(src, "accl_v_y",                   dst.accl_v_y);
     // センサー角速度リミッタテーブル (hardware.yaml: sensor_deg_limitter_*)
     from_json_vector(src, "sensor_deg_limitter_v",      dst.sensor_deg_limitter_v);
     from_json_vector(src, "sensor_deg_limitter_str",    dst.sensor_deg_limitter_str);

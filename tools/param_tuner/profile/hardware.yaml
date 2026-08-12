@@ -111,6 +111,11 @@ axel_degenerate_y: [1, 1, 0.975, 0.95, 0.5, 0.2, 0.1]
 axel_degenerate_dia_x: [0, 1, 2, 4, 6, 8, 10, 40]
 axel_degenerate_dia_y: [1, 1, 1, 0.95, 0.85, 0.75, 0.25, -0.1]
 
+# 速度→加速度テーブル (STRAIGHT 時に tgt_in.accl をこの LUT で上書きしてから
+# axel_degenerate_gain を掛ける)。要素数が2未満の場合は無効(従来通り固定accl)。
+# accl_v_x: [0, 1000, 2000, 3000, 4000]
+# accl_v_y: [10000, 10000, 8000, 6000, 4000]
+
 decel_delay_cnt: 5
 dedel_delay_n: 4
 
@@ -459,8 +464,8 @@ normal_sla_r_wall_off_th_in: 70 #[mm]
 normal_sla_l_wall_off_th_out: 80 #[mm]
 normal_sla_r_wall_off_th_out: 80 #[mm]
 
-normal_sla_l_wall_off_ref_cnt: 133 #125~144
-normal_sla_r_wall_off_ref_cnt: 139 #125~144
+normal_sla_l_wall_off_ref_cnt: 139 #413 -274 = 139 #125~144 
+normal_sla_r_wall_off_ref_cnt: 130 #404-274 = 130 #125~144
 
 normal_sla_l_wall_off_dist: 6
 normal_sla_r_wall_off_dist: 6

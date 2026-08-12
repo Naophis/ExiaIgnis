@@ -470,6 +470,14 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
         for (float v : src.axel_degenerate_dia_y) a.add(v);
     }
     {
+        JsonArray a = dst["accl_v_x"].to<JsonArray>();
+        for (float v : src.accl_v_x) a.add(v);
+    }
+    {
+        JsonArray a = dst["accl_v_y"].to<JsonArray>();
+        for (float v : src.accl_v_y) a.add(v);
+    }
+    {
         JsonArray a = dst["sensor_deg_limitter_v"].to<JsonArray>();
         for (float v : src.sensor_deg_limitter_v) a.add(v);
     }

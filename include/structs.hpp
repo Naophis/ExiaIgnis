@@ -766,6 +766,10 @@ typedef struct {
   std::vector<float> axel_degenerate_dia_x;
   std::vector<float> axel_degenerate_dia_y;
 
+  // 速度→加速度テーブル (control_law で tgt_in.accl 書き換えに使用)
+  std::vector<float> accl_v_x;
+  std::vector<float> accl_v_y;
+
   // センサー角速度リミッタテーブル (control_law で interp1d に渡す)
   std::vector<float> sensor_deg_limitter_v;
   std::vector<float> sensor_deg_limitter_str;

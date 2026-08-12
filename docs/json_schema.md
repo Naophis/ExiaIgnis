@@ -308,6 +308,8 @@ USB シリアルコマンド `filename@json_content\n` で書き込み、起動�
   "axel_degenerate_y":      [1.0, 0.8, 0.5],
   "axel_degenerate_dia_x":  [0.0, 0.5, 1.0],
   "axel_degenerate_dia_y":  [1.0, 0.8, 0.5],
+  "accl_v_x":               [0.0, 1000.0, 2000.0],
+  "accl_v_y":               [10000.0, 8000.0, 6000.0],
   "sensor_deg_limitter_v":      [0.5, 1.0, 2.0],
   "sensor_deg_limitter_str":    [10.0, 5.0, 2.0],
   "sensor_deg_limitter_dia":    [10.0, 5.0, 2.0],
@@ -316,6 +318,7 @@ USB シリアルコマンド `filename@json_content\n` で書き込み、起動�
 ```
 
 `interp1d(x_table, y_table, v)` で速度に応じたゲインを補間する。
+`accl_v_x`/`accl_v_y` は STRAIGHT 走行時に `tgt_in.accl` をこの LUT の出力で上書きしてから `axel_degenerate_gain` を掛ける (要素数2未満なら無効)。
 
 ### その他 hardware.json フィールド
 
