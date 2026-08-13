@@ -42,9 +42,18 @@
 #define M_PWM_L2      5   // PWM2 B
 #define M_PWM_R1      6   // PWM3 A
 #define M_PWM_R2      7   // PWM3 B
-#define SUCTION_EN    8   // GPIO output — HIGH = driver enabled
-#define SUCTION_PWM1  9   // PWM4 B  (U phase)
-#define SUCTION_PWM2  10  // PWM5 A  (V phase)
-#define SUCTION_PWM3  11  // PWM5 B  (W phase)
+#define SUCTION_EN    8   // GPIO output — HIGH = driver enabled (BldcActuator専用、現在未使用)
+#define SUCTION_PWM1  9   // PWM4 B  (V phase, BldcActuator専用、現在未使用)
+#define SUCTION_PWM2  10  // PWM5 A  (V phase, BldcActuator専用、現在未使用)
+#define SUCTION_PWM3  11  // PWM5 B  (BldcActuator W相 / SuctionEscActuator兼用)
 
 #define MOTOR_PWM_FREQ_HZ  37500u
+
+// ============================================================
+// PWM / Suction ESC (AM32, RCサーボ標準PWM 1000〜2000us)
+// ============================================================
+// AM32 ESCへのスロットル信号線。旧BldcActuatorのW相ピン(GPIO11)を流用。
+#define SUCTION_ESC_PWM       SUCTION_PWM3
+#define SUCTION_ESC_FREQ_HZ   250u    // 信号リフレッシュ周波数(AM32は自動判別、範囲内なら変更可)
+#define SUCTION_ESC_PULSE_MIN_US  1000u  // 0%duty (アーム/停止)
+#define SUCTION_ESC_PULSE_MAX_US  2000u  // 100%duty (フル)

@@ -124,7 +124,9 @@
       "Bash(sudo -n aa-status)",
       "Read(//etc/apparmor.d/**)",
       "Bash(echo \"RC=$?\")",
-      "Bash(echo \"pkill_rc=$?\")"
+      "Bash(echo \"pkill_rc=$?\")",
+      "WebFetch(domain:www.ti.com)",
+      "WebFetch(domain:www.farnell.com)"
     ],
     "additionalDirectories": [
       "/home/naoto/Desktop/mouse/ExiaIgnis/sample"

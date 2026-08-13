@@ -4,14 +4,14 @@
 #include <algorithm>
 #include <cmath>
 
-void ControlLaw::init(MotorActuator *motor, BldcActuator *bldc,
+void ControlLaw::init(MotorActuator *motor, SuctionEscActuator *esc,
                       SensorProcessor *sensor,
                       TrajectoryGenerator *trj, EgoEstimator *ego,
                       std::shared_ptr<motion_tgt_val_t> tgt_val,
                       std::shared_ptr<sensing_result_entity_t> sensing_result,
                       std::shared_ptr<input_param_t> param) {
   motor_ = motor;
-  bldc_  = bldc;
+  esc_   = esc;
   sensor_ = sensor;
   trj_ = trj;
   ego_ = ego;
@@ -1291,15 +1291,14 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
     if (duty_suction_in > 100.0f)
       duty_suction_in = 100.0f;
 
-    const float suction_gain = bldc_->get_ramp_rate();
     gain_cnt += 1.0f;
-    if (gain_cnt > suction_gain)
-      gain_cnt = suction_gain;
+    if (gain_cnt > kSuctionRampTicks)
+      gain_cnt = kSuctionRampTicks;
     {
-      // 起動時ゼロ振幅問題: 線形ランプは初回 duty ≈ 0% で始まるため BLDC が
-      // 起動トルクを得られない。50% から target へ線形補間することで
-      // 第1tick から十分な振幅を確保し、確実な起動を実現する。
-      const float ratio   = gain_cnt / suction_gain;          // 0.005 → 1.0
+      // 起動時ゼロ振幅問題: 線形ランプは初回 duty ≈ 0% で始まると始動が
+      // 遅れる。50% から target へ線形補間することで第1tick から十分な
+      // パルス幅を確保する(AM32側の自前ソフトスタートと併用)。
+      const float ratio   = gain_cnt / kSuctionRampTicks;      // 0.002 → 1.0
       const float min_pct = 50.0f;
       duty_suction_in = min_pct + (duty_suction_in - min_pct) * ratio;
     }
@@ -1313,7 +1312,7 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
 
   tgt_val_->duty_suction = duty_suction_in;
   motor_->apply(duty_l, duty_r);
-  bldc_->set_duty(duty_suction_in);
+  esc_->apply(duty_suction_in);
 }
 
 void ControlLaw::pl_req_activate(const planning_req_t &pl_req) {

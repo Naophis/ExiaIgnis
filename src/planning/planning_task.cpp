@@ -43,9 +43,11 @@ void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
   sem_init(&tick_sem_, 0, 1);
   motor_.init();
-  bldc_.init();
+  // bldc_.init() は呼ばない(AM32 ESC移行によりesc_側が実行系。
+  // planning_task.hppのbldc_メンバのコメント参照)。
+  esc_.init();
   sensor_.init(sensing_result, param, tgt_val);
-  ctl_.init(&motor_, &bldc_, &sensor_, &trj_, &ego, tgt_val, sensing_result, param);
+  ctl_.init(&motor_, &esc_, &sensor_, &trj_, &ego, tgt_val, sensing_result, param);
   ego.init(sensing_result, param, tgt_val);
   trj_.init(tgt_val, param, sensing_result);
 }
@@ -102,14 +104,11 @@ void PlanningTask::timer_irq_handler() {
   const uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;
   self->prev_ts_ = now;
 
-  // BLDC吸引モーターのsectorテーブル/ペーシング更新。以前はBldcActuator
-  // 自身がadd_repeating_timer_us()で独自の1kHzタイマー(SDKのデフォルト
-  // alarm_pool = core0固定)を持っていたが、core0のUI/ボタン/USB/printf
-  // 処理と割り込みを奪い合いジッタの原因になっていたため、他のセンサー/
-  // 制御処理と同じくこのalarm_poolを介さない直接ハードウェアアラームIRQへ
-  // 統合した。battery_lpを渡すことでamp_gain/max_ampをバッテリー電圧に
-  // 依らず一定の実電圧になるよう補正する(bldc_actuator.hpp参照)。
-  self->bldc_.tick(self->sensing_result->ego.battery_lp);
+  // AM32 ESC移行によりbldc_.tick()は呼ばない(旧BLDC自前コミュテーション
+  // 用の1kHz駆動。planning_task.hppのbldc_メンバのコメント参照)。
+  // esc_側はMotorActuatorと同じくハードウェアPWMが自律的に出力し続ける
+  // ため、毎tickのCPU介入は不要(ControlLaw::set_next_duty()からapply()
+  // が呼ばれた時だけCCレジスタを書き換える)。
 
   self->tick(dt_us);
   sem_release(&self->tick_sem_);
@@ -511,11 +510,11 @@ void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
 void PlanningTask::suction_enable(float duty, float duty_low) {
   suction_en = true;
   ctl_.set_suction_target(duty, duty_low);
-  bldc_.enable();
+  esc_.enable();
 }
 void PlanningTask::suction_disable() {
   suction_en = false;
-  bldc_.disable();
+  esc_.disable();
 }
 
 void PlanningTask::wait_tick() {

@@ -17,14 +17,14 @@ void MainTask::test_run() {
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    while (planning_->bldc_.is_ramping()) {
+    while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
     sleep_ms(200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    while (planning_->bldc_.is_ramping()) {
+    while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
     sleep_ms(200);
@@ -95,14 +95,14 @@ void MainTask::test_back() {
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    while (planning_->bldc_.is_ramping()) {
+    while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
     sleep_ms(200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    while (planning_->bldc_.is_ramping()) {
+    while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
     sleep_ms(200);
@@ -171,14 +171,14 @@ void MainTask::test_front_wall_offset() {
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
                               sys_.test.suction_duty_low);
-    while (planning_->bldc_.is_ramping()) {
+    while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
     sleep_ms(200);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
-    while (planning_->bldc_.is_ramping()) {
+    while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
     sleep_ms(200);

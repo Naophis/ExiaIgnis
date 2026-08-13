@@ -1,0 +1,38 @@
+#pragma once
+#include "hardware/pwm.h"
+#include <stdint.h>
+
+// 吸引モーター用 AM32 ESC への RC標準PWM(1000〜2000us)出力。
+// MotorActuatorと同じ「PWM出力のみを担当」する薄いクラス。BLDCの自前
+// コミュテーション(BldcActuator)は行わない — 実際の6-step commutationは
+// 外付けAM32 ESC側がBEMFセンサレスで自律的に行うため、こちら側は
+// コアレスモーター相当の単純なduty指令を出すだけでよい。
+//
+// GPIO11(SUCTION_PWM3)を流用し、ESCのスロットル信号線として使う
+// (define.hpp の SUCTION_ESC_PWM 参照)。BldcActuatorが使っていた
+// GPIO8/9/10は未使用のまま残る。
+//
+// [重要] apply(0%)="最小パルス(1000us)"は「停止」であって「信号なし」
+// ではない。ESCがアーム状態を保つには継続的なパルス出力が必要なため、
+// init()直後から常時PWMを出し続け、enable/disableはduty=0を送るか
+// どうかの論理フラグとしてのみ扱う(物理的なPWM出力自体は止めない)。
+class SuctionEscActuator {
+public:
+  // GPIOファンクション設定・PWMスライス初期化。Core0のmainから呼ぶ。
+  // 呼び出し直後から最小パルス(0%duty)を出力し始める(ESCのアーム待ち状態)。
+  void init();
+
+  // duty[%] (0〜100) をパルス幅(1000〜2000us)に線形変換してPWMへ書き込む。
+  void apply(float duty_pct);
+
+  void enable();
+  void disable();
+  bool is_enabled() const { return enabled_; }
+
+private:
+  uint     slice_   = 0;
+  uint     channel_ = 0;
+  uint32_t wrap_    = 0;
+  float    ticks_per_us_ = 0.0f;
+  bool     enabled_ = false;
+};

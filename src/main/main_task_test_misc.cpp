@@ -13,49 +13,22 @@ void MainTask::test_suction() {
   mp->reset_gyro_ref_with_check();
   sleep_ms(250);
 
-  // --- 実行前に BLDC 関連パラメータをダンプ ---
-  printf("== BLDC params ==\n");
-  printf("suction_bldc_hz(base)=%.0f  test.suction_bldc_hz=%.0f  "
-         "-> target_hz=%.0f\n",
-         sys_.suction_bldc_hz, sys_.test.suction_bldc_hz,
-         planning_->bldc_.get_target_hz());
-  printf("ramp_rate=%.0f\n", planning_->bldc_.get_ramp_rate());
-  printf("batt LUT(%d pts):", planning_->bldc_.get_batt_table_len());
-  for (int i = 0; i < planning_->bldc_.get_batt_table_len(); i++) {
-    printf(" %.1fV(gain=%.4f,max_amp=%.3f,ramp_gain_mul=%.3f)",
-           planning_->bldc_.get_batt_v_bp(i),
-           planning_->bldc_.get_batt_gain_point(i),
-           planning_->bldc_.get_batt_max_amp_point(i),
-           planning_->bldc_.get_batt_max_amp_gain_point(i));
-  }
-  printf("\n");
-  printf("ramp_gain LUT(%d pts):",
-         planning_->bldc_.get_ramp_gain_hz_table_len());
-  for (int i = 0; i < planning_->bldc_.get_ramp_gain_hz_table_len(); i++) {
-    printf(" %.0fHz(ramp_gain=%.0f)", planning_->bldc_.get_ramp_gain_hz_bp(i),
-           planning_->bldc_.get_ramp_gain_hz_point(i));
-  }
-  printf("\n");
+  // AM32 ESC移行によりBLDC V/Hzパラメータダンプ・ALIGN/RAMP/RUN直叩き
+  // テスト(旧bldc_.test_direct())は廃止。ControlLaw経由でduty指令→ESCへの
+  // PWM出力のみを確認する。
+  printf("== suction ESC test ==\n");
   printf("test.suction_duty=%.2f  test.suction_duty_low=%.2f\n",
          sys_.test.suction_duty, sys_.test.suction_duty_low);
 
-  // --- Step 1: ALIGN→RAMP→RUN を5秒間確認 ---
-  printf("== BLDC test start (5sec) ==\n");
-//   planning_->bldc_.test_direct(30.0f);
-  printf("== BLDC test done ==\n");
-  sleep_ms(200);
-
-  // --- Step 2: ControlLaw 経由で運転 (RAMP 中は printf 抑制) ---
   const uint64_t t_suction_start = time_us_64();
   planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
 
-  while (planning_->bldc_.is_ramping()) {
+  while (planning_->is_suction_ramping()) {
     sleep_ms(5);
   }
   const uint64_t t_ramp_done = time_us_64();
-  printf("ramp done: %.1fms (target_hz=%.0f)\n",
-         (double)(t_ramp_done - t_suction_start) / 1000.0,
-         planning_->bldc_.get_target_hz());
+  printf("ramp done: %.1fms\n",
+         (double)(t_ramp_done - t_suction_start) / 1000.0);
 
   while (!ui_->button_state()) {
     printf("batt=%.3fV duty=%.1f%%\n",
@@ -66,9 +39,6 @@ void MainTask::test_suction() {
 
   planning_->suction_disable();
   printf("suction stopped\n");
-
-  // disable()で1kHz tick自体が止まっているので、ここでのprintfは安全。
-  planning_->bldc_.dump_trace();
 }
 
 void MainTask::dump1() {

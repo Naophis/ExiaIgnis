@@ -22,7 +22,7 @@ static constexpr float RAMP_END_HZ     = 16000.0f;
 
 static constexpr uint32_t BLDC_PWM_FREQ_HZ = 80000u;
 static constexpr uint32_t ALIGN_TICKS =
-    (uint32_t)(BldcActuator::PLANNING_HZ) * 60 / 1000;  // 600ms分の1kHz tick数
+    (uint32_t)(BldcActuator::PLANNING_HZ) * 120 / 1000;  // 600ms分の1kHz tick数
 
 // U(slice4)/V,W(slice5)と重ならない、GPIOに紐付けないペーシング専用slice。
 static constexpr uint PACE_SLICE = 6;

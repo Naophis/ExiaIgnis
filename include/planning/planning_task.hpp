@@ -8,6 +8,7 @@
 #include "planning/bldc_actuator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
+#include "planning/suction_esc_actuator.hpp"
 #include "planning/trajectory_generator.hpp"
 #include "structs.hpp"
 #include "utils/kalman_filter.hpp"
@@ -59,6 +60,9 @@ public:
   void motor_disable();
   void suction_enable(float duty, float duty_low);
   void suction_disable();
+  // 吸引duty指令がControlLaw内でまだ目標値へランプ中かどうか。
+  // 旧BldcActuator::is_ramping()の代替(ControlLaw::is_suction_ramping()参照)。
+  bool is_suction_ramping() const { return ctl_.is_suction_ramping(); }
 
   // ---- 推定リセット ----
   void reset_kf_state(bool full) {
@@ -76,7 +80,11 @@ public:
   std::shared_ptr<motion_tgt_val_t> tgt_val;
   EgoEstimator                      ego;
   MotorActuator                     motor_;
+  // 旧・自前6-step commutation実装。AM32 ESC移行によりinit()/tick()/
+  // enable()/disable()いずれも呼ばれなくなったが、コードは参照用に残す
+  // (再度自前コミュテーションへ戻す場合の土台として)。実行系は esc_ 側。
   BldcActuator                      bldc_;
+  SuctionEscActuator                esc_;
   SensorProcessor                   sensor_;
   TrajectoryGenerator               trj_;
   ControlLaw                        ctl_;

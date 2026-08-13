@@ -1,10 +1,10 @@
 #pragma once
 #include "gen_code_simple_pid/simple_pid_controller.h"
 #include "planning/astraea_types.hpp"
-#include "planning/bldc_actuator.hpp"
 #include "planning/ego_estimator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
+#include "planning/suction_esc_actuator.hpp"
 #include "planning/trajectory_generator.hpp"
 #include "structs.hpp"
 #include <memory>
@@ -15,9 +15,9 @@
 class ControlLaw {
 public:
   // ---- ライフサイクル ----
-  void init(MotorActuator *motor, BldcActuator *bldc, SensorProcessor *sensor,
-            TrajectoryGenerator *trj, EgoEstimator *ego,
-            std::shared_ptr<motion_tgt_val_t> tgt_val,
+  void init(MotorActuator *motor, SuctionEscActuator *esc,
+            SensorProcessor *sensor, TrajectoryGenerator *trj,
+            EgoEstimator *ego, std::shared_ptr<motion_tgt_val_t> tgt_val,
             std::shared_ptr<sensing_result_entity_t> sensing_result,
             std::shared_ptr<input_param_t> param);
 
@@ -34,13 +34,19 @@ public:
     tgt_duty.duty_suction_low = duty_low;
   }
 
+  // 吸引duty指令が目標値へ向けてまだランプ中かどうか。旧BldcActuator::
+  // is_ramping()の代替(PlanningTask::is_suction_ramping()から呼ばれる)。
+  bool is_suction_ramping() const {
+    return suction_en_ && gain_cnt < kSuctionRampTicks;
+  }
+
   // ---- 公開データ ----
   std::shared_ptr<pid_error_entity_t> ee;
 
 private:
   // ---- サブシステム参照 ----
   MotorActuator       *motor_  = nullptr;
-  BldcActuator        *bldc_   = nullptr;
+  SuctionEscActuator  *esc_    = nullptr;
   SensorProcessor     *sensor_ = nullptr;
   TrajectoryGenerator *trj_    = nullptr;
   EgoEstimator        *ego_    = nullptr;
@@ -61,9 +67,12 @@ private:
   Simple_PID_Controller gyro_pid;
 
   // ---- 吸引制御 ----
-  // duty ランプの目標速度(elec_hz/sec相当のticks)は BldcActuator の
-  // battery_v→ramp_gain LUT (get_ramp_rate()) をそのまま共有する
-  // (両者はもともと同じ sys_.test.suction_gain 値を使っていたため)。
+  // duty ランプ: gain_cnt を 1kHz tick毎に+1し、kSuctionRampTicks に達する
+  // までの比率で 50%→目標duty へ線形補間する(起動トルク確保のため、
+  // set_next_duty()参照)。AM32移行前は BldcActuator::get_ramp_rate() の
+  // battery_v→ramp_gain LUT値を共有していたが、ESC側は自前でBEMF閉ループ
+  // 制御を行うためソフト側は固定時間ランプで十分としている。
+  static constexpr float kSuctionRampTicks = 500.0f; // @1kHz = 0.5秒でランプ完了
   float  gain_cnt     = 0.0f;
   duty_t tgt_duty{};
 
