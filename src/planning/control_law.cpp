@@ -1284,35 +1284,42 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
         tgt_val_->tgt_in.tgt_dist > 60 &&
         (tgt_val_->ego_in.state == 0 || tgt_val_->ego_in.state == 1) &&
         tgt_val_->motion_type == MotionType::STRAIGHT;
-    duty_suction_in =
-        100.0f *
-        (high_suction ? tgt_duty.duty_suction_low : tgt_duty.duty_suction) /
-        sensing_result_->ego.batt_kf;
-    if (duty_suction_in > 100.0f)
-      duty_suction_in = 100.0f;
+    // suction_duty/duty_low/duty_burst/duty_burst_lowはESCへの目標パルス幅
+    // (us、1000〜2000)をそのまま指定する値(structs.hppのコメント参照)。
+    // BLDC時代のバッテリー電圧duty%補正(*100/batt_kf)はus直接指定の
+    // 空間には対応しないため廃止した。
+    suction_target_us_ =
+        high_suction ? tgt_duty.duty_suction_low : tgt_duty.duty_suction;
+    if (suction_target_us_ < (float)SUCTION_ESC_PULSE_MIN_US)
+      suction_target_us_ = (float)SUCTION_ESC_PULSE_MIN_US;
+    if (suction_target_us_ > (float)SUCTION_ESC_PULSE_MAX_US)
+      suction_target_us_ = (float)SUCTION_ESC_PULSE_MAX_US;
 
-    gain_cnt += 1.0f;
-    if (gain_cnt > kSuctionRampTicks)
-      gain_cnt = kSuctionRampTicks;
-    {
-      // 起動時ゼロ振幅問題: 線形ランプは初回 duty ≈ 0% で始まると始動が
-      // 遅れる。50% から target へ線形補間することで第1tick から十分な
-      // パルス幅を確保する(AM32側の自前ソフトスタートと併用)。
-      const float ratio   = gain_cnt / kSuctionRampTicks;      // 0.002 → 1.0
-      const float min_pct = 50.0f;
-      duty_suction_in = min_pct + (duty_suction_in - min_pct) * ratio;
+    // suction_ramp_us_per_sec_ の速度で目標パルス幅へ線形にランプする
+    // (AM32側の自前ソフトスタートと併用。旧BLDCのbattery_v/elec_hz依存
+    // gainテーブルは廃止し、system.yaml一発値の固定レートに簡略化)。
+    if (suction_pulse_us_ < suction_target_us_) {
+      suction_pulse_us_ += suction_ramp_us_per_sec_ * dt_;
+      if (suction_pulse_us_ > suction_target_us_)
+        suction_pulse_us_ = suction_target_us_;
+    } else if (suction_pulse_us_ > suction_target_us_) {
+      suction_pulse_us_ -= suction_ramp_us_per_sec_ * dt_;
+      if (suction_pulse_us_ < suction_target_us_)
+        suction_pulse_us_ = suction_target_us_;
     }
-    if (duty_suction_in > 100.0f)
-      duty_suction_in = 100.0f;
+    duty_suction_in = suction_pulse_us_;
     if (!isfinite(duty_suction_in))
-      duty_suction_in = 0.0f;
+      duty_suction_in = (float)SUCTION_ESC_PULSE_MIN_US;
   } else {
-    gain_cnt = 0.0f;
+    // 次回enable時は最小パルスから再スタートする。
+    suction_pulse_us_  = (float)SUCTION_ESC_PULSE_MIN_US;
+    suction_target_us_ = (float)SUCTION_ESC_PULSE_MIN_US;
+    duty_suction_in     = (float)SUCTION_ESC_PULSE_MIN_US;
   }
 
   tgt_val_->duty_suction = duty_suction_in;
   motor_->apply(duty_l, duty_r);
-  esc_->apply(duty_suction_in);
+  esc_->apply_us(duty_suction_in);
 }
 
 void ControlLaw::pl_req_activate(const planning_req_t &pl_req) {

@@ -34,6 +34,18 @@ void SuctionEscActuator::apply(float duty_pct) {
       (float)SUCTION_ESC_PULSE_MIN_US +
       ((float)SUCTION_ESC_PULSE_MAX_US - (float)SUCTION_ESC_PULSE_MIN_US) *
           duty_pct / 100.0f;
+  write_ticks(pulse_us);
+}
+
+void SuctionEscActuator::apply_us(float pulse_us) {
+  if (pulse_us < (float)SUCTION_ESC_PULSE_MIN_US)
+    pulse_us = (float)SUCTION_ESC_PULSE_MIN_US;
+  if (pulse_us > (float)SUCTION_ESC_PULSE_MAX_US)
+    pulse_us = (float)SUCTION_ESC_PULSE_MAX_US;
+  write_ticks(pulse_us);
+}
+
+void SuctionEscActuator::write_ticks(float pulse_us) {
   const uint16_t level = (uint16_t)(pulse_us * ticks_per_us_);
   pwm_set_chan_level(slice_, channel_, level);
 }

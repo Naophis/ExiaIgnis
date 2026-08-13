@@ -1026,10 +1026,16 @@ typedef struct {
   float alpha = 0;
   float ang = 0;
   int suction_active = 0;
+  // AM32 ESC移行後、suction_duty/duty_low/duty_burst/duty_burst_lowは
+  // 全てESCへの目標パルス幅を「us(1000〜2000)」で直接指定する値として
+  // 扱う(0〜100%のduty%ではない。ControlLaw::set_next_duty()参照)。
   float suction_duty = 0;
   float suction_duty_low = 0;
   float suction_duty_burst = 0;
   float suction_duty_burst_low = 0;
+  // 目標パルス幅へのランプ速度(us/sec)。例: 2000なら1000us分(0%→100%
+  // 相当)を0.5秒でランプする。ControlLaw::set_suction_ramp_rate()参照。
+  float suction_esc_ramp_us_per_sec = 2000.0f;
   float suction_bldc_hz = 0;
   // BldcActuatorのbattery_v→{gain, max_amp} LUT(可変長、区分線形補間)。
   // amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain のV/Hz比例式に使うgainと、その

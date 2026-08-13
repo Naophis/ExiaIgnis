@@ -37,7 +37,14 @@ public:
   // 吸引duty指令が目標値へ向けてまだランプ中かどうか。旧BldcActuator::
   // is_ramping()の代替(PlanningTask::is_suction_ramping()から呼ばれる)。
   bool is_suction_ramping() const {
-    return suction_en_ && gain_cnt < kSuctionRampTicks;
+    return suction_en_ && (suction_pulse_us_ != suction_target_us_);
+  }
+
+  // 目標パルス幅へのランプ速度(us/sec)。system.yamlの
+  // suction_esc_ramp_us_per_secから起動時に一度だけ設定される
+  // (main_task.cpp load_param_after()参照)。
+  void set_suction_ramp_rate(float us_per_sec) {
+    suction_ramp_us_per_sec_ = us_per_sec;
   }
 
   // ---- 公開データ ----
@@ -67,13 +74,14 @@ private:
   Simple_PID_Controller gyro_pid;
 
   // ---- 吸引制御 ----
-  // duty ランプ: gain_cnt を 1kHz tick毎に+1し、kSuctionRampTicks に達する
-  // までの比率で 50%→目標duty へ線形補間する(起動トルク確保のため、
-  // set_next_duty()参照)。AM32移行前は BldcActuator::get_ramp_rate() の
-  // battery_v→ramp_gain LUT値を共有していたが、ESC側は自前でBEMF閉ループ
-  // 制御を行うためソフト側は固定時間ランプで十分としている。
-  static constexpr float kSuctionRampTicks = 500.0f; // @1kHz = 0.5秒でランプ完了
-  float  gain_cnt     = 0.0f;
+  // 目標パルス幅(us)へ suction_ramp_us_per_sec_ の速度で線形にランプする
+  // (set_next_duty()参照)。AM32移行前は BldcActuator::get_ramp_rate() の
+  // battery_v→ramp_gain LUT値(elec_hz空間)を共有していたが、ESC側は
+  // パルス幅(us)指令のみで済むため、system.yaml一発値の固定レートランプに
+  // 簡略化している。
+  float  suction_ramp_us_per_sec_ = 2000.0f;
+  float  suction_pulse_us_        = 1000.0f; // 現在のランプ済みパルス幅(us)
+  float  suction_target_us_       = 1000.0f; // 直近tickの目標パルス幅(us)
   duty_t tgt_duty{};
 
   // ---- センサー制御状態 ----

@@ -25,11 +25,17 @@ public:
   // duty[%] (0〜100) をパルス幅(1000〜2000us)に線形変換してPWMへ書き込む。
   void apply(float duty_pct);
 
+  // パルス幅を us で直接指定してPWMへ書き込む(1000〜2000usへクランプ)。
+  // ControlLawはこちらを使う(system.yamlのsuction_duty系はus直接指定)。
+  void apply_us(float pulse_us);
+
   void enable();
   void disable();
   bool is_enabled() const { return enabled_; }
 
 private:
+  void write_ticks(float pulse_us);
+
   uint     slice_   = 0;
   uint     channel_ = 0;
   uint32_t wrap_    = 0;

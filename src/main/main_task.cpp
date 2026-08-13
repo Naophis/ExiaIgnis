@@ -44,8 +44,12 @@ bool rx_usb_cmd(char *buf, int len);
 void MainTask::load_param_after() {
   // AM32 ESC移行により、BldcActuator向けのV/Hzランプパラメータ(旧
   // suction_bldc_hz / suction_batt_*_table / suction_batt_ramp_gain_table_*)
-  // はもう読み込まない。吸引duty(suction_duty等)はplanning_->suction_enable()
-  // 経由でそのまま使われる(main_task_run.cpp等の呼び出し箇所を参照)。
+  // はもう読み込まない。吸引duty(suction_duty等、単位はus)は
+  // planning_->suction_enable() 経由でそのまま使われる
+  // (main_task_run.cpp等の呼び出し箇所を参照)。
+  planning_->ctl_.set_suction_ramp_rate(sys_.test.suction_esc_ramp_us_per_sec);
+  printf("[param] suction_esc_ramp_us_per_sec = %.0f\n",
+         sys_.test.suction_esc_ramp_us_per_sec);
 }
 
 bool MainTask::load_params() {

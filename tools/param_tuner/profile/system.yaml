@@ -115,19 +115,32 @@ test: # テスト走行時に使用するパラメータ群
   ang: 3600
   search_mode: 0
   
-  suction_duty: 9.0
-  suction_duty_low: 9.0
+  # [重要] AM32 ESC移行により、suction_duty系は0〜100%のduty%ではなく
+  # ESCへの目標パルス幅を「us(1000〜2000)」で直接指定する値になった
+  # (1000=停止/アーム, 2000=フル)。旧BldcActuator用の値(9.0等)は無効に
+  # なるため、us単位の値に置き換え済み(要実機再調整)。
+  suction_duty: 1750
+  suction_duty_low: 1500
 
   # Alter
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.750
   # Nova
-  suction_duty_burst: 8.25
-  suction_duty_burst_low: 8.0 # suction_duty_burst -0.25
+  suction_duty_burst: 1750
+  suction_duty_burst_low: 1500 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
 
+  # 目標パルス幅へのランプ速度(us/sec)。suction_enable()直後、この速度で
+  # 最小パルス(1000us)から目標us値へ線形にランプする
+  # (ControlLaw::set_next_duty()参照)。AM32自体のソフトスタートと併用。
+  suction_esc_ramp_us_per_sec: 2000
+
+  # ---- 以下、旧BldcActuator(自前6-step commutation)専用パラメータ ----
+  # AM32 ESC移行によりBldcActuator::tick()/enable()は呼ばれなくなったため
+  # 現在は未使用(コード・設定とも参照用に残置。planning_task.hppの
+  # bldc_メンバのコメント参照)。
   suction_bldc_hz: 8200
   # バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長。3配列とも同じ
   # 長さ・昇順で指定すること)。amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain の
