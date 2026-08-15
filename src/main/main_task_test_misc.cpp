@@ -1,10 +1,225 @@
 #include "define.hpp"
 #include "hardware/gpio.h"
+#include "hardware/pio.h"
 #include "main/main_task.hpp"
 #include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
 #include "pico/time.h"
+#include "driver/am32_config.hpp"
+#include "config_loader.hpp"
 #include <stdio.h>
+
+namespace {
+void am32_printf_line(const char* line) { printf("%s\n", line); }
+
+// 設定通信を終えた後、信号線をCore1(ControlLaw)が回し続けているPWMスライスへ
+// 戻す。SuctionEscActuator::init()でPWMスライス自体は起動時から動作し続けて
+// おり、config中もCore1は変わらずpwm_set_chan_level()を叩き続けている
+// (物理ピンがPIOへ切り替わっているため単に信号がESCへ届いていないだけ)。
+// そのためスライス自体の再初期化は不要で、GPIO機能をPWMへ戻すだけでよい。
+void restore_suction_pwm_pin() {
+  gpio_set_function(SUCTION_ESC_PWM, GPIO_FUNC_PWM);
+}
+
+// read_am32_param()/write_am32_param()の開始時点の生設定byte列を保存しておき、
+// restore_am32_param()で書き戻せるようにする。人間単位への変換(motor_kv()等)
+// を経由せず生byteのまま保存/復元することで、換算の往復誤差(例: timingの
+// 旧フォーマット非対応)を回避する。
+constexpr const char* kAm32BackupPath = "/am32_backup.bin";
+
+void backup_am32_settings(const AM32Settings& s) {
+  if (ConfigLoader::write_file(kAm32BackupPath, s.raw.buffer, AM32Settings::LAYOUT_SIZE)) {
+    printf("am32: backup saved to %s (%u bytes)\n", kAm32BackupPath,
+           (unsigned)AM32Settings::LAYOUT_SIZE);
+  } else {
+    printf("am32: backup save FAILED\n");
+  }
+}
+}  // namespace
+
+void MainTask::read_am32_param() {
+  // Core1がconfig中も1kHzでsuction PWMを書き続けるため、意図しない残り
+  // duty(旧テストの目標値)がESC復帰直後に反映されないよう先に止めておく。
+  planning_->suction_disable();
+  while (planning_->is_suction_ramping()) {
+    sleep_ms(5);
+  }
+
+  // AM32(cached_/last_read_で192byte*2を持つ)をCore0のスタック(8KB)へ直接
+  // 積まず、staticにして.bssへ逃がす(スタック圧迫によるフォルトの可能性を排除)。
+  static AM32 esc;
+  esc.init(SUCTION_ESC_PWM, pio0);
+
+  printf("== AM32 read == (sizeof(AM32)=%u)\n", (unsigned)sizeof(AM32));
+  const Am32ConfigStatus st = esc.enterConfigMode();
+  if (st != Am32ConfigStatus::OK) {
+    printf("enterConfigMode failed: %s (%s)\n",
+           am32_config_status_to_string(st),
+           Am32Protocol::status_to_string(esc.last_protocol_status()));
+    restore_suction_pwm_pin();
+    return;
+  }
+  printf("handshake OK. devinfo:");
+  for (int i = 0; i < 9; i++) {
+    printf(" %02X", esc.device_info()[i]);
+  }
+  printf("\n");
+
+  am32_handle_cli(esc, "read", am32_printf_line);
+  am32_handle_cli(esc, "dump", am32_printf_line);
+  backup_am32_settings(esc.cached_settings());
+
+  esc.exitConfigMode();
+  restore_suction_pwm_pin();
+  printf("== AM32 read done ==\n");
+}
+
+void MainTask::write_am32_param() {
+  planning_->suction_disable();
+  while (planning_->is_suction_ramping()) {
+    sleep_ms(5);
+  }
+
+  static AM32 esc;
+  esc.init(SUCTION_ESC_PWM, pio0);
+
+  printf("== AM32 write ==\n");
+  Am32ConfigStatus st = esc.enterConfigMode();
+  if (st != Am32ConfigStatus::OK) {
+    printf("enterConfigMode failed: %s (%s)\n",
+           am32_config_status_to_string(st),
+           Am32Protocol::status_to_string(esc.last_protocol_status()));
+    restore_suction_pwm_pin();
+    return;
+  }
+
+  AM32Settings settings;
+  st = esc.readSettings(settings);
+  if (st != Am32ConfigStatus::OK) {
+    printf("readSettings failed: %s (%s)\n",
+           am32_config_status_to_string(st),
+           Am32Protocol::status_to_string(esc.last_protocol_status()));
+    esc.exitConfigMode();
+    restore_suction_pwm_pin();
+    return;
+  }
+  printf("before: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+         settings.motor_kv(), settings.motor_poles(), settings.timing(),
+         settings.pwm_frequency_khz());
+  backup_am32_settings(settings);  // restore_am32_param()で戻せるよう書き換え前の生byteを保存
+
+  // TODO: 実際に書き換えたい値へ調整すること。以下はサンプル値。
+  settings.set_motor_kv(8500);
+  settings.set_motor_poles(12);
+  settings.set_timing(25);
+
+  st = esc.writeSettings(settings);  // 範囲チェック + RAM staging更新のみ
+  if (st != Am32ConfigStatus::OK) {
+    char verr[64] = {0};
+    am32_validate_settings(settings, verr, sizeof(verr));  // 詳細理由を再取得して表示
+    printf("writeSettings failed (validation): %s -- %s\n",
+           am32_config_status_to_string(st), verr);
+    esc.exitConfigMode();
+    restore_suction_pwm_pin();
+    return;
+  }
+
+  st = esc.saveSettings();  // ここで実際にESCのflashへ書き込む
+  if (st != Am32ConfigStatus::OK) {
+    printf("saveSettings failed: %s (%s) -- rolling back staged value\n",
+           am32_config_status_to_string(st),
+           Am32Protocol::status_to_string(esc.last_protocol_status()));
+    esc.rollback();
+  } else {
+    printf("save OK\n");
+  }
+
+  AM32Settings verify;
+  st = esc.readSettings(verify);
+  if (st == Am32ConfigStatus::OK) {
+    printf("after : KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+           verify.motor_kv(), verify.motor_poles(), verify.timing(),
+           verify.pwm_frequency_khz());
+  }
+
+  esc.exitConfigMode();
+  restore_suction_pwm_pin();
+  printf("== AM32 write done ==\n");
+}
+
+// read_am32_param()/write_am32_param()が保存したバックアップ(/am32_backup.bin)
+// をESCへ書き戻す。書き換え前の生byte列をそのまま使うため、motor_kv()等の
+// 人間単位アクセサは経由しない(換算の往復誤差を避けるため)。
+void MainTask::restore_am32_param() {
+  printf("== AM32 restore ==\n");
+  const int32_t sz = ConfigLoader::file_size(kAm32BackupPath);
+  if (sz != (int32_t)AM32Settings::LAYOUT_SIZE) {
+    printf("am32: no valid backup at %s (size=%ld, expected %u) -- run read/write first\n",
+           kAm32BackupPath, (long)sz, (unsigned)AM32Settings::LAYOUT_SIZE);
+    return;
+  }
+
+  AM32Settings settings{};
+  size_t out_size = 0;
+  if (!ConfigLoader::read_file_raw(kAm32BackupPath, settings.raw.buffer,
+                                    sizeof(settings.raw.buffer), out_size) ||
+      out_size != AM32Settings::LAYOUT_SIZE) {
+    printf("am32: backup read failed\n");
+    return;
+  }
+  printf("am32: backup loaded: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+         settings.motor_kv(), settings.motor_poles(), settings.timing(),
+         settings.pwm_frequency_khz());
+
+  planning_->suction_disable();
+  while (planning_->is_suction_ramping()) {
+    sleep_ms(5);
+  }
+
+  static AM32 esc;
+  esc.init(SUCTION_ESC_PWM, pio0);
+
+  Am32ConfigStatus st = esc.enterConfigMode();
+  if (st != Am32ConfigStatus::OK) {
+    printf("enterConfigMode failed: %s (%s)\n",
+           am32_config_status_to_string(st),
+           Am32Protocol::status_to_string(esc.last_protocol_status()));
+    restore_suction_pwm_pin();
+    return;
+  }
+
+  st = esc.writeSettings(settings);  // 範囲チェック + RAM staging更新のみ
+  if (st != Am32ConfigStatus::OK) {
+    char verr[64] = {0};
+    am32_validate_settings(settings, verr, sizeof(verr));
+    printf("writeSettings failed (validation): %s -- %s\n",
+           am32_config_status_to_string(st), verr);
+    esc.exitConfigMode();
+    restore_suction_pwm_pin();
+    return;
+  }
+
+  st = esc.saveSettings();
+  if (st != Am32ConfigStatus::OK) {
+    printf("saveSettings failed: %s (%s)\n",
+           am32_config_status_to_string(st),
+           Am32Protocol::status_to_string(esc.last_protocol_status()));
+  } else {
+    printf("restore OK\n");
+  }
+
+  AM32Settings verify;
+  st = esc.readSettings(verify);
+  if (st == Am32ConfigStatus::OK) {
+    printf("after restore: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+           verify.motor_kv(), verify.motor_poles(), verify.timing(),
+           verify.pwm_frequency_khz());
+  }
+
+  esc.exitConfigMode();
+  restore_suction_pwm_pin();
+  printf("== AM32 restore done ==\n");
+}
 
 void MainTask::test_suction() {
   const auto se = get_sensing_entity();

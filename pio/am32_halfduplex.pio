@@ -1,0 +1,67 @@
+;
+; am32_halfduplex.pio - AM32 ESC 設定通信(bootloader raw protocol)用
+; half-duplex bit-bang UART, 19200bps, 8N1, non-inverted, idle-high。
+;
+; プロトコル仕様の出典: AM32-bootloader (AlkaMotors/AM32-bootloader) bootloader/main.c
+; の serialreadChar()/serialwriteChar() コメント
+; ("read one byte from the input pin, 19200, not inverted, one stop bit")。
+;
+; TX/RXは同一GPIO(半二重)を2つのSMで共有する。どちらか一方のSMのみを
+; 有効化し、他方は無効(pindir=input)にしておくことでバス競合を防ぐ
+; (C側 am32_protocol.cpp の switch_to_tx()/switch_to_rx() が制御)。
+;
+; プログラム構造は Raspberry Pi Pico SDK 付属サンプル
+; pico-examples/pio/uart_tx/uart_tx.pio, pio/uart_rx/uart_rx.pio を
+; 1ピン半二重向けに移植したもの(8 cycles/bitのループ構造も同一)。
+; AM32固有の値(baud=19200等)以外はSDK標準UARTビットバンガーそのもの。
+
+.program am32_tx
+.side_set 1 opt
+
+; OUT pin 0 と side-set pin 0 は両方とも同一GPIO(半二重信号線)にマップする。
+    pull       side 1 [7]  ; OSRへ1バイトpull、その間lineをHi(stop bit/idle)に維持
+    set x, 7   side 0 [7]  ; ビットカウンタ=7、start bit(Low)を8サイクル分アサート
+bitloop:                   ; 8回ループ(8N1のdata bit)
+    out pins, 1            ; OSRから1bit shift outしてpinへ
+    jmp x-- bitloop   [6]  ; 1ループ=8サイクル = 1 bit time
+% c-sdk {
+static inline void am32_tx_program_init(PIO pio, uint sm, uint offset, uint pin, float clkdiv) {
+    pio_sm_config c = am32_tx_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, true, false, 32);
+    sm_config_set_out_pins(&c, pin, 1);
+    sm_config_set_sideset_pins(&c, pin);
+    sm_config_set_clkdiv(&c, clkdiv);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}
+
+; ------------------------------------------------------------------
+
+.program am32_rx
+
+; IN pin 0 と JMP pin は両方とも同一GPIO(半二重信号線)にマップする。
+; フレーミングエラー(stop bitがLow)はバイトを破棄してstartへ戻る。
+start:
+    wait 0 pin 0        ; start bit(Low)のedgeまで待機
+    set x, 7    [10]    ; ビットカウンタ=7、最初のdata bitの中央まで待つ
+bitloop:                ; 8回ループ、各1bit time
+    in pins, 1          ; 1bitをISRへshift in
+    jmp x-- bitloop [6]
+    jmp pin good_stop   ; stop bitがHiであることを確認
+
+    wait 1 pin 0         ; フレーミングエラー: lineがidle(Hi)に戻るまで待ってから再開
+    jmp start            ; このバイトはpushしない
+
+good_stop:
+    push                 ; ISR(受信バイト)をRX FIFOへpush
+    jmp start
+% c-sdk {
+static inline void am32_rx_program_init(PIO pio, uint sm, uint offset, uint pin, float clkdiv) {
+    pio_sm_config c = am32_rx_program_get_default_config(offset);
+    sm_config_set_in_shift(&c, true, false, 32);
+    sm_config_set_in_pins(&c, pin);
+    sm_config_set_jmp_pin(&c, pin);
+    sm_config_set_clkdiv(&c, clkdiv);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

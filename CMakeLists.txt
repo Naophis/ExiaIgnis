@@ -117,6 +117,8 @@ add_executable(ExiaIgnis
     src/driver/asm330lhh.cpp
     src/driver/as5147p.cpp
     src/driver/ads7042.cpp
+    src/driver/am32_protocol.cpp
+    src/driver/am32_config.cpp
     src/config_loader.cpp
 
     src/utils/kalman_filter.cpp
@@ -151,8 +153,11 @@ pico_set_program_name(ExiaIgnis "ExiaIgnis")
 pico_set_program_version(ExiaIgnis "0.1")
 
 # Generate PIO header
-pico_generate_pio_header(ExiaIgnis 
+pico_generate_pio_header(ExiaIgnis
     ${CMAKE_CURRENT_LIST_DIR}/pio/blink.pio
+)
+pico_generate_pio_header(ExiaIgnis
+    ${CMAKE_CURRENT_LIST_DIR}/pio/am32_halfduplex.pio
 )
 
 # Modify the below lines to enable/disable output over UART/USB

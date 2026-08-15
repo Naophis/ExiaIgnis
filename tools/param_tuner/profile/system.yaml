@@ -61,7 +61,7 @@ maze_size: 32
 debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
-mode: 0 # メイン
+# mode: 0 # メイン
 # mode: 1 # 最短スローム
 # mode: 2 # 直進
 # mode: 3 # 超信地
@@ -79,6 +79,10 @@ mode: 0 # メイン
 # mode: 21 # pivot turn n2
 # mode: 22 # encoder_test
 # mode: 23 # search pivot turn
+# mode: 24 # AM32 param read
+mode: 25 # AM32 param write
+# mode: 26 # AM32 restore
+
 
 test: # テスト走行時に使用するパラメータ群
   v_max: 400

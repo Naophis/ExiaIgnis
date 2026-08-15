@@ -144,6 +144,12 @@ private:
   void test_search_pivot();
   void test_system_identification(bool para);
 
+  void read_am32_param();
+  void write_am32_param();
+  // read_am32_param()/write_am32_param()実行時に自動保存されるバックアップ
+  // (/am32_backup.bin)をESCへ書き戻し、元の設定に復元する。
+  void restore_am32_param();
+
   std::unordered_map<unsigned char, std::vector<std::pair<TurnType, std::string>>> turn_map;
   param_set_t p_set;
   std::vector<param_set_t> paramset_list;

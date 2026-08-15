@@ -77,6 +77,15 @@ void MainTask::run_test_mode(int mode) {
     } else if (mode == 23) {
       printf("load_circuit_path\n");
       test_search_pivot();
+    } else if (mode == 24) {
+      printf("suction\n");
+      read_am32_param();
+    }  else if (mode == 25) {
+      printf("suction\n");
+      write_am32_param();
+    } else if (mode == 26) {
+      printf("am32 restore\n");
+      restore_am32_param();
     }
   }
 }
