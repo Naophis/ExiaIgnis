@@ -56,6 +56,17 @@ int main() {
   stdio_init_all();
   set_sys_clock_khz(150000, true);
 
+  // 吸引ESC(AM32)は電源投入直後から有効なPWM信号(最小パルス1000us)が
+  // 来ていることを期待する。この後に続くConfigLoader::init()やsleep_ms
+  // (1500)等でGPIOが未設定(フローティング)のまま数秒経過すると、ESCが
+  // 信号ロストと判断してエラーブザーを鳴らし続けてしまう。他の初期化より
+  // 先に、PlanningTaskを生成してesc_.init()だけ済ませておくことで、電源
+  // 投入からできるだけ早く最小パルス出力を開始する
+  // (PlanningTask::init()側でも再度esc_.init()が呼ばれるが、GPIO/PWM
+  // レジスタの再設定なので副作用はない)。
+  auto planning = PlanningTask::create();
+  planning->esc_.init();
+
   // Tactile switch: pull-up (active low)
   gpio_init(BTN_PIN);
   gpio_set_dir(BTN_PIN, GPIO_IN);
@@ -96,7 +107,7 @@ int main() {
 
   printf("[boot] step1: SensingTask create\n");
   auto sensing = SensingTask::create();
-  auto planning = PlanningTask::create();
+  // planningはesc_の早期init()のため、main()冒頭で既に作成済み。
   printf("[boot] step2: sensing set_*\n");
 
   sensing->set_sensing_entity(sensing_entity);

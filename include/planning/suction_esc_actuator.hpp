@@ -14,8 +14,15 @@
 //
 // [重要] apply(0%)="最小パルス(1000us)"は「停止」であって「信号なし」
 // ではない。ESCがアーム状態を保つには継続的なパルス出力が必要なため、
-// init()直後から常時PWMを出し続け、enable/disableはduty=0を送るか
-// どうかの論理フラグとしてのみ扱う(物理的なPWM出力自体は止めない)。
+// init()直後から常時PWMを出し続ける。
+//
+// enable()/disable()はフラグ管理のみで、PWM出力そのものは書き換えない。
+// 実際のパルス幅は毎tick ControlLaw::set_next_duty()がsuction_ramp_us_
+// per_sec_の速度で目標値へ滑らかに追従させる(有効化時は最小パルスから
+// 目標へ、無効化時は目標から最小パルスへ)。まだ高速回転中のモーターに
+// 対して急に最小パルス(停止)を送ると、急ブレーキ相当のコマンドとなり
+// 大きな逆起電力/回生電流が生じ得るため、停止時も同じ滑らかなランプを
+// 経由させる設計にしている。
 class SuctionEscActuator {
 public:
   // GPIOファンクション設定・PWMスライス初期化。Core0のmainから呼ぶ。
@@ -29,6 +36,7 @@ public:
   // ControlLawはこちらを使う(system.yamlのsuction_duty系はus直接指定)。
   void apply_us(float pulse_us);
 
+  // フラグ管理のみ(クラスコメント参照)。実際の出力遷移はControlLaw側で行う。
   void enable();
   void disable();
   bool is_enabled() const { return enabled_; }

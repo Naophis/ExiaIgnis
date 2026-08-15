@@ -50,12 +50,12 @@ void SuctionEscActuator::write_ticks(float pulse_us) {
   pwm_set_chan_level(slice_, channel_, level);
 }
 
+// enable/disableはどちらもフラグ管理のみ。実際のパルス幅は
+// ControlLaw::set_next_duty()が毎tick suction_ramp_us_per_sec_で滑らかに
+// 追従させる(有効化時は最小パルスから目標へ、無効化時は目標から最小
+// パルスへ)。ここで即座に最小パルスへ叩き落とすと、まだ高速回転して
+// いるモーターに急ブレーキ相当のコマンドを送ることになり、大きな
+// 逆起電力/回生電流の原因になり得るため行わない。
 void SuctionEscActuator::enable() { enabled_ = true; }
 
-void SuctionEscActuator::disable() {
-  enabled_ = false;
-  // MotorActuator::motor_disable()と同じ考え方: 無効化時は即座に最小
-  // パルスを書き込む。PWM出力自体は止めない(信号が途切れるとESCが
-  // アーム解除/フェイルセーフに入る可能性があるため)。
-  apply(0.0f);
-}
+void SuctionEscActuator::disable() { enabled_ = false; }

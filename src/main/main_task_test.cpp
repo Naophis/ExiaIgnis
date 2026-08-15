@@ -10,6 +10,7 @@
 // テストモード dispatch (user_mode != 0)
 // ============================================================
 void MainTask::run_test_mode(int mode) {
+  file_idx = sys_.test.file_idx;
   if (mode != 0) {
     if (mode == 1) {
       printf("test_sla\n");

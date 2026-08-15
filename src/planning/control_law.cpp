@@ -1279,43 +1279,46 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
     duty_l = 0.0f;
     duty_r = 0.0f;
   }
+  // suction_duty/duty_low/duty_burst/duty_burst_lowはESCへの目標パルス幅
+  // (us、1000〜2000)をそのまま指定する値(structs.hppのコメント参照)。
+  // BLDC時代のバッテリー電圧duty%補正(*100/batt_kf)はus直接指定の空間には
+  // 対応しないため廃止した。
+  //
+  // suction_en_==falseの間も目標を最小パルス(1000us=停止)にしたまま同じ
+  // ランプ処理へ流し込む。即座にMINへ叩き落とすと、まだ高速回転している
+  // 吸引モーターに対して急ブレーキ相当のコマンドを送ることになり、大きな
+  // 逆起電力/回生電流が生じ得るため、停止時もsuction_ramp_us_per_sec_の
+  // 速度で徐々に緩める(=有効/無効どちらの遷移でも同じ滑らかなランプに
+  // 統一する)。
+  suction_target_us_ = (float)SUCTION_ESC_PULSE_MIN_US;
   if (suction_en_) {
     const bool high_suction =
         tgt_val_->tgt_in.tgt_dist > 60 &&
         (tgt_val_->ego_in.state == 0 || tgt_val_->ego_in.state == 1) &&
         tgt_val_->motion_type == MotionType::STRAIGHT;
-    // suction_duty/duty_low/duty_burst/duty_burst_lowはESCへの目標パルス幅
-    // (us、1000〜2000)をそのまま指定する値(structs.hppのコメント参照)。
-    // BLDC時代のバッテリー電圧duty%補正(*100/batt_kf)はus直接指定の
-    // 空間には対応しないため廃止した。
     suction_target_us_ =
         high_suction ? tgt_duty.duty_suction_low : tgt_duty.duty_suction;
     if (suction_target_us_ < (float)SUCTION_ESC_PULSE_MIN_US)
       suction_target_us_ = (float)SUCTION_ESC_PULSE_MIN_US;
     if (suction_target_us_ > (float)SUCTION_ESC_PULSE_MAX_US)
       suction_target_us_ = (float)SUCTION_ESC_PULSE_MAX_US;
-
-    // suction_ramp_us_per_sec_ の速度で目標パルス幅へ線形にランプする
-    // (AM32側の自前ソフトスタートと併用。旧BLDCのbattery_v/elec_hz依存
-    // gainテーブルは廃止し、system.yaml一発値の固定レートに簡略化)。
-    if (suction_pulse_us_ < suction_target_us_) {
-      suction_pulse_us_ += suction_ramp_us_per_sec_ * dt_;
-      if (suction_pulse_us_ > suction_target_us_)
-        suction_pulse_us_ = suction_target_us_;
-    } else if (suction_pulse_us_ > suction_target_us_) {
-      suction_pulse_us_ -= suction_ramp_us_per_sec_ * dt_;
-      if (suction_pulse_us_ < suction_target_us_)
-        suction_pulse_us_ = suction_target_us_;
-    }
-    duty_suction_in = suction_pulse_us_;
-    if (!isfinite(duty_suction_in))
-      duty_suction_in = (float)SUCTION_ESC_PULSE_MIN_US;
-  } else {
-    // 次回enable時は最小パルスから再スタートする。
-    suction_pulse_us_  = (float)SUCTION_ESC_PULSE_MIN_US;
-    suction_target_us_ = (float)SUCTION_ESC_PULSE_MIN_US;
-    duty_suction_in     = (float)SUCTION_ESC_PULSE_MIN_US;
   }
+
+  // suction_ramp_us_per_sec_ の速度で目標パルス幅へ線形にランプする
+  // (AM32側の自前ソフトスタートと併用。旧BLDCのbattery_v/elec_hz依存
+  // gainテーブルは廃止し、system.yaml一発値の固定レートに簡略化)。
+  if (suction_pulse_us_ < suction_target_us_) {
+    suction_pulse_us_ += suction_ramp_us_per_sec_ * dt_;
+    if (suction_pulse_us_ > suction_target_us_)
+      suction_pulse_us_ = suction_target_us_;
+  } else if (suction_pulse_us_ > suction_target_us_) {
+    suction_pulse_us_ -= suction_ramp_us_per_sec_ * dt_;
+    if (suction_pulse_us_ < suction_target_us_)
+      suction_pulse_us_ = suction_target_us_;
+  }
+  duty_suction_in = suction_pulse_us_;
+  if (!isfinite(duty_suction_in))
+    duty_suction_in = (float)SUCTION_ESC_PULSE_MIN_US;
 
   tgt_val_->duty_suction = duty_suction_in;
   motor_->apply(duty_l, duty_r);
