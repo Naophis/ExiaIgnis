@@ -11,7 +11,7 @@ normal:
   v: 300.000000
   ang: 90.000000
   rad: 26.000000
-  pow_n: 2.000000
+  pow_n: 2  
   front: { left: 4.94298864, right: 4.94298864 }
   back: { left: 4.74724031, right: 4.74724031 }
 # check
