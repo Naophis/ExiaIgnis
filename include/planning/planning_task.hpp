@@ -121,6 +121,17 @@ private:
   std::atomic<bool> motor_stop_req_{false};   // Core0 -> Core1: 停止要求
   std::atomic<bool> motor_stopped_ack_{false}; // Core1 -> Core0: 停止完了通知
 
+  // ---- motor_enable() 用 Core0<->Core1 ハンドシェイク (motor_disable()と対称) ----
+  // 従来はCore0のmotor_enable()内で直接 trj_.setup()/ego.kf_*.reset()/
+  // motor_en=true/motor_.motor_enable() を行っていたが、これらは全てCore1の
+  // tick()が毎ms読み書きしているego/trj_/PWMハードウェアと競合し得る
+  // (motor_en自体もCore1専用フィールドとして書き込み場所が限定されているのに
+  // ここだけCore0から直接書いていた)。起動要求をatomicで伝え、実際の初期化と
+  // motor_en=true化はCore1のtick()内、同一tick・同一コアでのみ行うことで
+  // motor_disable()と同じ理屈でレースを排除する。
+  std::atomic<bool> motor_start_req_{false};    // Core0 -> Core1: 起動要求
+  std::atomic<bool> motor_started_ack_{false};  // Core1 -> Core0: 起動完了通知
+
   // ---- 共有エンティティ ----
   std::shared_ptr<SensingTask>              sensing_;
   std::shared_ptr<sensing_result_entity_t>  sensing_result;

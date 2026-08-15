@@ -157,6 +157,27 @@ void PlanningTask::tick(uint32_t dt_us) {
   // T1 以降: コマンド受信で cmd_log_remain が更新された後に評価
   const bool do_log = false; // (tick_num <= 30) || (cmd_log_remain > 0);
 
+  // Core0 からの起動要求をCore1側で確定させる。trj_.setup()/ego.kf_*.reset()/
+  // motor_en=true/motor_.motor_enable()を全てこの1tick・同一コア内で行うことで
+  // Core1が毎ms読み書きするego/trj_/PWMハードウェアとの競合を避ける
+  // (one-shotラッチとしてmotor_started_ack_で多重実行を防ぐ)。
+  if (motor_start_req_.load(std::memory_order_acquire) &&
+      !motor_started_ack_.load(std::memory_order_relaxed)) {
+    if (!motor_en) {
+      trj_.setup();
+    }
+    ego.kf_dist.reset(0);
+    ego.kf_ang.reset(0);
+    ego.kf_v.reset(0);
+    ego.kf_w.reset(0);
+    ego.kf_w2.reset(0);
+    ego.kf_v_l.reset(0);
+    ego.kf_v_r.reset(0);
+    motor_en = true;
+    motor_.motor_enable();
+    motor_started_ack_.store(true, std::memory_order_release);
+  }
+
   // Core0 からの停止要求を Core1 側で確定させる。この tick の
   // ego.update()/ctl_.calc() 双方が motor_en=false を見るので、
   // 直後の set_next_duty() で duty=0 が必ず適用される。
@@ -473,20 +494,23 @@ void PlanningTask::cp_request() {
 }
 
 void PlanningTask::motor_enable() {
-  // 2回目呼び出し（motor_en=true 中）は generate() と競合するためスキップ
-  if (!motor_en) {
-    trj_.setup();
-  }
+  // 実際の初期化(trj_.setup()/ego.kf_*.reset()/motor_en=true/
+  // motor_.motor_enable())はCore1のtick()内でのみ行う。ここでは要求を出して
+  // Core1からの完了ackをタイムアウト付きで待つだけ(motor_disable()と対称)。
+  motor_started_ack_.store(false, std::memory_order_relaxed);
+  motor_start_req_.store(true, std::memory_order_release);
 
-  ego.kf_dist.reset(0);
-  ego.kf_ang.reset(0);
-  ego.kf_v.reset(0);
-  ego.kf_w.reset(0);
-  ego.kf_w2.reset(0);
-  ego.kf_v_l.reset(0);
-  ego.kf_v_r.reset(0);
-  motor_en = true;
-  motor_.motor_enable();
+  const uint32_t t0 = to_ms_since_boot(get_absolute_time());
+  while (!motor_started_ack_.load(std::memory_order_acquire)) {
+    if (to_ms_since_boot(get_absolute_time()) - t0 > 20) {
+      // Core1 の tick が想定外に止まっている等の異常系向けフォールバック。
+      // 通常経路では 1tick (~1ms) 以内に ack されるはず。
+      motor_.motor_enable();
+      break;
+    }
+    sleep_us(100);
+  }
+  motor_start_req_.store(false, std::memory_order_relaxed);
 }
 void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
   // PWM ハードウェアの disable は Core1 の tick() 内でのみ行う
