@@ -35,6 +35,49 @@ void backup_am32_settings(const AM32Settings& s) {
     printf("am32: backup save FAILED\n");
   }
 }
+
+// tools/param_tuner/profile/am32.yaml から生成された /am32.txt を読み込む。
+//
+// [重要] ESCのbootloaderはreceiveBuffer()呼び出しから20ms以内に次フレームの
+// 先頭byteが来ないと invalid_command=101 とみなし、その場でapplicationへ
+// jumpしてしまう(出典: 調査レポート§2.2)。LittleFSのflash erase/program相当の
+// アクセスはCLAUDE.mdにもある通り~100msかかり得るため、この読み込みは
+// 必ずenterConfigMode()より前(=ESCとの通信区間の外側)で行うこと。
+bool load_am32_target_doc(JsonDocument& doc) {
+  return ConfigLoader::load_file("/am32.txt", doc);
+}
+
+// 読み込み済みdocの内容で、out (ESCから読み出した現在値) の該当フィールドだけ
+// 上書きする。純粋にRAM上の操作でLittleFSへは触れない(config session中に
+// 呼んでよい)。doc側に存在しないキーはoutの現在値がそのまま残る(部分上書き)。
+// 各setterが内部で範囲クランプするため、ここでの追加チェックは不要。
+void apply_am32_target_doc(const JsonDocument& doc, AM32Settings& out) {
+  out.set_motor_kv(doc["motor_kv"] | out.motor_kv());
+  out.set_motor_poles(doc["motor_poles"] | out.motor_poles());
+  out.set_timing(doc["timing"] | out.timing());
+  out.set_pwm_frequency_khz(doc["pwm_frequency_khz"] | out.pwm_frequency_khz());
+  out.set_variable_pwm_enabled(doc["variable_pwm"] | out.variable_pwm_enabled());
+  out.set_startup_power_percent(doc["startup_power_percent"] | out.startup_power_percent());
+  out.set_sine_startup_enabled(doc["sine_startup"] | out.sine_startup_enabled());
+  out.set_bidirectional_enabled(doc["bidirectional"] | out.bidirectional_enabled());
+  out.set_complementary_pwm_enabled(doc["complementary_pwm"] | out.complementary_pwm_enabled());
+  out.set_stuck_rotor_protection_enabled(
+      doc["stuck_rotor_protection"] | out.stuck_rotor_protection_enabled());
+  out.set_brake_on_stop(doc["brake_on_stop"] | out.brake_on_stop());
+  out.set_drag_brake_strength(doc["drag_brake_strength"] | out.drag_brake_strength());
+  out.set_driving_brake_strength(doc["driving_brake_strength"] | out.driving_brake_strength());
+  if (doc["current_limit_disabled"] | false) {
+    out.disable_current_limit();
+  } else {
+    out.set_current_limit_amps(doc["current_limit_amps"] | out.current_limit_amps());
+  }
+  if (doc["temp_limit_disabled"] | false) {
+    out.disable_temperature_limit();
+  } else {
+    out.set_temperature_limit_c(doc["temp_limit_c"] | out.temperature_limit_c());
+  }
+  out.set_beep_volume(doc["beep_volume"] | out.beep_volume());
+}
 }  // namespace
 
 void MainTask::read_am32_param() {
@@ -67,10 +110,13 @@ void MainTask::read_am32_param() {
 
   am32_handle_cli(esc, "read", am32_printf_line);
   am32_handle_cli(esc, "dump", am32_printf_line);
-  backup_am32_settings(esc.cached_settings());
 
   esc.exitConfigMode();
   restore_suction_pwm_pin();
+
+  // ESCとの通信区間の外側(config mode終了後)でLittleFSへ書き込む
+  // (理由: apply_am32_target_doc()のコメント参照)。
+  backup_am32_settings(esc.cached_settings());
   printf("== AM32 read done ==\n");
 }
 
@@ -78,6 +124,16 @@ void MainTask::write_am32_param() {
   planning_->suction_disable();
   while (planning_->is_suction_ramping()) {
     sleep_ms(5);
+  }
+
+  // /am32.txt の読み込みはESCとのconfig session開始前に済ませる
+  // (apply_am32_target_doc()のコメント参照: session中のLittleFSアクセスは
+  // ESC bootloaderの20ms待受タイムアウトを超えて勝手にjumpさせてしまう)。
+  JsonDocument target_doc;
+  if (!load_am32_target_doc(target_doc)) {
+    printf("am32: /am32.txt not found -- upload tools/param_tuner/profile/am32.yaml "
+           "first (aborting, nothing written)\n");
+    return;
   }
 
   static AM32 esc;
@@ -93,7 +149,7 @@ void MainTask::write_am32_param() {
     return;
   }
 
-  AM32Settings settings;
+  AM32Settings settings;  // ESCから読み出した"before"値。書き込み後のバックアップに使う
   st = esc.readSettings(settings);
   if (st != Am32ConfigStatus::OK) {
     printf("readSettings failed: %s (%s)\n",
@@ -106,17 +162,19 @@ void MainTask::write_am32_param() {
   printf("before: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
          settings.motor_kv(), settings.motor_poles(), settings.timing(),
          settings.pwm_frequency_khz());
-  backup_am32_settings(settings);  // restore_am32_param()で戻せるよう書き換え前の生byteを保存
 
-  // TODO: 実際に書き換えたい値へ調整すること。以下はサンプル値。
-  settings.set_motor_kv(8500);
-  settings.set_motor_poles(12);
-  settings.set_timing(25);
+  // target_docの内容で上書きする(RAM上の操作のみ、LittleFSへは触れない)。
+  // yaml側に無い項目はESCの現在値のまま。
+  AM32Settings target = settings;
+  apply_am32_target_doc(target_doc, target);
+  printf("target: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+         target.motor_kv(), target.motor_poles(), target.timing(),
+         target.pwm_frequency_khz());
 
-  st = esc.writeSettings(settings);  // 範囲チェック + RAM staging更新のみ
+  st = esc.writeSettings(target);  // 範囲チェック + RAM staging更新のみ
   if (st != Am32ConfigStatus::OK) {
     char verr[64] = {0};
-    am32_validate_settings(settings, verr, sizeof(verr));  // 詳細理由を再取得して表示
+    am32_validate_settings(target, verr, sizeof(verr));  // 詳細理由を再取得して表示
     printf("writeSettings failed (validation): %s -- %s\n",
            am32_config_status_to_string(st), verr);
     esc.exitConfigMode();
@@ -144,6 +202,10 @@ void MainTask::write_am32_param() {
 
   esc.exitConfigMode();
   restore_suction_pwm_pin();
+
+  // ESCとの通信区間の外側(config mode終了後)でLittleFSへ書き込む。
+  // "before"値(=書き換え前の生byte)をrestore_am32_param()用に保存する。
+  backup_am32_settings(settings);
   printf("== AM32 write done ==\n");
 }
 

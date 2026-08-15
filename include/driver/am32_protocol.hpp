@@ -111,6 +111,14 @@ private:
     void switch_to_tx();
     void switch_to_rx();
     Status tx_bytes(const uint8_t* data, size_t len);
+    // tx_bytes()からFIFO投入部分のみを切り出したもの。ESC側が単一フレームとして
+    // 連続受信する複数segment(例: write_buffer()のcommand+payload+crc)を送る際、
+    // segmentごとにtx_bytes()の末尾のsettle待ち(520us)を挟むとESC側の
+    // フレーム内byte間タイムアウト(5*BITTIME=260us)を超えてしまうため、
+    // 複数segmentをenqueue_bytes()で継ぎ目なく積んでから最後に一度だけ
+    // wait_tx_drain()でsettleさせる。
+    Status enqueue_bytes(const uint8_t* data, size_t len);
+    Status wait_tx_drain(size_t total_len_hint);
     Status rx_bytes(uint8_t* out, size_t len, uint32_t timeout_us);
     Status rx_ack(uint32_t timeout_us = ACK_TIMEOUT_US);
 

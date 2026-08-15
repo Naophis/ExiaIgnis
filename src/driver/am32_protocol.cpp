@@ -123,7 +123,7 @@ void Am32Protocol::switch_to_rx() {
     mode_ = BusMode::RX;
 }
 
-Am32Protocol::Status Am32Protocol::tx_bytes(const uint8_t* data, size_t len) {
+Am32Protocol::Status Am32Protocol::enqueue_bytes(const uint8_t* data, size_t len) {
     for (size_t i = 0; i < len; i++) {
         const uint64_t deadline = time_us_64() + 5000;
         while (pio_sm_is_tx_fifo_full(pio_, sm_tx_)) {
@@ -133,8 +133,12 @@ Am32Protocol::Status Am32Protocol::tx_bytes(const uint8_t* data, size_t len) {
         }
         pio_sm_put(pio_, sm_tx_, data[i]);
     }
+    return Status::OK;
+}
+
+Am32Protocol::Status Am32Protocol::wait_tx_drain(size_t total_len_hint) {
     // TX FIFOおよびシフトレジスタが空になる(=最終byteの送出が完了する)まで待つ。
-    const uint64_t drain_deadline = time_us_64() + (uint64_t)len * 10 * BIT_TIME_US + 5000;
+    const uint64_t drain_deadline = time_us_64() + (uint64_t)total_len_hint * 10 * BIT_TIME_US + 5000;
     while (!pio_sm_is_tx_fifo_empty(pio_, sm_tx_)) {
         if (time_us_64() > drain_deadline) {
             return Status::TIMEOUT;
@@ -142,6 +146,14 @@ Am32Protocol::Status Am32Protocol::tx_bytes(const uint8_t* data, size_t len) {
     }
     busy_wait_us(10 * BIT_TIME_US);  // 最終byteのstart+8bit+stopの送出完了を待つ
     return Status::OK;
+}
+
+Am32Protocol::Status Am32Protocol::tx_bytes(const uint8_t* data, size_t len) {
+    Status st = enqueue_bytes(data, len);
+    if (st != Status::OK) {
+        return st;
+    }
+    return wait_tx_drain(len);
 }
 
 Am32Protocol::Status Am32Protocol::rx_bytes(uint8_t* out, size_t len, uint32_t timeout_us) {
@@ -253,20 +265,30 @@ Am32Protocol::Status Am32Protocol::write_buffer(const uint8_t* payload, uint16_t
     frame[4] = (uint8_t)(crc & 0xFF);
     frame[5] = (uint8_t)(crc >> 8);
 
-    switch_to_tx();
-    Status st = tx_bytes(frame, sizeof(frame));
-    if (st != Status::OK) {
-        return st;
-    }
-    // 出典: bootloader/main.c decodeInput() — SET_BUFFERコマンド自体にACKは無く、
-    // 直後に生payload(+CRC16 2byte)が続く前提でincoming_payload_no_commandへ遷移する。
-    st = tx_bytes(payload, len);
-    if (st != Status::OK) {
-        return st;
-    }
     const uint16_t pcrc = crc16(payload, len);
     const uint8_t crcbuf[2] = {(uint8_t)(pcrc & 0xFF), (uint8_t)(pcrc >> 8)};
-    st = tx_bytes(crcbuf, 2);
+
+    // 出典: bootloader/main.c decodeInput() — SET_BUFFERコマンド自体にACKは無く、
+    // 直後に生payload(+CRC16 2byte)が続く前提でincoming_payload_no_commandへ遷移する。
+    // ESC側はcommand+payload+crcを1つの連続フレームとして受信するため、
+    // (bootloader/main.c serialreadChar()のbyte間タイムアウト5*BITTIME=260us)、
+    // 3つのsegmentをtx_bytes()で個別に送るとsegment間に生じるsettle待ち(520us)が
+    // 260usを超えてフレームが分断されてしまう。そのためenqueue_bytes()で継ぎ目
+    // なく積み、最後に一度だけwait_tx_drain()する。
+    switch_to_tx();
+    Status st = enqueue_bytes(frame, sizeof(frame));
+    if (st != Status::OK) {
+        return st;
+    }
+    st = enqueue_bytes(payload, len);
+    if (st != Status::OK) {
+        return st;
+    }
+    st = enqueue_bytes(crcbuf, 2);
+    if (st != Status::OK) {
+        return st;
+    }
+    st = wait_tx_drain(sizeof(frame) + len + 2);
     if (st != Status::OK) {
         return st;
     }
