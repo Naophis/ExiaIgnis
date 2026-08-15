@@ -4,27 +4,37 @@
 # ここに無い項目・コメントアウトした項目はESCの現在値がそのまま維持される。
 #
 # 各項目の意味・単位は include/driver/am32_config.hpp の AM32Settings 参照。
-# 生成方法: terminal.js 実行時に system.yaml / hardware.yaml と同じ扱いで
-# 選択すると /am32.txt としてESCへ送信される (main_task.cpp load_params() 参照)。
+# 範囲外の値は AM32::writeSettings() の am32_validate_settings() で弾かれる
+# (書き込みは中断され、何もESCへ送られない)。setter自体が範囲をクランプする
+# 項目もあるため、範囲外を書いても即エラーにならず黙って丸められる場合もある
+# (詳細は各setterのコメント参照)。
+#
+# 送信方法: tx_term.js 実行時に system.yaml / hardware.yaml と同じ扱いで
+# 選択(番号2)すると /am32.txt としてESCへ送信される (main_task.cpp
+# load_params() 参照。terminal.jsは廃止済み、tx_term.jsを使うこと)。
+#
 
-motor_kv: 2220
-motor_poles: 14
-timing: 0                    # AM32 Configuratorのスライダーと同じ0-32単位
-pwm_frequency_khz: 24
-variable_pwm: true
-startup_power_percent: 100
-sine_startup: false
-bidirectional: false
-complementary_pwm: true
-stuck_rotor_protection: true
-brake_on_stop: 0
-drag_brake_strength: 10
-driving_brake_strength: 10
+motor_kv: 8500                 # 実KV値。20〜10220、40刻み(raw=(kv-20)/40を0-255へクランプ)
+motor_poles: 12                # モーター極数。2〜36 (validateで拒否)
+timing: 0                      # AM32 Configuratorのスライダーと同じ0〜32単位(0〜32でクランプ)。
+                                # eeprom_version<3の旧フォーマット(0-3, 7.5deg刻み)は非対応
+pwm_frequency_khz: 24          # 8〜144 (validateで拒否)
+variable_pwm: true             # true/false (fw>=2.18では内部的に0/1/2のenumだが0=無効/非0=有効で統一)
+startup_power_percent: 100     # 50〜150 (setterでクランプ)
+sine_startup: false            # true/false
+bidirectional: false           # true/false (3Dモード)
+complementary_pwm: true        # true/false (demag compensationとは別項目。AM32公式構造体に
+                                # demag comp相当の独立項目は存在しない)
+stuck_rotor_protection: true   # true/false
+brake_on_stop: 0               # enum値。AM32公式資料上の取り得る値の一覧は未確認(出典不明のためvalidate対象外)
+drag_brake_strength: 10        # 1〜10 (setterでクランプ、validateでも拒否)
+driving_brake_strength: 10     # 1〜10 (setterでクランプ、validateでも拒否)
 
-current_limit_disabled: false
-current_limit_amps: 204
+current_limit_disabled: false  # trueならcurrent_limit_amps無視 (raw=202を書き込む)
+current_limit_amps: 204        # 0〜402、2A刻み(raw=amps/2を0-201へクランプ)。raw=202が「無効」sentinel
+                                # (current_limit_disabled: trueにするとそちらが優先される)
 
-temp_limit_disabled: true
-temp_limit_c: 100
+temp_limit_disabled: true      # trueならtemp_limit_c無視 (raw=255を書き込む)
+temp_limit_c: 100              # 70〜140 (setterでクランプ)。disabled=falseの時のみ有効
 
-beep_volume: 5
+beep_volume: 11                 # 0〜11 (setterでクランプ、validateでも拒否)
