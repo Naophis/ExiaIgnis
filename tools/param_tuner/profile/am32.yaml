@@ -1,0 +1,30 @@
+# AM32 ESC (吸引モーター用) 設定。
+# write_am32_param() (テストモード25) 実行時にESCから読み出した現在値へ
+# ここに書かれた項目だけを上書きし、flashへ書き込む。
+# ここに無い項目・コメントアウトした項目はESCの現在値がそのまま維持される。
+#
+# 各項目の意味・単位は include/driver/am32_config.hpp の AM32Settings 参照。
+# 生成方法: terminal.js 実行時に system.yaml / hardware.yaml と同じ扱いで
+# 選択すると /am32.txt としてESCへ送信される (main_task.cpp load_params() 参照)。
+
+motor_kv: 2220
+motor_poles: 14
+timing: 0                    # AM32 Configuratorのスライダーと同じ0-32単位
+pwm_frequency_khz: 24
+variable_pwm: true
+startup_power_percent: 100
+sine_startup: false
+bidirectional: false
+complementary_pwm: true
+stuck_rotor_protection: true
+brake_on_stop: 0
+drag_brake_strength: 10
+driving_brake_strength: 10
+
+current_limit_disabled: false
+current_limit_amps: 204
+
+temp_limit_disabled: true
+temp_limit_c: 100
+
+beep_volume: 5

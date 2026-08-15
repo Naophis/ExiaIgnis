@@ -22,7 +22,7 @@ async function sleep(ms) {
 const callerFun = async (mode) => {
   while (true) {
     const files = fs.readdirSync(path.join(__dirname, `profile/${mode}/`));
-    const list = ["system.yaml", "hardware.yaml"].concat(
+    const list = ["system.yaml", "hardware.yaml", "am32.yaml"].concat(
       files.filter((f) => f.match(/.yaml$/) || f.match(/.maze$/))
     );
 
@@ -50,7 +50,7 @@ const callerFun = async (mode) => {
           console.log(`${file}, ${remoteName}: finish!!`);
         }
       }
-      for (const file of ["system.yaml", "hardware.yaml"]) {
+      for (const file of ["system.yaml", "hardware.yaml", "am32.yaml"]) {
         const remoteName = file.replace("yaml", "txt");
         sendViaPython(path.join(__dirname, "profile", file), remoteName);
         await sleep(250);
@@ -66,7 +66,7 @@ const callerFun = async (mode) => {
         continue;
       }
 
-      if (idx === 0 || idx === 1) {
+      if (idx === 0 || idx === 1 || idx === 2) {
         const file = list[idx];
         const remoteName = file.replace("yaml", "txt");
         sendViaPython(path.join(__dirname, "profile", file), remoteName);
