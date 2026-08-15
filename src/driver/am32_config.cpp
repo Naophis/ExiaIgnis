@@ -273,6 +273,8 @@ void dump_settings(const AM32Settings& s, Am32CliEmit emit) {
     } else {
         emit_line(emit, "temp_limit       : %u C", s.temperature_limit_c());
     }
+    emit_line(emit, "low_voltage_cutoff_raw : %u (意味は出典未確認)", s.low_voltage_cutoff_raw());
+    emit_line(emit, "low_cell_volt_cutoff   : %.2f V/cell", (double)s.low_cell_volt_cutoff_v());
     emit_line(emit, "beep_volume      : %u", s.beep_volume());
 }
 
@@ -294,6 +296,8 @@ bool cli_get(const AM32Settings& s, const char* field, char* out, size_t out_len
     if (!strcmp(field, "drag_brake")) { snprintf(out, out_len, "%u", s.drag_brake_strength()); return true; }
     if (!strcmp(field, "driving_brake")) { snprintf(out, out_len, "%u", s.driving_brake_strength()); return true; }
     if (!strcmp(field, "beep_volume")) { snprintf(out, out_len, "%u", s.beep_volume()); return true; }
+    if (!strcmp(field, "low_voltage_cutoff_raw")) { snprintf(out, out_len, "%u", s.low_voltage_cutoff_raw()); return true; }
+    if (!strcmp(field, "low_cell_volt_cutoff")) { snprintf(out, out_len, "%.2f", (double)s.low_cell_volt_cutoff_v()); return true; }
     return false;
 }
 
@@ -314,6 +318,7 @@ bool cli_set(AM32Settings& s, const char* field, long value) {
     if (!strcmp(field, "drag_brake")) { s.set_drag_brake_strength((uint8_t)value); return true; }
     if (!strcmp(field, "driving_brake")) { s.set_driving_brake_strength((uint8_t)value); return true; }
     if (!strcmp(field, "beep_volume")) { s.set_beep_volume((uint8_t)value); return true; }
+    if (!strcmp(field, "low_voltage_cutoff_raw")) { s.set_low_voltage_cutoff_raw((uint8_t)value); return true; }
     return false;
 }
 

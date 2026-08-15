@@ -40,12 +40,20 @@ variable_pwm: true             # true/false (fw>=2.18では内部的に0/1/2のe
                                 # PWM周波数48kHz化の件と合わせ、この非力なMCU(STM32F051)では
                                 # スイッチング/PWM方式まわりの憶測ベースの変更は軒並み逆効果という
                                 # 傾向が出ている
-startup_power_percent: 100     # 50〜150 (setterでクランプ)
-sine_startup: false            # true/false
+startup_power_percent: 100     # 50〜150 (setterでクランプ)。130/150まで試したが改善せず、トルク不足
+                                # ではなさそうと判断し100(元の値)に戻した
+sine_startup: true             # true/false。12.0V失敗時の症状が「本来高速回転するはずが1秒に数回転
+                                # しか回らない」だったため、始動トルク不足ではなく、センサーレス方式の
+                                # コミュテーション検出が低電圧下でロックできず低速の強制駆動から
+                                # 抜け出せていない可能性が高いと判断。正弦波起動は低速域のコミュテー
+                                # ション安定性を上げる機能なのでtrueにして試す
 bidirectional: false           # true/false (3Dモード)
 complementary_pwm: true        # true/false (demag compensationとは別項目。AM32公式構造体に
                                 # demag comp相当の独立項目は存在しない)
-stuck_rotor_protection: true   # true/false
+stuck_rotor_protection: true   # true/false。falseで試した結果、症状が「低速で回り続ける」に変わった
+                                # だけで直らなかった。つまりfalse時は保護が誤検知していたのではなく、
+                                # 正しく異常(低速のまま高速化できない)を検知して電力カットしていた
+                                # ということが分かったので、安全のためtrueへ戻す
 brake_on_stop: 0               # enum値。AM32公式資料上の取り得る値の一覧は未確認(出典不明のためvalidate対象外)
 drag_brake_strength: 10        # 1〜10 (setterでクランプ、validateでも拒否)
 driving_brake_strength: 10     # 1〜10 (setterでクランプ、validateでも拒否)

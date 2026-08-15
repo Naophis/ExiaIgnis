@@ -7,10 +7,12 @@
 #include <stdio.h>
 
 namespace {
-// "AM32WRITE" コマンド受信フラグ。rx_usb_cmd()はMainTaskへアクセスできない
-// (free function)ため、MainTask::run()のボタン待ちループ側でこのフラグを
-// ポーリングしてwrite_am32_param()を呼ぶ(consume_am32_write_request()参照)。
+// "AM32WRITE"/"AM32READ" コマンド受信フラグ。rx_usb_cmd()はMainTaskへ
+// アクセスできない(free function)ため、MainTask::run()のボタン待ちループ側で
+// このフラグをポーリングしてwrite/read_am32_param()を呼ぶ
+// (consume_am32_write_request()/consume_am32_read_request()参照)。
 bool g_am32_write_requested = false;
+bool g_am32_read_requested = false;
 }  // namespace
 
 // MainTask::run()のボタン待ちループから呼ぶ。trueを返したら1回分の
@@ -18,6 +20,13 @@ bool g_am32_write_requested = false;
 bool consume_am32_write_request() {
   const bool v = g_am32_write_requested;
   g_am32_write_requested = false;
+  return v;
+}
+
+// 同上、"AM32READ"用。
+bool consume_am32_read_request() {
+  const bool v = g_am32_read_requested;
+  g_am32_read_requested = false;
   return v;
 }
 
@@ -44,7 +53,7 @@ int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms) {
 // ─── USB コマンド処理 ─────────────────────────────────────────────────────
 // "filename@content" → ファイルを保存して true を返す (再ロード要)。
 // "LIST" / "SHOW:name" / "READ:name" / "DELETE:name" / "DELETEALL" /
-// "AM32WRITE" を処理する。
+// "AM32WRITE" / "AM32READ" を処理する。
 bool rx_usb_cmd(char *buf, int len) {
   while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
     buf[--len] = '\0';
@@ -56,6 +65,15 @@ bool rx_usb_cmd(char *buf, int len) {
   // コマンドを送ると、write_am32_param() (物理ボタン操作なし) が実行される。
   if (strcmp(buf, "AM32WRITE") == 0) {
     g_am32_write_requested = true;
+    printf("OK\n");
+    fflush(stdout);
+    return false;
+  }
+
+  // ── AM32READ ──────────────────────────────────────────────────────────
+  // read_am32_param() (物理ボタン操作なし) を実行する。
+  if (strcmp(buf, "AM32READ") == 0) {
+    g_am32_read_requested = true;
     printf("OK\n");
     fflush(stdout);
     return false;

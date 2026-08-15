@@ -34,6 +34,11 @@ Pico へ USB CDC 経由でファイルを操作するスクリプト。
       LittleFS を再フォーマットして全ファイルを消去する。
       例: python send_file.py deleteall
 
+  am32read
+      "AM32READ" コマンドを送り、物理ボタン操作なしに read_am32_param() を
+      実行させる。実行ログを "== AM32 read done ==" まで表示する。
+      例: python send_file.py am32read
+
   am32write
       "AM32WRITE" コマンドを送り、物理ボタン操作なしに write_am32_param() を
       実行させる (事前に am32.txt をアップロード済みであること)。実行ログを
@@ -64,7 +69,7 @@ except ImportError:
 TIMEOUT_SEC = 10
 PICO_VID    = 0x2E8A  # Raspberry Pi
 COMMANDS    = {"write", "read", "list", "delete", "deleteall", "show",
-               "am32write", "am32sync"}
+               "am32read", "am32write", "am32sync"}
 AM32_YAML_DEFAULT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "tools", "param_tuner", "profile", "am32.yaml")
@@ -215,15 +220,9 @@ def cmd_show(ser: serial.Serial, remote_name: str) -> None:
         print(text)
 
 
-def cmd_am32write(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
-    ser.write(b"AM32WRITE\n")
-    ser.flush()
-    ack = readline_skip_sensor(ser)
-    if ack != "OK":
-        print(f"失敗: {ack}", file=sys.stderr)
-        sys.exit(1)
-    print("write_am32_param() 実行中... "
-          "(電源制御が無い場合は表示に従ってESCのバッテリを挿し直してください)")
+def _stream_am32_log(ser: serial.Serial, done_prefix: str,
+                     timeout_sec: float) -> None:
+    """AM32READ/AM32WRITE実行中のデバイス側ログをdone_prefixが出るまで流す。"""
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         raw = ser.readline()
@@ -235,11 +234,35 @@ def cmd_am32write(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
         if line.startswith("[main] waiting"):
             continue  # 2秒毎のハートビートは待機表示中はうるさいので抑制
         print(line)
-        if line.startswith("== AM32 write done"):
+        if line.startswith(done_prefix):
             return
-    print("失敗: '== AM32 write done' を受信できませんでした(タイムアウト)",
+    print(f"失敗: '{done_prefix}' を受信できませんでした(タイムアウト)",
           file=sys.stderr)
     sys.exit(1)
+
+
+def cmd_am32write(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
+    ser.write(b"AM32WRITE\n")
+    ser.flush()
+    ack = readline_skip_sensor(ser)
+    if ack != "OK":
+        print(f"失敗: {ack}", file=sys.stderr)
+        sys.exit(1)
+    print("write_am32_param() 実行中... "
+          "(電源制御が無い場合は表示に従ってESCのバッテリを挿し直してください)")
+    _stream_am32_log(ser, "== AM32 write done", timeout_sec)
+
+
+def cmd_am32read(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
+    ser.write(b"AM32READ\n")
+    ser.flush()
+    ack = readline_skip_sensor(ser)
+    if ack != "OK":
+        print(f"失敗: {ack}", file=sys.stderr)
+        sys.exit(1)
+    print("read_am32_param() 実行中... "
+          "(電源制御が無い場合は表示に従ってESCのバッテリを挿し直してください)")
+    _stream_am32_log(ser, "== AM32 read done", timeout_sec)
 
 
 def cmd_am32sync(ser: serial.Serial, local_path: str) -> None:
@@ -313,6 +336,9 @@ def main() -> None:
 
         elif command == "deleteall":
             cmd_deleteall(ser)
+
+        elif command == "am32read":
+            cmd_am32read(ser)
 
         elif command == "am32write":
             cmd_am32write(ser)

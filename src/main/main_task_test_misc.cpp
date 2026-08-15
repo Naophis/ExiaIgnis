@@ -84,6 +84,10 @@ void apply_am32_target_doc(const JsonDocument& doc, AM32Settings& out) {
     out.set_temperature_limit_c(doc["temp_limit_c"] | out.temperature_limit_c());
   }
   out.set_beep_volume(doc["beep_volume"] | out.beep_volume());
+  out.set_low_voltage_cutoff_raw(
+      doc["low_voltage_cutoff_raw"] | out.low_voltage_cutoff_raw());
+  out.set_low_cell_volt_cutoff_v(
+      doc["low_cell_volt_cutoff"] | out.low_cell_volt_cutoff_v());
 }
 }  // namespace
 

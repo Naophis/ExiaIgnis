@@ -186,6 +186,20 @@ struct AM32Settings {
     }
     void disable_temperature_limit() { raw.f.limits.temperature = 255; }
 
+    // 低電圧カットオフ(ESC内蔵)。has_off/onの意味かenumかまでは出典未確認のため
+    // 生値のまま公開する。0=無効の可能性が高いが未確認。
+    uint8_t low_voltage_cutoff_raw() const { return raw.f.low_voltage_cut_off; }
+    void set_low_voltage_cutoff_raw(uint8_t v) { raw.f.low_voltage_cut_off = v; }
+
+    // セルあたりカットオフ電圧。raw+250がcentivolt(=raw 0〜100で2.50〜3.50V相当)。
+    float low_cell_volt_cutoff_v() const {
+        return (raw.f.low_cell_volt_cutoff + 250) / 100.0f;
+    }
+    void set_low_cell_volt_cutoff_v(float volts) {
+        const int raw_v = (int)((volts * 100.0f) - 250.0f + 0.5f);  // 四捨五入
+        raw.f.low_cell_volt_cutoff = (uint8_t)am32_detail::clamp_i(raw_v, 0, 100);
+    }
+
     uint8_t brake_on_stop() const { return raw.f.brake_on_stop; }
     void set_brake_on_stop(uint8_t v) { raw.f.brake_on_stop = v; }
 
