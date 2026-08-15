@@ -268,18 +268,36 @@ Am32Protocol::Status Am32Protocol::write_buffer(const uint8_t* payload, uint16_t
     const uint16_t pcrc = crc16(payload, len);
     const uint8_t crcbuf[2] = {(uint8_t)(pcrc & 0xFF), (uint8_t)(pcrc >> 8)};
 
-    // 出典: bootloader/main.c decodeInput() — SET_BUFFERコマンド自体にACKは無く、
-    // 直後に生payload(+CRC16 2byte)が続く前提でincoming_payload_no_commandへ遷移する。
-    // ESC側はcommand+payload+crcを1つの連続フレームとして受信するため、
-    // (bootloader/main.c serialreadChar()のbyte間タイムアウト5*BITTIME=260us)、
-    // 3つのsegmentをtx_bytes()で個別に送るとsegment間に生じるsettle待ち(520us)が
-    // 260usを超えてフレームが分断されてしまう。そのためenqueue_bytes()で継ぎ目
-    // なく積み、最後に一度だけwait_tx_drain()する。
+    // 出典: bootloader/main.c decodeInput()/receiveBuffer() (AM32-bootloader実ソースを
+    // 直接確認済み)。CMD_SET_BUFFERの6byteフレーム自体にACKは無い
+    // ("// no ack with command set buffer;")。重要なのは、ESC側がコマンドフレームと
+    // 続くpayload+CRCを「2回の別々のreceiveBuffer()呼び出し」で受信するという点:
+    //   - 1回目のreceiveBuffer()呼び出しはSET_BUFFERの6byteを受信し、decodeInput()が
+    //     incoming_payload_no_command=1をセットしてreturnする。このループは
+    //     serialreadChar()が次のbyteのstart bitを5*BITTIME(260us)待っても来ないと
+    //     判断して終わる(messagereceived==trueの間のみ有効なタイムアウト)ため、
+    //     260usを超える無信号区間がなければこの呼び出しは終わらず、続けて送った
+    //     payloadのbyteをコマンドフレームの続きとして誤って飲み込んでしまう
+    //     (このためACKもNACKも返らず完全にTIMEOUTする)。
+    //   - 2回目のreceiveBuffer()呼び出しでpayload+CRC(payload_buffer_size+2byte)を
+    //     受信し、CRC OKならACK(0x30)、NGならBAD_CRC(0xC2)を返す。この呼び出し内では
+    //     messagereceivedがtrueのまま続くため、byte間は260us以内(=tx_bytes()の
+    //     ような個別settleを挟まない、enqueue_bytesでの継ぎ目ない送信)を保つ必要がある。
+    // 従って: 「コマンドフレーム」と「payload」の間には意図的に260us超のgapを、
+    // 「payload」と「CRC」の間はgapレスで送る、という組み合わせが必要。
     switch_to_tx();
-    Status st = enqueue_bytes(frame, sizeof(frame));
+    Status st = tx_bytes(frame, sizeof(frame));
     if (st != Status::OK) {
         return st;
     }
+    // [重要] tx_bytes()末尾のwait_tx_drain()内settle(520us)は「最終byteの送信完了を
+    // 保証するための待ち」であり、そこから先の追加の無信号区間を保証するものでは
+    // ない(最悪ケースではFIFO-empty検出時点でまだ最終byteの送信が始まったばかりで、
+    // 520us全てが送信完了待ちに消費され、実際のgapがほぼ0になり得る)。ESC側が
+    // コマンドフレーム受信ループを終えるには260us超の"本当の"無信号区間が必要
+    // (このファイル冒頭のwrite_buffer()コメント参照)なので、送信完了確定後に
+    // 明示的な追加待ちを入れる。
+    busy_wait_us(500);
     st = enqueue_bytes(payload, len);
     if (st != Status::OK) {
         return st;
@@ -288,7 +306,7 @@ Am32Protocol::Status Am32Protocol::write_buffer(const uint8_t* payload, uint16_t
     if (st != Status::OK) {
         return st;
     }
-    st = wait_tx_drain(sizeof(frame) + len + 2);
+    st = wait_tx_drain(len + 2);
     if (st != Status::OK) {
         return st;
     }

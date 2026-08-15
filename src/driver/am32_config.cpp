@@ -122,7 +122,13 @@ Am32ConfigStatus AM32::enterConfigMode(uint32_t manual_retry_ms) {
             attempt++;
             last_protocol_status_ = proto_.handshake(devinfo_, Am32Protocol::HANDSHAKE_TIMEOUT_US);
             if (last_protocol_status_ == Am32Protocol::Status::OK) {
-                printf("am32: handshake OK (attempt %d)\n", attempt);
+                // [重要] ここでprintfしない。この直後、呼び出し側はhandshakeの
+                // 応答が終わった直後のタイミングでESCへ次のコマンド(readSettings等)
+                // を送る可能性があり、その前にprintfを挟むとESC bootloaderの
+                // 新フレーム待ち20msタイムアウトを超えてしまう(saveSettings()の
+                // コメント参照)。呼び出し回数はlast_handshake_attempts()経由で
+                // 後から安全なタイミングに取得させる。
+                last_handshake_attempts_ = attempt;
                 break;
             }
             // 大半の時間を無信号(idle)のまま過ごし、ESC側checkForSignal()の
@@ -189,17 +195,28 @@ Am32ConfigStatus AM32::saveSettings() {
     if (mode_ != Mode::CONFIG) {
         return Am32ConfigStatus::NOT_IN_CONFIG_MODE;
     }
-    last_protocol_status_ = proto_.set_address(Am32Protocol::ADDRESS_MAGIC_EEPROM);
-    if (last_protocol_status_ != Am32Protocol::Status::OK) {
-        return Am32ConfigStatus::PROTOCOL_ERROR;
-    }
-    last_protocol_status_ = proto_.write_buffer(cached_.raw.buffer, (uint16_t)AM32Settings::LAYOUT_SIZE);
-    if (last_protocol_status_ != Am32Protocol::Status::OK) {
-        return Am32ConfigStatus::PROTOCOL_ERROR;
-    }
+    // [重要] set_address/write_buffer/prog_flashの3コマンドは、ESC bootloaderが
+    // 新フレーム先頭を待つ20msタイムアウト(receiveBuffer())に収まる間隔で連続実行
+    // する必要がある。USB CDC経由のprintf()はホストの受信状況次第で最大500ms
+    // ブロックし得る(pico_stdio_usb既定のPICO_STDIO_USB_STDOUT_TIMEOUT_US)ため、
+    // この3コマンドの間には絶対にprintf等の時間の読めない処理を挟まないこと。
+    // 診断出力は全コマンド完了後(または最初の失敗を検出した直後、これ以上ESCと
+    // 通信する予定が無いタイミング)にのみ行う。
+    Am32Protocol::Status st_addr = proto_.set_address(Am32Protocol::ADDRESS_MAGIC_EEPROM);
+    Am32Protocol::Status st_buf = (st_addr == Am32Protocol::Status::OK)
+        ? proto_.write_buffer(cached_.raw.buffer, (uint16_t)AM32Settings::LAYOUT_SIZE)
+        : st_addr;
     // 出典: 調査レポート§5 — SET_BUFFERはESC側のRAMバッファへ積むだけで、実際にflashへ
     // 書き込むのはPROG_FLASHコマンド。
-    last_protocol_status_ = proto_.prog_flash();
+    Am32Protocol::Status st_prog = (st_buf == Am32Protocol::Status::OK)
+        ? proto_.prog_flash()
+        : st_buf;
+
+    printf("am32: saveSettings set_address=%s write_buffer=%s prog_flash=%s\n",
+           Am32Protocol::status_to_string(st_addr), Am32Protocol::status_to_string(st_buf),
+           Am32Protocol::status_to_string(st_prog));
+
+    last_protocol_status_ = st_prog;
     if (last_protocol_status_ != Am32Protocol::Status::OK) {
         return Am32ConfigStatus::PROTOCOL_ERROR;
     }
@@ -234,6 +251,7 @@ void dump_settings(const AM32Settings& s, Am32CliEmit emit) {
     emit_line(emit, "motor_kv         : %u", s.motor_kv());
     emit_line(emit, "motor_poles      : %u", s.motor_poles());
     emit_line(emit, "timing           : %u (%.2f deg)", s.timing(), (double)s.timing_degrees());
+    emit_line(emit, "auto_advance     : %s", s.auto_advance_enabled() ? "on" : "off");
     emit_line(emit, "pwm_frequency    : %u kHz", s.pwm_frequency_khz());
     emit_line(emit, "variable_pwm     : %s", s.variable_pwm_enabled() ? "on" : "off");
     emit_line(emit, "startup_power    : %u %%", s.startup_power_percent());
@@ -262,6 +280,7 @@ bool cli_get(const AM32Settings& s, const char* field, char* out, size_t out_len
     if (!strcmp(field, "kv")) { snprintf(out, out_len, "%u", s.motor_kv()); return true; }
     if (!strcmp(field, "poles")) { snprintf(out, out_len, "%u", s.motor_poles()); return true; }
     if (!strcmp(field, "timing")) { snprintf(out, out_len, "%u", s.timing()); return true; }
+    if (!strcmp(field, "auto_advance")) { snprintf(out, out_len, "%u", s.auto_advance_enabled() ? 1 : 0); return true; }
     if (!strcmp(field, "pwm")) { snprintf(out, out_len, "%u", s.pwm_frequency_khz()); return true; }
     if (!strcmp(field, "variable_pwm")) { snprintf(out, out_len, "%u", s.variable_pwm_enabled() ? 1 : 0); return true; }
     if (!strcmp(field, "startup_power")) { snprintf(out, out_len, "%u", s.startup_power_percent()); return true; }
@@ -280,6 +299,7 @@ bool cli_set(AM32Settings& s, const char* field, long value) {
     if (!strcmp(field, "kv")) { s.set_motor_kv((uint16_t)value); return true; }
     if (!strcmp(field, "poles")) { s.set_motor_poles((uint8_t)value); return true; }
     if (!strcmp(field, "timing")) { s.set_timing((uint8_t)value); return true; }
+    if (!strcmp(field, "auto_advance")) { s.set_auto_advance_enabled(value != 0); return true; }
     if (!strcmp(field, "pwm")) { s.set_pwm_frequency_khz((uint8_t)value); return true; }
     if (!strcmp(field, "variable_pwm")) { s.set_variable_pwm_enabled(value != 0); return true; }
     if (!strcmp(field, "startup_power")) { s.set_startup_power_percent((uint8_t)value); return true; }

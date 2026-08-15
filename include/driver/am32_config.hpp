@@ -132,6 +132,12 @@ struct AM32Settings {
     uint8_t pwm_frequency_khz() const { return raw.f.pwm_frequency; }
     void set_pwm_frequency_khz(uint8_t khz) { raw.f.pwm_frequency = khz; }
 
+    // 要fw>=2.16。有効時はESCがRPMに応じてtiming(advance_level)を動的調整する。
+    // timingとの正確な相互作用(auto_advance有効時にadvance_levelがベース値/
+    // フォールバックとして使われるか等)は出典未確認。
+    bool auto_advance_enabled() const { return raw.f.auto_advance != 0; }
+    void set_auto_advance_enabled(bool en) { raw.f.auto_advance = en ? 1 : 0; }
+
     // fw<2.18ではbool、fw>=2.18では0/1/2のenum(0=Fixed,1=Variable,2=byRPM)。
     // ここでは「0=無効／0以外=有効」というbool的な入出力に統一する(両世代と互換)。
     bool variable_pwm_enabled() const { return raw.f.variable_pwm != 0; }
@@ -247,6 +253,10 @@ public:
     bool has_valid_devinfo() const { return devinfo_valid_; }
     const uint8_t* device_info() const { return devinfo_; }  // 9byte, 出典: 調査レポート§3.1
     const AM32Settings& cached_settings() const { return cached_; }
+    // has_power_control()==false時、handshakeが何回目のpollingで成功したか
+    // (enterConfigMode()内部ではESC通信の合間にprintf出来ないため、呼び出し側が
+    // 後で安全なタイミングにログ出力するためのgetter)。
+    int last_handshake_attempts() const { return last_handshake_attempts_; }
 
     Am32Protocol::Status last_protocol_status() const { return last_protocol_status_; }
 
@@ -268,6 +278,7 @@ private:
     bool has_read_ = false;
 
     Am32Protocol::Status last_protocol_status_ = Am32Protocol::Status::OK;
+    int last_handshake_attempts_ = 0;
 };
 
 // --- デバッグ用CLIヘルパー ---

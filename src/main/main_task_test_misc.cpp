@@ -55,6 +55,7 @@ void apply_am32_target_doc(const JsonDocument& doc, AM32Settings& out) {
   out.set_motor_kv(doc["motor_kv"] | out.motor_kv());
   out.set_motor_poles(doc["motor_poles"] | out.motor_poles());
   out.set_timing(doc["timing"] | out.timing());
+  out.set_auto_advance_enabled(doc["auto_advance"] | out.auto_advance_enabled());
   out.set_pwm_frequency_khz(doc["pwm_frequency_khz"] | out.pwm_frequency_khz());
   out.set_variable_pwm_enabled(doc["variable_pwm"] | out.variable_pwm_enabled());
   out.set_startup_power_percent(doc["startup_power_percent"] | out.startup_power_percent());
@@ -102,14 +103,19 @@ void MainTask::read_am32_param() {
     restore_suction_pwm_pin();
     return;
   }
-  printf("handshake OK. devinfo:");
+  // [重要] handshake成功直後、次のESC通信(readSettings)を始めるまでの間に
+  // printfを挟まないこと(saveSettings()のコメント参照: USB CDC経由のprintfは
+  // 最大500msブロックし得るため、間に挟むとESC bootloaderの新フレーム待ち
+  // 20msタイムアウトを超えてしまう)。devinfoの表示はreadSettings完了後
+  // ("dump"はRAM上の操作でESC通信を伴わないため、その後段なら安全)まで遅らせる。
+  am32_handle_cli(esc, "read", am32_printf_line);
+  am32_handle_cli(esc, "dump", am32_printf_line);
+
+  printf("handshake OK (attempt %d). devinfo:", esc.last_handshake_attempts());
   for (int i = 0; i < 9; i++) {
     printf(" %02X", esc.device_info()[i]);
   }
   printf("\n");
-
-  am32_handle_cli(esc, "read", am32_printf_line);
-  am32_handle_cli(esc, "dump", am32_printf_line);
 
   esc.exitConfigMode();
   restore_suction_pwm_pin();
@@ -149,55 +155,71 @@ void MainTask::write_am32_param() {
     return;
   }
 
+  // [重要] ここから下、ESCと通信する一連の呼び出し(readSettings→writeSettings→
+  // saveSettings→readSettings)の間には絶対にprintfを挟まない。USB CDC経由の
+  // printf()はホストの受信状況次第で最大500msブロックし得る(pico_stdio_usb既定の
+  // PICO_STDIO_USB_STDOUT_TIMEOUT_US)ため、間に1回でも挟むとESC bootloaderの
+  // 新フレーム待ち20msタイムアウトを超えて勝手にapplicationへjumpしてしまう
+  // (実際にこれが原因でsaveSettings()が恒常的にTIMEOUTしていた実例がある)。
+  // 診断出力は全ESC通信が終わった後にまとめて行う。
   AM32Settings settings;  // ESCから読み出した"before"値。書き込み後のバックアップに使う
-  st = esc.readSettings(settings);
-  if (st != Am32ConfigStatus::OK) {
-    printf("readSettings failed: %s (%s)\n",
-           am32_config_status_to_string(st),
-           Am32Protocol::status_to_string(esc.last_protocol_status()));
-    esc.exitConfigMode();
-    restore_suction_pwm_pin();
-    return;
-  }
-  printf("before: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
-         settings.motor_kv(), settings.motor_poles(), settings.timing(),
-         settings.pwm_frequency_khz());
+  Am32ConfigStatus read_st = esc.readSettings(settings);
 
-  // target_docの内容で上書きする(RAM上の操作のみ、LittleFSへは触れない)。
-  // yaml側に無い項目はESCの現在値のまま。
   AM32Settings target = settings;
-  apply_am32_target_doc(target_doc, target);
-  printf("target: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
-         target.motor_kv(), target.motor_poles(), target.timing(),
-         target.pwm_frequency_khz());
+  Am32ConfigStatus write_st = Am32ConfigStatus::NOT_IN_CONFIG_MODE;  // "未試行"のsentinel
+  Am32ConfigStatus save_st = Am32ConfigStatus::NOT_IN_CONFIG_MODE;
+  Am32ConfigStatus verify_st = Am32ConfigStatus::NOT_IN_CONFIG_MODE;
+  AM32Settings verify{};
+  char verr[64] = {0};
+  // saveSettings()失敗時の実プロトコルステータス。この直後にreadSettings(verify)を
+  // 呼ぶとesc.last_protocol_status()がそちらの結果で上書きされてしまうため、
+  // 表示用に先に退避しておく。
+  Am32Protocol::Status save_proto_st = Am32Protocol::Status::OK;
 
-  st = esc.writeSettings(target);  // 範囲チェック + RAM staging更新のみ
-  if (st != Am32ConfigStatus::OK) {
-    char verr[64] = {0};
-    am32_validate_settings(target, verr, sizeof(verr));  // 詳細理由を再取得して表示
-    printf("writeSettings failed (validation): %s -- %s\n",
-           am32_config_status_to_string(st), verr);
-    esc.exitConfigMode();
-    restore_suction_pwm_pin();
-    return;
+  if (read_st == Am32ConfigStatus::OK) {
+    // target_docの内容で上書きする(RAM上の操作のみ、LittleFSへは触れない)。
+    // yaml側に無い項目はESCの現在値のまま。
+    apply_am32_target_doc(target_doc, target);
+    write_st = esc.writeSettings(target);  // 範囲チェック + RAM staging更新のみ
+    if (write_st != Am32ConfigStatus::OK) {
+      am32_validate_settings(target, verr, sizeof(verr));  // 詳細理由を後で表示
+    } else {
+      save_st = esc.saveSettings();  // ここで実際にESCのflashへ書き込む
+      save_proto_st = esc.last_protocol_status();
+      if (save_st != Am32ConfigStatus::OK) {
+        esc.rollback();
+      }
+      verify_st = esc.readSettings(verify);
+    }
   }
 
-  st = esc.saveSettings();  // ここで実際にESCのflashへ書き込む
-  if (st != Am32ConfigStatus::OK) {
-    printf("saveSettings failed: %s (%s) -- rolling back staged value\n",
-           am32_config_status_to_string(st),
+  // ここまででESCとの全通信が完了。以降はまとめて出力してよい。
+  printf("handshake OK (attempt %d)\n", esc.last_handshake_attempts());
+  if (read_st != Am32ConfigStatus::OK) {
+    printf("readSettings failed: %s (%s)\n",
+           am32_config_status_to_string(read_st),
            Am32Protocol::status_to_string(esc.last_protocol_status()));
-    esc.rollback();
   } else {
-    printf("save OK\n");
-  }
-
-  AM32Settings verify;
-  st = esc.readSettings(verify);
-  if (st == Am32ConfigStatus::OK) {
-    printf("after : KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
-           verify.motor_kv(), verify.motor_poles(), verify.timing(),
-           verify.pwm_frequency_khz());
+    printf("before: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+           settings.motor_kv(), settings.motor_poles(), settings.timing(),
+           settings.pwm_frequency_khz());
+    printf("target: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+           target.motor_kv(), target.motor_poles(), target.timing(),
+           target.pwm_frequency_khz());
+    if (write_st != Am32ConfigStatus::OK) {
+      printf("writeSettings failed (validation): %s -- %s\n",
+             am32_config_status_to_string(write_st), verr);
+    } else if (save_st != Am32ConfigStatus::OK) {
+      printf("saveSettings failed: %s (%s) -- rolling back staged value\n",
+             am32_config_status_to_string(save_st), Am32Protocol::status_to_string(save_proto_st));
+    } else {
+      printf("save OK\n");
+    }
+    if (verify_st == Am32ConfigStatus::OK) {
+      printf("after : KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
+             verify.motor_kv(), verify.motor_poles(), verify.timing(),
+             verify.pwm_frequency_khz());
+    }
   }
 
   esc.exitConfigMode();
@@ -205,7 +227,9 @@ void MainTask::write_am32_param() {
 
   // ESCとの通信区間の外側(config mode終了後)でLittleFSへ書き込む。
   // "before"値(=書き換え前の生byte)をrestore_am32_param()用に保存する。
-  backup_am32_settings(settings);
+  if (read_st == Am32ConfigStatus::OK) {
+    backup_am32_settings(settings);
+  }
   printf("== AM32 write done ==\n");
 }
 
@@ -261,18 +285,24 @@ void MainTask::restore_am32_param() {
     return;
   }
 
-  st = esc.saveSettings();
-  if (st != Am32ConfigStatus::OK) {
+  // [重要] saveSettings()とreadSettings()の間にprintfを挟まない
+  // (write_am32_param()のコメント参照)。診断出力はどちらも終わってからまとめて行う。
+  Am32ConfigStatus save_st = esc.saveSettings();
+  Am32Protocol::Status save_proto_st = esc.last_protocol_status();  // readSettingsで上書きされる前に退避
+  if (save_st != Am32ConfigStatus::OK) {
+    esc.rollback();
+  }
+  AM32Settings verify{};
+  Am32ConfigStatus verify_st = esc.readSettings(verify);
+
+  printf("handshake OK (attempt %d)\n", esc.last_handshake_attempts());
+  if (save_st != Am32ConfigStatus::OK) {
     printf("saveSettings failed: %s (%s)\n",
-           am32_config_status_to_string(st),
-           Am32Protocol::status_to_string(esc.last_protocol_status()));
+           am32_config_status_to_string(save_st), Am32Protocol::status_to_string(save_proto_st));
   } else {
     printf("restore OK\n");
   }
-
-  AM32Settings verify;
-  st = esc.readSettings(verify);
-  if (st == Am32ConfigStatus::OK) {
+  if (verify_st == Am32ConfigStatus::OK) {
     printf("after restore: KV=%u Poles=%u Timing=%u PWMfreq=%ukHz\n",
            verify.motor_kv(), verify.motor_poles(), verify.timing(),
            verify.pwm_frequency_khz());
