@@ -253,7 +253,8 @@ void dump_settings(const AM32Settings& s, Am32CliEmit emit) {
     emit_line(emit, "timing           : %u (%.2f deg)", s.timing(), (double)s.timing_degrees());
     emit_line(emit, "auto_advance     : %s", s.auto_advance_enabled() ? "on" : "off");
     emit_line(emit, "pwm_frequency    : %u kHz", s.pwm_frequency_khz());
-    emit_line(emit, "variable_pwm     : %s", s.variable_pwm_enabled() ? "on" : "off");
+    emit_line(emit, "variable_pwm     : %s (raw=%u, 0=Fixed/1=Variable/2=byRPM)",
+              s.variable_pwm_enabled() ? "on" : "off", s.pwm_mode_raw());
     emit_line(emit, "startup_power    : %u %%", s.startup_power_percent());
     emit_line(emit, "sine_startup     : %s", s.sine_startup_enabled() ? "on" : "off");
     emit_line(emit, "bidirectional    : %s", s.bidirectional_enabled() ? "on" : "off");
@@ -283,6 +284,7 @@ bool cli_get(const AM32Settings& s, const char* field, char* out, size_t out_len
     if (!strcmp(field, "auto_advance")) { snprintf(out, out_len, "%u", s.auto_advance_enabled() ? 1 : 0); return true; }
     if (!strcmp(field, "pwm")) { snprintf(out, out_len, "%u", s.pwm_frequency_khz()); return true; }
     if (!strcmp(field, "variable_pwm")) { snprintf(out, out_len, "%u", s.variable_pwm_enabled() ? 1 : 0); return true; }
+    if (!strcmp(field, "pwm_mode")) { snprintf(out, out_len, "%u", s.pwm_mode_raw()); return true; }
     if (!strcmp(field, "startup_power")) { snprintf(out, out_len, "%u", s.startup_power_percent()); return true; }
     if (!strcmp(field, "sine_start")) { snprintf(out, out_len, "%u", s.sine_startup_enabled() ? 1 : 0); return true; }
     if (!strcmp(field, "bidirectional")) { snprintf(out, out_len, "%u", s.bidirectional_enabled() ? 1 : 0); return true; }
@@ -302,6 +304,7 @@ bool cli_set(AM32Settings& s, const char* field, long value) {
     if (!strcmp(field, "auto_advance")) { s.set_auto_advance_enabled(value != 0); return true; }
     if (!strcmp(field, "pwm")) { s.set_pwm_frequency_khz((uint8_t)value); return true; }
     if (!strcmp(field, "variable_pwm")) { s.set_variable_pwm_enabled(value != 0); return true; }
+    if (!strcmp(field, "pwm_mode")) { s.set_pwm_mode_raw((uint8_t)value); return true; }
     if (!strcmp(field, "startup_power")) { s.set_startup_power_percent((uint8_t)value); return true; }
     if (!strcmp(field, "sine_start")) { s.set_sine_startup_enabled(value != 0); return true; }
     if (!strcmp(field, "bidirectional")) { s.set_bidirectional_enabled(value != 0); return true; }

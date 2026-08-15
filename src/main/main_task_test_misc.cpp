@@ -57,7 +57,13 @@ void apply_am32_target_doc(const JsonDocument& doc, AM32Settings& out) {
   out.set_timing(doc["timing"] | out.timing());
   out.set_auto_advance_enabled(doc["auto_advance"] | out.auto_advance_enabled());
   out.set_pwm_frequency_khz(doc["pwm_frequency_khz"] | out.pwm_frequency_khz());
-  out.set_variable_pwm_enabled(doc["variable_pwm"] | out.variable_pwm_enabled());
+  // pwm_mode(0=Fixed/1=Variable/2=by RPM、fw>=2.18限定)が指定されていればそちらを
+  // 優先する。無ければ従来通りbool方式のvariable_pwmを使う(常にraw=1を書く)。
+  if (doc["pwm_mode"].is<int>()) {
+    out.set_pwm_mode_raw(doc["pwm_mode"].as<uint8_t>());
+  } else {
+    out.set_variable_pwm_enabled(doc["variable_pwm"] | out.variable_pwm_enabled());
+  }
   out.set_startup_power_percent(doc["startup_power_percent"] | out.startup_power_percent());
   out.set_sine_startup_enabled(doc["sine_startup"] | out.sine_startup_enabled());
   out.set_bidirectional_enabled(doc["bidirectional"] | out.bidirectional_enabled());

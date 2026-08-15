@@ -14,12 +14,32 @@
 # load_params() 参照。terminal.jsは廃止済み、tx_term.jsを使うこと)。
 #
 
-motor_kv: 8500                 # 実KV値。20〜10220、40刻み(raw=(kv-20)/40を0-255へクランプ)
-motor_poles: 12                # モーター極数。2〜36 (validateで拒否)
+motor_kv: 8500                 # 実KV値。20〜10220、40刻み(raw=(kv-20)/40、最も近い値に丸め)。
+                                # 8500はちょうどこの並びに乗る値(=212*40+20)なので丸め誤差なし
+motor_poles: 14                # モーター極数(ローター磁石の総数。ステーター歯数ではない)。2〜36。
+                                # 12に変更して実測したところRPMが大きく落ちたため14に戻した
+                                # (BetaFPV 1103のような極小モーターは12N14P構成が一般的で、
+                                # 外から数えやすいステーター歯を磁石数と勘違いしやすい)
 timing: 0                      # AM32 Configuratorのスライダーと同じ0〜32単位(0〜32でクランプ)。
-                                # eeprom_version<3の旧フォーマット(0-3, 7.5deg刻み)は非対応
-pwm_frequency_khz: 24          # 8〜144 (validateで拒否)
-variable_pwm: true             # true/false (fw>=2.18では内部的に0/1/2のenumだが0=無効/非0=有効で統一)
+                                # eeprom_version<3の旧フォーマット(0-3, 7.5deg刻み)は非対応。
+                                # auto_advance: trueの間は使われ方が出典未確認(ベース値/フォールバックか
+                                # 完全に無視されるか不明)なので0のままにしている
+auto_advance: true             # true/false。要fw>=2.16(このESCはfw2.19なので対応)。有効時はRPMに応じて
+                                # ESC側がtimingを動的調整する。8500KVのような極小・高KVモーターは
+                                # 高RPM域で電気角周波数が上がるため、固定timingの決め打ちより
+                                # 自動調整の方が安全側に倒せる、という一般的なESCチューニングの経験則
+                                # (AM32プロトコル自体の出典ではない)
+pwm_frequency_khz: 24          # 8〜144 (validateで拒否)。48kHzを試したが実測でRPMが落ちたため24に戻した
+                                # (このESCはdevinfoからSTM32F051(48MHz M0)と判明しており、非力なMCUでは
+                                # switching周波数を上げるほど処理負荷/デッドタイム比率が増え不利に働いた
+                                # と考えられる。24kHzが実測で確認できている値)
+variable_pwm: true             # true/false (fw>=2.18では内部的に0/1/2のenumだが0=無効/非0=有効で統一)。
+                                # raw=1("Variable")固定で書く。これが実測で確認できている値
+# pwm_mode: 2                   # 0=Fixed/1=Variable/2=by RPM (fw>=2.18限定、生enum直接指定)。
+                                # 試したところRPMが落ちたため不採用(variable_pwm:trueのまま=raw1を維持)。
+                                # PWM周波数48kHz化の件と合わせ、この非力なMCU(STM32F051)では
+                                # スイッチング/PWM方式まわりの憶測ベースの変更は軒並み逆効果という
+                                # 傾向が出ている
 startup_power_percent: 100     # 50〜150 (setterでクランプ)
 sine_startup: false            # true/false
 bidirectional: false           # true/false (3Dモード)

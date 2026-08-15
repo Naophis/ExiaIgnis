@@ -47,6 +47,10 @@ public:
 
     static constexpr uint32_t ACK_TIMEOUT_US  = 8000;   // 通常コマンドのACK/応答待ちタイムアウト
     static constexpr uint32_t BYTE_TIMEOUT_US = 4000;   // 複数byte応答中、1byteごとのタイムアウト
+    // 出典: bootloader/main.c decodeInput() CMD_PROG_FLASH — ACKを返す前に
+    // save_flash_nolib()(実際のflash erase+program、STM32系では数十msかかり得る)を
+    // 同期的に実行するため、他コマンドのACK_TIMEOUT_USでは短すぎる。
+    static constexpr uint32_t PROG_FLASH_TIMEOUT_US = 500000;  // 500ms
 
     // ACK/NACK値 (出典: bootloader/main.c send_ACK()/send_BAD_ACK()/send_BAD_CRC_ACK())
     static constexpr uint8_t ACK_OK      = 0x30;

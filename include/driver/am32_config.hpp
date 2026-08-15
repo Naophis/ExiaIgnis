@@ -113,8 +113,11 @@ struct AM32Settings {
     uint8_t firmware_minor() const { return raw.f.version.minor; }
 
     uint16_t motor_kv() const { return (uint16_t)(raw.f.motor_kv * 40 + 20); }
+    // raw(0-255)には KV = raw*40+20 の関係でしか保存できない(表現可能な値は
+    // 20,60,100,...,8500,8540,...という40刻み+20のみ)。指定値がこの並びに
+    // 乗っていない場合は切り捨てず最も近い値に丸める(四捨五入)。
     void set_motor_kv(uint16_t kv) {
-        const int v = (kv >= 20) ? (int)((kv - 20) / 40) : 0;
+        const int v = (kv >= 20) ? (int)(((kv - 20) + 20) / 40) : 0;  // +20 = 四捨五入のための下駄
         raw.f.motor_kv = (uint8_t)am32_detail::clamp_i(v, 0, 255);
     }
 
@@ -140,8 +143,17 @@ struct AM32Settings {
 
     // fw<2.18ではbool、fw>=2.18では0/1/2のenum(0=Fixed,1=Variable,2=byRPM)。
     // ここでは「0=無効／0以外=有効」というbool的な入出力に統一する(両世代と互換)。
+    // fw>=2.18で"by RPM"(raw=2)を明示的に選びたい場合は pwm_mode_raw()/set_pwm_mode_raw()
+    // を使うこと(set_variable_pwm_enabled(true)は常にraw=1="Variable"を書き込む)。
     bool variable_pwm_enabled() const { return raw.f.variable_pwm != 0; }
     void set_variable_pwm_enabled(bool en) { raw.f.variable_pwm = en ? 1 : 0; }
+
+    // fw>=2.18限定。生のenum値をそのまま読み書きする(0=Fixed,1=Variable,2=by RPM)。
+    // "Variable"と"by RPM"の正確な挙動差はAM32公式ソースで未確認(項目名からの推測)。
+    uint8_t pwm_mode_raw() const { return raw.f.variable_pwm; }
+    void set_pwm_mode_raw(uint8_t mode) {
+        raw.f.variable_pwm = (uint8_t)am32_detail::clamp_i(mode, 0, 2);
+    }
 
     uint8_t startup_power_percent() const { return raw.f.startup_power; }
     void set_startup_power_percent(uint8_t pct) {

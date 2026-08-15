@@ -33,6 +33,18 @@ Pico へ USB CDC 経由でファイルを操作するスクリプト。
   deleteall
       LittleFS を再フォーマットして全ファイルを消去する。
       例: python send_file.py deleteall
+
+  am32write
+      "AM32WRITE" コマンドを送り、物理ボタン操作なしに write_am32_param() を
+      実行させる (事前に am32.txt をアップロード済みであること)。実行ログを
+      "== AM32 write done ==" まで表示する。
+      例: python send_file.py am32write
+
+  am32sync [<am32.yamlのパス>]
+      am32.yaml を /am32.txt としてアップロードし、続けて am32write を実行する
+      (tools/param_tuner/profile/am32.yaml を編集するたびにこれ1つ叩けばよい)。
+      パス省略時は tools/param_tuner/profile/am32.yaml を使う。
+      例: python send_file.py am32sync
 """
 
 import json
@@ -51,7 +63,11 @@ except ImportError:
 
 TIMEOUT_SEC = 10
 PICO_VID    = 0x2E8A  # Raspberry Pi
-COMMANDS    = {"write", "read", "list", "delete", "deleteall", "show"}
+COMMANDS    = {"write", "read", "list", "delete", "deleteall", "show",
+               "am32write", "am32sync"}
+AM32_YAML_DEFAULT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "tools", "param_tuner", "profile", "am32.yaml")
 
 
 def find_pico_port() -> str | None:
@@ -199,6 +215,38 @@ def cmd_show(ser: serial.Serial, remote_name: str) -> None:
         print(text)
 
 
+def cmd_am32write(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
+    ser.write(b"AM32WRITE\n")
+    ser.flush()
+    ack = readline_skip_sensor(ser)
+    if ack != "OK":
+        print(f"失敗: {ack}", file=sys.stderr)
+        sys.exit(1)
+    print("write_am32_param() 実行中... "
+          "(電源制御が無い場合は表示に従ってESCのバッテリを挿し直してください)")
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        raw = ser.readline()
+        if not raw:
+            continue
+        line = raw.decode("utf-8", errors="replace").rstrip()
+        if not line or "ADC0:" in line or "Gx:" in line or "Enc0:" in line:
+            continue
+        if line.startswith("[main] waiting"):
+            continue  # 2秒毎のハートビートは待機表示中はうるさいので抑制
+        print(line)
+        if line.startswith("== AM32 write done"):
+            return
+    print("失敗: '== AM32 write done' を受信できませんでした(タイムアウト)",
+          file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_am32sync(ser: serial.Serial, local_path: str) -> None:
+    cmd_write(ser, local_path, "am32.txt")
+    cmd_am32write(ser)
+
+
 def cmd_deleteall(ser: serial.Serial) -> None:
     ser.write(b"DELETEALL\n")
     ser.flush()
@@ -265,6 +313,13 @@ def main() -> None:
 
         elif command == "deleteall":
             cmd_deleteall(ser)
+
+        elif command == "am32write":
+            cmd_am32write(ser)
+
+        elif command == "am32sync":
+            local = args[1] if len(args) > 1 else AM32_YAML_DEFAULT
+            cmd_am32sync(ser, local)
 
         else:
             print(f"不明なコマンド: {command}\n", file=sys.stderr)

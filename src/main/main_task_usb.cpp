@@ -6,6 +6,21 @@
 #include <cstring>
 #include <stdio.h>
 
+namespace {
+// "AM32WRITE" コマンド受信フラグ。rx_usb_cmd()はMainTaskへアクセスできない
+// (free function)ため、MainTask::run()のボタン待ちループ側でこのフラグを
+// ポーリングしてwrite_am32_param()を呼ぶ(consume_am32_write_request()参照)。
+bool g_am32_write_requested = false;
+}  // namespace
+
+// MainTask::run()のボタン待ちループから呼ぶ。trueを返したら1回分の
+// "AM32WRITE"リクエストを消費(フラグをリセット)する。
+bool consume_am32_write_request() {
+  const bool v = g_am32_write_requested;
+  g_am32_write_requested = false;
+  return v;
+}
+
 // ─── USB シリアル受信 ─────────────────────────────────────────────────────
 // idle_ms の無通信が続いたら返す。\n で終端された行を1つ読み込む。
 int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms) {
@@ -28,12 +43,23 @@ int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms) {
 
 // ─── USB コマンド処理 ─────────────────────────────────────────────────────
 // "filename@content" → ファイルを保存して true を返す (再ロード要)。
-// "LIST" / "SHOW:name" / "READ:name" / "DELETE:name" / "DELETEALL" を処理する。
+// "LIST" / "SHOW:name" / "READ:name" / "DELETE:name" / "DELETEALL" /
+// "AM32WRITE" を処理する。
 bool rx_usb_cmd(char *buf, int len) {
   while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
     buf[--len] = '\0';
   if (len == 0)
     return false;
+
+  // ── AM32WRITE ─────────────────────────────────────────────────────────
+  // 事前に "am32.txt@..." で /am32.txt をアップロードしておいた上でこの
+  // コマンドを送ると、write_am32_param() (物理ボタン操作なし) が実行される。
+  if (strcmp(buf, "AM32WRITE") == 0) {
+    g_am32_write_requested = true;
+    printf("OK\n");
+    fflush(stdout);
+    return false;
+  }
 
   // ── filename@content ─────────────────────────────────────────────────
   char *at = strchr(buf, '@');

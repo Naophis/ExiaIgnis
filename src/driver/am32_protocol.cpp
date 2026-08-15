@@ -331,7 +331,9 @@ Am32Protocol::Status Am32Protocol::prog_flash() {
         return st;
     }
     switch_to_rx();
-    return rx_ack();
+    // 実際のflash erase+programが終わってからACKが返るため、通常より長く待つ
+    // (PROG_FLASH_TIMEOUT_USのコメント参照)。
+    return rx_ack(PROG_FLASH_TIMEOUT_US);
 }
 
 Am32Protocol::Status Am32Protocol::erase_flash() {

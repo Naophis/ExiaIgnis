@@ -40,6 +40,7 @@ std::shared_ptr<sensing_result_entity_t> MainTask::get_sensing_entity() {
 // ─── USB シリアル通信 (main_task_usb.cpp) ────────────────────────────────
 int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms);
 bool rx_usb_cmd(char *buf, int len);
+bool consume_am32_write_request();
 
 void MainTask::load_param_after() {
   // AM32 ESC移行により、BldcActuator向けのV/Hzランプパラメータ(旧
@@ -141,6 +142,12 @@ void MainTask::run() {
         if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
           updated = true;
           ui_->coin(25);
+        }
+        // "am32.txt@..." アップロード + "AM32WRITE" コマンドで、物理ボタン操作
+        // なしにwrite_am32_param()を実行できる(このwhileループを抜けずに
+        // 繰り返し呼べるので、am32.yamlの調整を反復しやすい)。
+        if (consume_am32_write_request()) {
+          write_am32_param();
         }
         // 2秒ごとにハートビートを出力してシリアル接続を確認できるようにする
         // send_file.py の "[" スキップフィルタで無視されるので通信に影響なし
