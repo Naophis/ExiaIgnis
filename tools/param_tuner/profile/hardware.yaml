@@ -373,8 +373,8 @@ sensor_pid_dia:
   c: 0
   mode: 0
 gyro_param:
-  gyro_w_gain_left: 0.002450750
-  gyro_w_gain_right: 0.00245050
+  gyro_w_gain_left: 0.00245450
+  gyro_w_gain_right: 0.00245450
   retry_min_th: 0
   retry_max_th: 3
   robust_th: 0.95
