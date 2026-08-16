@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConsoleLog } from "@/components/console-log";
+import { LogPlotPanel } from "@/components/log-plot-panel";
 import { ALL_SENTINEL, ProfilePanel } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
 import { TestTemplatePanel } from "@/components/test-template-panel";
@@ -34,6 +36,8 @@ export default function Home() {
   // up instantly instead of losing anything that arrived while paused.
   const [frozenLines, setFrozenLines] = useState<string[] | null>(null);
   const [sending, setSending] = useState<string | null>(null);
+
+  const [rightTab, setRightTab] = useState<"console" | "plot">("console");
 
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [editorContent, setEditorContent] = useState<string | null>(null);
@@ -310,12 +314,39 @@ export default function Home() {
             onClose={() => setShowTemplates(false)}
           />
         ) : (
-          <ConsoleLog
-            lines={paused && frozenLines !== null ? frozenLines : lines}
-            paused={paused}
-            onClear={clearConsole}
-            onTogglePause={togglePause}
-          />
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+            <div className="flex shrink-0 gap-1">
+              <Button
+                size="sm"
+                variant={rightTab === "console" ? "default" : "outline"}
+                onClick={() => setRightTab("console")}
+              >
+                コンソール
+              </Button>
+              <Button
+                size="sm"
+                variant={rightTab === "plot" ? "default" : "outline"}
+                onClick={() => setRightTab("plot")}
+              >
+                プロット
+              </Button>
+            </div>
+            {/* Both tabs render inside the same flex column; only their
+                visibility toggles so the SSE-fed `lines` state above keeps
+                accumulating in the background regardless of which tab is
+                showing. */}
+            <div className={`min-h-0 flex-1 ${rightTab === "console" ? "flex" : "hidden"}`}>
+              <ConsoleLog
+                lines={paused && frozenLines !== null ? frozenLines : lines}
+                paused={paused}
+                onClear={clearConsole}
+                onTogglePause={togglePause}
+              />
+            </div>
+            <div className={`min-h-0 flex-1 ${rightTab === "plot" ? "flex" : "hidden"}`}>
+              <LogPlotPanel />
+            </div>
+          </div>
         )}
       </div>
     </div>
