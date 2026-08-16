@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConsoleLog } from "@/components/console-log";
 import { LogPlotPanel } from "@/components/log-plot-panel";
+import { ParamMatrixPanel } from "@/components/param-matrix-panel";
 import { ALL_SENTINEL, ProfilePanel } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
 import { TestTemplatePanel } from "@/components/test-template-panel";
@@ -47,6 +48,8 @@ export default function Home() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [applyingTemplate, setApplyingTemplate] = useState<string | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
+
+  const [showMatrix, setShowMatrix] = useState(false);
 
   const refreshPorts = useCallback(async () => {
     const res = await fetch("/api/ports");
@@ -201,7 +204,15 @@ export default function Home() {
   const openTemplates = () => {
     setEditing(null);
     setEditorContent(null);
+    setShowMatrix(false);
     setShowTemplates(true);
+  };
+
+  const openMatrix = () => {
+    setEditing(null);
+    setEditorContent(null);
+    setShowTemplates(false);
+    setShowMatrix(true);
   };
 
   const applyTemplate = async (id: string) => {
@@ -279,6 +290,11 @@ export default function Home() {
         onDisconnect={handleDisconnect}
         onEnableAutoConnect={handleEnableAutoConnect}
       />
+      {showMatrix ? (
+        <div className="flex flex-1 overflow-hidden">
+          <ParamMatrixPanel onClose={() => setShowMatrix(false)} />
+        </div>
+      ) : (
       <div className="flex flex-1 gap-4 overflow-hidden">
         <ProfilePanel
           profiles={profiles}
@@ -287,6 +303,7 @@ export default function Home() {
           onSendAll={sendAll}
           onEditFile={openEditor}
           onOpenTemplates={openTemplates}
+          onOpenMatrix={openMatrix}
         />
         {editing ? (
           editorContent === null ? (
@@ -349,6 +366,7 @@ export default function Home() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

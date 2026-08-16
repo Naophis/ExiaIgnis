@@ -17,6 +17,7 @@ interface Props {
   onSendAll: () => void;
   onEditFile: (scope: SendScope, file: string) => void;
   onOpenTemplates: () => void;
+  onOpenMatrix: () => void;
 }
 
 export function ProfilePanel({
@@ -26,6 +27,7 @@ export function ProfilePanel({
   onSendAll,
   onEditFile,
   onOpenTemplates,
+  onOpenMatrix,
 }: Props) {
   const isBusy = sending !== null;
   const total = profiles.base.length + profiles.mode.length;
@@ -45,7 +47,12 @@ export function ProfilePanel({
   return (
     <Card className="flex w-80 shrink-0 flex-col overflow-hidden">
       <CardHeader className="gap-1">
-        <CardTitle>パラメータ送信 (hf)</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>パラメータ送信 (hf)</CardTitle>
+          <Button size="sm" variant="ghost" onClick={onOpenMatrix}>
+            パラメータ表
+          </Button>
+        </div>
         <span className="text-xs text-muted-foreground">
           {needle ? `${shown} / ${total} ファイル` : `${total} ファイル`}
         </span>
