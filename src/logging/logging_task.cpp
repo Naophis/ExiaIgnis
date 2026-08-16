@@ -214,8 +214,8 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.left45_3_lp = static_cast<int16_t>(sr->led_sen.left45_3.raw);
   ld.right45_3_lp = static_cast<int16_t>(sr->led_sen.right45_3.raw);
 
-  ld.battery_lp = floatToHalf(sr->ego.battery_raw);
-
+  // ld.battery_lp = floatToHalf(sr->ego.battery_raw);
+  ld.battery_lp = floatToHalf(sr->ego.batt_kf);
   ld.duty_l = floatToHalf(sr->ego.duty.duty_l);
   ld.duty_r = floatToHalf(sr->ego.duty.duty_r);
 

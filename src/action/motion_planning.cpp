@@ -986,6 +986,7 @@ void MotionPlanning::reset_tgt_data() {
   tgt_val->global_pos.dist = 0;
   tgt_val->global_pos.img_dist = 0;
   tgt_val->nmr.tgt_reset_req = true;
+  tgt_val->tgt_in.time_step2 = param->sakiyomi_time;
   pt->last_tgt_angle = 0;
   // TODO
   pt->send_command(*tgt_val);
