@@ -63,18 +63,18 @@ circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
 # mode: 0 # メイン
 # mode: 1 # 最短スローム
-# mode: 2 # 直進
+mode: 2 # 直進
 # mode: 3 # 超信地
-# mode: 5 # 探索スラローム sla_wall_ref_l/r
+# mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
-# mode: 9 # wall off, search_mode(1)->search_wall_off, 0->fast_run_wall_off
-# mode: 11 # vacume/suction test
-# mode: 12 # silent_keep
-# mode: 13 # keep_pos
-mode: 14 # sensing
-# mode: 15 # sensor calib
-# mode: 16 # system identification (para)
-# mode: 17 # system identification (roll)
+# mode: 9 # wall off: search_mode(1)->search_wall_off, 0->fast_run_wall_off
+# mode: 11 # vacume: suction test
+# mode: 12 # silent_keep:
+# mode: 13 # keep_pos:
+# mode: 14 # sensing:
+# mode: 15 # sensor calib:
+# mode: 16 # sysi(para)
+# mode: 17 # sysi(roll)
 # mode: 20 # pivot turn n
 # mode: 21 # pivot turn n2
 # mode: 22 # encoder_test
@@ -170,11 +170,11 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 12
+  file_idx: 4
   sla_dist: 90
   # sla_type: 3
   sla_type: 3
-  sla_type2: 9 # 復路ターン種類
+  sla_type2: 8 # 復路ターン種類
   sla_return: 0 # 往復フラグ
   # sla_type: 1 normal
   # sla_type: 2 #orval

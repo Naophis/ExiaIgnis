@@ -6,8 +6,10 @@ import { Card } from "@/components/ui/card";
 import { ConsoleLog } from "@/components/console-log";
 import { ALL_SENTINEL, ProfilePanel } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
+import { TestTemplatePanel } from "@/components/test-template-panel";
 import { YamlEditor } from "@/components/yaml-editor";
 import type { ConnectionStatus, PortInfo, ProfileList, SendScope } from "@/lib/serial-manager";
+import type { TestTemplate, TestTemplateValues } from "@/lib/test-template-shared";
 
 const MAX_LOG_LINES = 2000;
 const MODE = "hf";
@@ -37,6 +39,11 @@ export default function Home() {
   const [editorContent, setEditorContent] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [templates, setTemplates] = useState<TestTemplate[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState<string | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
   const refreshPorts = useCallback(async () => {
     const res = await fetch("/api/ports");
     const data = await res.json();
@@ -49,6 +56,12 @@ export default function Home() {
     setProfiles(data);
   }, []);
 
+  const refreshTemplates = useCallback(async () => {
+    const res = await fetch("/api/test-templates");
+    const data = await res.json();
+    setTemplates(data.templates as TestTemplate[]);
+  }, []);
+
   useEffect(() => {
     // react-hooks/set-state-in-effect flags any effect that fetches on
     // mount, but this project doesn't run the React Compiler; the standard
@@ -57,9 +70,10 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshPorts();
     void refreshProfiles();
+    void refreshTemplates();
     const interval = setInterval(() => void refreshPorts(), 3000);
     return () => clearInterval(interval);
-  }, [refreshPorts, refreshProfiles]);
+  }, [refreshPorts, refreshProfiles, refreshTemplates]);
 
   useEffect(() => {
     const es = new EventSource("/api/stream");
@@ -137,6 +151,7 @@ export default function Home() {
   };
 
   const openEditor = async (scope: SendScope, file: string) => {
+    setShowTemplates(false);
     setEditing({ scope, file });
     setEditorContent(null);
     try {
@@ -169,11 +184,66 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "保存に失敗しました");
       toast.success(`${editing.file}: 保存しました`);
-      closeEditor();
+      // Stay in the editor; sync editorContent so the dirty flag clears
+      // instead of staying stuck true (YamlEditor keeps its own draft state).
+      setEditorContent(content);
     } catch (err) {
       toast.error(`${editing.file}: ${(err as Error).message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openTemplates = () => {
+    setEditing(null);
+    setEditorContent(null);
+    setShowTemplates(true);
+  };
+
+  const applyTemplate = async (id: string) => {
+    setApplyingTemplate(id);
+    try {
+      const res = await fetch("/api/test-templates/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "適用に失敗しました");
+      toast.success(`system.yaml に適用しました: ${data.name}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setApplyingTemplate(null);
+    }
+  };
+
+  const saveTemplate = async (id: string | undefined, name: string, values: TestTemplateValues) => {
+    setSavingTemplate(true);
+    try {
+      const res = await fetch("/api/test-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name, values }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "保存に失敗しました");
+      toast.success(`テンプレートを保存しました: ${name}`);
+      await refreshTemplates();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const deleteTemplate = async (id: string) => {
+    try {
+      const res = await fetch(`/api/test-templates?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("削除に失敗しました");
+      await refreshTemplates();
+    } catch (err) {
+      toast.error((err as Error).message);
     }
   };
 
@@ -212,6 +282,7 @@ export default function Home() {
           onSendFile={sendOne}
           onSendAll={sendAll}
           onEditFile={openEditor}
+          onOpenTemplates={openTemplates}
         />
         {editing ? (
           editorContent === null ? (
@@ -228,6 +299,16 @@ export default function Home() {
               onClose={closeEditor}
             />
           )
+        ) : showTemplates ? (
+          <TestTemplatePanel
+            templates={templates}
+            applying={applyingTemplate}
+            saving={savingTemplate}
+            onApply={applyTemplate}
+            onSave={saveTemplate}
+            onDelete={deleteTemplate}
+            onClose={() => setShowTemplates(false)}
+          />
         ) : (
           <ConsoleLog
             lines={paused && frozenLines !== null ? frozenLines : lines}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,17 @@ interface Props {
   onSendFile: (scope: SendScope, file: string) => void;
   onSendAll: () => void;
   onEditFile: (scope: SendScope, file: string) => void;
+  onOpenTemplates: () => void;
 }
 
-export function ProfilePanel({ profiles, sending, onSendFile, onSendAll, onEditFile }: Props) {
+export function ProfilePanel({
+  profiles,
+  sending,
+  onSendFile,
+  onSendAll,
+  onEditFile,
+  onOpenTemplates,
+}: Props) {
   const isBusy = sending !== null;
   const total = profiles.base.length + profiles.mode.length;
 
@@ -65,6 +73,21 @@ export function ProfilePanel({ profiles, sending, onSendFile, onSendAll, onEditF
                 disabled={isBusy}
                 onSend={() => onSendFile("base", file)}
                 onEdit={() => onEditFile("base", file)}
+                extra={
+                  file === "system.yaml" ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isBusy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenTemplates();
+                      }}
+                    >
+                      テンプレート
+                    </Button>
+                  ) : undefined
+                }
               />
             ))}
             {base.length > 0 && mode.length > 0 && <Separator className="my-1" />}
@@ -91,12 +114,14 @@ function FileRow({
   disabled,
   onSend,
   onEdit,
+  extra,
 }: {
   file: string;
   sending: string | null;
   disabled: boolean;
   onSend: () => void;
   onEdit: () => void;
+  extra?: ReactNode;
 }) {
   const editable = file.endsWith(".yaml");
   return (
@@ -114,18 +139,20 @@ function FileRow({
       className={`flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-muted ${editable ? "cursor-pointer" : ""}`}
     >
       <span className="truncate text-sm">{file}</span>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={disabled}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSend();
-        }}
-        className="shrink-0"
-      >
-        {sending === file ? "..." : "Send"}
-      </Button>
+      <div className="flex shrink-0 items-center gap-1">
+        {extra}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSend();
+          }}
+        >
+          {sending === file ? "..." : "Send"}
+        </Button>
+      </div>
     </div>
   );
 }
