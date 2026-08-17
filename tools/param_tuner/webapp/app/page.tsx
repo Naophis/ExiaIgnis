@@ -45,6 +45,11 @@ export default function Home() {
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [editorContent, setEditorContent] = useState<string | null>(null);
   const [liveDraft, setLiveDraft] = useState<string | null>(null);
+  // Bumped whenever the slalom sim panel patches liveDraft externally, to
+  // force YamlEditor to remount and re-seed its internal draft from the new
+  // liveDraft (see YamlEditor's initialDraft prop) instead of keeping the
+  // stale buffer it mounted with.
+  const [draftPatchNonce, setDraftPatchNonce] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const [templates, setTemplates] = useState<TestTemplate[]>([]);
@@ -184,6 +189,14 @@ export default function Home() {
     setLiveDraft(null);
   };
 
+  // The slalom sim panel patched the draft (not the saved file) - just
+  // update the buffer and force YamlEditor to pick it up; the user still
+  // reviews and explicitly saves via Ctrl+S like any other edit.
+  const applySimResultToDraft = (nextDraft: string) => {
+    setLiveDraft(nextDraft);
+    setDraftPatchNonce((n) => n + 1);
+  };
+
   const saveEditor = async (content: string) => {
     if (!editing) return;
     setSaving(true);
@@ -318,16 +331,21 @@ export default function Home() {
           ) : (
             <>
               <YamlEditor
-                key={`${editing.scope}:${editing.file}`}
+                key={`${editing.scope}:${editing.file}:${draftPatchNonce}`}
                 file={editing.file}
                 content={editorContent}
+                initialDraft={liveDraft ?? undefined}
                 saving={saving}
                 onSave={saveEditor}
                 onClose={closeEditor}
                 onDraftChange={setLiveDraft}
               />
               {editing.scope === "mode" && TURN_PROFILE_FILE_RE.test(editing.file) && (
-                <SlalomSimPanel file={editing.file} draft={liveDraft ?? editorContent} />
+                <SlalomSimPanel
+                  file={editing.file}
+                  draft={liveDraft ?? editorContent}
+                  onApply={applySimResultToDraft}
+                />
               )}
             </>
           )

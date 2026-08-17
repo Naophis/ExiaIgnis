@@ -117,15 +117,25 @@ export function SlalomSimPlot({ result }: Props) {
       drawSegment(result.afterPath[0], result.afterPath[1], "coral");
     }
 
-    ctx.strokeStyle = "gold";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    result.path.forEach((p, i) => {
-      const [cx, cy] = toCanvas(p.x, p.y);
-      if (i === 0) ctx.moveTo(cx, cy);
-      else ctx.lineTo(cx, cy);
-    });
-    ctx.stroke();
+    const drawPath = (points: { x: number; y: number }[], color: string, dashed: boolean) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = dashed ? 2 : 3;
+      ctx.setLineDash(dashed ? [5, 4] : []);
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        const [cx, cy] = toCanvas(p.x, p.y);
+        if (i === 0) ctx.moveTo(cx, cy);
+        else ctx.lineTo(cx, cy);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+
+    // Idealized (no-slip) path in solid gold, tire-slip overlay dashed cyan -
+    // both drawn in the same cell-aligned frame so the gap between them
+    // directly shows how far slip would drag the robot off-line.
+    drawPath(result.path, "gold", false);
+    drawPath(result.slipPath, "deepskyblue", true);
 
     const drawDot = (p: { x: number; y: number }, color: string) => {
       const [cx, cy] = toCanvas(p.x, p.y);

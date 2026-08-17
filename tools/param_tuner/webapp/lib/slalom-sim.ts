@@ -11,12 +11,13 @@
 //  - Slalom.calc_offset_dist's per-type branches (Plot.exe's hf_cl=0 default
 //    table for rad/pow_n/ang/end_pos/start_ang)
 //
-// Deliberately NOT ported: calc_slip / calc_slip_normalturn (the K/K_y slip
-// model). main.py's GUI passes K/K_y into Slalom() but its actual plotted
-// trajectory and printed front/back/time always come from the non-slip
-// calc()/calc_offset_dist() path (mode is always 0 there), so K/K_y are inert
-// for every value this panel displays - reproducing them would add a lot of
-// dynamics code for zero visible effect.
+// slalom.py's calc_slip (the K/K_y tire-slip dynamics model) IS ported here
+// (see simulateSlipStep below) to draw a second, slip-affected trajectory
+// alongside the idealized one - useful as a visual "how far will the real
+// robot drift" check. Note this is purely a diagnostic overlay: front/back/
+// time (and everything applySimResultToYaml writes back to the yaml) always
+// come from the non-slip path, matching what the firmware actually uses -
+// the real robot doesn't know its own slip, so there's nothing to feed back.
 
 export type TurnType =
   | "normal"
@@ -86,6 +87,12 @@ const OFFSET = { prev: 7, after: 7, prevDia: 7, afterDia: 7 };
 const DT = 0.001;
 const CELL_SIZE = 90;
 const HALF_CELL_SIZE = 45;
+const SLIP_MASS = 0.015; // slalom.py's module-level `m` (kg-scale tuning constant, not the robot's real mass)
+
+// hardware.yaml's slip_param_k2 / slip_param_K at the time of writing - just
+// the Tkinter GUI's starting point, editable in the panel like there too.
+export const DEFAULT_SLIP_K = 150;
+export const DEFAULT_SLIP_KY = 0.5;
 
 function safeIntegrand(x: number, n: number): number {
   if (Math.abs(x) >= 1) return 0;
@@ -151,10 +158,13 @@ export interface SlalomSimParams {
   rad: number; // mm
   n: number; // pow_n
   ang: number; // deg, total turn angle
+  K: number; // slip_param_k2 - beta (slip angle) relaxation gain
+  Ky: number; // slip_param_K - lateral force gain
 }
 
 export interface SlalomSimResult {
-  path: Point[]; // trajectory in the turn's own frame, offset by turnOffset already applied
+  path: Point[]; // idealized (non-slip) trajectory, offset by turnOffset already applied
+  slipPath: Point[]; // same frame/offset as `path`, but integrated with tire-slip dynamics - overlay only
   prevPath: [Point, Point];
   afterPath: [Point, Point]; // shifted to align with the trajectory's own origin, like plot.py's after_path2
   time: number; // seconds, informational only - not written to the yaml
@@ -167,7 +177,7 @@ export interface SlalomSimResult {
 }
 
 export function simulateSlalom(params: SlalomSimParams): SlalomSimResult {
-  const { type, v, rad, n, ang } = params;
+  const { type, v, rad, n, ang, K, Ky } = params;
   const defaults = TURN_DEFAULTS[type];
   const angRad = (ang * Math.PI) / 180;
   const et = getEt(n);
@@ -179,6 +189,7 @@ export function simulateSlalom(params: SlalomSimParams): SlalomSimResult {
 
   const startTheta = defaults.startAngle * (Math.PI / 180);
 
+  // Idealized (non-slip) state.
   let theta = startTheta;
   let w = 0;
   let x = 0;
@@ -186,16 +197,47 @@ export function simulateSlalom(params: SlalomSimParams): SlalomSimResult {
   let maxAccY = 0;
   const path: Point[] = [{ x, y }];
 
+  // Tire-slip state (slalom.py's calc_slip/step_euler_slip). Driven by the
+  // exact same w(t) sequence as the idealized state above - alpha(t) has no
+  // feedback from slip dynamics, only x/y/theta/vx/vy/beta do.
+  let slipTheta = startTheta;
+  let slipX = 0;
+  let slipY = 0;
+  let vx = v / 1000;
+  let vy = 0;
+  let beta = 0;
+  const slipPath: Point[] = [{ x: slipX, y: slipY }];
+
   for (let i = 1; i <= steps; i++) {
     const t = DT * (i - 1);
     const alpha = baseAlpha * calcNeipire(t, baseTime, n);
+    const wPrev = w; // slalom.py's step_euler_slip reads state["w"] *before* it's overwritten with w_next
     const wNext = w + alpha * DT;
+
     theta = theta + wNext * DT;
     x = x + v * Math.cos(theta) * DT;
     y = y + v * Math.sin(theta) * DT;
     w = wNext;
     path.push({ x, y });
     maxAccY = Math.max(maxAccY, Math.abs((v * w) / 1000));
+
+    // step_euler_slip: Fx is always forced to 0 upstream (the PI-control
+    // term it would otherwise use is dead code there), so only the lateral
+    // slip force Fy = -Ky * beta drives ax/ay besides the w x v coupling.
+    const fy = -Ky * beta;
+    const ax = wPrev * vy;
+    const ay = fy / SLIP_MASS - wPrev * vx;
+    const nextVx = vx + ax * DT;
+    const nextVy = vy + ay * DT;
+    const speed = Math.max(Math.hypot(nextVx, nextVy), 1e-6);
+    slipX = slipX + speed * 1000 * Math.cos(slipTheta) * DT;
+    slipY = slipY + speed * 1000 * Math.sin(slipTheta) * DT;
+    const nextBeta = (beta / DT - wNext) / (1 / DT + K / speed);
+    slipTheta = slipTheta + wNext * DT + (nextBeta - beta);
+    vx = nextVx;
+    vy = nextVy;
+    beta = nextBeta;
+    slipPath.push({ x: slipX, y: slipY });
   }
 
   const endPos = defaults.endPos;
@@ -266,6 +308,11 @@ export function simulateSlalom(params: SlalomSimParams): SlalomSimResult {
 
   const turnOffset = prevPath[1];
   const offsetPath = path.map((p) => ({ x: p.x + turnOffset.x, y: p.y + turnOffset.y }));
+  // Drawn in the same cell-aligned frame as the idealized path (rather than
+  // solving its own offset like plotorval.py's independent res2 does), so
+  // the overlay directly shows how far slip drags the robot off the
+  // idealized line the firmware actually plans for.
+  const offsetSlipPath = slipPath.map((p) => ({ x: p.x + turnOffset.x, y: p.y + turnOffset.y }));
   const afterPath2: [Point, Point] = [
     { x: afterPath[0].x + turnOffset.x, y: afterPath[0].y + turnOffset.y },
     { x: afterPath[1].x + turnOffset.x, y: afterPath[1].y + turnOffset.y },
@@ -273,6 +320,7 @@ export function simulateSlalom(params: SlalomSimParams): SlalomSimResult {
 
   return {
     path: offsetPath,
+    slipPath: offsetSlipPath,
     prevPath,
     afterPath: afterPath2,
     time: baseTime,

@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { load as loadYaml } from "js-yaml";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
+  DEFAULT_SLIP_K,
+  DEFAULT_SLIP_KY,
   simulateSlalom,
   TURN_DEFAULTS,
   TURN_TYPES,
@@ -14,12 +17,14 @@ import {
   type SlalomSimResult,
   type TurnType,
 } from "@/lib/slalom-sim";
+import { APPLY_ALL_SELECTION, applySimResultToYaml, type SlalomApplySelection } from "@/lib/slalom-yaml-patch";
 import { SlalomSimPlot } from "@/components/slalom-sim-plot";
 import { cn } from "@/lib/utils";
 
 interface Props {
   file: string;
   draft: string;
+  onApply: (nextDraft: string) => void;
 }
 
 interface Fields {
@@ -68,10 +73,20 @@ function resolveFields(draft: string, type: TurnType, fileSpeed: number | null):
   return { ...defaults, ...fromDraft };
 }
 
-export function SlalomSimPanel({ file, draft }: Props) {
+export function SlalomSimPanel({ file, draft, onApply }: Props) {
   const fileSpeed = useMemo(() => parseFileSpeed(file), [file]);
   const [type, setType] = useState<TurnType>("normal");
   const [fields, setFields] = useState<Fields>(() => resolveFields(draft, "normal", fileSpeed));
+  // Slip params aren't part of the yaml turn blocks - they're a shared,
+  // hand-tuned starting point (hardware.yaml's slip_param_k2/slip_param_K),
+  // so they persist across turn-type switches instead of resetting.
+  const [slipK, setSlipK] = useState(String(DEFAULT_SLIP_K));
+  const [slipKy, setSlipKy] = useState(String(DEFAULT_SLIP_KY));
+  // Which fields "適用" actually writes - lets e.g. only `rad` be pushed
+  // into the yaml while the rest of the block stays as hand-tuned.
+  const [applySelection, setApplySelection] = useState<SlalomApplySelection>(APPLY_ALL_SELECTION);
+  const toggleApplyField = (key: keyof SlalomApplySelection) =>
+    setApplySelection((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const reloadFromDraft = (nextType: TurnType) => {
     setFields(resolveFields(draft, nextType, fileSpeed));
@@ -95,13 +110,21 @@ export function SlalomSimPanel({ file, draft }: Props) {
       const rad = parseFloat(fields.rad);
       const n = parseFloat(fields.n);
       const ang = parseFloat(fields.ang);
-      if (![v, rad, n, ang].every(Number.isFinite) || v <= 0 || rad === 0 || n <= 0 || ang <= 0) {
-        setError("v / rad / pow_n / ang に有効な数値を入力してください");
+      const K = parseFloat(slipK);
+      const Ky = parseFloat(slipKy);
+      if (
+        ![v, rad, n, ang, K, Ky].every(Number.isFinite) ||
+        v <= 0 ||
+        rad === 0 ||
+        n <= 0 ||
+        ang <= 0
+      ) {
+        setError("v / rad / pow_n / ang / K / K_y に有効な数値を入力してください");
         setResult(null);
         return;
       }
       try {
-        setResult(simulateSlalom({ type, v, rad, n, ang }));
+        setResult(simulateSlalom({ type, v, rad, n, ang, K, Ky }));
         setError(null);
       } catch (err) {
         setError((err as Error).message);
@@ -109,10 +132,23 @@ export function SlalomSimPanel({ file, draft }: Props) {
       }
     }, 150);
     return () => clearTimeout(handle);
-  }, [type, fields]);
+  }, [type, fields, slipK, slipKy]);
 
   const setField = (key: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const nothingSelected = Object.values(applySelection).every((v) => !v);
+
+  const applyToYaml = () => {
+    if (!result || nothingSelected) return;
+    try {
+      const nextDraft = applySimResultToYaml(draft, type, fields, result, applySelection);
+      onApply(nextDraft);
+      toast.success(`${type}: 編集中のYAMLに反映しました（保存はCtrl+Sで）`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
 
   return (
     <Card className="flex w-[34rem] min-w-[20rem] shrink flex-col overflow-hidden">
@@ -168,6 +204,17 @@ export function SlalomSimPanel({ file, draft }: Props) {
           </label>
         </div>
 
+        <div className="grid grid-cols-4 gap-2">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            K (slip_param_k2)
+            <Input inputMode="decimal" value={slipK} onChange={(e) => setSlipK(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            K_y (slip_param_K)
+            <Input inputMode="decimal" value={slipKy} onChange={(e) => setSlipKy(e.target.value)} />
+          </label>
+        </div>
+
         <Separator />
 
         {error ? (
@@ -193,6 +240,53 @@ export function SlalomSimPanel({ file, draft }: Props) {
         <div className="h-80 shrink-0 overflow-hidden rounded-md border">
           <SlalomSimPlot result={result} />
         </div>
+        <div className="flex gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-4 bg-[gold]" />
+            理想軌道（スリップ未考慮）
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-[deepskyblue]" />
+            スリップ考慮軌道
+          </span>
+        </div>
+
+        {result && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">適用する項目</span>
+            <div className="flex flex-wrap gap-1">
+              {(
+                [
+                  ["v", "v"],
+                  ["ang", "ang"],
+                  ["n", "pow_n"],
+                  ["rad", "rad"],
+                  ...(result.offsetSupported ? ([["front", "front"], ["back", "back"]] as const) : []),
+                ] as const
+              ).map(([key, label]) => {
+                const active = applySelection[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleApplyField(key)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap ring-1 ring-border transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground ring-primary"
+                        : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button size="sm" disabled={nothingSelected} onClick={applyToYaml} className="self-start">
+              選択した項目を編集中のYAMLに適用
+            </Button>
+          </div>
+        )}
 
         {result && (
           <pre className="overflow-x-auto rounded-md border bg-muted/30 p-2 text-xs">

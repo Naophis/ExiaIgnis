@@ -10,6 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 interface Props {
   file: string;
   content: string;
+  // Seeds the draft buffer instead of `content` when set (e.g. a sibling
+  // panel patched the draft externally). Parent must bump the `key` it
+  // mounts this component with whenever this changes, since it's only read
+  // at mount time - see initialDraft below.
+  initialDraft?: string;
   saving: boolean;
   onSave: (content: string) => void;
   onClose: () => void;
@@ -21,10 +26,11 @@ interface Props {
 const EXTENSIONS = [yaml()];
 
 // Mount this only once `content` has actually been fetched (parent shows its
-// own loading placeholder until then) - draft is seeded from `content` once,
-// at mount time, so there's no prop/state to keep in sync afterwards.
-export function YamlEditor({ file, content, saving, onSave, onClose, onDraftChange }: Props) {
-  const [draft, setDraft] = useState(content);
+// own loading placeholder until then) - draft is seeded from `content` (or
+// `initialDraft`, if provided) once, at mount time, so there's no prop/state
+// to keep in sync afterwards.
+export function YamlEditor({ file, content, initialDraft, saving, onSave, onClose, onDraftChange }: Props) {
+  const [draft, setDraft] = useState(initialDraft ?? content);
   const dirty = draft !== content;
 
   const handleChange = (value: string) => {
