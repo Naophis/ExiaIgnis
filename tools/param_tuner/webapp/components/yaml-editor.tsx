@@ -13,6 +13,9 @@ interface Props {
   saving: boolean;
   onSave: (content: string) => void;
   onClose: () => void;
+  // Fired on every keystroke so a sibling panel (e.g. the slalom simulator)
+  // can react to unsaved edits without owning the draft itself.
+  onDraftChange?: (content: string) => void;
 }
 
 const EXTENSIONS = [yaml()];
@@ -20,9 +23,14 @@ const EXTENSIONS = [yaml()];
 // Mount this only once `content` has actually been fetched (parent shows its
 // own loading placeholder until then) - draft is seeded from `content` once,
 // at mount time, so there's no prop/state to keep in sync afterwards.
-export function YamlEditor({ file, content, saving, onSave, onClose }: Props) {
+export function YamlEditor({ file, content, saving, onSave, onClose, onDraftChange }: Props) {
   const [draft, setDraft] = useState(content);
   const dirty = draft !== content;
+
+  const handleChange = (value: string) => {
+    setDraft(value);
+    onDraftChange?.(value);
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -46,7 +54,7 @@ export function YamlEditor({ file, content, saving, onSave, onClose }: Props) {
         <div className="min-h-0 flex-1 overflow-auto rounded-md border text-xs">
           <CodeMirror
             value={draft}
-            onChange={setDraft}
+            onChange={handleChange}
             theme={vscodeDark}
             extensions={EXTENSIONS}
             basicSetup={{ foldGutter: true, highlightActiveLine: true }}

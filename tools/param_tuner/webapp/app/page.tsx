@@ -9,6 +9,7 @@ import { LogPlotPanel } from "@/components/log-plot-panel";
 import { ParamMatrixPanel } from "@/components/param-matrix-panel";
 import { ALL_SENTINEL, ProfilePanel } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
+import { SlalomSimPanel } from "@/components/slalom-sim-panel";
 import { TestTemplatePanel } from "@/components/test-template-panel";
 import { YamlEditor } from "@/components/yaml-editor";
 import type { ConnectionStatus, PortInfo, ProfileList, SendScope } from "@/lib/serial-manager";
@@ -16,6 +17,7 @@ import type { TestTemplate, TestTemplateValues } from "@/lib/test-template-share
 
 const MAX_LOG_LINES = 2000;
 const MODE = "hf";
+const TURN_PROFILE_FILE_RE = /^t_\d+\.yaml$/i;
 
 interface EditTarget {
   scope: SendScope;
@@ -42,6 +44,7 @@ export default function Home() {
 
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [editorContent, setEditorContent] = useState<string | null>(null);
+  const [liveDraft, setLiveDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [templates, setTemplates] = useState<TestTemplate[]>([]);
@@ -168,6 +171,7 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "読み込みに失敗しました");
       setEditorContent(data.content as string);
+      setLiveDraft(data.content as string);
     } catch (err) {
       toast.error(`${file}: ${(err as Error).message}`);
       setEditing(null);
@@ -177,6 +181,7 @@ export default function Home() {
   const closeEditor = () => {
     setEditing(null);
     setEditorContent(null);
+    setLiveDraft(null);
   };
 
   const saveEditor = async (content: string) => {
@@ -311,14 +316,20 @@ export default function Home() {
               <span className="text-sm text-muted-foreground">読み込み中...</span>
             </Card>
           ) : (
-            <YamlEditor
-              key={`${editing.scope}:${editing.file}`}
-              file={editing.file}
-              content={editorContent}
-              saving={saving}
-              onSave={saveEditor}
-              onClose={closeEditor}
-            />
+            <>
+              <YamlEditor
+                key={`${editing.scope}:${editing.file}`}
+                file={editing.file}
+                content={editorContent}
+                saving={saving}
+                onSave={saveEditor}
+                onClose={closeEditor}
+                onDraftChange={setLiveDraft}
+              />
+              {editing.scope === "mode" && TURN_PROFILE_FILE_RE.test(editing.file) && (
+                <SlalomSimPanel file={editing.file} draft={liveDraft ?? editorContent} />
+              )}
+            </>
           )
         ) : showTemplates ? (
           <TestTemplatePanel
