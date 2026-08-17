@@ -5,7 +5,6 @@ import { load as loadYaml } from "js-yaml";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
   simulateSlalom,
@@ -116,12 +115,14 @@ export function SlalomSimPanel({ file, draft }: Props) {
     setFields((prev) => ({ ...prev, [key]: e.target.value }));
 
   return (
-    <Card className="flex w-[34rem] shrink-0 flex-col overflow-hidden">
+    <Card className="flex w-[34rem] min-w-[20rem] shrink flex-col overflow-hidden">
       <CardHeader className="gap-1">
-        <CardTitle>スラロームシミュレータ</CardTitle>
-        <span className="text-xs text-muted-foreground">
-          tools/slalom の物理シミュレータをブラウザに移植した参照用ツールです（YAMLへの反映は行いません）
-        </span>
+        <div className="flex items-center justify-between">
+          <CardTitle>スラロームシミュレータ</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => reloadFromDraft(type)}>
+            編集中のYAMLから再読込
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
         <div className="flex flex-col gap-1">
@@ -147,11 +148,8 @@ export function SlalomSimPanel({ file, draft }: Props) {
             })}
           </div>
         </div>
-        <Button size="sm" variant="outline" className="self-start" onClick={() => reloadFromDraft(type)}>
-          編集中のYAMLから再読込
-        </Button>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             v (mm/s)
             <Input inputMode="decimal" value={fields.v} onChange={setField("v")} />
@@ -192,7 +190,7 @@ export function SlalomSimPanel({ file, draft }: Props) {
           </span>
         )}
 
-        <div className="min-h-96 flex-1 overflow-hidden rounded-md border">
+        <div className="h-80 shrink-0 overflow-hidden rounded-md border">
           <SlalomSimPlot result={result} />
         </div>
 
