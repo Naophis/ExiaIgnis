@@ -51,19 +51,33 @@ interface RunPrfYaml {
   exec_prof: Array<{ fast: number; normal: number; slow: number }>;
 }
 
-function readStatusMap(mode: string): Record<number, StatusRow> {
+interface ColumnNotes {
+  status: StatusRow;
+  profileIdxNote: string;
+  led: string;
+}
+
+function readStatusMap(mode: string): Record<number, ColumnNotes> {
   const p = path.join(PROFILE_DIR, mode, STATUS_FILE);
   if (!fs.existsSync(p)) return {};
-  const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as Record<string, StatusRow>;
-  const out: Record<number, StatusRow> = {};
-  for (const [k, v] of Object.entries(raw)) out[Number(k)] = v;
+  const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as Record<string, Partial<ColumnNotes>>;
+  const out: Record<number, ColumnNotes> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    out[Number(k)] = {
+      status: v.status ?? emptyStatusRow(),
+      profileIdxNote: v.profileIdxNote ?? "",
+      led: v.led ?? "",
+    };
+  }
   return out;
 }
 
 function writeStatusMap(mode: string, rows: ParamMatrixRow[]): void {
   const p = path.join(PROFILE_DIR, mode, STATUS_FILE);
-  const out: Record<string, StatusRow> = {};
-  for (const r of rows) out[String(r.vMax)] = r.status;
+  const out: Record<string, ColumnNotes> = {};
+  for (const r of rows) {
+    out[String(r.vMax)] = { status: r.status, profileIdxNote: r.profileIdxNote, led: r.led };
+  }
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(out, null, 2), "utf-8");
 }
@@ -77,7 +91,7 @@ export function readParamMatrix(mode = "hf"): ParamMatrixRow[] {
   const profiles = loadYaml(fs.readFileSync(path.join(modeDir, "profiles.yaml"), "utf-8")) as ProfilesYaml;
   const velProf = loadYaml(fs.readFileSync(path.join(modeDir, "vel_prof.yaml"), "utf-8")) as VelProfYaml;
   const runPrf = loadYaml(fs.readFileSync(path.join(modeDir, "run_prf.yaml"), "utf-8")) as RunPrfYaml;
-  const statuses = readStatusMap(mode);
+  const notes = readStatusMap(mode);
 
   return profiles.list.map((entry, i) => {
     const vMaxMatch = entry.match(/^t_(\d+)\.hf$/);
@@ -85,6 +99,7 @@ export function readParamMatrix(mode = "hf"): ParamMatrixRow[] {
     const p = profiles.profile_idx[i];
     const v = velProf.v_prof[i];
     const e = runPrf.exec_prof[i];
+    const n = notes[vMax];
     return {
       vMax,
       suction: p?.suction ?? 0,
@@ -101,7 +116,9 @@ export function readParamMatrix(mode = "hf"): ParamMatrixRow[] {
       execFast: e?.fast ?? 0,
       execNormal: e?.normal ?? 0,
       execSlow: e?.slow ?? 0,
-      status: statuses[vMax] ?? emptyStatusRow(),
+      status: n?.status ?? emptyStatusRow(),
+      profileIdxNote: n?.profileIdxNote ?? "",
+      led: n?.led ?? "",
     };
   });
 }

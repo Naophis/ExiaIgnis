@@ -43,6 +43,12 @@ export interface ParamMatrixRow {
   execNormal: number;
   execSlow: number;
   status: StatusRow;
+  // Reference-only fields from the spreadsheet's mode_idx/profile_idx/LED
+  // table (rows 13-19). Never read by param.gs and not reflected in any of
+  // the 3 YAMLs - free-form notes the tuner jots down for themselves, kept
+  // alongside `status` in param_matrix_status.json.
+  profileIdxNote: string;
+  led: string;
 }
 
 export const STATUS_ROW_KEYS: (keyof StatusRow)[] = [

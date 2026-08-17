@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,6 +56,24 @@ const EXEC_ROWS: { key: ExecKey; label: string }[] = [
   { key: "execNormal", label: "normal_idx" },
   { key: "execSlow", label: "slow_idx" },
 ];
+
+// Golden-angle hue step: keeps adjacent columns visually distinct and keeps
+// each column's hue stable as columns are added/removed (unlike idx*360/n,
+// which reshuffles every column's color whenever the count changes).
+const COLUMN_HUE_STEP = 137.508;
+
+function columnColor(idx: number, alpha: number): string {
+  const hue = (idx * COLUMN_HUE_STEP) % 360;
+  return `hsl(${hue} 55% 32% / ${alpha})`;
+}
+
+// Reference cells (turn-profile idx / fast·normal·slow_idx) are colored to
+// match the header color of the column they point to, so you can see at a
+// glance which speed profile a reference resolves to without reading numbers.
+function refCellStyle(value: number, columnCount: number): CSSProperties | undefined {
+  if (!Number.isInteger(value) || value < 0 || value >= columnCount) return undefined;
+  return { backgroundColor: columnColor(value, 0.35) };
+}
 
 function remapIndex(v: number, deletedIdx: number, newLength: number): { value: number; clamped: boolean } {
   if (v === deletedIdx) return { value: Math.max(0, newLength - 1), clamped: true };
@@ -117,7 +135,7 @@ export function ParamMatrixPanel({ onClose }: Props) {
     }
     const last = rows[rows.length - 1];
     const newRow: ParamMatrixRow = last
-      ? { ...cloneRow(last), vMax: v, status: emptyStatusRow() }
+      ? { ...cloneRow(last), vMax: v, status: emptyStatusRow(), profileIdxNote: "", led: "" }
       : {
           vMax: v,
           suction: 0,
@@ -135,6 +153,8 @@ export function ParamMatrixPanel({ onClose }: Props) {
           execNormal: 0,
           execSlow: 0,
           status: emptyStatusRow(),
+          profileIdxNote: "",
+          led: "",
         };
     setRows([...rows, newRow]);
     setAddedVMax((prev) => [...prev, v]);
@@ -228,16 +248,17 @@ export function ParamMatrixPanel({ onClose }: Props) {
               </Button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border">
-              <table className="border-collapse text-[11px]">
+              <table className="border-collapse text-sm">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 top-0 z-20 min-w-[110px] border-b border-r border-border bg-card px-2 py-1 text-left">
+                    <th className="sticky left-0 top-0 z-20 min-w-[140px] border-b border-r border-border bg-card px-3 py-2 text-left">
                       mm/sec
                     </th>
                     {rows.map((r, idx) => (
                       <th
                         key={`${idx}-${r.vMax}`}
-                        className="sticky top-0 z-10 min-w-[70px] border-b border-l border-border bg-card px-1 py-1 text-center font-semibold"
+                        className="sticky top-0 z-10 min-w-[72px] border-b border-l border-border px-1 py-2 text-center font-semibold"
+                        style={{ backgroundColor: columnColor(idx, 1) }}
                       >
                         <VMaxCell
                           value={r.vMax}
@@ -246,7 +267,7 @@ export function ParamMatrixPanel({ onClose }: Props) {
                         <button
                           type="button"
                           onClick={() => deleteColumn(idx)}
-                          className="mt-0.5 block w-full text-[10px] text-destructive hover:underline"
+                          className="mt-1 block w-full text-xs text-destructive hover:underline"
                         >
                           削除
                         </button>
@@ -267,12 +288,72 @@ export function ParamMatrixPanel({ onClose }: Props) {
                     </tr>
                   ))}
 
+                  <SectionLabelRow
+                    label="参照 (mode_idx / profile_idx / fast・normal・slow_idx / LED)"
+                    colSpan={rows.length + 1}
+                  />
+                  <tr>
+                    <RowLabel label="mode_idx" />
+                    {rows.map((_, idx) => (
+                      <td
+                        key={idx}
+                        className="border-l border-b border-border p-0 text-center text-muted-foreground"
+                        style={{ backgroundColor: columnColor(idx, 0.35) }}
+                      >
+                        {idx}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <RowLabel label="profile_idx (メモ)" />
+                    {rows.map((r, idx) => (
+                      <td key={idx} className="border-l border-b border-border p-0">
+                        <TextCell
+                          value={r.profileIdxNote}
+                          onCommit={(v) => updateRow(idx, (row) => ({ ...row, profileIdxNote: v }))}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                  {EXEC_ROWS.map(({ key, label }) => (
+                    <tr key={key}>
+                      <RowLabel label={label} />
+                      {rows.map((r, idx) => (
+                        <td
+                          key={idx}
+                          className="border-l border-b border-border p-0"
+                          style={refCellStyle(r[key], rows.length)}
+                        >
+                          <NumberCell
+                            value={r[key]}
+                            onCommit={(v) => updateRow(idx, (row) => ({ ...row, [key]: Math.round(v) }))}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  <tr>
+                    <RowLabel label="LED" />
+                    {rows.map((r, idx) => (
+                      <td key={idx} className="border-l border-b border-border p-0">
+                        <TextCell
+                          value={r.led}
+                          onCommit={(v) => updateRow(idx, (row) => ({ ...row, led: v }))}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+
                   <SectionLabelRow label="ターンプロファイル参照 (行番号)" colSpan={rows.length + 1} />
                   {REF_ROWS.map(({ key, label }) => (
                     <tr key={key}>
                       <RowLabel label={label} />
                       {rows.map((r, idx) => (
-                        <td key={idx} className="border-l border-b border-border p-0">
+                        <td
+                          key={idx}
+                          className="border-l border-b border-border p-0"
+                          style={refCellStyle(r[key], rows.length)}
+                        >
                           <NumberCell
                             value={r[key]}
                             onCommit={(v) => updateRow(idx, (row) => ({ ...row, [key]: Math.round(v) }))}
@@ -303,20 +384,6 @@ export function ParamMatrixPanel({ onClose }: Props) {
                     </Fragment>
                   ))}
 
-                  <SectionLabelRow label="実行時パラメータ (行番号)" colSpan={rows.length + 1} />
-                  {EXEC_ROWS.map(({ key, label }) => (
-                    <tr key={key}>
-                      <RowLabel label={label} />
-                      {rows.map((r, idx) => (
-                        <td key={idx} className="border-l border-b border-border p-0">
-                          <NumberCell
-                            value={r[key]}
-                            onCommit={(v) => updateRow(idx, (row) => ({ ...row, [key]: Math.round(v) }))}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>
@@ -332,7 +399,7 @@ function SectionLabelRow({ label, colSpan }: { label: string; colSpan: number })
     <tr>
       <td
         colSpan={colSpan}
-        className="sticky left-0 border-b border-border bg-muted px-2 py-1 font-semibold text-muted-foreground"
+        className="sticky left-0 border-b border-border bg-muted px-3 py-1.5 font-semibold text-muted-foreground"
       >
         {label}
       </td>
@@ -342,7 +409,7 @@ function SectionLabelRow({ label, colSpan }: { label: string; colSpan: number })
 
 function RowLabel({ label }: { label: string }) {
   return (
-    <td className="sticky left-0 z-10 min-w-[110px] border-b border-r border-border bg-card px-2 py-1 text-muted-foreground">
+    <td className="sticky left-0 z-10 min-w-[140px] border-b border-r border-border bg-card px-3 py-1.5 text-muted-foreground">
       {label}
     </td>
   );
@@ -357,7 +424,7 @@ function StatusButton({ value, onClick }: { value: StatusCell; onClick: () => vo
         ? "text-destructive"
         : "text-muted-foreground/40";
   return (
-    <button type="button" onClick={onClick} className={`h-6 w-full text-sm font-bold hover:bg-muted ${color}`}>
+    <button type="button" onClick={onClick} className={`h-9 w-full text-lg font-bold hover:bg-muted ${color}`}>
       {label || "・"}
     </button>
   );
@@ -379,7 +446,21 @@ function NumberCell({ value, onCommit }: { value: number; onCommit: (v: number) 
         if (e.target.value.trim() !== "" && !Number.isNaN(n)) onCommit(n);
         else e.target.value = String(value);
       }}
-      className="h-6 w-16 bg-transparent px-1 text-center outline-none focus:bg-muted"
+      className="h-8 w-16 bg-transparent px-1 text-center text-sm outline-none focus:bg-muted"
+    />
+  );
+}
+
+// Free-form reference note (profile_idx memo / LED pattern) - no numeric
+// validation, just committed as typed on blur.
+function TextCell({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  return (
+    <input
+      key={value}
+      type="text"
+      defaultValue={value}
+      onBlur={(e) => onCommit(e.target.value)}
+      className="h-8 w-16 bg-transparent px-1 text-center text-sm outline-none focus:bg-muted"
     />
   );
 }
@@ -396,7 +477,7 @@ function VMaxCell({ value, onCommit }: { value: number; onCommit: (v: number) =>
         if (Number.isInteger(n) && n > 0) onCommit(n);
         else e.target.value = String(value);
       }}
-      className="h-6 w-16 bg-transparent px-1 text-center font-semibold outline-none focus:bg-muted"
+      className="h-8 w-16 bg-transparent px-1 text-center text-base font-semibold outline-none focus:bg-muted"
     />
   );
 }
