@@ -1,155 +1,223 @@
 {
   "300": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "400": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "1200": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "1500": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "1800": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "1850": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "1900": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "1950": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2000": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2050": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2100": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2150": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2200": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2250": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2300": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2350": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   },
   "2400": {
-    "large90": null,
-    "orval180": null,
-    "dia45": null,
-    "dia45_2": null,
-    "dia135": null,
-    "dia135_2": null,
-    "dia90": null
+    "status": {
+      "large90": null,
+      "orval180": null,
+      "dia45": null,
+      "dia45_2": null,
+      "dia135": null,
+      "dia135_2": null,
+      "dia90": null
+    },
+    "profileIdxNote": "",
+    "led": ""
   }
 }

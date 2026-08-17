@@ -47,6 +47,6 @@ exec_prof:
   - fast: 13
     normal: 16
     slow: 3
-  - fast: 0
-    normal: 0
-    slow: 0
+  - fast: 14
+    normal: 16
+    slow: 3

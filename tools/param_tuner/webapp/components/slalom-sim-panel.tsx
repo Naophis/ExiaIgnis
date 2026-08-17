@@ -18,7 +18,13 @@ import {
   type TurnType,
 } from "@/lib/slalom-sim";
 import { APPLY_ALL_SELECTION, applySimResultToYaml, type SlalomApplySelection } from "@/lib/slalom-yaml-patch";
-import { SlalomSimPlot } from "@/components/slalom-sim-plot";
+import {
+  DEFAULT_LAYER_VISIBILITY,
+  SIM_PLOT_STYLE,
+  SlalomSimPlot,
+  type LayerVisibility,
+  type SimLayerKey,
+} from "@/components/slalom-sim-plot";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -87,6 +93,10 @@ export function SlalomSimPanel({ file, draft, onApply }: Props) {
   const [applySelection, setApplySelection] = useState<SlalomApplySelection>(APPLY_ALL_SELECTION);
   const toggleApplyField = (key: keyof SlalomApplySelection) =>
     setApplySelection((prev) => ({ ...prev, [key]: !prev[key] }));
+  // Show/hide individual plot layers - the 4 lines can overlap and be hard
+  // to pick apart, so let the user declutter instead of chasing colors.
+  const [layerVisible, setLayerVisible] = useState<LayerVisibility>(DEFAULT_LAYER_VISIBILITY);
+  const toggleLayer = (key: SimLayerKey) => setLayerVisible((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const reloadFromDraft = (nextType: TurnType) => {
     setFields(resolveFields(draft, nextType, fileSpeed));
@@ -238,17 +248,41 @@ export function SlalomSimPanel({ file, draft, onApply }: Props) {
         )}
 
         <div className="h-80 shrink-0 overflow-hidden rounded-md border">
-          <SlalomSimPlot result={result} />
+          <SlalomSimPlot result={result} visible={layerVisible} />
         </div>
-        <div className="flex gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-0.5 w-4 bg-[gold]" />
-            理想軌道（スリップ未考慮）
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-[deepskyblue]" />
-            スリップ考慮軌道
-          </span>
+        <div className="flex flex-wrap gap-x-1 gap-y-1 text-xs">
+          {(
+            [
+              ["idealPath", "理想軌道（スリップ未考慮）", SIM_PLOT_STYLE.idealPath.color, false],
+              ["idealOffset", "理想軌道の前後オフセット", SIM_PLOT_STYLE.idealOffset.color, false],
+              ["slipPath", "スリップ考慮軌道", SIM_PLOT_STYLE.slipPath.color, true],
+              ["slipOffset", "スリップ軌道の前後オフセット", SIM_PLOT_STYLE.slipOffset.color, true],
+            ] as const
+          ).map(([key, label, color, dashed]) => {
+            const on = layerVisible[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggleLayer(key)}
+                title="クリックで表示/非表示を切り替え"
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-muted",
+                  on ? "text-foreground" : "text-muted-foreground/50 line-through"
+                )}
+              >
+                <span
+                  className={cn("inline-block h-0.5 w-4 shrink-0", dashed && "border-t-2 border-dashed")}
+                  style={{
+                    backgroundColor: dashed ? undefined : color,
+                    borderColor: dashed ? color : undefined,
+                    opacity: on ? 1 : 0.4,
+                  }}
+                />
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {result && (

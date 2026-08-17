@@ -164,16 +164,99 @@ export interface SlalomSimParams {
 
 export interface SlalomSimResult {
   path: Point[]; // idealized (non-slip) trajectory, offset by turnOffset already applied
-  slipPath: Point[]; // same frame/offset as `path`, but integrated with tire-slip dynamics - overlay only
   prevPath: [Point, Point];
   afterPath: [Point, Point]; // shifted to align with the trajectory's own origin, like plot.py's after_path2
+  // Tire-slip overlay: plotorval.py's res2 re-solves calc_offset_dist against
+  // the *slip* trajectory's own endpoint (a separate call from the one that
+  // produces prevPath/afterPath/front/back above) - so the slip path gets
+  // its own, independently-aligned lead-in/lead-out, not the ideal path's.
+  slipPath: Point[];
+  slipPrevPath: [Point, Point];
+  slipAfterPath: [Point, Point];
   time: number; // seconds, informational only - not written to the yaml
-  front: number; // mm
+  front: number; // mm - always from the idealized (non-slip) path; this is what the firmware plans for
   back: number; // mm
   offsetSupported: boolean;
   maxAccG: number;
   et: number;
   steps: number;
+}
+
+// plot.py's Slalom.calc_offset_dist per-type branches. Pure function of the
+// trajectory's own endpoint, so it's called once for the idealized path and
+// again for the slip path - each gets its own lead-in/lead-out geometry.
+function computeOffsetGeometry(
+  type: TurnType,
+  angRad: number,
+  endPos: Point,
+  endX: number,
+  endY: number
+): { prevPath: [Point, Point]; afterPath: [Point, Point] } {
+  let prevPath: [Point, Point] = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
+  let afterPath: [Point, Point] = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
+  if (OFFSET_UNSUPPORTED.has(type)) return { prevPath, afterPath };
+
+  const a = Math.sin(angRad);
+  const b = Math.cos(angRad);
+
+  switch (type) {
+    case "normal": {
+      const endOffset = endPos.y - endY;
+      const startOffset = endPos.x - endX;
+      prevPath = [{ x: 0, y: 0 }, { x: startOffset, y: 0 }];
+      afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
+      break;
+    }
+    case "large": {
+      const endOffset = endPos.y - endY - OFFSET.after;
+      const startOffset = endPos.x - endX + OFFSET.prev;
+      prevPath = [{ x: -OFFSET.prev, y: 0 }, { x: startOffset - OFFSET.prev, y: 0 }];
+      afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
+      break;
+    }
+    case "dia45":
+    case "dia135": {
+      const endOffset = (endPos.y - endY) / a;
+      const startOffset = endPos.x - endX + OFFSET.prev - endOffset * b;
+      prevPath = [{ x: -OFFSET.prev, y: 0 }, { x: startOffset - OFFSET.prev, y: 0 }];
+      afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
+      break;
+    }
+    case "dia45_2": {
+      const startOffset = (HALF_CELL_SIZE - endX) / a + OFFSET.prevDia;
+      const endOffset = CELL_SIZE - endY - (startOffset - OFFSET.prevDia) * a;
+      prevPath = [
+        { x: -OFFSET.prevDia * a, y: -OFFSET.prevDia * a },
+        { x: (startOffset - OFFSET.prevDia) * b, y: (startOffset - OFFSET.prevDia) * a },
+      ];
+      afterPath = [{ x: endX, y: endY }, { x: endX, y: endY + endOffset }];
+      break;
+    }
+    case "dia135_2": {
+      const startOffset = (CELL_SIZE - endY) / b + OFFSET.prev;
+      const endOffset = Math.abs(HALF_CELL_SIZE + endX + Math.abs((startOffset - OFFSET.prev) * a));
+      prevPath = [
+        { x: -OFFSET.prevDia * a, y: -OFFSET.prevDia * a },
+        { x: Math.abs((startOffset - OFFSET.prevDia) * a), y: Math.abs((startOffset - OFFSET.prevDia) * b) },
+      ];
+      afterPath = [{ x: endX, y: endY }, { x: endX - endOffset, y: endY }];
+      break;
+    }
+    case "dia90": {
+      const cellDiag = CELL_SIZE / Math.SQRT2;
+      const endOffset = cellDiag - endY;
+      const startOffset = cellDiag - endX + OFFSET.prevDia;
+      prevPath = [{ x: -OFFSET.prevDia, y: 0 }, { x: startOffset - OFFSET.prevDia, y: 0 }];
+      afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
+      break;
+    }
+  }
+
+  return { prevPath, afterPath };
+}
+
+function shiftPoint(p: Point, offset: Point): Point {
+  return { x: p.x + offset.x, y: p.y + offset.y };
 }
 
 export function simulateSlalom(params: SlalomSimParams): SlalomSimResult {
@@ -241,91 +324,39 @@ export function simulateSlalom(params: SlalomSimParams): SlalomSimResult {
   }
 
   const endPos = defaults.endPos;
-  const endX = x;
-  const endY = y;
-
-  let prevPath: [Point, Point] = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
-  let afterPath: [Point, Point] = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
   const offsetSupported = !OFFSET_UNSUPPORTED.has(type);
 
-  if (offsetSupported) {
-    const a = Math.sin(angRad);
-    const b = Math.cos(angRad);
+  // Idealized path's own offset geometry - this is what front/back/the yaml
+  // patch use, matching what the firmware actually plans for.
+  const ideal = computeOffsetGeometry(type, angRad, endPos, x, y);
+  const turnOffset = ideal.prevPath[1];
+  const offsetPath = path.map((p) => shiftPoint(p, turnOffset));
+  const afterPath2: [Point, Point] = [shiftPoint(ideal.afterPath[0], turnOffset), shiftPoint(ideal.afterPath[1], turnOffset)];
 
-    switch (type) {
-      case "normal": {
-        const endOffset = endPos.y - endY;
-        const startOffset = endPos.x - endX;
-        prevPath = [{ x: 0, y: 0 }, { x: startOffset, y: 0 }];
-        afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
-        break;
-      }
-      case "large": {
-        const endOffset = endPos.y - endY - OFFSET.after;
-        const startOffset = endPos.x - endX + OFFSET.prev;
-        prevPath = [{ x: -OFFSET.prev, y: 0 }, { x: startOffset - OFFSET.prev, y: 0 }];
-        afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
-        break;
-      }
-      case "dia45":
-      case "dia135": {
-        const endOffset = (endPos.y - endY) / a;
-        const startOffset = endPos.x - endX + OFFSET.prev - endOffset * b;
-        prevPath = [{ x: -OFFSET.prev, y: 0 }, { x: startOffset - OFFSET.prev, y: 0 }];
-        afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
-        break;
-      }
-      case "dia45_2": {
-        const startOffset = (HALF_CELL_SIZE - endX) / a + OFFSET.prevDia;
-        const endOffset = CELL_SIZE - endY - (startOffset - OFFSET.prevDia) * a;
-        prevPath = [
-          { x: -OFFSET.prevDia * a, y: -OFFSET.prevDia * a },
-          { x: (startOffset - OFFSET.prevDia) * b, y: (startOffset - OFFSET.prevDia) * a },
-        ];
-        afterPath = [{ x: endX, y: endY }, { x: endX, y: endY + endOffset }];
-        break;
-      }
-      case "dia135_2": {
-        const startOffset = (CELL_SIZE - endY) / b + OFFSET.prev;
-        const endOffset = Math.abs(HALF_CELL_SIZE + endX + Math.abs((startOffset - OFFSET.prev) * a));
-        prevPath = [
-          { x: -OFFSET.prevDia * a, y: -OFFSET.prevDia * a },
-          { x: Math.abs((startOffset - OFFSET.prevDia) * a), y: Math.abs((startOffset - OFFSET.prevDia) * b) },
-        ];
-        afterPath = [{ x: endX, y: endY }, { x: endX - endOffset, y: endY }];
-        break;
-      }
-      case "dia90": {
-        const cellDiag = CELL_SIZE / Math.SQRT2;
-        const endOffset = cellDiag - endY;
-        const startOffset = cellDiag - endX + OFFSET.prevDia;
-        prevPath = [{ x: -OFFSET.prevDia, y: 0 }, { x: startOffset - OFFSET.prevDia, y: 0 }];
-        afterPath = [{ x: endX, y: endY }, { x: endX + endOffset * b, y: endY + endOffset * a }];
-        break;
-      }
-    }
-  }
-
-  const turnOffset = prevPath[1];
-  const offsetPath = path.map((p) => ({ x: p.x + turnOffset.x, y: p.y + turnOffset.y }));
-  // Drawn in the same cell-aligned frame as the idealized path (rather than
-  // solving its own offset like plotorval.py's independent res2 does), so
-  // the overlay directly shows how far slip drags the robot off the
-  // idealized line the firmware actually plans for.
-  const offsetSlipPath = slipPath.map((p) => ({ x: p.x + turnOffset.x, y: p.y + turnOffset.y }));
-  const afterPath2: [Point, Point] = [
-    { x: afterPath[0].x + turnOffset.x, y: afterPath[0].y + turnOffset.y },
-    { x: afterPath[1].x + turnOffset.x, y: afterPath[1].y + turnOffset.y },
+  // Slip path's own offset geometry - re-solved against *its* endpoint
+  // (slipX, slipY), independently of the idealized path's. This is what
+  // plotorval.py's res2 does after calc_slip(): the slip overlay gets its
+  // own lead-in/lead-out, which is generally NOT the same shift as the
+  // idealized path's, so the two trajectories can end up visibly offset
+  // from each other rather than sharing one frame.
+  const slip = computeOffsetGeometry(type, angRad, endPos, slipX, slipY);
+  const slipTurnOffset = slip.prevPath[1];
+  const offsetSlipPath = slipPath.map((p) => shiftPoint(p, slipTurnOffset));
+  const slipAfterPath2: [Point, Point] = [
+    shiftPoint(slip.afterPath[0], slipTurnOffset),
+    shiftPoint(slip.afterPath[1], slipTurnOffset),
   ];
 
   return {
     path: offsetPath,
-    slipPath: offsetSlipPath,
-    prevPath,
+    prevPath: ideal.prevPath,
     afterPath: afterPath2,
+    slipPath: offsetSlipPath,
+    slipPrevPath: slip.prevPath,
+    slipAfterPath: slipAfterPath2,
     time: baseTime,
-    front: calcDist(prevPath[0], prevPath[1]),
-    back: calcDist(afterPath[0], afterPath[1]),
+    front: calcDist(ideal.prevPath[0], ideal.prevPath[1]),
+    back: calcDist(ideal.afterPath[0], ideal.afterPath[1]),
     offsetSupported,
     maxAccG: maxAccY / 9.8,
     et,
