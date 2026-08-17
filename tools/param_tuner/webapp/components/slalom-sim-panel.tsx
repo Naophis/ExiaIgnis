@@ -16,6 +16,7 @@ import {
   type TurnType,
 } from "@/lib/slalom-sim";
 import { SlalomSimPlot } from "@/components/slalom-sim-plot";
+import { cn } from "@/lib/utils";
 
 interface Props {
   file: string;
@@ -115,7 +116,7 @@ export function SlalomSimPanel({ file, draft }: Props) {
     setFields((prev) => ({ ...prev, [key]: e.target.value }));
 
   return (
-    <Card className="flex w-96 shrink-0 flex-col overflow-hidden">
+    <Card className="flex w-[34rem] shrink-0 flex-col overflow-hidden">
       <CardHeader className="gap-1">
         <CardTitle>スラロームシミュレータ</CardTitle>
         <span className="text-xs text-muted-foreground">
@@ -123,26 +124,32 @@ export function SlalomSimPanel({ file, draft }: Props) {
         </span>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-        <div className="flex items-end gap-2">
-          <div className="flex flex-1 flex-col gap-1">
-            <span className="text-xs text-muted-foreground">ターン種別</span>
-            <Select value={type} onValueChange={(v) => v && setType(v as TurnType)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TURN_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {TURN_TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">ターン種別</span>
+          <div className="flex min-w-0 flex-wrap gap-1">
+            {TURN_TYPES.map((t) => {
+              const active = t === type;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap ring-1 ring-border transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground ring-primary"
+                      : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  {TURN_TYPE_LABELS[t]}
+                </button>
+              );
+            })}
           </div>
-          <Button size="sm" variant="outline" onClick={() => reloadFromDraft(type)}>
-            編集中のYAMLから再読込
-          </Button>
         </div>
+        <Button size="sm" variant="outline" className="self-start" onClick={() => reloadFromDraft(type)}>
+          編集中のYAMLから再読込
+        </Button>
 
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -185,7 +192,7 @@ export function SlalomSimPanel({ file, draft }: Props) {
           </span>
         )}
 
-        <div className="min-h-64 flex-1 overflow-hidden rounded-md border">
+        <div className="min-h-96 flex-1 overflow-hidden rounded-md border">
           <SlalomSimPlot result={result} />
         </div>
 

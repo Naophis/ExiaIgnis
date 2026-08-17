@@ -42,7 +42,7 @@ export const TURN_TYPES: TurnType[] = [
 export const TURN_TYPE_LABELS: Record<TurnType, string> = {
   normal: "normal",
   large: "large",
-  orval: "orval (180°)",
+  orval: "orval",
   dia45: "dia45",
   dia135: "dia135",
   dia45_2: "dia45_2",
