@@ -328,35 +328,37 @@ void MainTask::test_suction() {
   const auto se = get_sensing_entity();
   const float target_v = sys_.test.suction_duty;
 
-  mp->reset_gyro_ref_with_check();
-  sleep_ms(250);
+  while (1) {
+    mp->reset_gyro_ref_with_check();
+    sleep_ms(250);
 
-  // AM32 ESC移行によりBLDC V/Hzパラメータダンプ・ALIGN/RAMP/RUN直叩き
-  // テスト(旧bldc_.test_direct())は廃止。ControlLaw経由でduty指令→ESCへの
-  // PWM出力のみを確認する。
-  printf("== suction ESC test ==\n");
-  printf("test.suction_duty=%.2f  test.suction_duty_low=%.2f\n",
-         sys_.test.suction_duty, sys_.test.suction_duty_low);
+    // AM32 ESC移行によりBLDC V/Hzパラメータダンプ・ALIGN/RAMP/RUN直叩き
+    // テスト(旧bldc_.test_direct())は廃止。ControlLaw経由でduty指令→ESCへの
+    // PWM出力のみを確認する。
+    printf("== suction ESC test ==\n");
+    printf("test.suction_duty=%.2f  test.suction_duty_low=%.2f\n",
+           sys_.test.suction_duty, sys_.test.suction_duty_low);
 
-  const uint64_t t_suction_start = time_us_64();
-  planning_->suction_enable(sys_.test.suction_duty, sys_.test.suction_duty_low);
+    const uint64_t t_suction_start = time_us_64();
+    planning_->suction_enable(sys_.test.suction_duty,
+                              sys_.test.suction_duty_low);
 
-  while (planning_->is_suction_ramping()) {
-    sleep_ms(5);
+    while (planning_->is_suction_ramping()) {
+      sleep_ms(5);
+    }
+    const uint64_t t_ramp_done = time_us_64();
+    printf("ramp done: %.1fms\n",
+           (double)(t_ramp_done - t_suction_start) / 1000.0);
+
+    while (!ui_->button_state()) {
+      printf("batt=%.3fV duty=%.1f%%\n", se->ego.batt_kf,
+             planning_->tgt_val->duty_suction);
+      sleep_ms(200);
+    }
+
+    planning_->suction_disable();
+    printf("suction stopped\n");
   }
-  const uint64_t t_ramp_done = time_us_64();
-  printf("ramp done: %.1fms\n",
-         (double)(t_ramp_done - t_suction_start) / 1000.0);
-
-  while (!ui_->button_state()) {
-    printf("batt=%.3fV duty=%.1f%%\n",
-           se->ego.batt_kf,
-           planning_->tgt_val->duty_suction);
-    sleep_ms(200);
-  }
-
-  planning_->suction_disable();
-  printf("suction stopped\n");
 }
 
 void MainTask::dump1() {

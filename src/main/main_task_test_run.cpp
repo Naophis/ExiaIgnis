@@ -20,14 +20,14 @@ void MainTask::test_run() {
     while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
-    sleep_ms(800);
+    sleep_ms(1500);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
     while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
-    sleep_ms(800);
+    sleep_ms(1500);
   }
   if (param_->test_log_enable > 0) {
     lt_->start();
