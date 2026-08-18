@@ -834,6 +834,7 @@ void ControlLaw::reset_pid_val() {
     ee->sen_log_dia.gain_zz = ee->sen_log_dia.gain_z = 0;
     ee->aw_log.duty_roll_before = ee->aw_log.duty_roll = 0;
     mpc_u_prev = mpc_d_estimated = 0;
+    ee->aw_log.mpc_d_estimated = 0;
   }
   ee->v_val.p = ee->v_val.i = ee->v_val.d = 0;
   ee->w_val.p = ee->w_val.i = ee->w_val.d = 0;
@@ -1096,6 +1097,7 @@ ControlLaw::calc_angle_velocity_ctrl() {
     float observer_k = param_->gyro_pid.mpc_observer_k;
     mpc_d_estimated += observer_k * (w_meas - w_pred);
     mpc_w_prev = w_meas;
+    ee->aw_log.mpc_d_estimated = mpc_d_estimated; // ログ確認用。制御出力へはまだ未結線
 
     if (param_->enable_mpc > 0 && tgt_val_->motion_type == MotionType::SLALOM) {
       // MPC override reserved
@@ -1120,6 +1122,11 @@ ControlLaw::summation_duty() {
   auto ff_front = trj_->mpc_next_ego.ff_duty_front;
   auto ff_roll = trj_->mpc_next_ego.ff_duty_roll;
   const auto se = sensing_result_;
+
+  // torque_mode!=2 のときは実際に出力へ使われないため既定でゼロにしておく
+  // (torque_mode==2 分岐でのみ実値を書き込む)
+  se->ego.duty.ff_front_torque = 0;
+  se->ego.duty.ff_roll_torque = 0;
 
   if (tgt_val_->motion_type == MotionType::WALL_OFF ||
       tgt_val_->motion_type == MotionType::WALL_OFF_DIA) {
@@ -1170,6 +1177,9 @@ ControlLaw::summation_duty() {
       ff_front2 = ff_roll2 = ff_duty_r2 = ff_duty_l2 = ff_friction_r =
           ff_friction_l = 0;
     }
+    se->ego.duty.ff_front_torque = ff_front2;
+    se->ego.duty.ff_roll_torque = ff_roll2;
+
     float torque_r = ff_front2 + ff_roll2 + duty_c + duty_roll + ff_friction_r;
     float torque_l = ff_front2 - ff_roll2 + duty_c - duty_roll + ff_friction_l;
 

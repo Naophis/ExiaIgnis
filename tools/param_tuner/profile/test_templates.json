@@ -37,14 +37,14 @@
     "id": "seed-fast",
     "name": "高速(720mm)",
     "values": {
-      "mode": 2,
       "v_max": 1500,
       "accl": 42500,
       "decel": -47500,
       "dia_accl": 45000,
       "dia_decel": -47500,
       "dist": 720,
-      "suction_active": 2
+      "suction_active": 2,
+      "mode": 2
     }
   },
   {

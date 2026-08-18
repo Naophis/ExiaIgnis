@@ -87,6 +87,11 @@ typedef struct {
   float ff_duty_roll;
   float ff_duty_rpm_r;
   float ff_duty_rpm_l;
+
+  // torque_mode==2 で実際にsummation_duty()に使われるトルク系FF
+  // (ff_duty_front/roll はduty系の並行計算値で、torque_mode==2時は出力に使われない)
+  float ff_front_torque = 0;
+  float ff_roll_torque = 0;
 } duty_t;
 
 typedef struct {
@@ -822,6 +827,7 @@ typedef struct {
   float sat_flag;
   float duty_roll;
   float duty_roll_before;
+  float mpc_d_estimated; // calc_angle_velocity_ctrl() の外乱オブザーバ推定値(現状は未結線、ログ確認用)
 } aw_log_t;
 
 typedef struct {
@@ -976,6 +982,9 @@ typedef struct {
   TurnDirection td;
   TurnType tt;
   float duty_suction = 0;
+  // WallOffController::continuous_turn_flag のミラー。ログ観点のみで使用
+  // (実際の閾値切替はwall_off_controller.cpp側の同名フラグで行われる)
+  bool continuous_turn = false;
 } motion_tgt_val_t;
 
 typedef struct {
@@ -1270,6 +1279,7 @@ typedef struct {
 
   uint8_t motion_type;
   int16_t motion_timestamp;
+  uint8_t continuous_turn; // WallOffController::continuous_turn_flag のミラー
 
   // real16_T duty_ff_front;
   // real16_T duty_ff_roll;
@@ -1324,6 +1334,8 @@ typedef struct {
   real16_T ff_duty_roll;
   real16_T ff_duty_rpm_r;
   real16_T ff_duty_rpm_l;
+  real16_T ff_front_torque; // torque_mode==2で実際に使われるトルク系FF (ff_duty_frontとは別系統)
+  real16_T ff_roll_torque;
 
   real16_T pos_x;
   real16_T pos_y;
@@ -1347,6 +1359,7 @@ typedef struct {
   real16_T img_ang_sum;
   real16_T duty_roll;
   real16_T duty_roll_before;
+  real16_T mpc_d_estimated;
 
   int16_t pln_t_ego;
   int16_t pln_t_sensor;
@@ -1561,7 +1574,7 @@ typedef struct {
   float ang_kf_sum = 118;
   float img_ang_sum = 119;
   float duty_roll_before = 120;
-  int reserve5 = 121;
+  float mpc_d_estimated = 121; // 旧 reserve5。yawモデル外乱オブザーバの推定値(control_law.cpp calc_angle_velocity_ctrl)
 
 } LogStruct10;
 
@@ -1572,6 +1585,9 @@ typedef struct {
   int pln_t_kanayama = 125;
   int pln_t_copy     = 126;
   int pln_t_ctl      = 127;
+  float ff_front_torque = 128; // torque_mode==2 実適用値 (summation_duty)
+  float ff_roll_torque  = 129;
+  int continuous_turn   = 130; // 連続ターン中の壁切れ閾値切替フラグ (WallOffController)
 } LogStruct11;
 
 #endif

@@ -112,6 +112,13 @@ struct AM32Settings {
     uint8_t firmware_major() const { return raw.f.version.major; }
     uint8_t firmware_minor() const { return raw.f.version.minor; }
 
+    // 起動時のコミュテーション周波数(≒回転数)の立ち上げ速度と説明されている
+    // 項目(仕様上は「0.1%/ms〜25%/ms」の範囲を持つらしいが、raw値から
+    // その単位への正確な換算式は出典未確認のため、生値のまま公開する)。
+    // 「回転前の励磁(align)の長さ」そのものではない可能性がある点に注意。
+    uint8_t max_ramp_raw() const { return raw.f.max_ramp; }
+    void set_max_ramp_raw(uint8_t v) { raw.f.max_ramp = v; }
+
     uint16_t motor_kv() const { return (uint16_t)(raw.f.motor_kv * 40 + 20); }
     // raw(0-255)には KV = raw*40+20 の関係でしか保存できない(表現可能な値は
     // 20,60,100,...,8500,8540,...という40刻み+20のみ)。指定値がこの並びに
@@ -162,6 +169,22 @@ struct AM32Settings {
 
     bool sine_startup_enabled() const { return raw.f.use_sine_start != 0; }
     void set_sine_startup_enabled(bool en) { raw.f.use_sine_start = en ? 1 : 0; }
+
+    // 正弦波起動モードから通常運転(BEMF検出方式)へ切り替わるスロットル閾値[%]。
+    // sine_startup_enabled()==trueの時のみ意味を持つ。
+    uint8_t sine_mode_changeover_throttle_pct() const {
+        return raw.f.sine_mode_changeover_thottle_level;
+    }
+    void set_sine_mode_changeover_throttle_pct(uint8_t pct) {
+        raw.f.sine_mode_changeover_thottle_level =
+            (uint8_t)am32_detail::clamp_i(pct, 5, 25);
+    }
+
+    // 正弦波起動モード中のパワーレベル。sine_startup_enabled()==trueの時のみ意味を持つ。
+    uint8_t sine_mode_power() const { return raw.f.sine_mode_power; }
+    void set_sine_mode_power(uint8_t v) {
+        raw.f.sine_mode_power = (uint8_t)am32_detail::clamp_i(v, 1, 10);
+    }
 
     bool bidirectional_enabled() const { return raw.f.bi_direction != 0; }
     void set_bidirectional_enabled(bool en) { raw.f.bi_direction = en ? 1 : 0; }

@@ -146,6 +146,7 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
 
 void LoggingTask::start() {
   log_vec_.clear(); // size=0 に戻す (capacity・PSRAM 確保は維持)
+  dropped_ticks_ = 0;
   active_ = true;
   add_repeating_timer_us(-1000, log_timer_callback, nullptr, &log_timer_);
   printf("[LoggingTask] start\n");
@@ -155,7 +156,8 @@ void LoggingTask::stop() {
   cancel_repeating_timer(&log_timer_);
   active_ = false;
   xip_cache_clean_all();
-  printf("[LoggingTask] stop: %zu entries\n", log_vec_.size());
+  printf("[LoggingTask] stop: %zu entries, dropped(overrun)=%zu\n",
+         log_vec_.size(), dropped_ticks_);
 }
 
 // ============================================================
@@ -173,8 +175,10 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   if (!sr || !tv) [[unlikely]]
     return true;
 
-  if (tv->calc_time_diff > 3000)
+  if (tv->calc_time_diff > 3000) {
+    self->dropped_ticks_ = self->dropped_ticks_ + 1;
     return true;
+  }
 
   if (self->log_vec_.size() >= self->log_cap_) {
     self->active_ = false;
@@ -223,8 +227,11 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.ff_duty_roll = floatToHalf(sr->ego.duty.ff_duty_roll);
   ld.ff_duty_rpm_r = floatToHalf(sr->ego.duty.ff_duty_rpm_r);
   ld.ff_duty_rpm_l = floatToHalf(sr->ego.duty.ff_duty_rpm_l);
+  ld.ff_front_torque = floatToHalf(sr->ego.duty.ff_front_torque);
+  ld.ff_roll_torque = floatToHalf(sr->ego.duty.ff_roll_torque);
 
   ld.motion_type = static_cast<uint8_t>(tv->motion_type);
+  ld.continuous_turn = tv->continuous_turn ? 1 : 0;
   ld.duty_sensor_ctrl = floatToHalf(sr->ego.duty.sen);
 
   ld.sen_log_l45 = floatToHalf(sr->sen.l45.sensor_dist);
@@ -312,6 +319,7 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.ang_i_bias_val = floatToHalf(ee->ang_val.i2_val);
     ld.duty_roll = floatToHalf(ee->aw_log.duty_roll);
     ld.duty_roll_before = floatToHalf(ee->aw_log.duty_roll_before);
+    ld.mpc_d_estimated = floatToHalf(ee->aw_log.mpc_d_estimated);
   }
 
   self->log_vec_.emplace_back(std::move(ld));
@@ -343,7 +351,7 @@ void LoggingTask::dump_csv() const {
   LogStruct10 ls10{};
   LogStruct11 ls11{};
 
-  const int size =
+  constexpr int size =
       sizeof(LogStruct1) + sizeof(LogStruct2) + sizeof(LogStruct3) +
       sizeof(LogStruct4) + sizeof(LogStruct5) + sizeof(LogStruct6) +
       sizeof(LogStruct7) + sizeof(LogStruct8) + sizeof(LogStruct9) +
@@ -482,7 +490,7 @@ void LoggingTask::dump_csv() const {
   printf("ang_kf_sum:float:%d\n", (int)sizeof(ls10.ang_kf_sum));
   printf("img_ang_sum:float:%d\n", (int)sizeof(ls10.img_ang_sum));
   printf("duty_roll_before:float:%d\n", (int)sizeof(ls10.duty_roll_before));
-  printf("reserve5:int:%d\n", (int)sizeof(ls10.reserve5));
+  printf("mpc_d_estimated:float:%d\n", (int)sizeof(ls10.mpc_d_estimated));
   // LogStruct11
   printf("pln_t_ego:int:%d\n", (int)sizeof(ls11.pln_t_ego));
   printf("pln_t_sensor:int:%d\n", (int)sizeof(ls11.pln_t_sensor));
@@ -490,6 +498,9 @@ void LoggingTask::dump_csv() const {
   printf("pln_t_kanayama:int:%d\n", (int)sizeof(ls11.pln_t_kanayama));
   printf("pln_t_copy:int:%d\n", (int)sizeof(ls11.pln_t_copy));
   printf("pln_t_ctl:int:%d\n", (int)sizeof(ls11.pln_t_ctl));
+  printf("ff_front_torque:float:%d\n", (int)sizeof(ls11.ff_front_torque));
+  printf("ff_roll_torque:float:%d\n", (int)sizeof(ls11.ff_roll_torque));
+  printf("continuous_turn:int:%d\n", (int)sizeof(ls11.continuous_turn));
 
   fflush(stdout);
   sleep_ms(50);
@@ -504,7 +515,7 @@ void LoggingTask::dump_csv() const {
   // CRLF 変換を無効化してバイナリデータを送信 (\n バイトが壊れるのを防ぐ)
   stdio_set_translate_crlf(&stdio_usb, false);
 
-  uint8_t send_buf[504]; // 1レコード分のスタックバッファ (ls1-10: 480 + ls11: 24)
+  uint8_t send_buf[size]; // 1レコード分のスタックバッファ。sizeof(LogStruct1..11)から自動算出
 
   ls1.index = 0;
 
@@ -718,7 +729,7 @@ void LoggingTask::dump_csv() const {
     ls10.ang_kf_sum = halfToFloat(e.ang_kf_sum) * 180.0f / m_PI;
     ls10.img_ang_sum = halfToFloat(e.img_ang_sum) * 180.0f / m_PI;
     ls10.duty_roll_before = halfToFloat(e.duty_roll_before);
-    ls10.reserve5 = 0;
+    ls10.mpc_d_estimated = halfToFloat(e.mpc_d_estimated);
     // --- ls11 ---
     ls11.pln_t_ego = e.pln_t_ego;
     ls11.pln_t_sensor = e.pln_t_sensor;
@@ -726,6 +737,9 @@ void LoggingTask::dump_csv() const {
     ls11.pln_t_kanayama = e.pln_t_kanayama;
     ls11.pln_t_copy = e.pln_t_copy;
     ls11.pln_t_ctl = e.pln_t_ctl;
+    ls11.ff_front_torque = halfToFloat(e.ff_front_torque);
+    ls11.ff_roll_torque = halfToFloat(e.ff_roll_torque);
+    ls11.continuous_turn = e.continuous_turn;
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

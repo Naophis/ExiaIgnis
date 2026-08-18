@@ -3,10 +3,20 @@
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "pico/stdlib.h"
+#include <cstdio>
 
 namespace {
 // 整数分周器固定 + wrap可変方式 (ui.cpp UserInterface::set_pwm_freq と同型)。
-// SUCTION_ESC_FREQ_HZ(250Hz)程度の低周波でも16bit wrapに収める。
+// PWM TOP(wrap)レジスタは実機のレジスタ定義上も16bit(最大65535)、
+// pwm_set_wrap()の引数もuint16_tである。ここでのkClkDivInt/
+// SUCTION_ESC_FREQ_HZの組み合わせは、単純な計算上の都合(粗い分解能で
+// wrapを65535未満に収める)よりも実機での動作確認を優先して選んだ値
+// (define.hppのSUCTION_ESC_FREQ_HZコメント参照: wrapがuint16_tへ暗黙変換
+// で切り詰められて別の周波数になった状態がむしろ正常動作した、という
+// 実機検証の経緯がある)。init()側でwrapが16bit範囲を超えていないか
+// 明示的にチェックし、超えていれば標準出力に警告する(超過時に無言で
+// 切り詰められて別の周波数になる、という今回ハマった事態を再発させない
+// ため)。
 constexpr uint8_t kClkDivInt = 16;
 } // namespace
 
@@ -16,7 +26,16 @@ void SuctionEscActuator::init() {
   channel_ = pwm_gpio_to_channel(SUCTION_ESC_PWM);
 
   const uint32_t sys_clk = clock_get_hz(clk_sys);
-  wrap_ = sys_clk / ((uint32_t)kClkDivInt * SUCTION_ESC_FREQ_HZ) - 1u;
+  const uint32_t wrap32 = sys_clk / ((uint32_t)kClkDivInt * SUCTION_ESC_FREQ_HZ) - 1u;
+  if (wrap32 > 0xFFFFu) {
+    // pwm_set_wrap()はuint16_t引数のため、ここでチェックせずに渡すと
+    // 無言で下位16bitに切り詰められ、意図と異なる周波数が出力される。
+    printf("[suction_esc] WARN: wrap=%lu exceeds 16bit (freq=%uHz, clkdiv=%u) "
+           "-- truncated value will be used, frequency will NOT match "
+           "SUCTION_ESC_FREQ_HZ\n",
+           (unsigned long)wrap32, (unsigned)SUCTION_ESC_FREQ_HZ, (unsigned)kClkDivInt);
+  }
+  wrap_ = wrap32;
   ticks_per_us_ = (float)sys_clk / (float)kClkDivInt / 1.0e6f;
 
   pwm_set_clkdiv_int_frac4(slice_, kClkDivInt, 0);

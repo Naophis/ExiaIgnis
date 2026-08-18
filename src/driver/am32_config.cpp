@@ -248,6 +248,7 @@ void emit_line(Am32CliEmit emit, const char* fmt, ...) {
 void dump_settings(const AM32Settings& s, Am32CliEmit emit) {
     emit_line(emit, "eeprom_version   : %u", s.eeprom_version());
     emit_line(emit, "firmware         : %u.%u", s.firmware_major(), s.firmware_minor());
+    emit_line(emit, "max_ramp_raw     : %u (単位は出典未確認)", s.max_ramp_raw());
     emit_line(emit, "motor_kv         : %u", s.motor_kv());
     emit_line(emit, "motor_poles      : %u", s.motor_poles());
     emit_line(emit, "timing           : %u (%.2f deg)", s.timing(), (double)s.timing_degrees());
@@ -257,6 +258,8 @@ void dump_settings(const AM32Settings& s, Am32CliEmit emit) {
               s.variable_pwm_enabled() ? "on" : "off", s.pwm_mode_raw());
     emit_line(emit, "startup_power    : %u %%", s.startup_power_percent());
     emit_line(emit, "sine_startup     : %s", s.sine_startup_enabled() ? "on" : "off");
+    emit_line(emit, "sine_changeover  : %u %%", s.sine_mode_changeover_throttle_pct());
+    emit_line(emit, "sine_mode_power  : %u", s.sine_mode_power());
     emit_line(emit, "bidirectional    : %s", s.bidirectional_enabled() ? "on" : "off");
     emit_line(emit, "complementary_pwm: %s", s.complementary_pwm_enabled() ? "on" : "off");
     emit_line(emit, "stuck_rotor_prot : %s", s.stuck_rotor_protection_enabled() ? "on" : "off");
@@ -280,6 +283,7 @@ void dump_settings(const AM32Settings& s, Am32CliEmit emit) {
 
 // "get"/"set" が受け付けるフィールド名。依頼にあった項目 + AM32Settings公開分。
 bool cli_get(const AM32Settings& s, const char* field, char* out, size_t out_len) {
+    if (!strcmp(field, "max_ramp")) { snprintf(out, out_len, "%u", s.max_ramp_raw()); return true; }
     if (!strcmp(field, "kv")) { snprintf(out, out_len, "%u", s.motor_kv()); return true; }
     if (!strcmp(field, "poles")) { snprintf(out, out_len, "%u", s.motor_poles()); return true; }
     if (!strcmp(field, "timing")) { snprintf(out, out_len, "%u", s.timing()); return true; }
@@ -289,6 +293,8 @@ bool cli_get(const AM32Settings& s, const char* field, char* out, size_t out_len
     if (!strcmp(field, "pwm_mode")) { snprintf(out, out_len, "%u", s.pwm_mode_raw()); return true; }
     if (!strcmp(field, "startup_power")) { snprintf(out, out_len, "%u", s.startup_power_percent()); return true; }
     if (!strcmp(field, "sine_start")) { snprintf(out, out_len, "%u", s.sine_startup_enabled() ? 1 : 0); return true; }
+    if (!strcmp(field, "sine_changeover")) { snprintf(out, out_len, "%u", s.sine_mode_changeover_throttle_pct()); return true; }
+    if (!strcmp(field, "sine_mode_power")) { snprintf(out, out_len, "%u", s.sine_mode_power()); return true; }
     if (!strcmp(field, "bidirectional")) { snprintf(out, out_len, "%u", s.bidirectional_enabled() ? 1 : 0); return true; }
     if (!strcmp(field, "current_limit")) { snprintf(out, out_len, "%u", s.current_limit_amps()); return true; }
     if (!strcmp(field, "temp_limit")) { snprintf(out, out_len, "%u", s.temperature_limit_c()); return true; }
@@ -302,6 +308,7 @@ bool cli_get(const AM32Settings& s, const char* field, char* out, size_t out_len
 }
 
 bool cli_set(AM32Settings& s, const char* field, long value) {
+    if (!strcmp(field, "max_ramp")) { s.set_max_ramp_raw((uint8_t)value); return true; }
     if (!strcmp(field, "kv")) { s.set_motor_kv((uint16_t)value); return true; }
     if (!strcmp(field, "poles")) { s.set_motor_poles((uint8_t)value); return true; }
     if (!strcmp(field, "timing")) { s.set_timing((uint8_t)value); return true; }
@@ -311,6 +318,8 @@ bool cli_set(AM32Settings& s, const char* field, long value) {
     if (!strcmp(field, "pwm_mode")) { s.set_pwm_mode_raw((uint8_t)value); return true; }
     if (!strcmp(field, "startup_power")) { s.set_startup_power_percent((uint8_t)value); return true; }
     if (!strcmp(field, "sine_start")) { s.set_sine_startup_enabled(value != 0); return true; }
+    if (!strcmp(field, "sine_changeover")) { s.set_sine_mode_changeover_throttle_pct((uint8_t)value); return true; }
+    if (!strcmp(field, "sine_mode_power")) { s.set_sine_mode_power((uint8_t)value); return true; }
     if (!strcmp(field, "bidirectional")) { s.set_bidirectional_enabled(value != 0); return true; }
     if (!strcmp(field, "current_limit")) { s.set_current_limit_amps((uint16_t)value); return true; }
     if (!strcmp(field, "temp_limit")) { s.set_temperature_limit_c((uint8_t)value); return true; }

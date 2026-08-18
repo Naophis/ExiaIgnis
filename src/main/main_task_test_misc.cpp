@@ -52,6 +52,7 @@ bool load_am32_target_doc(JsonDocument& doc) {
 // 呼んでよい)。doc側に存在しないキーはoutの現在値がそのまま残る(部分上書き)。
 // 各setterが内部で範囲クランプするため、ここでの追加チェックは不要。
 void apply_am32_target_doc(const JsonDocument& doc, AM32Settings& out) {
+  out.set_max_ramp_raw(doc["max_ramp_raw"] | out.max_ramp_raw());
   out.set_motor_kv(doc["motor_kv"] | out.motor_kv());
   out.set_motor_poles(doc["motor_poles"] | out.motor_poles());
   out.set_timing(doc["timing"] | out.timing());

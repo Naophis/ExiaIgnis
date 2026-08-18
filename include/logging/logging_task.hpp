@@ -61,6 +61,9 @@ public:
     void   stop();
     bool   is_logging() const { return active_; }
     size_t count()      const { return log_vec_.size(); }
+    // calc_time_diff > 3000us で log_timer_callback() がその場でスキップした
+    // (=記録から欠落した) tick数。overrun発生の有無を示す診断用カウンタ。
+    size_t dropped_ticks() const { return dropped_ticks_; }
 
     // Core0 (MainTask) から stop() 後に呼ぶ
     void dump_csv()      const;  // USB CDC にバイナリ出力 (rx_term.js バイナリプロトコル)
@@ -86,6 +89,7 @@ private:
     volatile bool active_  = false;
     size_t        log_cap_ = 0;
     uint8_t      *send_buf_ = nullptr;
+    volatile size_t dropped_ticks_ = 0;
 
     // Core0 タイマー — 1kHz で PSRAM へ直接書き込む (Core1 非使用)
     repeating_timer_t log_timer_{};
