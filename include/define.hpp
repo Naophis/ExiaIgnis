@@ -65,6 +65,5 @@
 // 実機で確認された。原因(分解能か166Hz付近という値そのものか)は特定できて
 // いないが、この166という値は「たまたま動いた」ものを明示的な意図に
 // 変えただけで、実測結果は変えていない。
-#define SUCTION_ESC_FREQ_HZ   250u
 #define SUCTION_ESC_PULSE_MIN_US  1000u  // 0%duty (アーム/停止)
 #define SUCTION_ESC_PULSE_MAX_US  2000u  // 100%duty (フル)

@@ -56,6 +56,10 @@ void MainTask::load_param_after() {
                                                sys_.test.suction_batt_boost_us_table);
   printf("[param] suction_batt_boost_table: %u points\n",
          (unsigned)sys_.test.suction_batt_boost_v_table.size());
+  planning_->ctl_.set_suction_ramp_rate_table(sys_.test.suction_ramp_rate_us_x,
+                                              sys_.test.suction_ramp_rate_us_y);
+  printf("[param] suction_ramp_rate_table: %u points\n",
+         (unsigned)sys_.test.suction_ramp_rate_us_x.size());
 }
 
 bool MainTask::load_params() {

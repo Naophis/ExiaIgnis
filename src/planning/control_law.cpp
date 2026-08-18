@@ -1326,15 +1326,24 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
       suction_target_us_ = (float)SUCTION_ESC_PULSE_MAX_US;
   }
 
-  // suction_ramp_us_per_sec_ の速度で目標パルス幅へ線形にランプする
-  // (AM32側の自前ソフトスタートと併用。旧BLDCのbattery_v/elec_hz依存
-  // gainテーブルは廃止し、system.yaml一発値の固定レートに簡略化)。
+  // 現在のパルス幅に応じたランプ速度で目標パルス幅へ線形にランプする
+  // (AM32側の自前ソフトスタートと併用)。1999付近(高domain)で序盤から脱調が
+  // 頻発し、一律にランプを遅くしたら改善した実測を受け、旧BLDCの
+  // battery_v/elec_hz依存gainテーブルと同じ発想で、パルス幅域ごとに
+  // 個別のランプ速度を指定できるLUTを導入(suction_ramp_rate_us_x/y、
+  // 空ならsuction_ramp_us_per_sec_の固定レートのまま)。安全マージンを
+  // 見て目標到達直前の速度(現在値側)を使う。
+  float ramp_rate = suction_ramp_us_per_sec_;
+  if (suction_ramp_rate_us_x_.size() >= 2 && suction_ramp_rate_us_y_.size() >= 2) {
+    ramp_rate = sensor_->interp1d(suction_ramp_rate_us_x_, suction_ramp_rate_us_y_,
+                                  suction_pulse_us_, false);
+  }
   if (suction_pulse_us_ < suction_target_us_) {
-    suction_pulse_us_ += suction_ramp_us_per_sec_ * dt_;
+    suction_pulse_us_ += ramp_rate * dt_;
     if (suction_pulse_us_ > suction_target_us_)
       suction_pulse_us_ = suction_target_us_;
   } else if (suction_pulse_us_ > suction_target_us_) {
-    suction_pulse_us_ -= suction_ramp_us_per_sec_ * dt_;
+    suction_pulse_us_ -= ramp_rate * dt_;
     if (suction_pulse_us_ < suction_target_us_)
       suction_pulse_us_ = suction_target_us_;
   }

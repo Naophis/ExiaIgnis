@@ -57,14 +57,14 @@ void MainTask::test_sla() {
     while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
-    sleep_ms(1500);
+    sleep_ms(2500);
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
     while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
-    sleep_ms(1500);
+    sleep_ms(2500);
   }
 
   reset_tgt_data();

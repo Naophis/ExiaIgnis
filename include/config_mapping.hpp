@@ -780,6 +780,8 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "suction_esc_ramp_us_per_sec", dst.suction_esc_ramp_us_per_sec);
     from_json_vector(src, "suction_batt_boost_v_table", dst.suction_batt_boost_v_table);
     from_json_vector(src, "suction_batt_boost_us_table", dst.suction_batt_boost_us_table);
+    from_json_vector(src, "suction_ramp_rate_us_x", dst.suction_ramp_rate_us_x);
+    from_json_vector(src, "suction_ramp_rate_us_y", dst.suction_ramp_rate_us_y);
     from_json_field(src, "suction_bldc_hz", dst.suction_bldc_hz);
     from_json_vector(src, "suction_batt_v_table", dst.suction_batt_v_table);
     from_json_vector(src, "suction_batt_gain_table", dst.suction_batt_gain_table);

@@ -5,6 +5,8 @@
 #include "pico/stdlib.h"
 #include <cstdio>
 
+#define SUCTION_ESC_FREQ_HZ   250u
+
 namespace {
 // 整数分周器固定 + wrap可変方式 (ui.cpp UserInterface::set_pwm_freq と同型)。
 // PWM TOP(wrap)レジスタは実機のレジスタ定義上も16bit(最大65535)、

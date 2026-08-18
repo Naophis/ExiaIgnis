@@ -1054,6 +1054,15 @@ typedef struct {
   // 値は実機未検証の初期値なので要調整。
   std::vector<float> suction_batt_boost_v_table;
   std::vector<float> suction_batt_boost_us_table;
+  // 現在のパルス幅(us、昇順)ごとにランプ速度(us/sec)を変える区分線形LUT。
+  // 1999付近(高域)で序盤から脱調する症状が、一律にsuction_esc_ramp_us_per_sec
+  // を下げたら改善した実測を受けての機能。低域は元の速さを保ちつつ、高域
+  // だけさらに遅くする、といった調整に使う(ControlLaw::set_next_duty()
+  // 参照)。suction_ramp_rate_us_x・suction_ramp_rate_us_yは同じ長さで
+  // 指定すること。空(未指定)ならsuction_esc_ramp_us_per_secの固定レートの
+  // まま。値は実機未検証の初期値なので要調整。
+  std::vector<float> suction_ramp_rate_us_x;
+  std::vector<float> suction_ramp_rate_us_y;
   float suction_bldc_hz = 0;
   // BldcActuatorのbattery_v→{gain, max_amp} LUT(可変長、区分線形補間)。
   // amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain のV/Hz比例式に使うgainと、その

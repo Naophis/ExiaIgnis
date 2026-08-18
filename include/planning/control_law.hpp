@@ -56,6 +56,16 @@ public:
     suction_batt_boost_us_table_ = std::move(us_table);
   }
 
+  // 現在のパルス幅(us、昇順)→その位置でのランプ速度(us/sec)の区分線形LUT。
+  // system.yamlのsuction_ramp_rate_us_x/suction_ramp_rate_us_yから起動時に
+  // 一度だけ設定される(main_task.cpp load_param_after()参照)。空(未指定)
+  // ならsuction_ramp_us_per_sec_の固定レートのまま(set_next_duty()参照)。
+  void set_suction_ramp_rate_table(std::vector<float> x_table,
+                                   std::vector<float> y_table) {
+    suction_ramp_rate_us_x_ = std::move(x_table);
+    suction_ramp_rate_us_y_ = std::move(y_table);
+  }
+
   // ---- 公開データ ----
   std::shared_ptr<pid_error_entity_t> ee;
 
@@ -93,6 +103,8 @@ private:
   float  suction_target_us_       = 1000.0f; // 直近tickの目標パルス幅(us)
   std::vector<float> suction_batt_boost_v_table_;
   std::vector<float> suction_batt_boost_us_table_;
+  std::vector<float> suction_ramp_rate_us_x_;
+  std::vector<float> suction_ramp_rate_us_y_;
   duty_t tgt_duty{};
 
   // ---- センサー制御状態 ----

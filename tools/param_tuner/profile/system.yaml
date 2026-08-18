@@ -107,15 +107,15 @@ test: # テスト走行時に使用するパラメータ群
   # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
   # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
   # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
-  suction_duty: 1800
-  suction_duty_low: 1800
+  suction_duty: 1999
+  suction_duty_low: 1999
 
   # Alter
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.750
   # Nova
-  suction_duty_burst: 1800
-  suction_duty_burst_low: 1800 # suction_duty_burst -0.25
+  suction_duty_burst: 1999
+  suction_duty_burst_low: 1999 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
@@ -123,9 +123,27 @@ test: # テスト走行時に使用するパラメータ群
   # 目標パルス幅へのランプ速度(us/sec)。suction_enable()直後、この速度で
   # 最小パルス(1000us)から目標us値へ線形にランプする
   # (ControlLaw::set_next_duty()参照)。AM32自体のソフトスタートと併用。
-  suction_esc_ramp_us_per_sec: 650  # 2000→1000。ランプ時間を約0.5秒→約1秒に延長
-                                      # (センサーレスBLDCの起動ハンドオフが軽負荷ファンだと
+  suction_esc_ramp_us_per_sec: 350  # 2000→1000。ランプ時間を約0.5秒→約1秒に延長
+                                      # (センサーレスBLDCの起動ハンドオフgbが軽負荷ファンだと
                                       # 不安定になりやすいため、緩やかに立ち上げて安定性を見る)
+                                      # suction_ramp_rate_us_x/yを指定した場合はそちらが優先され、
+                                      # この値はテーブルが空の場合のフォールバックとしてのみ使われる。
+
+  # 現在のパルス幅(us、昇順)に応じてランプ速度(us/sec)を変える区分線形LUT。
+  # 脆弱なポイントが2箇所あることが実機検証で判明:
+  # (1) 1000付近(起動直後、オープンループ→クローズドループへのハンドオフ
+  #     そのもの)。ここを900まで速めたところゴリゴリが再発し、さらに
+  #     250まで落としたことで改善した。センサーレスBLDCの中で最もデリケート
+  #     な瞬間なので、他のどこよりゆっくり立ち上げる必要がある。
+  # (2) 1800〜1999(高域、電気角周波数が上がりBEMF追従が厳しくなる領域)。
+  #     ここも一律で遅くする(650→350)と改善した。
+  # 一方、1600付近の中間域は一度クローズドループでロックしてしまえば
+  # 慣性もついて最も頑丈なので、そこだけ速く(650)しても問題にならない。
+  # 結果、「遅い(起動直後)→速い(中間域)→やや遅い(高域)」の形が実機で
+  # 確定(ControlLaw::set_next_duty()参照)。
+  # 空にすれば従来通りsuction_esc_ramp_us_per_secの固定レートに戻る。
+  suction_ramp_rate_us_x: [1000, 1600, 1800, 1999]
+  suction_ramp_rate_us_y: [250, 650,  600,  450 ]
 
   # バッテリー電圧が低いほど始動失敗が顕著という実測傾向への対策。
   # AM32 ESCは閉ループRPM制御ではなく、指令dutyをバッテリー電圧に対する
@@ -166,7 +184,7 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 12
+  file_idx: 8
   sla_dist: 90
   # sla_type: 3
   sla_type: 3
