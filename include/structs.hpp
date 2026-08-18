@@ -1045,6 +1045,15 @@ typedef struct {
   // 目標パルス幅へのランプ速度(us/sec)。例: 2000なら1000us分(0%→100%
   // 相当)を0.5秒でランプする。ControlLaw::set_suction_ramp_rate()参照。
   float suction_esc_ramp_us_per_sec = 2000.0f;
+  // バッテリー電圧が低いほど始動失敗(脱調/ロック未確立)が顕著になる実測
+  // 傾向を受けての補正。suction_target_us_(ControlLaw::set_next_duty())に
+  // 電圧依存で上乗せするus値を、電圧(昇順)→上乗せusの区分線形LUTで指定する
+  // (batt_kf基準。sensor_->interp1d()使用)。suction_batt_boost_v_table・
+  // suction_batt_boost_us_tableは同じ長さで指定すること。空(未指定)なら
+  // 補正なし(従来通りduty_suction/duty_suction_lowをそのまま使う)。
+  // 値は実機未検証の初期値なので要調整。
+  std::vector<float> suction_batt_boost_v_table;
+  std::vector<float> suction_batt_boost_us_table;
   float suction_bldc_hz = 0;
   // BldcActuatorのbattery_v→{gain, max_amp} LUT(可変長、区分線形補間)。
   // amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain のV/Hz比例式に使うgainと、その

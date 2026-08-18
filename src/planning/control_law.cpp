@@ -1292,7 +1292,8 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
   // suction_duty/duty_low/duty_burst/duty_burst_lowはESCへの目標パルス幅
   // (us、1000〜2000)をそのまま指定する値(structs.hppのコメント参照)。
   // BLDC時代のバッテリー電圧duty%補正(*100/batt_kf)はus直接指定の空間には
-  // 対応しないため廃止した。
+  // そのままは対応しないため廃止したが、電圧低下時の始動失敗傾向を受け、
+  // 下方のsuction_batt_boost_v/us_tableによるus加算方式で補正を再導入した。
   //
   // suction_en_==falseの間も目標を最小パルス(1000us=停止)にしたまま同じ
   // ランプ処理へ流し込む。即座にMINへ叩き落とすと、まだ高速回転している
@@ -1308,6 +1309,17 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
         tgt_val_->motion_type == MotionType::STRAIGHT;
     suction_target_us_ =
         high_suction ? tgt_duty.duty_suction_low : tgt_duty.duty_suction;
+    // 電圧モジュレーション方式のESCは印加電圧(≒バッテリー電圧×duty)が
+    // 下がるほど同じduty指令でも実際のRPMが下がる(閉ループRPM制御では
+    // ないため)。低電圧ほど始動失敗が顕著という実測傾向に対し、電圧が
+    // 下がった分だけduty指令(パルス幅)を上乗せして補う。
+    if (suction_batt_boost_v_table_.size() >= 2 &&
+        suction_batt_boost_us_table_.size() >= 2) {
+      const auto se = sensing_result_;
+      suction_target_us_ += sensor_->interp1d(suction_batt_boost_v_table_,
+                                              suction_batt_boost_us_table_,
+                                              se->ego.batt_kf, false);
+    }
     if (suction_target_us_ < (float)SUCTION_ESC_PULSE_MIN_US)
       suction_target_us_ = (float)SUCTION_ESC_PULSE_MIN_US;
     if (suction_target_us_ > (float)SUCTION_ESC_PULSE_MAX_US)

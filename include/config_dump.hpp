@@ -520,6 +520,15 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["suction_duty_low"]    = src.suction_duty_low;
     dst["suction_duty_burst"]  = src.suction_duty_burst;
     dst["suction_duty_burst_low"] = src.suction_duty_burst_low;
+    dst["suction_esc_ramp_us_per_sec"] = src.suction_esc_ramp_us_per_sec;
+    {
+        JsonArray a = dst["suction_batt_boost_v_table"].to<JsonArray>();
+        for (float v : src.suction_batt_boost_v_table) a.add(v);
+    }
+    {
+        JsonArray a = dst["suction_batt_boost_us_table"].to<JsonArray>();
+        for (float v : src.suction_batt_boost_us_table) a.add(v);
+    }
     dst["suction_bldc_hz"]     = src.suction_bldc_hz;
     {
         JsonArray a = dst["suction_batt_v_table"].to<JsonArray>();

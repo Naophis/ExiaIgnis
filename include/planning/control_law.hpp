@@ -47,6 +47,15 @@ public:
     suction_ramp_us_per_sec_ = us_per_sec;
   }
 
+  // バッテリー電圧(batt_kf、昇順)→吸引パルス幅への上乗せus値の区分線形LUT。
+  // system.yamlのsuction_batt_boost_v_table/suction_batt_boost_us_tableから
+  // 起動時に一度だけ設定される(main_task.cpp load_param_after()参照)。
+  void set_suction_batt_boost_table(std::vector<float> v_table,
+                                    std::vector<float> us_table) {
+    suction_batt_boost_v_table_  = std::move(v_table);
+    suction_batt_boost_us_table_ = std::move(us_table);
+  }
+
   // ---- 公開データ ----
   std::shared_ptr<pid_error_entity_t> ee;
 
@@ -82,6 +91,8 @@ private:
   float  suction_ramp_us_per_sec_ = 2000.0f;
   float  suction_pulse_us_        = 1000.0f; // 現在のランプ済みパルス幅(us)
   float  suction_target_us_       = 1000.0f; // 直近tickの目標パルス幅(us)
+  std::vector<float> suction_batt_boost_v_table_;
+  std::vector<float> suction_batt_boost_us_table_;
   duty_t tgt_duty{};
 
   // ---- センサー制御状態 ----

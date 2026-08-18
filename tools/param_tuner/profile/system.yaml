@@ -62,13 +62,13 @@ debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
 # mode: 0 # メイン
-# mode: 1 # 最短スローム
+mode: 1 # 最短スローム
 # mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
 # mode: 9 # wall off: search_mode(1)->search_wall_off, 0->fast_run_wall_off
-mode: 11 # vacume: suction test
+# mode: 11 # vacume: suction test
 # mode: 12 # silent_keep:
 # mode: 13 # keep_pos:
 # mode: 14 # sensing:
@@ -92,25 +92,6 @@ test: # テスト走行時に使用するパラメータ群
   dia_decel: -47500
   dist: 120 #直進
   suction_active: 2
-
-  # v_max: 1500
-  # accl: 42500
-  # decel: -47500
-  # # accl: 22500
-  # # decel: -22500
-  # dia_accl: 45000
-  # dia_decel: -47500
-  # dist: 120 #直進
-  # suction_active: 2
-
-  # sla_accl: 28000
-  # sla_decel: -30000
-
-  # v_max: 11550
-  # accl: 28000
-  # decel: -68000
-  # dist: 720 #直進
-  # suction_active: 2
 
   end_v: 10
   dia: 0
@@ -146,6 +127,16 @@ test: # テスト走行時に使用するパラメータ群
                                       # (センサーレスBLDCの起動ハンドオフが軽負荷ファンだと
                                       # 不安定になりやすいため、緩やかに立ち上げて安定性を見る)
 
+  # バッテリー電圧が低いほど始動失敗が顕著という実測傾向への対策。
+  # AM32 ESCは閉ループRPM制御ではなく、指令dutyをバッテリー電圧に対する
+  # 割合として印加するだけなので、同じduty指令でも電圧が下がれば実際の
+  # 印加電圧(≒RPM)が下がる。電圧(batt_kf, 昇順)→上乗せus値の区分線形LUTで
+  # 電圧低下分をduty指令(パルス幅)に加算して補う(ControlLaw::set_next_duty()
+  # 参照)。値は実機未検証の初期値(3S: 11.1V空〜12.6V満充電相当を目安に、
+  # 満充電付近で補正ゼロ・空に近いほど増やす形)。要実機調整。
+  suction_batt_boost_v_table:  [11.1, 12.0, 12.6]
+  suction_batt_boost_us_table: [150,  50,   0   ]
+
   # ---- 以下、旧BldcActuator(自前6-step commutation)専用パラメータ ----
   # AM32 ESC移行によりBldcActuator::tick()/enable()は呼ばれなくなったため
   # 現在は未使用(コード・設定とも参照用に残置。planning_task.hppの
@@ -175,7 +166,7 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 4
+  file_idx: 12
   sla_dist: 90
   # sla_type: 3
   sla_type: 3
