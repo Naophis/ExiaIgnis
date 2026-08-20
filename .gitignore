@@ -5,3 +5,4 @@ dump.json
 
 csv/*.csv
 csv/**/*.csv
+turn_log*/*
