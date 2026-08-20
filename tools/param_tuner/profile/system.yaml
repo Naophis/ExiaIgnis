@@ -107,15 +107,15 @@ test: # テスト走行時に使用するパラメータ群
   # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
   # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
   # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
-  suction_duty: 1999
-  suction_duty_low: 1999
+  suction_duty: 2000
+  suction_duty_low: 2000
 
   # Alter
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.750
   # Nova
-  suction_duty_burst: 1999
-  suction_duty_burst_low: 1999 # suction_duty_burst -0.25
+  suction_duty_burst: 2000
+  suction_duty_burst_low: 2000 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
@@ -184,7 +184,7 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 8
+  file_idx: 14
   sla_dist: 90
   # sla_type: 3
   sla_type: 3
