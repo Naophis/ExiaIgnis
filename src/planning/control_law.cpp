@@ -790,6 +790,11 @@ ControlLaw::calc_pid_val_ang_vel() {
   ee->w.error_dd = ee->w.error_d - ee->w.error_dd;
   ee->w_kf.error_dd = ee->w_kf.error_d - ee->w_kf.error_dd;
 
+  // conditional integration は v=2200 検証で有意な悪化(振動増大)が確認されたため無効化。
+  // sat_roll_dirはduty_r/duty_lどちらが張り付いたかだけを見ており、並進(duty_c)由来か
+  // ヨー(duty_roll)由来かを区別できていないため、並進飽和時にもヨーI項の必要な積算まで
+  // 止めてしまっていた可能性が高い(control_law.cpp:apply_duty_limitter()参照)。
+  // sat_roll_dir自体の計算・ログは残し、I項への反映のみ止める。
   ee->w.error_i += ee->w.error_p;
   ee->w_kf.error_i += ee->w_kf.error_p;
 
@@ -1000,6 +1005,21 @@ __attribute__((noinline, section(".time_critical.control_law"))) void
 ControlLaw::calc_angle_velocity_ctrl() {
   const auto se = sensing_result_;
   if (tgt_val_->motion_type != ee->ang_log.prev_motion_type) {
+    const MotionType prev_mt = ee->ang_log.prev_motion_type;
+    const bool was_turn = (prev_mt == MotionType::SLALOM ||
+                          prev_mt == MotionType::SLA_BACK_STR);
+    const bool now_turn = (tgt_val_->motion_type == MotionType::SLALOM ||
+                          tgt_val_->motion_type == MotionType::SLA_BACK_STR);
+    if (was_turn && !now_turn) {
+      // 旋回終了: ヨーレートI項を0クリアする。v=2200でフェアなベースライン
+      // (n=4, angOsc平均12.00°)と比較し、angOsc平均8.22°・settle_ms平均
+      // 33.5ms・Ipeak(post30)平均97.7への改善を確認済み(2026-08-20)。
+      // i_bias/dt_での再着火は img_ang(セグメント内ローカル基準)と
+      // kim.theta(累積の絶対基準)のズレを拾って悪化したため不採用。
+      ee->w.error_i = 0.0f;
+      gyro_pid_windup_histerisis = false;
+      gyro_pid_histerisis_i = 0.0f;
+    }
     ee->ang_log.omega_ref_prev = tgt_val_->ego_in.w;
     ee->ang_log.prev_motion_type = tgt_val_->motion_type;
   }
@@ -1123,6 +1143,12 @@ ControlLaw::summation_duty() {
   auto ff_roll = trj_->mpc_next_ego.ff_duty_roll;
   const auto se = sensing_result_;
 
+  // duty_rollは calc_angle_velocity_ctrl()/calc_front_ctrl_duty() で今tick分が
+  // 既に確定している。ee->aw_log.duty_roll は従来 reset_pid_val() で 0 に
+  // されるだけで実値が書き込まれない死んだログフィールドだったため、ここで
+  // 実際に使われる値をミラーする。
+  ee->aw_log.duty_roll = duty_roll;
+
   // torque_mode!=2 のときは実際に出力へ使われないため既定でゼロにしておく
   // (torque_mode==2 分岐でのみ実値を書き込む)
   se->ego.duty.ff_front_torque = 0;
@@ -1228,6 +1254,21 @@ void ControlLaw::apply_duty_limitter() {
     ee->aw_log.sat_flag = 1.0f;
   } else {
     ee->aw_log.sat_flag = 0.0f;
+  }
+
+  // duty_roll(ヨートルク)は summation_duty() で duty_r に+、duty_l に-で乗る。
+  // duty_r が上限で頭打ち、または duty_l が下限で頭打ちなら「duty_rollを+方向に
+  // これ以上振っても効かない」ことを意味する(並進側飽和との厳密な切り分けはしない近似)。
+  const bool push_positive_blocked =
+      (prev_r > tgt_duty.duty_r) || (prev_l < tgt_duty.duty_l);
+  const bool push_negative_blocked =
+      (prev_r < tgt_duty.duty_r) || (prev_l > tgt_duty.duty_l);
+  if (push_positive_blocked && !push_negative_blocked) {
+    ee->aw_log.sat_roll_dir = 1.0f;
+  } else if (push_negative_blocked && !push_positive_blocked) {
+    ee->aw_log.sat_roll_dir = -1.0f;
+  } else {
+    ee->aw_log.sat_roll_dir = 0.0f;
   }
 }
 

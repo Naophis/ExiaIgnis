@@ -320,6 +320,7 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.duty_roll = floatToHalf(ee->aw_log.duty_roll);
     ld.duty_roll_before = floatToHalf(ee->aw_log.duty_roll_before);
     ld.mpc_d_estimated = floatToHalf(ee->aw_log.mpc_d_estimated);
+    ld.sat_roll_dir = floatToHalf(ee->aw_log.sat_roll_dir);
   }
 
   self->log_vec_.emplace_back(std::move(ld));
@@ -501,6 +502,7 @@ void LoggingTask::dump_csv() const {
   printf("ff_front_torque:float:%d\n", (int)sizeof(ls11.ff_front_torque));
   printf("ff_roll_torque:float:%d\n", (int)sizeof(ls11.ff_roll_torque));
   printf("continuous_turn:int:%d\n", (int)sizeof(ls11.continuous_turn));
+  printf("sat_roll_dir:float:%d\n", (int)sizeof(ls11.sat_roll_dir));
 
   fflush(stdout);
   sleep_ms(50);
@@ -740,6 +742,7 @@ void LoggingTask::dump_csv() const {
     ls11.ff_front_torque = halfToFloat(e.ff_front_torque);
     ls11.ff_roll_torque = halfToFloat(e.ff_roll_torque);
     ls11.continuous_turn = e.continuous_turn;
+    ls11.sat_roll_dir = halfToFloat(e.sat_roll_dir);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

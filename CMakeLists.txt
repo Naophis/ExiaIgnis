@@ -43,6 +43,11 @@ pico_sdk_init()
 
 # ---- ArduinoJson ----
 include(FetchContent)
+# 既にpopulate済みの依存関係は毎回configureのたびにgit fetchで
+# updateチェックされ、configureが数十秒〜100秒以上遅くなるためスキップする。
+# 依存を更新したい場合は build/_deps を削除するか、このフラグを一時的にOFFにすること。
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
+
 FetchContent_Declare(ArduinoJson
     GIT_REPOSITORY https://github.com/bblanchon/ArduinoJson.git
     GIT_TAG        v7.0.4

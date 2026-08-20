@@ -828,6 +828,11 @@ typedef struct {
   float duty_roll;
   float duty_roll_before;
   float mpc_d_estimated; // calc_angle_velocity_ctrl() の外乱オブザーバ推定値(現状は未結線、ログ確認用)
+  // apply_duty_limitter() が前tickで判定したduty飽和方向。
+  // +1: duty_roll を+方向にこれ以上振っても効かない(duty_r+側 or duty_l-側で頭打ち)
+  // -1: duty_roll を-方向にこれ以上振っても効かない(duty_r-側 or duty_l+側で頭打ち)
+  //  0: 余裕あり
+  float sat_roll_dir;
 } aw_log_t;
 
 typedef struct {
@@ -1378,6 +1383,7 @@ typedef struct {
   real16_T duty_roll;
   real16_T duty_roll_before;
   real16_T mpc_d_estimated;
+  real16_T sat_roll_dir; // apply_duty_limitter()判定のduty飽和方向(+1/-1/0)
 
   int16_t pln_t_ego;
   int16_t pln_t_sensor;
@@ -1606,6 +1612,7 @@ typedef struct {
   float ff_front_torque = 128; // torque_mode==2 実適用値 (summation_duty)
   float ff_roll_torque  = 129;
   int continuous_turn   = 130; // 連続ターン中の壁切れ閾値切替フラグ (WallOffController)
+  float sat_roll_dir    = 131; // duty飽和方向(conditional integrationの動作確認用)
 } LogStruct11;
 
 #endif
