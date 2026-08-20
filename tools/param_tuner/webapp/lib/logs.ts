@@ -58,3 +58,9 @@ export function openInPlotJuggler(name: string): void {
 export function killPlotJuggler(): void {
   spawn("pkill", ["-f", "plotjuggler"], { stdio: "ignore" });
 }
+
+export function openLogsFolder(): void {
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+  const child = spawn("xdg-open", [LOGS_DIR], { detached: true, stdio: "ignore" });
+  child.unref();
+}

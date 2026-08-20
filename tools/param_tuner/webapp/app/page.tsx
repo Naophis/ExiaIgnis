@@ -41,6 +41,7 @@ export default function Home() {
   const [sending, setSending] = useState<string | null>(null);
 
   const [rightTab, setRightTab] = useState<"console" | "plot">("console");
+  const [plotAutoOpen, setPlotAutoOpen] = useState<{ file: string; nonce: number } | null>(null);
 
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [editorContent, setEditorContent] = useState<string | null>(null);
@@ -114,7 +115,23 @@ export default function Home() {
 
     es.addEventListener("saved", (e) => {
       const data = JSON.parse((e as MessageEvent).data) as { type: string; file: string };
-      toast.success(`保存しました (${data.type}): ${data.file}`);
+      if (data.type === "csv") {
+        toast.success(
+          <button
+            type="button"
+            className="w-full cursor-pointer text-left hover:underline"
+            onClick={() => {
+              setRightTab("plot");
+              setPlotAutoOpen({ file: data.file, nonce: Date.now() });
+            }}
+          >
+            保存しました (csv): {data.file}
+            <span className="block text-xs text-muted-foreground">クリックでPlotJugglerを開く</span>
+          </button>,
+        );
+      } else {
+        toast.success(`保存しました (${data.type}): ${data.file}`);
+      }
     });
 
     // Device sent a clear-screen escape (e.g. dump1()'s live redraw loop):
@@ -390,7 +407,7 @@ export default function Home() {
               />
             </div>
             <div className={`min-h-0 flex-1 ${rightTab === "plot" ? "flex" : "hidden"}`}>
-              <LogPlotPanel />
+              <LogPlotPanel autoOpen={plotAutoOpen} />
             </div>
           </div>
         )}

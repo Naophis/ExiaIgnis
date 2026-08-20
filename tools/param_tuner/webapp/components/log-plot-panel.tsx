@@ -30,7 +30,12 @@ function formatClickInfo(p: TrajectoryPoint): string {
   return parts.join(" | ");
 }
 
-export function LogPlotPanel() {
+interface AutoOpenRequest {
+  file: string;
+  nonce: number;
+}
+
+export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }) {
   const [files, setFiles] = useState<LogFileInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
@@ -76,22 +81,46 @@ export function LogPlotPanel() {
     return buildTrajectoryData(parseCsv(csvText));
   }, [csvText]);
 
-  const openPlotJuggler = async () => {
-    if (!selected) return;
+  const openPlotJuggler = useCallback(async (name?: string) => {
+    const target = name ?? selected;
+    if (!target) return;
     setPjBusy(true);
     try {
       const res = await fetch("/api/logs/plotjuggler", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "open", name: selected }),
+        body: JSON.stringify({ action: "open", name: target }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "起動に失敗しました");
-      toast.success(`PlotJuggler で開いています: ${selected}`);
+      toast.success(`PlotJuggler で開いています: ${target}`);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setPjBusy(false);
+    }
+  }, [selected]);
+
+  // Triggered by clicking the "PlotJugglerで開く" action on the save
+  // notification toast (see app/page.tsx's "saved" SSE handler). Keyed off
+  // `nonce` so repeated requests for the same file still re-fire.
+  useEffect(() => {
+    if (!autoOpen) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelected(autoOpen.file);
+    void openPlotJuggler(autoOpen.file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen?.nonce]);
+
+  const openLogsFolder = async () => {
+    try {
+      const res = await fetch("/api/logs/open-folder", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "フォルダを開けませんでした");
+      }
+    } catch (err) {
+      toast.error((err as Error).message);
     }
   };
 
@@ -114,9 +143,14 @@ export function LogPlotPanel() {
       <div className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-border">
         <div className="flex items-center justify-between p-2">
           <span className="text-sm font-medium">ログファイル</span>
-          <Button size="sm" variant="ghost" onClick={() => void refreshFiles()}>
-            更新
-          </Button>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" onClick={() => void openLogsFolder()}>
+              フォルダを開く
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void refreshFiles()}>
+              更新
+            </Button>
+          </div>
         </div>
         <Separator />
         <ScrollArea className="min-h-0 flex-1">
@@ -126,6 +160,7 @@ export function LogPlotPanel() {
                 key={f.name}
                 type="button"
                 onClick={() => setSelected(f.name)}
+                onDoubleClick={() => void openPlotJuggler(f.name)}
                 className={`flex flex-col rounded px-2 py-1.5 text-left text-xs transition-colors ${
                   selected === f.name ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                 }`}
@@ -154,7 +189,7 @@ export function LogPlotPanel() {
             Right45
           </label>
           <div className="flex-1" />
-          <Button size="sm" variant="outline" disabled={!selected || pjBusy} onClick={openPlotJuggler}>
+          <Button size="sm" variant="outline" disabled={!selected || pjBusy} onClick={() => void openPlotJuggler()}>
             PlotJugglerで開く
           </Button>
           <Button size="sm" variant="outline" onClick={killPlotJuggler}>
