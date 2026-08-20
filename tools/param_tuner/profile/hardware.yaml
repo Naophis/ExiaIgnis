@@ -65,7 +65,7 @@ Mass: 0.030
 slip_param_K: 0.5
 slip_param_k2: 150
 
-sakiyomi_time: 2
+sakiyomi_time: 4
 
 #ログON_OFF
 logging_time: 1.0
