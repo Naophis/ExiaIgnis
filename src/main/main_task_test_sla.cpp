@@ -71,6 +71,16 @@ void MainTask::test_sla() {
   reset_ego_data();
   planning_->motor_enable();
 
+  // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
+  // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。
+  if (sys_.test.suction_active != 0) {
+    param_->accl_v_x = sys_.test.accl_v_x;
+    param_->accl_v_y = sys_.test.accl_v_y;
+  } else {
+    param_->accl_v_x.clear();
+    param_->accl_v_y.clear();
+  }
+
   req_error_reset();
 
   if (param_->test_log_enable > 0) {
@@ -276,6 +286,16 @@ void MainTask::test_run_sla() {
   reset_ego_data();
   planning_->motor_enable();
 
+  // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
+  // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。
+  if (sys_.test.suction_active != 0) {
+    param_->accl_v_x = sys_.test.accl_v_x;
+    param_->accl_v_y = sys_.test.accl_v_y;
+  } else {
+    param_->accl_v_x.clear();
+    param_->accl_v_y.clear();
+  }
+
   req_error_reset();
   if (param_->test_log_enable > 0) {
     lt_->start_slalom_log();
@@ -366,6 +386,16 @@ void MainTask::test_search_sla(bool wall_off) {
   reset_tgt_data();
   reset_ego_data();
   planning_->motor_enable();
+
+  // 探索用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を想定し、
+  // LUTを使わず固定accl(str_p.accl)にフォールバックする。
+  if (param_set.suction != 0) {
+    param_->accl_v_x = str_p.accl_v_x;
+    param_->accl_v_y = str_p.accl_v_y;
+  } else {
+    param_->accl_v_x.clear();
+    param_->accl_v_y.clear();
+  }
 
   req_error_reset();
 
@@ -483,6 +513,16 @@ void MainTask::test_sla_walloff() {
   reset_tgt_data();
   reset_ego_data();
   planning_->motor_enable();
+
+  // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
+  // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。
+  if (sys_.test.suction_active != 0) {
+    param_->accl_v_x = sys_.test.accl_v_x;
+    param_->accl_v_y = sys_.test.accl_v_y;
+  } else {
+    param_->accl_v_x.clear();
+    param_->accl_v_y.clear();
+  }
 
   req_error_reset();
   if (param_->test_log_enable > 0) {
@@ -614,6 +654,16 @@ void MainTask::test_dia_walloff() {
   reset_tgt_data();
   reset_ego_data();
   planning_->motor_enable();
+
+  // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
+  // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。
+  if (sys_.test.suction_active != 0) {
+    param_->accl_v_x = sys_.test.accl_v_x;
+    param_->accl_v_y = sys_.test.accl_v_y;
+  } else {
+    param_->accl_v_x.clear();
+    param_->accl_v_y.clear();
+  }
 
   req_error_reset();
   if (param_->test_log_enable > 0) {

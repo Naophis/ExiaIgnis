@@ -39,9 +39,15 @@ void MainTask::test_run() {
 
   planning_->set_search_mode(test_search_mode > 0);
 
-  // testモード用の速度→加速度LUTに切り替える
-  param_->accl_v_x = sys_.test.accl_v_x;
-  param_->accl_v_y = sys_.test.accl_v_y;
+  // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
+  // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。
+  if (sys_.test.suction_active != 0) {
+    param_->accl_v_x = sys_.test.accl_v_x;
+    param_->accl_v_y = sys_.test.accl_v_y;
+  } else {
+    param_->accl_v_x.clear();
+    param_->accl_v_y.clear();
+  }
 
   ps.v_max = sys_.test.v_max;
   ps.v_end = 20;

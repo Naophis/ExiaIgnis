@@ -114,6 +114,8 @@ axel_degenerate_dia_y: [1, 1, 1, 0.95, 0.85, 0.75, 0.25, -0.1]
 
 # 速度→加速度テーブル (STRAIGHT 時に tgt_in.accl をこの LUT で上書きしてから
 # axel_degenerate_gain を掛ける)。要素数が2未満の場合は無効(従来通り固定accl)。
+# → vel_prof.yaml(str_map、探索/タイムアタック別)・system.yaml(testモード)側に
+# 移設予定のため、ここでは未設定のままにする。
 # accl_v_x: [0, 1000, 2000, 3000, 4000]
 # accl_v_y: [10000, 10000, 8000, 6000, 4000]
 
