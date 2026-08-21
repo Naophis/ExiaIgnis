@@ -46,21 +46,21 @@ SuctionResolution: 40
 # roll
 # Ke: 0.00172 # 大：逆起電力大
 # Ke: 0.002560632779648483  # 大：逆起電力大
-Ke: 0.000975  # 大：逆起電力大
+Ke: 0.000945  # 大：逆起電力大
 # Km: 0.00260946 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00130473 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00145 # トルク定数：　大-> 縦系の出力小
 Km: 0.00180 # トルク定数：　大-> 縦系の出力小
 Lm: 0.00000035 # 大：横系の出力大
 
-coulomb_friction: 0.000015 # クーロン摩擦
-viscous_friction: 0.001475 # 粘性摩擦
+coulomb_friction: 0.0000125 # クーロン摩擦
+viscous_friction: 0.000825 # 粘性摩擦
 
 # coulomb_friction: 0.0 # クーロン摩擦
 # viscous_friction: 0.0 # 粘性摩擦
 
 Resist: 4.4
-Mass: 0.030
+Mass: 0.040
 
 slip_param_K: 0.5
 slip_param_k2: 150
@@ -191,7 +191,7 @@ motor_pid2:
   # b: 0.00
   # d: 0.0000125
 
-  p: 0.000015
+  p: 0.00001375
   i: 0.00000425
   b: 0.00
   d: 0.0000175
@@ -216,17 +216,6 @@ motor_pid2:
 #   c: 0
 gyro_pid:
   mode: 3
-  # p: 0.000325
-  # i: 0.01465
-  # b: 0.0000275
-  # d: 0.000775
-
-  # p: 0.000325
-  # i: 0.01465 # dif angle
-  # # b: 0.0000375 #summation
-  # b: 0.0000595 #summation
-  # # b: 0.0000425 #summation
-  # d: 0.000295
 
   antiwindup: 1
   windup_gain: 10.0
