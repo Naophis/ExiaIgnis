@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -112,6 +113,15 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpen?.nonce]);
 
+  const copyFileName = async (name: string) => {
+    try {
+      await navigator.clipboard.writeText(name);
+      toast.success(`コピーしました: ${name}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
   const openLogsFolder = async () => {
     try {
       const res = await fetch("/api/logs/open-folder", { method: "POST" });
@@ -156,20 +166,40 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col p-1">
             {files.map((f) => (
-              <button
+              <div
                 key={f.name}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelected(f.name)}
                 onDoubleClick={() => void openPlotJuggler(f.name)}
-                className={`flex flex-col rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") setSelected(f.name);
+                }}
+                className={`group flex items-center justify-between gap-1 rounded px-2 py-1.5 text-left text-xs transition-colors ${
                   selected === f.name ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                 }`}
               >
-                <span className="truncate font-medium">{f.name}</span>
-                <span className={selected === f.name ? "text-primary-foreground/70" : "text-muted-foreground"}>
-                  {formatDate(f.mtimeMs)}
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate font-medium">{f.name}</span>
+                  <span className={selected === f.name ? "text-primary-foreground/70" : "text-muted-foreground"}>
+                    {formatDate(f.mtimeMs)}
+                  </span>
                 </span>
-              </button>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  className={`shrink-0 opacity-0 group-hover:opacity-100 ${
+                    selected === f.name ? "hover:bg-primary-foreground/20" : ""
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void copyFileName(f.name);
+                  }}
+                  title="ファイル名をコピー"
+                >
+                  <CopyIcon />
+                </Button>
+              </div>
             ))}
             {files.length === 0 && (
               <span className="px-2 py-1 text-xs text-muted-foreground">ログファイルがありません</span>
