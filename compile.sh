@@ -7,8 +7,11 @@ BUILD_DIR="$SCRIPT_DIR/build"
 
 mkdir -p "$BUILD_DIR"
 
-echo "[1/2] CMake configure..."
-cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+# 初回のみconfigureする。CMakeLists.txt等の変更時はninja側が自動でre-configureする
+if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+    echo "[1/2] CMake configure..."
+    cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+fi
 
 echo "[2/2] ビルド中..."
 cmake --build "$BUILD_DIR" -- -j$(nproc)
