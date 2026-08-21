@@ -489,6 +489,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "Lm", dst.Lm);
     from_json_field(src, "coulomb_friction", dst.coulomb_friction);
     from_json_field(src, "viscous_friction", dst.viscous_friction);
+    from_json_field(src, "MotorHz", dst.MotorHz);
     from_json_field(src, "battery_init_cov", dst.battery_init_cov);
     from_json_field(src, "battery_p_noise", dst.battery_p_noise);
     from_json_field(src, "battery_m_noise", dst.battery_m_noise);

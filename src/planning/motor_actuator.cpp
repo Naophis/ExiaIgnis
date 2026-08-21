@@ -6,7 +6,9 @@
 #include <cmath>
 #include <initializer_list>
 
-void MotorActuator::init() {
+void MotorActuator::init(uint32_t motor_hz) {
+  motor_hz_ = motor_hz;
+
   const uint pwm_pins[] = {M_PWM_L1, M_PWM_L2, M_PWM_R1, M_PWM_R2};
   for (uint pin : pwm_pins) {
     gpio_set_function(pin, GPIO_FUNC_PWM);
@@ -15,7 +17,7 @@ void MotorActuator::init() {
   slice_L_ = pwm_gpio_to_slice_num(M_PWM_L1);
   slice_R_ = pwm_gpio_to_slice_num(M_PWM_R1);
 
-  motor_wrap_ = (uint32_t)(clock_get_hz(clk_sys) / MOTOR_PWM_FREQ_HZ) - 1u;
+  motor_wrap_ = (uint32_t)(clock_get_hz(clk_sys) / motor_hz_) - 1u;
 
   for (uint slice : {slice_L_, slice_R_}) {
     pwm_set_clkdiv_int_frac4(slice, 1, 0);
@@ -66,7 +68,7 @@ void MotorActuator::motor_disable() {
   // 次の wrap まで反映されない）。先に duty=0 を書き込み、1 周期分待って
   // 出力が確実に LOW に落ちてから PWM を止める。
   apply(0.0f, 0.0f);
-  busy_wait_us(2u * 1000000u / MOTOR_PWM_FREQ_HZ);
+  busy_wait_us(2u * 1000000u / motor_hz_);
   pwm_set_enabled(slice_L_, false);
   pwm_set_enabled(slice_R_, false);
 }

@@ -550,6 +550,7 @@ typedef struct {
   float Lm = 0;
   float coulomb_friction = 0;
   float viscous_friction = 0;
+  int MotorHz = 37500; // 駆動モーターPWM周波数(MotorActuator::init())
 
   float battery_init_cov = 0.95;
   float battery_p_noise = 0.05;

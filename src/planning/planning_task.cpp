@@ -42,7 +42,7 @@ void PlanningTask::set_input_param_entity(
 void PlanningTask::init(std::shared_ptr<SensingTask> sensing) {
   sensing_ = sensing;
   sem_init(&tick_sem_, 0, 1);
-  motor_.init();
+  motor_.init((uint32_t)param->MotorHz);
   // bldc_.init() は呼ばない(AM32 ESC移行によりesc_側が実行系。
   // planning_task.hppのbldc_メンバのコメント参照)。
   esc_.init();
