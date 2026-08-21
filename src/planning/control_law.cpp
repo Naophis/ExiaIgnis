@@ -226,7 +226,23 @@ __attribute__((noinline, section(".time_critical.control_law"))) float
 ControlLaw::calc_sensor_pid() {
   float duty = 0;
   SensingControlType type = SensingControlType::None;
-  ee->sen.error_i += ee->sen.error_p;
+  // conditional integration: 高速(非探索)モードでは|error_p|が
+  // windup_dead_bindを超えている間(壁ロスト直後の再捕捉時など、誤差が
+  // 一方向に張り付きうる場面)はI項の積算そのものを止める。ヨーレート
+  // ループの「逆符号のときだけ減衰」方式は同方向の持続的な誤差に対して
+  // 無力(2026-08-22, str_ang_pidへの初回I項導入で発散・リバート済み)
+  // だったため、より単純で安全なこの方式を採用する。
+  const bool freeze_sen_i =
+      !search_mode_ && param_->str_ang_pid_fast.antiwindup &&
+      ABS(ee->sen.error_p) > param_->str_ang_pid_fast.windup_dead_bind;
+  if (!freeze_sen_i) {
+    ee->sen.error_i += ee->sen.error_p;
+  }
+  if (param_->str_ang_pid_fast.windup_i_max > 0) {
+    ee->sen.error_i =
+        std::clamp(ee->sen.error_i, -param_->str_ang_pid_fast.windup_i_max,
+                   param_->str_ang_pid_fast.windup_i_max);
+  }
   ee->sen.error_d = ee->sen.error_p;
   ee->sen.error_p = check_sen_error(type);
   if (search_mode_) {
@@ -244,7 +260,7 @@ ControlLaw::calc_sensor_pid() {
              param_->str_ang_pid.i * ee->sen.error_d;
       set_ctrl_val(ee->s_val, ee->sen.error_p, 0, 0, ee->sen.error_d,
                    param_->str_ang_pid.p * ee->sen.error_p, 0, 0,
-                   -param_->str_ang_pid.d * ee->sen.error_d,
+                   -param_->str_ang_pid.i * ee->sen.error_d,
                    ee->sen_log.gain_zz, ee->sen_log.gain_z);
       ee->sen_log.gain_zz = ee->sen_log.gain_z;
       ee->sen_log.gain_z = duty;
@@ -256,13 +272,14 @@ ControlLaw::calc_sensor_pid() {
     }
   } else {
     if (ee->sen.error_p != 0) {
-      duty = param_->str_ang_pid.b * ee->sen.error_p -
-             param_->str_ang_pid.d * ee->sen.error_d;
+      const float i_gain = param_->str_ang_pid_fast.i * ee->sen.error_i;
+      duty = param_->str_ang_pid_fast.p * ee->sen.error_p + i_gain -
+             param_->str_ang_pid_fast.d * ee->sen.error_d;
       ee->sen_log.gain_zz = ee->sen_log.gain_z;
       ee->sen_log.gain_z = duty;
-      set_ctrl_val(ee->s_val, ee->sen.error_p, 0, 0, ee->sen.error_d,
-                   param_->str_ang_pid.b * ee->sen.error_p, 0, 0,
-                   -param_->str_ang_pid.d * ee->sen.error_d,
+      set_ctrl_val(ee->s_val, ee->sen.error_p, ee->sen.error_i, 0,
+                   ee->sen.error_d, param_->str_ang_pid_fast.p * ee->sen.error_p,
+                   i_gain, 0, -param_->str_ang_pid_fast.d * ee->sen.error_d,
                    ee->sen_log.gain_zz, ee->sen_log.gain_z);
     } else {
       duty = 0;

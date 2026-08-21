@@ -314,6 +314,7 @@ typedef struct {
   char antiwindup = 0;
   float windup_gain = 0;
   float windup_dead_bind = 0;
+  float windup_i_max = 0; // I項積算値そのものの絶対値クランプ。0なら無効
   float i_theta_tau = 0;
   float theta_gate = 0;
   float omega_gate = 0;
@@ -602,6 +603,10 @@ typedef struct {
   pid_param_t gyro_pid;
   pid_param_t gyro_pid_gain_limitter;
   pid_param_t str_ang_pid;
+  // 高速走行(非探索)時の壁PD専用ゲイン。str_ang_pidは.p/.iを探索モードの
+  // P/D、.b/.dを高速モードのP/Dとして兼用する紛らわしい構成だったため、
+  // I項導入を機に高速側だけ独立させた(p/i/d本来の意味で使う)。
+  pid_param_t str_ang_pid_fast;
   pid_param_t str_ang_dia_pid;
   pid_param_t angle_pid;
   pid_param_t front_ctrl_angle_pid;

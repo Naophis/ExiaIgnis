@@ -136,6 +136,7 @@ inline void convertFromJson(JsonVariantConst src, pid_param_t& dst) {
     from_json_field(src, "antiwindup", dst.antiwindup);
     from_json_field(src, "windup_gain", dst.windup_gain);
     from_json_field(src, "windup_dead_bind", dst.windup_dead_bind);
+    from_json_field(src, "windup_i_max", dst.windup_i_max);
     from_json_field(src, "i_theta_tau", dst.i_theta_tau);
     from_json_field(src, "theta_gate", dst.theta_gate);
     from_json_field(src, "omega_gate", dst.omega_gate);
@@ -575,6 +576,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "gyro_pid", dst.gyro_pid);
     from_json_nested(src, "gyro_pid_gain_limitter", dst.gyro_pid_gain_limitter);
     from_json_nested(src, "str_ang_pid", dst.str_ang_pid);
+    from_json_nested(src, "str_ang_pid_fast", dst.str_ang_pid_fast);
     from_json_nested(src, "str_ang_dia_pid", dst.str_ang_dia_pid);
     from_json_nested(src, "angle_pid", dst.angle_pid);
     from_json_nested(src, "front_ctrl_angle_pid", dst.front_ctrl_angle_pid);

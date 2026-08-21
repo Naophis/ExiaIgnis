@@ -53,5 +53,20 @@
     "values": {
       "mode": 11
     }
+  },
+  {
+    "id": "b2e314bf-6f5d-42aa-96e4-247524c5a615",
+    "name": "吸引スラローム",
+    "values": {
+      "v_max": 1500,
+      "accl": 42500,
+      "decel": -47500,
+      "dia_accl": 45000,
+      "dia_decel": -47500,
+      "dist": 120,
+      "suction_active": 2,
+      "mode": 1,
+      "ignore_opp_sen": 1
+    }
   }
 ]

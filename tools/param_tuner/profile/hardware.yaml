@@ -314,6 +314,9 @@ front_ctrl_keep_angle_pid: # pid for angle
 ####################################
 
 # 光センサー制御
+# str_ang_pid: 探索モード専用(calc_sensor_pid()のsearch_mode_分岐)。
+# .p=P, .i=D(紛らわしいがコード上そういう割り当て)。.b/.dは高速側で
+# 使っていたが、str_ang_pid_fastへ分離したため未使用。
 str_ang_pid:
   mode: 2
   # p: 0.000235 #search_mode
@@ -325,8 +328,6 @@ str_ang_pid:
   p: 0.035
   i: 0.0325
 
-  b: 0.035
-  d: 0.0325
   c: 0
 
   # p: 0.0
@@ -339,6 +340,21 @@ str_ang_pid:
   # b: 0.4975
   # i: 0.125
   # c: 0
+
+# str_ang_pid_fast: 高速(非探索)走行時の壁PD専用ゲイン。p/i/dは本来の意味
+# (calc_sensor_pid()の非探索分岐)。旧str_ang_pid.b/dの値をp/dに移設。
+# I項は2026-08-22にconditional integration方式で新規追加(要実機チューニング、
+# 保守的な初期値)。
+str_ang_pid_fast:
+  mode: 2
+  p: 0.035
+  i: 0.002
+  d: 0.0325
+  c: 0
+
+  antiwindup: 1
+  windup_dead_bind: 15  # |error_p|(mm)がこれを超えている間はI項の積算を停止
+  windup_i_max: 50      # I項積算値(error_i)の絶対値クランプ
 
 # str_ang_dia_pid: #not use
 #   # p: 0.095

@@ -21,6 +21,7 @@ inline void convertToJson(const pid_param_t& src, JsonVariant dst) {
     dst["antiwindup"] = (int)src.antiwindup;
     dst["windup_gain"] = src.windup_gain;
     dst["windup_dead_bind"] = src.windup_dead_bind;
+    dst["windup_i_max"] = src.windup_i_max;
     dst["i_theta_tau"] = src.i_theta_tau;
     dst["theta_gate"] = src.theta_gate;
     dst["omega_gate"] = src.omega_gate;
@@ -295,6 +296,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["gyro_pid"]                    = src.gyro_pid;
     dst["gyro_pid_gain_limitter"]      = src.gyro_pid_gain_limitter;
     dst["str_ang_pid"]                 = src.str_ang_pid;
+    dst["str_ang_pid_fast"]            = src.str_ang_pid_fast;
     dst["str_ang_dia_pid"]             = src.str_ang_dia_pid;
     dst["angle_pid"]                   = src.angle_pid;
     dst["front_ctrl_angle_pid"]        = src.front_ctrl_angle_pid;
