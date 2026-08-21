@@ -92,6 +92,8 @@ typedef struct {
   // (ff_duty_front/roll はduty系の並行計算値で、torque_mode==2時は出力に使われない)
   float ff_front_torque = 0;
   float ff_roll_torque = 0;
+  float ff_friction_torque_r = 0;
+  float ff_friction_torque_l = 0;
 } duty_t;
 
 typedef struct {
@@ -116,6 +118,8 @@ typedef struct {
   float w_kf = 0;
   float w_kf2 = 0;
   float v_kf = 0;
+  float v_kf_l = 0; // kf_v_l.get_state() (v_kfへの入力の可視化用、EgoEstimator::update)
+  float v_kf_r = 0; // kf_v_r.get_state()
   float dist_kf = 0;
   float ang_kf = 0;
   float ang_kf2 = 0;
@@ -1366,6 +1370,10 @@ typedef struct {
   real16_T ff_duty_rpm_l;
   real16_T ff_front_torque; // torque_mode==2で実際に使われるトルク系FF (ff_duty_frontとは別系統)
   real16_T ff_roll_torque;
+  real16_T ff_friction_torque_r;
+  real16_T ff_friction_torque_l;
+  real16_T v_kf_l;
+  real16_T v_kf_r;
 
   real16_T pos_x;
   real16_T pos_y;
@@ -1620,6 +1628,10 @@ typedef struct {
   float ff_roll_torque  = 129;
   int continuous_turn   = 130; // 連続ターン中の壁切れ閾値切替フラグ (WallOffController)
   float sat_roll_dir    = 131; // duty飽和方向(conditional integrationの動作確認用)
+  float ff_friction_torque_r = 132; // クーロン+粘性摩擦FF(summation_duty, torque_mode==2実適用値)
+  float ff_friction_torque_l = 133;
+  float v_kf_l = 134; // kf_v.update()に渡るkf_v_l/kf_v_rの状態(v_c2の入力の可視化用)
+  float v_kf_r = 135;
 } LogStruct11;
 
 #endif

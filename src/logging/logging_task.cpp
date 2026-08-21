@@ -229,6 +229,10 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.ff_duty_rpm_l = floatToHalf(sr->ego.duty.ff_duty_rpm_l);
   ld.ff_front_torque = floatToHalf(sr->ego.duty.ff_front_torque);
   ld.ff_roll_torque = floatToHalf(sr->ego.duty.ff_roll_torque);
+  ld.ff_friction_torque_r = floatToHalf(sr->ego.duty.ff_friction_torque_r);
+  ld.ff_friction_torque_l = floatToHalf(sr->ego.duty.ff_friction_torque_l);
+  ld.v_kf_l = floatToHalf(sr->ego.v_kf_l);
+  ld.v_kf_r = floatToHalf(sr->ego.v_kf_r);
 
   ld.motion_type = static_cast<uint8_t>(tv->motion_type);
   ld.continuous_turn = tv->continuous_turn ? 1 : 0;
@@ -503,6 +507,10 @@ void LoggingTask::dump_csv() const {
   printf("ff_roll_torque:float:%d\n", (int)sizeof(ls11.ff_roll_torque));
   printf("continuous_turn:int:%d\n", (int)sizeof(ls11.continuous_turn));
   printf("sat_roll_dir:float:%d\n", (int)sizeof(ls11.sat_roll_dir));
+  printf("ff_friction_torque_r:float:%d\n", (int)sizeof(ls11.ff_friction_torque_r));
+  printf("ff_friction_torque_l:float:%d\n", (int)sizeof(ls11.ff_friction_torque_l));
+  printf("v_kf_l:float:%d\n", (int)sizeof(ls11.v_kf_l));
+  printf("v_kf_r:float:%d\n", (int)sizeof(ls11.v_kf_r));
 
   fflush(stdout);
   sleep_ms(50);
@@ -743,6 +751,10 @@ void LoggingTask::dump_csv() const {
     ls11.ff_roll_torque = halfToFloat(e.ff_roll_torque);
     ls11.continuous_turn = e.continuous_turn;
     ls11.sat_roll_dir = halfToFloat(e.sat_roll_dir);
+    ls11.ff_friction_torque_r = halfToFloat(e.ff_friction_torque_r);
+    ls11.ff_friction_torque_l = halfToFloat(e.ff_friction_torque_l);
+    ls11.v_kf_l = halfToFloat(e.v_kf_l);
+    ls11.v_kf_r = halfToFloat(e.v_kf_r);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

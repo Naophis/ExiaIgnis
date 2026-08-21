@@ -1167,6 +1167,8 @@ ControlLaw::summation_duty() {
   // (torque_mode==2 分岐でのみ実値を書き込む)
   se->ego.duty.ff_front_torque = 0;
   se->ego.duty.ff_roll_torque = 0;
+  se->ego.duty.ff_friction_torque_r = 0;
+  se->ego.duty.ff_friction_torque_l = 0;
 
   if (tgt_val_->motion_type == MotionType::WALL_OFF ||
       tgt_val_->motion_type == MotionType::WALL_OFF_DIA) {
@@ -1219,6 +1221,8 @@ ControlLaw::summation_duty() {
     }
     se->ego.duty.ff_front_torque = ff_front2;
     se->ego.duty.ff_roll_torque = ff_roll2;
+    se->ego.duty.ff_friction_torque_r = ff_friction_r;
+    se->ego.duty.ff_friction_torque_l = ff_friction_l;
 
     float torque_r = ff_front2 + ff_roll2 + duty_c + duty_roll + ff_friction_r;
     float torque_l = ff_front2 - ff_roll2 + duty_c - duty_roll + ff_friction_l;

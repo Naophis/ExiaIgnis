@@ -553,8 +553,13 @@ __attribute__((noinline, section(".time_critical.sensing_irq"))) void
 SensingTask::read_spi_sensors() {
   const auto &se = sensing_result;
 
-  const auto accl_l = (tgt_val->ego_in.v_l - vl_old) / dt;
-  const auto accl_r = (tgt_val->ego_in.v_r - vr_old) / dt;
+  // kf_v(中央フィルタ)と同じく目標加速度を使う。旧実装は
+  // (今tickの目標速度 - 前tickの実測速度)/dt を"加速度"としてpredict()に
+  // 渡していたため、目標と実測が乖離するほど巨大な誤値になるバグがあった
+  // (FFのみ・目標400/実測650のテストでkf_v_l/kf_v_rがv_c/v_l/v_rから
+  // 乖離して負値まで発散する形で発覚、2026-08-22)。
+  const auto accl_l = tgt_val->ego_in.accl;
+  const auto accl_r = tgt_val->ego_in.accl;
 
   const float tire = param->tire;
   const float tread = param->tire_tread;
@@ -737,8 +742,6 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   }
 
   w_old = tgt_val->ego_in.w;
-  vl_old = se->ego.v_l;
-  vr_old = se->ego.v_r;
 }
 void SensingTask::set_input_param_entity(
     std::shared_ptr<input_param_t> &_param) {

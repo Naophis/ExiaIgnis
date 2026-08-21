@@ -59,8 +59,6 @@ private:
     dma_channel_config dma_cfg_rx_bat_{};
     void init_dma();
     float w_old = 0;
-    float vr_old = 0;
-    float vl_old = 0;
     int64_t gyro_timestamp_old = 0;
     int64_t gyro_timestamp_now = 0;
     int64_t gyro2_timestamp_old = 0;

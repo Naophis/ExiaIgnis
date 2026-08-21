@@ -28,6 +28,8 @@ EgoEstimator::update(bool motor_en) {
   if (std::isfinite(tgt_val->ego_in.accl) && std::isfinite(se->ego.v_c)) {
     auto tmp_v_l = kf_v_l.get_state();
     auto tmp_v_r = kf_v_r.get_state();
+    se->ego.v_kf_l = tmp_v_l;
+    se->ego.v_kf_r = tmp_v_r;
     kf_v.predict(tgt_val->ego_in.accl);
     kf_v.update((tmp_v_l + tmp_v_r) / 2);
     se->ego.v_kf = kf_v.get_state();
