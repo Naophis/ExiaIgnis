@@ -87,10 +87,10 @@ mode: 2 # 直進
 test: # テスト走行時に使用するパラメータ群
   v_max: 7500
   accl: 42500
-  decel: -47500 
+  decel: -52500 
   dia_accl: 45000
   dia_decel: -47500
-  dist: 720 #直進
+  dist: 810 #直進
   suction_active: 2
 
   end_v: 10

@@ -348,13 +348,13 @@ str_ang_pid:
 str_ang_pid_fast:
   mode: 2
   p: 0.035
-  i: 0.002
+  i: 0.0035
   d: 0.0325
   c: 0
 
   antiwindup: 1
   windup_dead_bind: 15  # |error_p|(mm)がこれを超えている間はI項の積算を停止
-  windup_i_max: 50      # I項積算値(error_i)の絶対値クランプ
+  windup_i_max: 90      # I項積算値(error_i)の絶対値クランプ
 
 # str_ang_dia_pid: #not use
 #   # p: 0.095
