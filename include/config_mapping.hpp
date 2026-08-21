@@ -770,6 +770,8 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "end_v", dst.end_v);
     from_json_field(src, "accl", dst.accl);
     from_json_field(src, "decel", dst.decel);
+    from_json_vector(src, "accl_v_x", dst.accl_v_x);
+    from_json_vector(src, "accl_v_y", dst.accl_v_y);
     from_json_field(src, "dia_accl", dst.dia_accl);
     from_json_field(src, "dia_decel", dst.dia_decel);
     from_json_field(src, "dist", dst.dist);
@@ -910,6 +912,8 @@ inline void convertFromJson(JsonVariantConst src, straight_param_t& dst) {
     from_json_field(src, "w1",    dst.w_end);  // vel_prof short alias
     from_json_field(src, "alpha", dst.alpha);
     from_json_field(src, "a2",    dst.alpha);  // vel_prof short alias
+    from_json_vector(src, "accl_v_x", dst.accl_v_x);
+    from_json_vector(src, "accl_v_y", dst.accl_v_y);
 }
 
 /**

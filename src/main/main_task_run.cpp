@@ -77,6 +77,9 @@ void MainTask::run_main_mode() {
         idx = 1;
       }
       load_slalom_param(idx, idx, idx);
+      // 探索用の速度→加速度LUTに切り替える
+      param_->accl_v_x = param_set.str_map[StraightType::Search].accl_v_x;
+      param_->accl_v_y = param_set.str_map[StraightType::Search].accl_v_y;
       sr = search_ctrl->exec(param_set, SearchMode::ALL);
       if (sr == SearchResult::SUCCESS)
         save_maze_data(true);
@@ -98,6 +101,9 @@ void MainTask::run_main_mode() {
       }
       sr = SearchResult::SUCCESS;
       load_slalom_param(idx, idx, idx);
+      // 探索用の速度→加速度LUTに切り替える
+      param_->accl_v_x = param_set.str_map[StraightType::Search].accl_v_x;
+      param_->accl_v_y = param_set.str_map[StraightType::Search].accl_v_y;
       if (rorl == TurnDirection::Right)
         sr = search_ctrl->exec(param_set, SearchMode::Kata);
       else
@@ -252,6 +258,10 @@ void MainTask::path_run(int idx, int idx2, int idx3) {
 
   const auto backup_l45 = param_->sen_ref_p.normal.exist.left45;
   const auto backup_r45 = param_->sen_ref_p.normal.exist.right45;
+
+  // タイムアタック(FastRun)用の速度→加速度LUTに切り替える
+  param_->accl_v_x = param_set.str_map[StraightType::FastRun].accl_v_x;
+  param_->accl_v_y = param_set.str_map[StraightType::FastRun].accl_v_y;
 
   mp->exec_path_running(param_set);
 

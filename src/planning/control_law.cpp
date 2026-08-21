@@ -38,11 +38,15 @@ ControlLaw::calc(bool motor_en, bool suction_en, bool search_mode,
   // axel degenerate gain (pre-calc before sensor PID, mirrors tick() logic)
   float axel_degenerate_gain = 1.0f;
   diff_old = diff;
+  // 速度→加速度LUT: 探索/タイムアタック/testモードで別々のテーブルを走行
+  // 開始時にparam_->accl_v_x/yへコピーして使う(main_task_run.cpp,
+  // main_task_test_run.cpp参照)。axel_degenerateと違い探索モードでも適用する。
+  if (tgt_val_->motion_type == MotionType::STRAIGHT &&
+      param_->accl_v_x.size() >= 2) {
+    tgt_val_->tgt_in.accl = sensor_->interp1d(param_->accl_v_x, param_->accl_v_y,
+                                              tgt_val_->ego_in.v, false);
+  }
   if (!search_mode_ && tgt_val_->motion_type == MotionType::STRAIGHT) {
-    if (param_->accl_v_x.size() >= 2) {
-      tgt_val_->tgt_in.accl = sensor_->interp1d(param_->accl_v_x, param_->accl_v_y,
-                                                tgt_val_->ego_in.v, false);
-    }
     if (param_->axel_degenerate_x.size() >= 2 &&
         tgt_val_->nmr.sct == SensorCtrlType::Straight) {
       SensingControlType type = SensingControlType::None;

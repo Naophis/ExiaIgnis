@@ -513,6 +513,14 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["end_v"]               = src.end_v;
     dst["accl"]                = src.accl;
     dst["decel"]               = src.decel;
+    {
+        JsonArray a = dst["accl_v_x"].to<JsonArray>();
+        for (float v : src.accl_v_x) a.add(v);
+    }
+    {
+        JsonArray a = dst["accl_v_y"].to<JsonArray>();
+        for (float v : src.accl_v_y) a.add(v);
+    }
     dst["dia_accl"]            = src.dia_accl;
     dst["dia_decel"]           = src.dia_decel;
     dst["dist"]                = src.dist;

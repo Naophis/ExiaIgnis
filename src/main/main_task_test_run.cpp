@@ -39,6 +39,10 @@ void MainTask::test_run() {
 
   planning_->set_search_mode(test_search_mode > 0);
 
+  // testモード用の速度→加速度LUTに切り替える
+  param_->accl_v_x = sys_.test.accl_v_x;
+  param_->accl_v_y = sys_.test.accl_v_y;
+
   ps.v_max = sys_.test.v_max;
   ps.v_end = 20;
   ps.dist = sys_.test.dist - 5;

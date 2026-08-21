@@ -1049,6 +1049,11 @@ typedef struct {
   float end_v = 0;
   float accl = 0;
   float decel = 0;
+  // 速度→加速度LUT(要素数2未満なら無効、上のaccl固定値のまま)。
+  // testモード開始時にinput_param_t.accl_v_x/yへコピーして使う
+  // (ControlLaw::calc()参照、main_task_test_run.cpp)。
+  std::vector<float> accl_v_x;
+  std::vector<float> accl_v_y;
   float dia_accl = 0;
   float dia_decel = 0;
   float dist = 0;
@@ -1179,6 +1184,11 @@ typedef struct {
   float w_max = 0;
   float w_end = 0;
   float alpha = 0;
+  // 速度→加速度LUT(要素数2未満なら無効、上のaccl固定値のまま)。
+  // 走行モード開始時にinput_param_t.accl_v_x/yへコピーして使う
+  // (ControlLaw::calc()参照、main_task_run.cpp)。
+  std::vector<float> accl_v_x;
+  std::vector<float> accl_v_y;
 } straight_param_t;
 
 typedef struct {
