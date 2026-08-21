@@ -454,6 +454,8 @@ void PlanningTask::cp_request() {
 
   tgt_val->tgt_in.accl_param.limit = 5500;
   tgt_val->tgt_in.accl_param.n = 4;
+  tgt_val->tgt_in.accl_param.decel_delay_cnt = param->decel_delay_cnt;
+  tgt_val->tgt_in.accl_param.decel_delay_n = param->decel_delay_n;
 
   tgt_val->tgt_in.slip_gain_K1 = param->slip_param_K;
   tgt_val->tgt_in.slip_gain_K2 = param->slip_param_k2;

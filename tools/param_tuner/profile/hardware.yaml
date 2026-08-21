@@ -118,7 +118,7 @@ axel_degenerate_dia_y: [1, 1, 1, 0.95, 0.85, 0.75, 0.25, -0.1]
 # accl_v_y: [10000, 10000, 8000, 6000, 4000]
 
 decel_delay_cnt: 5
-dedel_delay_n: 4
+decel_delay_n: 4
 
 search_sen_ctrl_limitter: 8
 torque_mode: 2

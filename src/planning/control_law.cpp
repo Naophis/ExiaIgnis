@@ -1012,10 +1012,16 @@ ControlLaw::calc_angle_velocity_ctrl() {
                           tgt_val_->motion_type == MotionType::SLA_BACK_STR);
     if (was_turn && !now_turn) {
       // 旋回終了: ヨーレートI項を0クリアする。v=2200でフェアなベースライン
-      // (n=4, angOsc平均12.00°)と比較し、angOsc平均8.22°・settle_ms平均
-      // 33.5ms・Ipeak(post30)平均97.7への改善を確認済み(2026-08-20)。
-      // i_bias/dt_での再着火は img_ang(セグメント内ローカル基準)と
-      // kim.theta(累積の絶対基準)のズレを拾って悪化したため不採用。
+      // (n=4, angOsc平均12.00°)比 angOsc平均8.22°への改善を確認済み
+      // (2026-08-20)。ヒステリシス脱出側(下記)と同様にee->ang.error_p/dt_
+      // による再着火も試したが(turn_log/12, n=4)、angOsc平均9.52°・
+      // stdev3.23へ悪化(turn_log/11の平均7.49°・stdev1.13比)し、実機でも
+      // 走行軌跡の不安定化が確認された(2026-08-21)ため0クリアに差し戻し。
+      // ヒステリシス脱出はw.error_pがデッドバンドを下回った瞬間にのみ発火
+      // するため再着火時のerror_pは元々小さいことが保証されるが、旋回終了
+      // はmotion_type遷移で無条件に発火し残差の大きさに歯止めがない。
+      // error_p/dt_はdt_=0.001で1000倍されるため、わずかな残差でも
+      // ヨーレートI項に大きなステップを注入してしまい不安定化した。
       ee->w.error_i = 0.0f;
       gyro_pid_windup_histerisis = false;
       gyro_pid_histerisis_i = 0.0f;
@@ -1067,7 +1073,15 @@ ControlLaw::calc_angle_velocity_ctrl() {
         gyro_pid_windup_histerisis = true;
       } else {
         if (gyro_pid_windup_histerisis) {
-          w_error_i = ee->w.error_i = ee->ang.i_bias / dt_;
+          // i_bias(= img_ang - kim.theta)ではなく ee->ang.error_p
+          // (= img_ang + offset - ang_kf、実際にheading PIDが使っている
+          // 誤差)から再着火する。img_ang/ang_kfはlast_tgt_angle_のオフセット
+          // 簿記を通して一貫した基準で管理されているが、kim.thetaは
+          // EgoEstimator内で独立に積分される値でこの簿記に乗っておらず、
+          // i_biasは基準の異なる値同士の引き算になっていた(数十度相当の
+          // 汚染値を生む原因)。error_pなら「適切な残差でI項を復元する」
+          // という本来の意図を保ったまま基準ズレを避けられる。
+          w_error_i = ee->w.error_i = ee->ang.error_p / dt_;
         }
         gyro_pid_windup_histerisis = false;
         gyro_pid_histerisis_i = 0;

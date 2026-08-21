@@ -311,6 +311,8 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["sensor_gain"]              = src.sensor_gain;
     dst["sakiyomi_time"]            = src.sakiyomi_time;
     dst["search_sen_ctrl_limitter"] = src.search_sen_ctrl_limitter;
+    dst["decel_delay_cnt"]          = src.decel_delay_cnt;
+    dst["decel_delay_n"]            = src.decel_delay_n;
     dst["clear_angle"]              = src.clear_angle;
     dst["clear_dist_order"]         = src.clear_dist_order;
     dst["front_dist_offset"]        = src.front_dist_offset;

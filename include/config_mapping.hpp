@@ -598,6 +598,8 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "gain", dst.sensor_gain);
     from_json_field(src, "sakiyomi_time", dst.sakiyomi_time);
     from_json_field(src, "search_sen_ctrl_limitter", dst.search_sen_ctrl_limitter);
+    from_json_field(src, "decel_delay_cnt", dst.decel_delay_cnt);
+    from_json_field(src, "decel_delay_n", dst.decel_delay_n);
     from_json_field(src, "clear_angle", dst.clear_angle);
     from_json_field(src, "clear_dist_order", dst.clear_dist_order);
     from_json_field(src, "front_dist_offset", dst.front_dist_offset);

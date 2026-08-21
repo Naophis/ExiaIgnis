@@ -615,6 +615,13 @@ typedef struct {
   sensor_gain_t sensor_gain;
   float sakiyomi_time = 1;
   float search_sen_ctrl_limitter = 1;
+  // v > accl_param.limit(5500固定, motion_planning.cpp/planning_task.cpp)
+  // 域での加減速ソフトスタート用パラメータ。mpc_tgt_calc.cppのdecel/accl
+  // 分岐で (1 - pow(1 - min(counter/decel_delay_cnt, 1), decel_delay_n)) を
+  // 掛けて減速指令を滑らかに立ち上げる。0のままだと counter/0 -> Inf ->
+  // pow(0,0)=1 -> 係数0 となり、v>5500で減速指令が完全に消える(実機で確認)。
+  int decel_delay_cnt = 5;
+  float decel_delay_n = 4;
   float clear_angle = 0;
   float clear_dist_order = 0;
   float front_dist_offset = 0;
