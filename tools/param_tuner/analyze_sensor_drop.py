@@ -17,6 +17,11 @@ def as_float(row, key):
         return None
 
 
+def fmt(row, key):
+    v = as_float(row, key)
+    return f"{v:.2f}" if v is not None else row.get(key)
+
+
 def find_motion_state_starts(rows, motion_state):
     starts = []
     prev = None
@@ -59,7 +64,7 @@ def print_motion_state_values(rows, motion_state, columns):
 
     print(f"--- motion_state={motion_state} になった瞬間 ---")
     for s in starts:
-        values = ", ".join(f"{col}={rows[s][col]}" for col in columns)
+        values = ", ".join(f"{col}={fmt(rows[s], col)}" for col in columns)
         print(f"  index={rows[s]['index']}: {values}")
     print()
 
@@ -98,7 +103,7 @@ def main():
             if result["rise_row"] is None:
                 drop_row = result["drop_row"]
                 print(f"  start_index={start_index}: <={args.low} "
-                      f"index={rows[drop_row]['index']} (val={rows[drop_row][col]}) "
+                      f"index={rows[drop_row]['index']} (val={fmt(rows[drop_row], col)}) "
                       f"ですが、その後 >={args.high} に到達せず")
                 continue
             drop_row, rise_row = result["drop_row"], result["rise_row"]
@@ -106,8 +111,8 @@ def main():
             rise_index = int(float(rows[rise_row]["index"]))
             diff = rise_index - drop_index
             print(f"  motion_state={args.motion_state} start_index={start_index} | "
-                  f"<={args.low}: index={drop_index} (val={rows[drop_row][col]}) -> "
-                  f">={args.high}: index={rise_index} (val={rows[rise_row][col]}) | diff={diff}")
+                  f"<={args.low}: index={drop_index} (val={fmt(rows[drop_row], col)}) -> "
+                  f">={args.high}: index={rise_index} (val={fmt(rows[rise_row], col)}) | diff={diff}")
         print()
 
     if not args.no_state_values:
