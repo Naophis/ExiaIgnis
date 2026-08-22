@@ -120,6 +120,13 @@ ControlLaw::calc_tgt_duty() {
     ee->sen.error_i = 0;
     ee->sen_log.gain_zz = 0;
     ee->sen_log.gain_z = 0;
+    // sen_kanayama_dwはcalc_sensor_pid()(sct==Straightの時だけ呼ばれる)内でしか
+    // 更新されないメンバ変数。ここで呼ばれない間は直前(直進区間)の値が
+    // そのまま凍結して残ってしまうため、duty_sen/ee->sen.error_iと同様に
+    // ゼロクリアする(2026-08-23、SLA_FRONT_STR終端の壁追従値0.39rad/sが
+    // SLALOM/SLA_BACK_STRを跨いで凍結し、旋回後STRAIGHTのw目標offsetを
+    // 支配して収束を妨げていたバグを修正、20260823_072147.csv解析)。
+    sen_kanayama_dw = 0;
   } else if (tgt_val_->nmr.sct == SensorCtrlType::NONE) {
     duty_sen = sen_ang = 0;
     ee->sen.error_i = 0;
@@ -128,6 +135,7 @@ ControlLaw::calc_tgt_duty() {
     ee->sen_dia.error_i = 0;
     ee->sen_log_dia.gain_zz = 0;
     ee->sen_log_dia.gain_z = 0;
+    sen_kanayama_dw = 0; // 同上
   }
   if (dlog)
     g_irq_log.push("D1"); // after sct sensor_pid block
@@ -249,6 +257,20 @@ ControlLaw::calc_sensor_pid() {
   }
   ee->sen.error_d = ee->sen.error_p;
   ee->sen.error_p = check_sen_error(type);
+
+  // ego_in.ang再アンカー(2026-08-23): ego_in.angはSensingTask::calc_vel()
+  // (sensing_task.cpp)で毎tick生ジャイロ(w_raw/w_kf)を積分しているだけの
+  // 実測ヘディングで、壁が見えない間は無補正でドリフトする(実測: STRAIGHT
+  // 400tickで2.7°→3.7°の単調ドリフトを確認)。壁を新規に検出した瞬間
+  // (壁と正対しているはず、という前提)にego_in.ang/global_pos.angを
+  // ゼロへスナップし、それまでのドリフト蓄積をリセットする。
+  const bool wall_found_now = (type == SensingControlType::Wall);
+  if (wall_found_now && !wall_found_prev_) {
+    tgt_val_->ego_in.ang = 0;
+    tgt_val_->global_pos.ang = 0;
+  }
+  wall_found_prev_ = wall_found_now;
+
   if (search_mode_) {
     if (ee->sen.error_p > param_->search_sen_ctrl_limitter) {
       ee->sen.error_p = param_->search_sen_ctrl_limitter;
@@ -832,21 +854,27 @@ ControlLaw::calc_pid_val_ang_vel() {
   ee->w_kf.error_d = ee->w_kf.error_p;
 
   float offset = 0;
+  ee->aw_log.dbg_off_ang = 0;
   if (param_->torque_mode == 2) {
     if (!(tgt->motion_type == MotionType::PIVOT ||
           tgt->motion_type == MotionType::FRONT_CTRL)) {
       offset += duty_roll_ang;
+      ee->aw_log.dbg_off_ang = duty_roll_ang; // デバッグ用一時フィールド
     }
   }
   offset += sen_kanayama_dw;
+  ee->aw_log.dbg_off_kny = sen_kanayama_dw; // デバッグ用一時フィールド
 
   // turn_angle_fb.w_gain(2026-08-23追加): ee->ang.i_biasをw目標offsetへ
   // 直接加算する(sen_kanayama_dwと同じ経路)。duty_rollへ直接足すgain/
   // gain_i/gain_dと違い、既存gyro_pid.bの積分(w_error_i)と戦わない
   // (calc_angle_velocity_ctrl()側のturn_angle_fb_gainコメント参照)。
+  ee->aw_log.dbg_off_wgain = 0;
   if (param_->turn_angle_fb.enable &&
       angle_i_bias_active(tgt->motion_type)) {
-    offset += param_->turn_angle_fb.w_gain * ee->ang.i_bias;
+    ee->aw_log.dbg_off_wgain = // デバッグ用一時フィールド
+        param_->turn_angle_fb.w_gain * ee->ang.i_bias;
+    offset += ee->aw_log.dbg_off_wgain;
   }
   ee->aw_log.duty_roll_before = (tgt->ego_in.w + offset);
 
@@ -1080,28 +1108,25 @@ ControlLaw::calc_angle_velocity_ctrl() {
                           prev_mt == MotionType::SLA_BACK_STR);
     const bool now_turn = (tgt_val_->motion_type == MotionType::SLALOM ||
                           tgt_val_->motion_type == MotionType::SLA_BACK_STR);
-    // turn_angle_fb(2026-08-23、当初SLALOM/SLA_BACK_STR限定で実装したが、
-    // STRAIGHT走行中もkim_thetaが無補正で単調にドリフトし続ける問題が発覚
-    // したため、calc_angle_i_bias()がi_biasを計算する対象と同じ範囲
-    // (angle_i_bias_active()、探索モード除く実質全モーション)に拡張する)。
-    const bool was_active = angle_i_bias_active(prev_mt);
-    const bool now_active = angle_i_bias_active(tgt_val_->motion_type);
-    if ((!was_active && now_active) || (was_turn && !now_turn)) {
-      // 対象区間への突入、および旋回(SLALOM/SLA_BACK_STR)からの離脱で
-      // 積分をゼロクリアする。後者を入れないと旋回中に貯めた「追いつく
+    // turn_angle_fb直接duty注入(gain/gain_i/gain_d)はSLALOM/SLA_BACK_STR
+    // 限定(2026-08-23、STRAIGHT等の定常保持はw_gain/offset経路に一本化した
+    // ため、直接注入側の積分・D項状態はturn区間の出入りだけを見ればよい)。
+    if (was_turn != now_turn) {
+      // 旋回への突入、および旋回(SLALOM/SLA_BACK_STR)からの離脱で積分を
+      // ゼロクリアする。離脱時にクリアしないと旋回中に貯めた「追いつく
       // ための蓄積値」がそのままSTRAIGHTへ持ち越され、既に旋回は終わって
       // いるのに古い積分値が余計な補正をかけ続けて発振の引き金になる
       // (2026-08-23、20260823_054151.csv: 旋回直後のSTRAIGHTでw_lp±6rad/s
       // 級の振動、idx820付近まで約250tick持続してから収束)。
       turn_angle_fb_integral_ = 0.0f;
     }
-    if (now_active) {
-      // 対象区間内でのmotion_type切り替え全て(SLALOM<->SLA_BACK_STR境界
-      // 含む)でD項の前回値を現在値に同期する。img_angはmotion_type境界で
-      // 新セグメントの基準に切り替わりi_bias(=img_ang-kim.theta)が
-      // 不連続にジャンプするため、そのまま差分を取ると1tickだけ巨大な
-      // 偽の変化量を拾ってしまう(2026-08-23、20260823_052617.csvで
-      // duty急変・大振動を確認して発覚)。
+    if (now_turn) {
+      // 旋回区間内でのmotion_type切り替え(SLALOM<->SLA_BACK_STR境界含む)
+      // でD項の前回値を現在値に同期する。img_angはmotion_type境界で新
+      // セグメントの基準に切り替わりi_bias(=img_ang-kim.theta)が不連続に
+      // ジャンプするため、そのまま差分を取ると1tickだけ巨大な偽の変化量を
+      // 拾ってしまう(2026-08-23、20260823_052617.csvでduty急変・大振動を
+      // 確認して発覚)。
       turn_angle_fb_i_bias_prev_ = ee->ang.i_bias;
     }
     if (was_turn && !now_turn) {
@@ -1247,15 +1272,22 @@ ControlLaw::calc_angle_velocity_ctrl() {
     // 自体は正しい符号・大きさで実測とのズレを検出できている(20260823_040833.
     // csv解析: 旋回終盤で-2.7deg相当、目標-45degに対し実測-42.3degの不足と
     // 一致)が、既存kc_gain(=gyro_pid.c*i_bias、他モーションと共用)だけでは
-    // 力不足。当初SLALOM/SLA_BACK_STR限定で追加していたが、STRAIGHT走行中も
-    // kim_thetaが無補正で単調ドリフトし続ける問題が発覚した(2026-08-23、
-    // 20260823_053234.csv: STRAIGHT区間708tickでkim_thetaが0→5.1degへ単調
-    // 増加)ため、calc_angle_i_bias()がi_biasを計算する対象と同じ範囲
-    // (angle_i_bias_active())に適用範囲を拡張する(structs.hpp
-    // turn_angle_fb_t参照)。
+    // 力不足。
+    // [2026-08-23 修正] duty_rollへの直接加算(このgain/gain_i/gain_d)は
+    // STRAIGHTを含む全angle_i_bias_active()区間で有効にしていたが、
+    // duty_rollへ一定バイアスを足し続ける形は既存gyro_pid.bの積分
+    // (w_error_i)から見ると「外乱」でしかなく、長時間続くSTRAIGHTでは
+    // kb_gainがそれを正確に打ち消してしまい実質無効化していた
+    // (20260823_062913.csv/062821.csv、kb_gainが逆算したturn_angle_fb出力と
+    // ほぼ完全に相殺)。この直接加算はSLALOM/SLA_BACK_STRの速い過渡(kb_gainが
+    // 反応する前の短時間)にのみ効かせ、STRAIGHT等の定常保持はw_gain
+    // (calc_pid_val_ang_vel()のoffset経由、gyro_pid.bと戦わない経路)に
+    // 一本化する(structs.hpp turn_angle_fb_t参照)。
+    const bool turn_transient =
+        tgt_val_->motion_type == MotionType::SLALOM ||
+        tgt_val_->motion_type == MotionType::SLA_BACK_STR;
     float turn_angle_fb_gain = 0.0f;
-    if (param_->turn_angle_fb.enable &&
-        angle_i_bias_active(tgt_val_->motion_type)) {
+    if (param_->turn_angle_fb.enable && turn_transient) {
       turn_angle_fb_gain = param_->turn_angle_fb.gain * ee->ang.i_bias;
 
       // ang.i_bias専用の積分(2026-08-23): 既存w_error_i(アンチワインド
@@ -1497,6 +1529,7 @@ void ControlLaw::clear_ctrl_val() {
   sen_kanayama_dw = 0;
   turn_angle_fb_integral_ = 0;
   turn_angle_fb_i_bias_prev_ = 0;
+  wall_found_prev_ = false;
   ee->v.error_i = ee->v.error_d = ee->v.error_dd = 0;
   ee->dist.error_i = ee->dist.error_d = ee->dist.error_dd = 0;
   ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;

@@ -970,6 +970,12 @@ typedef struct {
   // -1: duty_roll を-方向にこれ以上振っても効かない(duty_r-側 or duty_l+側で頭打ち)
   //  0: 余裕あり
   float sat_roll_dir;
+  // デバッグ用(2026-08-23): calc_pid_val_ang_vel()のoffset内訳を直接確認する
+  // ための一時フィールド。offset=dbg_off_ang+dbg_off_kny+dbg_off_wgain
+  // (duty_roll_before=ego_in.w+offsetとの整合性確認用)。
+  float dbg_off_ang;
+  float dbg_off_wgain;
+  float dbg_off_kny;
 } aw_log_t;
 
 typedef struct {
@@ -1535,6 +1541,9 @@ typedef struct {
   real16_T duty_roll_before;
   real16_T mpc_d_estimated;
   real16_T sat_roll_dir; // apply_duty_limitter()判定のduty飽和方向(+1/-1/0)
+  real16_T dbg_off_ang;   // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
+  real16_T dbg_off_wgain; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
+  real16_T dbg_off_kny;   // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
 
   real16_T accel_x; // ASM330LHH加速度計X軸[mm/s^2], gain補正前
   real16_T accel_y; // ASM330LHH加速度計Y軸[mm/s^2], gain補正前
@@ -1781,6 +1790,9 @@ typedef struct {
   float accel_x_corr = 139; // gyro_pos補正後(車体基準点, 車体座標系)[mm/s^2]
   float accel_y_corr = 140;
   float accel_z_corr = 141;
+  float dbg_off_ang   = 142; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
+  float dbg_off_wgain = 143; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
+  float dbg_off_kny   = 144; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
 } LogStruct11;
 
 #endif

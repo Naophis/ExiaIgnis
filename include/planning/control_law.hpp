@@ -133,6 +133,11 @@ private:
   // 参照、旋回開始でゼロクリア)。
   float turn_angle_fb_integral_    = 0.0f;
   float turn_angle_fb_i_bias_prev_ = 0.0f; // D項用、旋回開始でゼロクリア
+  // ego_in.ang(=生ジャイロ積分ヘディング、sensing_task.cpp calc_vel()
+  // 参照)は壁を検出していない間は無補正でドリフトし続ける。壁を新規に
+  // 検出した瞬間(calc_sensor_pid()参照)にゼロクリアして、信頼できる基準
+  // (壁と正対=0)へスナップし直すための直前tickの壁検出状態。
+  bool  wall_found_prev_           = false;
 
   // ---- デューティ中間値 ----
   float duty_c                    = 0.0f;

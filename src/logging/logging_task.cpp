@@ -325,6 +325,9 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.duty_roll_before = floatToHalf(ee->aw_log.duty_roll_before);
     ld.mpc_d_estimated = floatToHalf(ee->aw_log.mpc_d_estimated);
     ld.sat_roll_dir = floatToHalf(ee->aw_log.sat_roll_dir);
+    ld.dbg_off_ang = floatToHalf(ee->aw_log.dbg_off_ang);
+    ld.dbg_off_wgain = floatToHalf(ee->aw_log.dbg_off_wgain);
+    ld.dbg_off_kny = floatToHalf(ee->aw_log.dbg_off_kny);
   }
 
   ld.accel_x = floatToHalf(sr->accel_x.data);
@@ -524,6 +527,9 @@ void LoggingTask::dump_csv() const {
   printf("accel_x_corr:float:%d\n", (int)sizeof(ls11.accel_x_corr));
   printf("accel_y_corr:float:%d\n", (int)sizeof(ls11.accel_y_corr));
   printf("accel_z_corr:float:%d\n", (int)sizeof(ls11.accel_z_corr));
+  printf("dbg_off_ang:float:%d\n", (int)sizeof(ls11.dbg_off_ang));
+  printf("dbg_off_wgain:float:%d\n", (int)sizeof(ls11.dbg_off_wgain));
+  printf("dbg_off_kny:float:%d\n", (int)sizeof(ls11.dbg_off_kny));
 
   fflush(stdout);
   sleep_ms(50);
@@ -774,6 +780,9 @@ void LoggingTask::dump_csv() const {
     ls11.accel_x_corr = halfToFloat(e.accel_x_corr);
     ls11.accel_y_corr = halfToFloat(e.accel_y_corr);
     ls11.accel_z_corr = halfToFloat(e.accel_z_corr);
+    ls11.dbg_off_ang = halfToFloat(e.dbg_off_ang);
+    ls11.dbg_off_wgain = halfToFloat(e.dbg_off_wgain);
+    ls11.dbg_off_kny = halfToFloat(e.dbg_off_kny);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));
