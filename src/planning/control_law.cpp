@@ -854,27 +854,21 @@ ControlLaw::calc_pid_val_ang_vel() {
   ee->w_kf.error_d = ee->w_kf.error_p;
 
   float offset = 0;
-  ee->aw_log.dbg_off_ang = 0;
   if (param_->torque_mode == 2) {
     if (!(tgt->motion_type == MotionType::PIVOT ||
           tgt->motion_type == MotionType::FRONT_CTRL)) {
       offset += duty_roll_ang;
-      ee->aw_log.dbg_off_ang = duty_roll_ang; // デバッグ用一時フィールド
     }
   }
   offset += sen_kanayama_dw;
-  ee->aw_log.dbg_off_kny = sen_kanayama_dw; // デバッグ用一時フィールド
 
   // turn_angle_fb.w_gain(2026-08-23追加): ee->ang.i_biasをw目標offsetへ
   // 直接加算する(sen_kanayama_dwと同じ経路)。duty_rollへ直接足すgain/
   // gain_i/gain_dと違い、既存gyro_pid.bの積分(w_error_i)と戦わない
   // (calc_angle_velocity_ctrl()側のturn_angle_fb_gainコメント参照)。
-  ee->aw_log.dbg_off_wgain = 0;
   if (param_->turn_angle_fb.enable &&
       angle_i_bias_active(tgt->motion_type)) {
-    ee->aw_log.dbg_off_wgain = // デバッグ用一時フィールド
-        param_->turn_angle_fb.w_gain * ee->ang.i_bias;
-    offset += ee->aw_log.dbg_off_wgain;
+    offset += param_->turn_angle_fb.w_gain * ee->ang.i_bias;
   }
   ee->aw_log.duty_roll_before = (tgt->ego_in.w + offset);
 
@@ -1229,42 +1223,12 @@ ControlLaw::calc_angle_velocity_ctrl() {
       ang_sum = 0;
     }
 
-    // 旋回終端ブレーキ(2026-08-23): SLALOM/SLA_BACK_STRでff_duty_rollが
-    // ideal_wと共にゼロへ落ちた後、実測角速度(w_lp)が慣性で収束しきらず
-    // 残留する問題への対策(20260823_032339.csv/20260823_032239.csvで確認、
-    // SLA_BACK_STR突入後もw_lpが収束せず増大するケースあり)。gyro_pid.p/dは
-    // FF主導設計を保つため極小(p=0.000325等)のままにし、計画角速度が
-    // ほぼゼロ(=FFがもう仕事をしていない)かつ実残差が大きい間だけ、
-    // 専用ゲインturn_end_brake.p/dに切り替えて能動的に残留回転を止める。
-    //
-    // [2026-08-23 修正] 当初SLALOMも対象に含めていたが、|ideal_w|<w_thは
-    // 旋回終盤だけでなく旋回"開始"直後(idealwがまだ0から立ち上がる途中)にも
-    // 成立してしまい、旋回入り口で誤爆して過大なduty(飽和→発振)を起こした
-    // (20260823_033928.csvで確認)。SLA_BACK_STRは常にideal_w=0で立ち上がり
-    // 局面が存在しないため、SLA_BACK_STRのみを対象にして誤爆を構造的に排除する。
-    //
-    // [単位に関する注意] duty_roll(=kp_gain+ki_gain+...の合計)はduty%では
-    // なくトルクとして扱われ、summation_duty()で
-    // torque*Resist/(Km*gear_a/gear_b)/battery*100 (≈4650倍、実測値から算出)
-    // という変換を経てduty%になる(control_law.cpp:1305-1313)。通常の
-    // gyro_pid.p=0.000325が極小なのはこの増幅を見込んだ値であり、
-    // turn_end_brake.p/dも同じ増幅を受けることに注意(小さい値で十分効く)。
-    const bool turn_end_brake_active =
-        param_->turn_end_brake.enable &&
-        tgt_val_->motion_type == MotionType::SLA_BACK_STR &&
-        ABS(tgt_val_->ego_in.w) < param_->turn_end_brake.w_th &&
-        ABS(ee->w.error_p) > param_->turn_end_brake.err_th;
-
-    auto kp_gain = (turn_end_brake_active ? param_->turn_end_brake.p
-                                           : param_->gyro_pid.p) *
-                   ee->w.error_p;
+    auto kp_gain = param_->gyro_pid.p * ee->w.error_p;
     auto ki_gain = param_->gyro_pid.i * diff_ang;
     auto kb_gain = param_->gyro_pid.b * w_error_i;
     // auto kb_gain = param_->gyro_pid.b * ee->w.error_i;
     auto kc_gain = param_->gyro_pid.c * ee->ang.i_bias;
-    auto kd_gain = (turn_end_brake_active ? param_->turn_end_brake.d
-                                           : param_->gyro_pid.d) *
-                   w_error_d;
+    auto kd_gain = param_->gyro_pid.d * w_error_d;
     limitter(kp_gain, ki_gain, kb_gain, kd_gain,
              param_->gyro_pid_gain_limitter);
 
@@ -1331,21 +1295,8 @@ ControlLaw::calc_angle_velocity_ctrl() {
       turn_angle_fb_gain += param_->turn_angle_fb.gain_d * i_bias_d;
     }
 
-    // SLALOM/SLA_BACK_STR限定の角速度PID(積分b+減衰d)ブースト(2026-08-23):
-    // gyro_pid.bを直接上げると収束は改善するが発振しやすい(実機確認)。積分の
-    // 位相遅れをdの増量で相殺するため、bとdを必ずペアで上乗せする
-    // (structs.hpp turn_w_pid_t参照、gyro_pid.b/d自体は他モーションと共用の
-    // ため変更しない)。
-    float turn_w_b_gain = 0.0f, turn_w_d_gain = 0.0f;
-    if (param_->turn_w_pid.enable &&
-        (tgt_val_->motion_type == MotionType::SLALOM ||
-         tgt_val_->motion_type == MotionType::SLA_BACK_STR)) {
-      turn_w_b_gain = param_->turn_w_pid.b * w_error_i;
-      turn_w_d_gain = param_->turn_w_pid.d * w_error_d;
-    }
-
     duty_roll = kp_gain + ki_gain + kb_gain + kc_gain + kd_gain +
-                turn_angle_fb_gain + turn_w_b_gain + turn_w_d_gain +
+                turn_angle_fb_gain +
                 (ee->ang_log.gain_z - ee->ang_log.gain_zz) * dt_;
 
     ee->ang_log.gain_zz = ee->ang_log.gain_z;

@@ -258,26 +258,6 @@ gyro_pid:
   mpc_max_torque: 0.0025
   mpc_observer_k: 0.25  # Disturbance observer gain (0.01=slow, 0.05=default, 0.1-0.2=aggressive)
 
-# 旋回終端ブレーキ(2026-08-23追加、要実機チューニング)。
-# SLA_BACK_STRでff_duty_rollがideal_w=0と共にゼロへ落ちた後、実測角速度(w_lp)
-# が慣性で収束しきらず残る問題への対策(20260823_032339.csv/20260823_032239.csv
-# で確認)。計画角速度がw_th未満(常時0)かつ残差がerr_thを超える間だけ、
-# gyro_pid.p/dの代わりにp/dを使う。
-#
-# [重要] duty_roll(=p*error等の合計)はduty%ではなくトルクとして扱われ、
-# summation_duty()内でtorque*Resist/(Km*gear_a/gear_b)/battery*100
-# (≈4650倍、Resist=4.4/km_gear=Km*gear_a/gear_b≈0.00775/battery≈12.2から算出)
-# という変換を経てduty%になる。通常のgyro_pid.p=0.000325が極小なのはこの
-# 増幅前提の値であり、ここも同じ増幅を受ける。
-# p=0.02, d=0.01(通常比60/34倍)で20260823_033928.csvにて即フル飽和→
-# 発振(duty ±99.9で往復)を確認したため、7〜4倍程度まで大幅に縮小した。
-turn_end_brake:
-  enable: 0
-  w_th: 0.5     # |ideal_w|がこれ未満で「終端」とみなす(rad/s)。SLA_BACK_STRは常時0なので実質無条件
-  err_th: 0.3   # |w.error_p|がこれ以上でブレーキ発動(rad/s)
-  p: 0.0025     # 通常gyro_pid.p(0.000325)の約7.7倍
-  d: 0.0012     # 通常gyro_pid.d(0.000295)の約4倍
-
 # 旋回角度不足への追加角度フィードバック(2026-08-23追加、要実機チューニング)。
 # ee->ang.i_bias(=img_ang-kim.theta)は正しく実測とのズレを検出しているが
 # (20260823_040833.csv解析: 旋回終盤で-2.7deg相当、目標-45degに対し実測
@@ -323,21 +303,6 @@ turn_angle_fb:
   # でΔw≈0.021rad/s(w_gain=0.5)を狙った初期仮値だが、繰り返し発振を踏まえ
   # 保守的に0.3から始める。
   w_gain: 0.3
-
-# SLALOM/SLA_BACK_STR限定の角速度PID(積分b+減衰d)ブースト(2026-08-23追加、
-# 要実機チューニング)。gyro_pid.b(0.0000595)を直接上げると収束は改善するが
-# 発振しやすい(実機確認)ため、gyro_pid.b/d自体は変更せず、SLALOM/SLA_BACK_STR
-# 限定でbとdを両方上乗せする(dはbより比率を大きく、位相遅れによる発振を
-# 抑える狙い)。b=0.00006(既存gyro_pid.bとほぼ同量を追加、合計で約2倍)、
-# d=0.0009(既存gyro_pid.dの約3倍を追加)は初期仮値、要実機検証。
-# 2026-08-23: b=0.00006/d=0.0009で実機発散(20260823_050137.csv、
-# duty±99.9%全飽和、kim_thetaが-51degまでオーバーシュートしSLA_BACK_STR中
-# w_lpが±18rad/sで暴走)。積分(b)経路はアンチワインドヒステリシス機構と
-# 相性が悪く根本的に発振しやすいと判断、無効化のまま維持する。
-turn_w_pid:
-  enable: 0
-  b: 0.00006
-  d: 0.0009
 
 angle_pid: # pid for angle
   # p: 44.50

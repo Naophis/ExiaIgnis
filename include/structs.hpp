@@ -546,21 +546,6 @@ typedef struct {
   float windup_deg = 0;
 } kanayama_t;
 
-// 旋回終端(SLALOM/SLA_BACK_STR)でff_duty_rollがideal_wと共にゼロへ落ちた後、
-// 実測角速度(w_lp)が慣性で収束しきらず残ってしまう問題への対策
-// (2026-08-23、20260823_032339.csv/20260823_032239.csvで解析)。
-// |ego_in.w|(計画角速度)がw_th未満まで小さくなり、かつ|w.error_p|(残差)が
-// err_thを超えている間だけ、通常のgyro_pid.p/dの代わりにこのp/dを使う。
-// gyro_pid.p/d自体はFF主導設計を維持するため極小のまま変更しない
-// (control_law.cpp calc_angle_velocity_ctrl()参照)。
-typedef struct {
-  int enable = 0;
-  float w_th = 0.5f;   // |ideal_w|がこれ未満で「終端」とみなす(rad/s)
-  float err_th = 0.3f; // |w.error_p|がこれ以上でブレーキ発動(rad/s)
-  float p = 0.0f;
-  float d = 0.0f;
-} turn_end_brake_t;
-
 // 旋回角度不足(SLALOM/SLA_BACK_STR)への追加角度フィードバック(2026-08-23)。
 // ee->ang.i_bias(=img_ang-kim.theta、calc_angle_i_bias()参照)は実測との
 // ズレを正しい符号・大きさで検出できている(20260823_040833.csv解析:
@@ -617,18 +602,6 @@ typedef struct {
   // 残す(gyro_pid.bの反応は遅いため短時間なら相殺されない)。0なら無効。
   float w_gain = 0.0f;
 } turn_angle_fb_t;
-
-// SLALOM/SLA_BACK_STR限定の角速度PID(積分b+減衰d)ブースト(2026-08-23)。
-// gyro_pid.b(角速度誤差の積分)を直接上げると収束は改善するが、積分特有の
-// 位相遅れにより発振しやすくなる(実機確認済み)。bを増やすときは同時にd
-// (減衰)も増やして位相余裕を確保するのがセオリー。gyro_pid.b/dはSTRAIGHT等
-// 他モーションと共用のため変更せず、SLALOM/SLA_BACK_STR限定の追加項として
-// 分離する(control_law.cpp calc_angle_velocity_ctrl()参照)。
-typedef struct {
-  int enable = 0;
-  float b = 0.0f; // w_error_iに掛けてduty_rollへ追加(gyro_pid.bとは別枠)
-  float d = 0.0f; // w_error_dに掛けてduty_rollへ追加(gyro_pid.dとは別枠、bとペアで減衰を確保)
-} turn_w_pid_t;
 
 // ASM330LHHの取り付け位置(車体基準点=v/wの基準点からのオフセット、mm)・
 // 向き(センサー座標系→車体座標系への回転角、deg)。EgoEstimatorで
@@ -712,9 +685,7 @@ typedef struct {
   pid_param_t motor_pid3;
   pid_param_t gyro_pid;
   pid_param_t gyro_pid_gain_limitter;
-  turn_end_brake_t turn_end_brake;
   turn_angle_fb_t turn_angle_fb;
-  turn_w_pid_t turn_w_pid;
   pid_param_t str_ang_pid;
   // 高速走行(非探索)時の壁PD専用ゲイン。str_ang_pidは.p/.iを探索モードの
   // P/D、.b/.dを高速モードのP/Dとして兼用する紛らわしい構成だったため、
@@ -970,12 +941,6 @@ typedef struct {
   // -1: duty_roll を-方向にこれ以上振っても効かない(duty_r-側 or duty_l+側で頭打ち)
   //  0: 余裕あり
   float sat_roll_dir;
-  // デバッグ用(2026-08-23): calc_pid_val_ang_vel()のoffset内訳を直接確認する
-  // ための一時フィールド。offset=dbg_off_ang+dbg_off_kny+dbg_off_wgain
-  // (duty_roll_before=ego_in.w+offsetとの整合性確認用)。
-  float dbg_off_ang;
-  float dbg_off_wgain;
-  float dbg_off_kny;
 } aw_log_t;
 
 typedef struct {
@@ -1541,9 +1506,6 @@ typedef struct {
   real16_T duty_roll_before;
   real16_T mpc_d_estimated;
   real16_T sat_roll_dir; // apply_duty_limitter()判定のduty飽和方向(+1/-1/0)
-  real16_T dbg_off_ang;   // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
-  real16_T dbg_off_wgain; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
-  real16_T dbg_off_kny;   // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
 
   real16_T accel_x; // ASM330LHH加速度計X軸[mm/s^2], gain補正前
   real16_T accel_y; // ASM330LHH加速度計Y軸[mm/s^2], gain補正前
@@ -1790,9 +1752,6 @@ typedef struct {
   float accel_x_corr = 139; // gyro_pos補正後(車体基準点, 車体座標系)[mm/s^2]
   float accel_y_corr = 140;
   float accel_z_corr = 141;
-  float dbg_off_ang   = 142; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
-  float dbg_off_wgain = 143; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
-  float dbg_off_kny   = 144; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
 } LogStruct11;
 
 #endif
