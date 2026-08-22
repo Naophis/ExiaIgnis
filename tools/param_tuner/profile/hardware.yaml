@@ -35,8 +35,8 @@ motor_r_cw_ccw_type: 1 # 1: duty > 0 -> true, 0: duty < 0 -> true
 motor_l_cw_ccw_type: 0 # 1: duty > 0 -> true, 0: duty < 0 -> true
 # debug for motor io direction
 motor_debug_mode: 0
-motor_debug_mode_duty_r: 10
-motor_debug_mode_duty_l: -10
+motor_debug_mode_duty_r: -10
+motor_debug_mode_duty_l: 10
 
 MotorHz: 37500
 SuctionHz: 42500
@@ -46,10 +46,19 @@ SuctionResolution: 40
 # roll
 # Ke: 0.00172 # 大：逆起電力大
 # Ke: 0.002560632779648483  # 大：逆起電力大
+# データシート(NFP-D0812-1-3.7)のNo-load speed/current/Rated voltageから
+# Ke=0.0014437[V/(rad/s)]を逆算したが、実機のt2200ターンでduty飽和
+# 30-35%→40.7%、v_c2のideal_vからのズレstdev 85/64→138.6mm/sと明確に悪化
+# したためリバート(2026-08-22)。ギアボックス損失等、モーター単体のデータ
+# シート値では捉えきれない実効特性差があると考えられる。経験的に合って
+# いた旧値の方を正とする。
 Ke: 0.000945  # 大：逆起電力大
 # Km: 0.00260946 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00130473 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00145 # トルク定数：　大-> 縦系の出力小
+# データシートのTorque Constant(13.3 g・cm/A)から0.0013043[Nm/A]を逆算した
+# が、Ke変更と同時に実機で発振悪化を確認したためリバート(2026-08-22、詳細
+# は上のKeコメント参照)。
 Km: 0.00160 # トルク定数：　大-> 縦系の出力小
 Lm: 0.00000275 # 大：横系の出力大
 
@@ -384,14 +393,37 @@ gyro_param:
   list_size: 256
   loop_size: 5
 
+gyro_pos:
+  x: 5.123 #mm
+  y: -3.125 #mm
+  z: 0.0 #mm
+  x_theta: 0.0 #deg
+  y_theta: 0.0 #deg
+  # 車体基準(前方)に対しセンサーが左(CCW)に90deg回転して実装されている。
+  # このコードベースのyaw符号規約(w>0=左旋回/CCW、本セッションのduty
+  # (+10,-10)→w=-31.19=右旋回で確認済み)に合わせ、センサー座標系→車体
+  # 座標系への回転として+90degとした。要実機検証(静止時は影響なし。
+  # 旋回中に向心成分が想定通りの軸に出るかで符号を確認すること)。
+  z_theta: 90.0 #deg
+
 # gyro2_param:
 #   # gyro_w_gain_left: 0.00246095
 #   # gyro_w_gain_right: 0.00246095
 #   gyro_w_gain_left: 0.0024475
 #   gyro_w_gain_right: 0.0024475
 #   lp_delay: 1
-# accel_x_param: # not use
-#   gain: 77.5 # 4g
+# 2026-08-22: ASM330LHHの加速度計を有効化(±16g, ODR3333Hz)。
+# dump1()のmin/max追跡(stillness gate付き, 合成加速度|a|≈1gのサンプルのみ
+# 採用)による多姿勢重力校正で確定。true=(raw-offset)*gain。
+accel_x_param:
+  gain: 0.9485
+  offset: 122.0
+accel_y_param:
+  gain: 0.9411
+  offset: -375.7
+accel_z_param: # ピッチング等でのX/Y軸への重力漏れ込み把握用
+  gain: 0.9245
+  offset: 79.0
 
 # comp_v_param:
 #   enc_v_lp: 0
