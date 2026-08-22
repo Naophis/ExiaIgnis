@@ -436,10 +436,21 @@ class SerialManager extends EventEmitter {
   private switchToBinaryMode() {
     if (!this.port) return;
     const dump = this.dump;
+    const totalBytes = dump.totalBytes;
+
+    // A garbled start___ line (serial noise) can yield a non-numeric or
+    // negative byte count. Without totalBytes we don't know how many bytes
+    // to frame, so there's nothing safe to do but drop the dump and stay in
+    // line mode - better than misframing the stream.
+    if (!Number.isFinite(totalBytes) || totalBytes <= 0) {
+      this.emit("log", `[LoggingTask] invalid start___ byte count (${dump.totalBytes}); dropping dump`);
+      this.dump = freshDumpState();
+      return;
+    }
+
     const fieldCount = dump.dataStruct.length;
     const recordByteSize = dump.dataStruct.reduce((s, d) => s + d.size, 0);
-    const totalBytes = dump.totalBytes;
-    const recordNum = Math.floor(totalBytes / recordByteSize);
+    const recordNum = recordByteSize > 0 ? Math.floor(totalBytes / recordByteSize) : 0;
 
     this.binaryMode = true;
     if (this.parser) this.port.unpipe(this.parser as NodeJS.WritableStream);
@@ -458,21 +469,34 @@ class SerialManager extends EventEmitter {
     const fieldSizes = dump.dataStruct.map((d) => d.size);
 
     parser.once("data", (binaryData: Buffer) => {
-      const rows = new Array<string>(recordNum + 1);
-      rows[0] = header;
-      const record = new Array<number>(fieldCount);
-      for (let j = 0; j < recordNum; j++) {
-        let offset = j * recordByteSize;
-        for (let i = 0; i < fieldCount; i++) {
-          record[i] = fieldReaders[i](binaryData, offset);
-          offset += fieldSizes[i];
+      // dataStruct comes from ready___-preceded name:type:size lines; if
+      // that header was missing or corrupted (e.g. dropped by serial noise,
+      // or start___ arrived without a ready___ first), fieldCount/recordByteSize
+      // are 0 and there's no valid layout to parse - discard the payload
+      // instead of building a bogus (or, for NaN/negative recordNum, crashing)
+      // array.
+      if (fieldCount === 0 || recordByteSize <= 0) {
+        this.emit(
+          "log",
+          `[LoggingTask] dump header missing/corrupt (fields=${fieldCount}, recordByteSize=${recordByteSize}); discarding ${binaryData.length} bytes`
+        );
+      } else {
+        const rows = new Array<string>(recordNum + 1);
+        rows[0] = header;
+        const record = new Array<number>(fieldCount);
+        for (let j = 0; j < recordNum; j++) {
+          let offset = j * recordByteSize;
+          for (let i = 0; i < fieldCount; i++) {
+            record[i] = fieldReaders[i](binaryData, offset);
+            offset += fieldSizes[i];
+          }
+          rows[j + 1] = record.join(",");
         }
-        rows[j + 1] = record.join(",");
+        const content = rows.join("\n") + "\n";
+        this.writeLogFile(dump.fileName, content);
+        this.emit("log", `[LoggingTask] dump done: ${recordNum} records -> ${dump.fileName}`);
+        this.emit("saved", { type: "csv", file: dump.fileName });
       }
-      const content = rows.join("\n") + "\n";
-      this.writeLogFile(dump.fileName, content);
-      this.emit("log", `[LoggingTask] dump done: ${recordNum} records -> ${dump.fileName}`);
-      this.emit("saved", { type: "csv", file: dump.fileName });
       this.dump = freshDumpState();
       this.switchLineMode();
     });
