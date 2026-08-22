@@ -197,7 +197,7 @@ motor_pid2:
   #AS5147P 
   mode: 7
 
-  p: 0.00001325
+  p: 0.00001275
   i: 0.00000425
   b: 0.00
   d: 0.0000175
@@ -351,10 +351,14 @@ str_ang_pid:
 # (calc_sensor_pid()の非探索分岐)。旧str_ang_pid.b/dの値をp/dに移設。
 # I項は2026-08-22にconditional integration方式で新規追加(要実機チューニング、
 # 保守的な初期値)。
+# 2026-08-23: kanayama_straight(ky/ki/k_theta)を並行実行する「いいとこ取り」
+# 構成に変更。速い成分はこちらのP+Dが担当、定常偏差の解消はkanayama_straight
+# のkiに一本化するため、二重積分を避けてi=0にした(旧値0.00375はコメントで保持)。
 str_ang_pid_fast:
   mode: 2
   p: 0.0375
-  i: 0.00375
+  # i: 0.00375 # kanayama_straight.kiと二重積分になるため0に変更(2026-08-23)
+  i: 0
   d: 0.0325
   c: 0
 

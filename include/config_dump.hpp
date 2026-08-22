@@ -234,6 +234,7 @@ inline void convertToJson(const kanayama_t& src, JsonVariant dst) {
     dst["kx"]         = src.kx;
     dst["ky"]         = src.ky;
     dst["k_theta"]    = src.k_theta;
+    dst["ki"]         = src.ki;
     dst["enable"]     = (int)src.enable;
     dst["windup"]     = (int)src.windup;
     dst["windup_deg"] = src.windup_deg;
@@ -471,6 +472,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["enable_mpc"]               = (int)src.enable_mpc;
     dst["dia90_offset"]             = src.dia90_offset;
     dst["kanayama"]                 = src.kanayama;
+    dst["kanayama_straight"]        = src.kanayama_straight;
     {
         JsonArray a = dst["axel_degenerate_x"].to<JsonArray>();
         for (float v : src.axel_degenerate_x) a.add(v);

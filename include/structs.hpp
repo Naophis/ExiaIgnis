@@ -537,6 +537,10 @@ typedef struct {
   float kx = 0;
   float ky = 0;
   float k_theta = 0;
+  float ki = 0; // STRAIGHT用カスケードのI項ゲイン(calc_sensor_pid()参照)。
+                // 積分値自体はstr_ang_pid_fast用のee->sen.error_iを共用
+                // (条件付き積分・絶対値クランプもstr_ang_pid_fast側の
+                // antiwindup/windup_dead_bind/windup_i_maxをそのまま使う)。
   char enable = 0;
   char windup = 0;
   float windup_deg = 0;
@@ -806,6 +810,10 @@ typedef struct {
   char enable_mpc = 0;
   float dia90_offset = 0;
   kanayama_t kanayama;
+  // STRAIGHT壁追従用Kanayamaカスケード(calc_sensor_pid()参照)。kxは未使用。
+  // enable=0(既定)はstr_ang_pid_fastのduty直接注入のまま、enable=1で
+  // ey(壁センサー横偏差)→Δw→既存gyro_pidという経路に切り替える。
+  kanayama_t kanayama_straight;
 
   // 軸退化ゲインテーブル (control_law で interp1d に渡す)
   std::vector<float> axel_degenerate_x;

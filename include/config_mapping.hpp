@@ -477,6 +477,7 @@ inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
     from_json_field(src, "kx", dst.kx);
     from_json_field(src, "ky", dst.ky);
     from_json_field(src, "k_theta", dst.k_theta);
+    from_json_field(src, "ki", dst.ki);
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "windup", dst.windup);
     from_json_field(src, "windup_deg", dst.windup_deg);
@@ -761,6 +762,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "enable_mpc", dst.enable_mpc);
     from_json_field(src, "dia90_offset", dst.dia90_offset);
     from_json_nested(src, "kanayama", dst.kanayama);
+    from_json_nested(src, "kanayama_straight", dst.kanayama_straight);
     // 軸退化ゲインテーブル (hardware.yaml: axel_degenerate_*)
     from_json_vector(src, "axel_degenerate_x",          dst.axel_degenerate_x);
     from_json_vector(src, "axel_degenerate_y",          dst.axel_degenerate_y);

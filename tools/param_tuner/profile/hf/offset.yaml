@@ -248,3 +248,22 @@ kanayama:
   enable: 0
   windup: 1
   windup_deg: 2.5
+
+# STRAIGHT壁追従のKanayamaカスケード(2026-08-22追加、要実機チューニング)。
+# kxは未使用(kanayama_tを流用しているだけ)。
+# 初回実機テスト(ky=0.0005)ではeyが-35mmまで単調に発散し全く収束しなかった
+# ため、kyを大幅に引き上げた(2026-08-22)。
+# ky=0.03のみだとeyが-15→-9mm付近で頭打ちになり定常偏差が残ったため、
+# I項を追加(ki)。str_ang_pid_fastのwindup_i_max(=90)でクランプされる
+# ee->sen.error_iを使うので、ki=0.006なら最大でも0.5rad/s程度の寄与。
+# 2026-08-23: str_ang_pid_fast(速いP+D直接duty)より収束が遅いと判明したため
+# 排他をやめ、str_ang_pid_fast.i=0にした上で両方を並行実行する「いいとこ取り」
+# 構成に変更(control_law.cpp calc_sensor_pid()参照)。
+kanayama_straight:
+  kx: 0
+  ky: 0.03
+  ki: 0.006
+  k_theta: 0.0005
+  enable: 1
+  windup: 1
+  windup_deg: 2.5

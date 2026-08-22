@@ -259,6 +259,7 @@ ControlLaw::calc_sensor_pid() {
   ee->sen.error_d = ee->sen.error_p - ee->sen.error_d;
 
   if (search_mode_) {
+    sen_kanayama_dw = 0;
     if (ee->sen.error_p != 0) {
       duty = param_->str_ang_pid.p * ee->sen.error_p -
              param_->str_ang_pid.i * ee->sen.error_d;
@@ -275,6 +276,12 @@ ControlLaw::calc_sensor_pid() {
       set_ctrl_val(ee->s_val, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
   } else {
+    // いいとこ取り構成(2026-08-23): str_ang_pid_fastのP+D(速い直接duty
+    // 注入)とKanayamaカスケード(ky/ki/k_theta、ヨーレートループ経由の
+    // 遅い/滑らかな補正)を排他にせず並行して常時実行する。速い成分は
+    // P+Dが、定常偏差の解消・向き調整は主にKanayamaのki/k_thetaが担当
+    // する想定。二重積分を避けるため、str_ang_pid_fast.iはhardware.yaml
+    // 側で0にして運用する(コード上はどちらも独立に有効)。
     if (ee->sen.error_p != 0) {
       const float i_gain = param_->str_ang_pid_fast.i * ee->sen.error_i;
       duty = param_->str_ang_pid_fast.p * ee->sen.error_p + i_gain -
@@ -291,6 +298,37 @@ ControlLaw::calc_sensor_pid() {
       ee->sen_log.gain_z = duty;
       set_ctrl_val(ee->s_val, 0, 0, 0, 0, 0, 0, 0, 0, ee->sen_log.gain_zz,
                    ee->sen_log.gain_z);
+    }
+
+    // Kanayamaカスケード: str_ang_pid_fastのduty注入と並行して、Δwを
+    // calc_pid_val_ang_vel()のoffsetに加算する(sen_kanayama_dw経由、
+    // ego_in.w自体は書き換えない、2026-08-22の事故コメント参照)。
+    // [ログ注意] enable時はここでee->s_valをKanayamaのey/e_theta/Δw内訳で
+    // 上書きするため、s_pid_*列は上のstr_ang_pid_fast内訳ではなくこちらが
+    // 表示される(duty_l/r・ang_kf等の実効値には影響しない)。
+    if (param_->kanayama_straight.enable) {
+      const float ey = ee->sen.error_p;
+      // e_thetaにはang_kfではなくkim_thetaを使う。enable_kalman_gyro=0のとき
+      // ang_kf/ang_kf2は単にego_in.ang(目標値そのもの)が代入されるだけで
+      // 実測と独立していないため、e_thetaが常にゼロになってしまう
+      // (EgoEstimator::update()参照)。kim_thetaは実測ジャイロKF(w_kf)を
+      // 積分したTrajectoryGenerator::calc_kanayama()内の値で、
+      // kanayama.enableに関わらず毎tick更新される独立した実測角度。
+      const float e_theta =
+          tgt_val_->ego_in.ang - sensing_result_->ego.kim_theta;
+      // I項はstr_ang_pid_fast用に条件付き積分・絶対値クランプ済みの
+      // ee->sen.error_iを共用(antiwindup/windup_dead_bind/windup_i_maxも
+      // str_ang_pid_fast側のものをそのまま使う)。
+      const float ki_gain = param_->kanayama_straight.ki * ee->sen.error_i;
+      const float delta_w = param_->kanayama_straight.ky * ey + ki_gain +
+                            param_->kanayama_straight.k_theta * sinf(e_theta);
+      sen_kanayama_dw = delta_w;
+      set_ctrl_val(ee->s_val, ey, ee->sen.error_i, 0, e_theta,
+                   param_->kanayama_straight.ky * ey, ki_gain, 0,
+                   param_->kanayama_straight.k_theta * sinf(e_theta),
+                   delta_w, delta_w);
+    } else {
+      sen_kanayama_dw = 0;
     }
   }
 
@@ -800,6 +838,7 @@ ControlLaw::calc_pid_val_ang_vel() {
       offset += duty_roll_ang;
     }
   }
+  offset += sen_kanayama_dw;
   ee->aw_log.duty_roll_before = (tgt->ego_in.w + offset);
 
   ee->w.error_p = (tgt->ego_in.w + offset) - se->ego.w_lp;
@@ -1313,6 +1352,7 @@ void ControlLaw::apply_duty_limitter() {
 
 void ControlLaw::clear_ctrl_val() {
   duty_c = duty_roll = duty_front_ctrl_roll_keep = duty_roll_ang = 0;
+  sen_kanayama_dw = 0;
   ee->v.error_i = ee->v.error_d = ee->v.error_dd = 0;
   ee->dist.error_i = ee->dist.error_d = ee->dist.error_dd = 0;
   ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;

@@ -131,6 +131,10 @@ private:
   float duty_c                    = 0.0f;
   float duty_roll                 = 0.0f;
   float duty_roll_ang             = 0.0f;
+  // STRAIGHT Kanayamaカスケード用のΔw[rad/s]。duty_roll_angと同じく
+  // calc_angle_velocity_ctrl()のoffsetに一時的に加算されるだけで、
+  // tgt_val_->ego_in.w(計画自身が毎tick自己伝播する状態)は書き換えない。
+  float sen_kanayama_dw            = 0.0f;
   float duty_front_ctrl_roll      = 0.0f;
   float duty_front_ctrl_trans     = 0.0f;
   float duty_front_ctrl_roll_keep = 0.0f;
