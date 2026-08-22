@@ -64,6 +64,7 @@ inline void convertToJson(const gyro_param_t& src, JsonVariant dst) {
 
 inline void convertToJson(const accel_param_t& src, JsonVariant dst) {
     dst["gain"] = src.gain;
+    dst["offset"] = src.offset;
 }
 
 inline void convertToJson(const gyro_pos_t& src, JsonVariant dst) {

@@ -365,6 +365,7 @@ typedef struct {
 
 typedef struct {
   float gain = 0;
+  float offset = 0; // 重力ベースのbias校正値[mm/s^2]。true=(raw-offset)*gain
 } accel_param_t;
 
 typedef struct {

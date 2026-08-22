@@ -188,6 +188,7 @@ inline void convertFromJson(JsonVariantConst src, gyro_param_t& dst) {
  */
 inline void convertFromJson(JsonVariantConst src, accel_param_t& dst) {
     from_json_field(src, "gain", dst.gain);
+    from_json_field(src, "offset", dst.offset);
 }
 
 /**

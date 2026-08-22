@@ -46,9 +46,14 @@ EgoEstimator::update(bool motor_en) {
                 r12 = cx * sy * sz - sx * cz;
     const float r20 = -sy, r21 = sx * cy, r22 = cx * cy;
 
-    const float ax_s = se->accel_x.data;
-    const float ay_s = se->accel_y.data;
-    const float az_s = se->accel_z.data;
+    // gain/offsetはセンサー座標系の生値(重力ベースの多姿勢校正、
+    // main_task_test_misc.cpp dump1()参照)に適用してから回転させる。
+    const float ax_s =
+        (se->accel_x.data - param->accel_x_param.offset) * param->accel_x_param.gain;
+    const float ay_s =
+        (se->accel_y.data - param->accel_y_param.offset) * param->accel_y_param.gain;
+    const float az_s =
+        (se->accel_z.data - param->accel_z_param.offset) * param->accel_z_param.gain;
     const float ax_b = r00 * ax_s + r01 * ay_s + r02 * az_s;
     const float ay_b = r10 * ax_s + r11 * ay_s + r12 * az_s;
     const float az_b = r20 * ax_s + r21 * ay_s + r22 * az_s;

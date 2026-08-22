@@ -7,6 +7,7 @@
 #include "pico/time.h"
 #include "driver/am32_config.hpp"
 #include "config_loader.hpp"
+#include <cmath>
 #include <stdio.h>
 
 namespace {
@@ -370,8 +371,36 @@ void MainTask::dump1() {
   planning_->send_command(*planning_->tgt_val);
   const auto se = get_sensing_entity();
 
+  // 加速度計オフセット/ゲイン校正用: dump1()を回している間、色々な姿勢に
+  // 傾けて各軸の生値(センサー座標系、gyro_pos補正前)の最小・最大を追跡する。
+  // 静止状態を保って重力(1g)がその軸の可動域いっぱいに載る姿勢を何通りか
+  // 経由すれば、min/maxが実質±1gの読み値に収束する。
+  // offset=(min+max)/2, gain=2g/(max-min) を都度計算して表示するので、
+  // 値が安定したらhardware.yamlのaccel_?_param.offset/gainに書き写す。
+  float accel_min_x = 1e9f, accel_max_x = -1e9f;
+  float accel_min_y = 1e9f, accel_max_y = -1e9f;
+  float accel_min_z = 1e9f, accel_max_z = -1e9f;
+
   const char ESC = '\033';
   while (1) {
+    // 静止していれば向きに関わらず合成加速度の大きさは常に1gのはず。
+    // ここから外れているサンプルは、姿勢変更中の動的な加速度(ジャーク)を
+    // 拾ってしまっている可能性が高いのでmin/max更新から除外する。
+    const float mag = sqrtf(se->accel_x.data * se->accel_x.data +
+                            se->accel_y.data * se->accel_y.data +
+                            se->accel_z.data * se->accel_z.data);
+    constexpr float kG = 9806.65f;
+    constexpr float kMagTolerance = 1000.0f; // ±1000mm/s^2 (約±10%)
+    const bool is_still = fabsf(mag - kG) < kMagTolerance;
+
+    if (is_still) {
+      if (se->accel_x.data < accel_min_x) accel_min_x = se->accel_x.data;
+      if (se->accel_x.data > accel_max_x) accel_max_x = se->accel_x.data;
+      if (se->accel_y.data < accel_min_y) accel_min_y = se->accel_y.data;
+      if (se->accel_y.data > accel_max_y) accel_max_y = se->accel_y.data;
+      if (se->accel_z.data < accel_min_z) accel_min_z = se->accel_z.data;
+      if (se->accel_z.data > accel_max_z) accel_max_z = se->accel_z.data;
+    }
 
     printf("%c[2J", ESC);
     printf("%c[0;0H", ESC);
@@ -384,13 +413,35 @@ void MainTask::dump1() {
     printf("gyro2: %d\t(%0.3f)\n", se->gyro2.raw,
            planning_->tgt_val->gyro2_zero_p_offset);
     printf("accel_x: %f\t(%f)\n", se->ego.accel_x_raw,
-           se->ego.accel_x_raw / 9806.65 * param_->accel_x_param.gain);
+           (se->ego.accel_x_raw - param_->accel_x_param.offset) / 9806.65 *
+               param_->accel_x_param.gain);
     printf("accel_y: %f\t(%f)\n", se->accel_y.data,
-           se->accel_y.data / 9806.65 * param_->accel_y_param.gain);
+           (se->accel_y.data - param_->accel_y_param.offset) / 9806.65 *
+               param_->accel_y_param.gain);
     printf("accel_z: %f\t(%f)\n", se->accel_z.data,
-           se->accel_z.data / 9806.65 * param_->accel_z_param.gain);
+           (se->accel_z.data - param_->accel_z_param.offset) / 9806.65 *
+               param_->accel_z_param.gain);
     printf("accel_corr(gyro_pos補正後): %f, %f, %f\n", se->ego.accel_x_corr,
            se->ego.accel_y_corr, se->ego.accel_z_corr);
+    printf("accel_mag: %.1f (1g=%.1f) %s\n", mag, kG,
+           is_still ? "static" : "moving(除外中)");
+    {
+      const float rx = accel_max_x - accel_min_x;
+      const float ry = accel_max_y - accel_min_y;
+      const float rz = accel_max_z - accel_min_z;
+      const float gain_x = rx > 1000 ? 2 * kG / rx : 0.0f;
+      const float gain_y = ry > 1000 ? 2 * kG / ry : 0.0f;
+      const float gain_z = rz > 1000 ? 2 * kG / rz : 0.0f;
+      printf("accel_calib_x: min=%.1f max=%.1f -> offset=%.1f gain=%.4f%s\n",
+             accel_min_x, accel_max_x, (accel_min_x + accel_max_x) / 2, gain_x,
+             rx > 1000 ? "" : " (要姿勢変更)");
+      printf("accel_calib_y: min=%.1f max=%.1f -> offset=%.1f gain=%.4f%s\n",
+             accel_min_y, accel_max_y, (accel_min_y + accel_max_y) / 2, gain_y,
+             ry > 1000 ? "" : " (要姿勢変更)");
+      printf("accel_calib_z: min=%.1f max=%.1f -> offset=%.1f gain=%.4f%s\n",
+             accel_min_z, accel_max_z, (accel_min_z + accel_max_z) / 2, gain_z,
+             rz > 1000 ? "" : " (要姿勢変更)");
+    }
     printf("battery: %0.3f (%d)\n", se->ego.battery_lp, se->battery.raw);
     printf("encoder: %5ld, %5ld\n", (long)se->encoder.left,
            (long)se->encoder.right);
