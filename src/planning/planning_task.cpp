@@ -9,6 +9,20 @@
 #include <algorithm>
 #include <cmath>
 
+// timer_hw->alarm[N] への生書き込みはhardware_alarm_set_target()と違い、
+// 「書き込み時刻が既にtargetを過ぎていた場合に二度と発火しない」レースに
+// 無防備(RP2040/2350のコンパレータは32bitカウンタが一周するまで再一致しない)。
+// パラメータconsoleからのファイル書き込み(flash_safe_execute()経由でCore1を
+// 一時停止)が「次回アラーム時刻の計算」〜「レジスタ書き込み」の間に重なると
+// 発生しうる(sensing_task.cppのarm_alarm32_safe()と同じ対策、詳細はそちら参照)。
+__attribute__((noinline, section(".time_critical.planning_tick")))
+static inline void arm_alarm32_safe(uint alarm_num, uint32_t target32) {
+  timer_hw->alarm[alarm_num] = target32;
+  if ((int32_t)((uint32_t)time_us_64() - target32) >= 0) {
+    hw_set_bits(&timer_hw->intf, 1u << alarm_num);
+  }
+}
+
 // ============================================================
 // static メンバの定義
 // ============================================================
@@ -64,7 +78,7 @@ void PlanningTask::start_irq() {
   // sensing (alarm 1) の直後に start するため位相が重なる。
   // sensing 自身の実行時間 (~350us) より後に発火するよう 600us 遅らせる。
   next_alarm_ = timer_hw->timerawl + interval_us_ + 600;
-  timer_hw->alarm[0] = next_alarm_;
+  arm_alarm32_safe(0, next_alarm_);
 }
 
 __attribute__((noinline, section(".time_critical.planning_cmd")))
@@ -88,6 +102,8 @@ void PlanningTask::timer_irq_handler() {
   // ハンドラ入口で即計測 — 以後の処理による可変遅延を period 計測に含めない
   const uint64_t now = time_us_64();
   timer_hw->intr = 1u << 0;
+  // arm_alarm32_safe()がINTFで強制発火させた場合に備えクリア(未使用時は無害)
+  hw_clear_bits(&timer_hw->intf, 1u << 0);
 
   auto *self = s_instance.get();
 
@@ -99,7 +115,7 @@ void PlanningTask::timer_irq_handler() {
     if ((int32_t)(now32 - self->next_alarm_) > (int32_t)self->interval_us_)
       self->next_alarm_ = now32 + self->interval_us_;
   }
-  timer_hw->alarm[0] = self->next_alarm_;
+  arm_alarm32_safe(0, self->next_alarm_);
 
   const uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;
   self->prev_ts_ = now;

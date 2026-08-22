@@ -39,6 +39,22 @@
 // --- バッテリADC (ADS7042I) SPI1 共有 ---
 #define BATTERY_CS_PIN 3 // GPIO3
 
+// timer_hw->alarm[N] への生書き込みはalarm_pool経由のhardware_alarm_set_target()
+// と違い「書き込み時刻が既にtargetを過ぎていた場合に二度と発火しない」レースに
+// 無防備(RP2040/2350のコンパレータは32bitカウンタが一周するまで再一致しない)。
+// パラメータconsoleからのファイル書き込み(flash_safe_execute()経由でCore1を
+// 一時停止)が「次回アラーム時刻の計算」〜「レジスタ書き込み」の間に重なると
+// 発生しうる(2026-08-23、dump1()実行中のsensor.yamlアップロードで発覚)。
+// 書き込み直後に現在時刻を再確認し、既に追い越していたら手動でIRQを起こす
+// ことでこのレースを閉じる。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+static inline void arm_alarm32_safe(uint alarm_num, uint32_t target32) {
+  timer_hw->alarm[alarm_num] = target32;
+  if ((int32_t)((uint32_t)time_us_64() - target32) >= 0) {
+    hw_set_bits(&timer_hw->intf, 1u << alarm_num);
+  }
+}
+
 // static メンバの定義
 std::shared_ptr<SensingTask> SensingTask::s_instance;
 
@@ -73,6 +89,8 @@ void SensingTask::timer_b_irq_handler() {
   // ハンドラ入口で即計測 — 以後の処理による可変遅延を period 計測に含めない
   const uint64_t sense_start = time_us_64();
   timer_hw->intr = 1u << 1;
+  // arm_alarm32_safe()がINTFで強制発火させた場合に備えクリア(未使用時は無害)
+  hw_clear_bits(&timer_hw->intf, 1u << 1);
 
   auto *self = s_instance.get();
 
@@ -84,7 +102,7 @@ void SensingTask::timer_b_irq_handler() {
     if ((int32_t)(now32 - self->next_alarm_a_) > (int32_t)self->interval_us_)
       self->next_alarm_a_ = now32 + self->interval_us_;
   }
-  timer_hw->alarm[1] = self->next_alarm_a_;
+  arm_alarm32_safe(1, self->next_alarm_a_);
 
   const auto &se = self->sensing_result;
   se->calc_time = (int16_t)(sense_start - self->start_time_z);
@@ -451,7 +469,7 @@ void SensingTask::start_irq() {
   hw_set_bits(&timer_hw->inte, 1u << 2);
 
   next_alarm_a_ = (uint32_t)time_us_64() + interval_us_;
-  timer_hw->alarm[1] = next_alarm_a_;
+  arm_alarm32_safe(1, next_alarm_a_);
 }
 
 // ============================================================
