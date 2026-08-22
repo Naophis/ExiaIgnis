@@ -5,8 +5,8 @@ dt: 0.001
 # tire_tread: 38.0
 # tire_tread: 37.72230756
 tire_tread: 38.72230756
-tire: 13.950 #30deg 
-tire2: 13.950 #30deg
+tire: 14.0250 #30deg 
+tire2: 14.0250 #30deg
 
 battery_gain: 4.057349148300616
 # battery_gain: 4.253592106693843
@@ -197,7 +197,7 @@ motor_pid2:
   #AS5147P 
   mode: 7
 
-  p: 0.0000125
+  p: 0.00000825
   i: 0.00000425
   b: 0.00
   d: 0.0000175

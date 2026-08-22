@@ -60,6 +60,7 @@ void MainTask::load_param_after() {
                                               sys_.test.suction_ramp_rate_us_y);
   printf("[param] suction_ramp_rate_table: %u points\n",
          (unsigned)sys_.test.suction_ramp_rate_us_x.size());
+  test_search_mode = sys_.test.search_mode;
 }
 
 bool MainTask::load_params() {

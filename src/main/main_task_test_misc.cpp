@@ -8,7 +8,14 @@
 #include "driver/am32_config.hpp"
 #include "config_loader.hpp"
 #include <cmath>
+#include <cstdlib>
 #include <stdio.h>
+
+// ─── USB シリアル通信 (main_task_usb.cpp) ────────────────────────────────
+// dump1()実行中にhardware.yaml/sensor.yaml等をアップロードしてparam_を
+// 即時再ロードするために使う(main_task.cppのボタン待ちループと同じ関数)。
+int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms);
+bool rx_usb_cmd(char *buf, int len);
 
 namespace {
 void am32_printf_line(const char* line) { printf("%s\n", line); }
@@ -381,8 +388,24 @@ void MainTask::dump1() {
   float accel_min_y = 1e9f, accel_max_y = -1e9f;
   float accel_min_z = 1e9f, accel_max_z = -1e9f;
 
+  // hardware.yaml(accel_?_param.offset/gain)やhf/sensor.yaml(sensor_gain)を
+  // ループを抜けずに送りつけられるようにする。ボタン待ちループと同じ
+  // rx_usb_cmd()を使い、ファイル受信時はparam_を再ロードして次の描画から
+  // printf/計算結果に反映させる。webapp側は"filename@content\nOK\n"の
+  // 単発ackを待つだけなので、100ms周期での応答でも問題ない。
+  constexpr size_t kRxBufSize = 16384;
+  char *rx_buf = static_cast<char *>(malloc(kRxBufSize));
+
   const char ESC = '\033';
   while (1) {
+    if (rx_buf) {
+      int rlen = usb_read_with_timeout(rx_buf, kRxBufSize, 100);
+      if (rlen > 0 && rx_usb_cmd(rx_buf, rlen)) {
+        load_params();
+      }
+    } else {
+      sleep_ms(100);
+    }
     // 静止していれば向きに関わらず合成加速度の大きさは常に1gのはず。
     // ここから外れているサンプルは、姿勢変更中の動的な加速度(ジャーク)を
     // 拾ってしまっている可能性が高いのでmin/max更新から除外する。
@@ -565,8 +588,6 @@ void MainTask::dump1() {
     if (ui_->button_state()) {
       planning_->tgt_val->ego_in.ang = planning_->tgt_val->ego_in.dist = 0;
     }
-
-    sleep_ms(100);
   }
 }
 
