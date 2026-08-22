@@ -1364,6 +1364,12 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
     if (param_->motor_debug_mode > 0) {
       duty_l = param_->motor_debug_mode_duty_l;
       duty_r = param_->motor_debug_mode_duty_r;
+    } else if (tgt_val_->nmr.sys_id.enable) {
+      // システム同定(test_system_identification): PID/FFを一切介さず
+      // duty_l/rを直接そのまま出力する。motor_debug_modeと同じ最終段
+      // オーバーライド方式(motion_planning.cpp::system_identification()参照)。
+      duty_l = tgt_val_->nmr.sys_id.left_v;
+      duty_r = tgt_val_->nmr.sys_id.right_v;
     }
   } else {
     duty_l = 0.0f;

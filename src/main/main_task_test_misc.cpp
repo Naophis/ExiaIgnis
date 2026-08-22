@@ -537,4 +537,58 @@ void MainTask::dump2() {
 
 void MainTask::encoder_test() {}
 
-void MainTask::test_system_identification(bool para) {}
+void MainTask::test_system_identification(bool para) {
+  mp->reset_gyro_ref_with_check();
+
+  // Resistは電流センサなしで摩擦モデル経由で推定するため、吸引による
+  // 荷重・グリップ変化やモーター電流の変動要因を持ち込まず、常に非吸引で
+  // 実施する(sys_.test.suction_activeには依存しない)。
+
+  reset_tgt_data();
+  reset_ego_data();
+  planning_->motor_enable();
+  req_error_reset();
+
+  if (param_->test_log_enable > 0) {
+    lt_->start_slalom_log();
+  }
+
+  // para==false: 並進(直進)方向のduty step応答。para==true: 旋回(roll)
+  // 方向のduty step応答(左右逆符号)。PID/FFを介さずduty_l/rを直接そのまま
+  // sysid_time[ms]間出力し(control_law.cpp set_next_duty()参照)、その間の
+  // エンコーダ速度・バッテリー電圧をログして、後でオフラインでResist等を
+  // 解析する。
+  const float duty = sys_.test.sysid_duty;
+  if (!para) {
+    mp->system_identification(MotionType::STRAIGHT, duty, duty,
+                              sys_.test.sysid_time);
+  } else {
+    mp->system_identification(MotionType::PIVOT, -duty, duty,
+                              sys_.test.sysid_time);
+  }
+
+  planning_->motor_disable();
+  reset_tgt_data();
+  reset_ego_data();
+  req_error_reset();
+  planning_->suction_disable();
+
+  lt_->stop_slalom_log();
+  reset_tgt_data();
+  reset_ego_data();
+  req_error_reset();
+  lt_->save(slalom_log_file);
+  ui_->coin(120);
+
+  while (1) {
+    if (ui_->button_state_hold())
+      break;
+    sleep_ms(10);
+  }
+  lt_->dump_log(slalom_log_file);
+  while (1) {
+    if (ui_->button_state_hold())
+      break;
+    sleep_ms(10);
+  }
+}

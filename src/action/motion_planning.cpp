@@ -1948,8 +1948,8 @@ void MotionPlanning::calc_dia45_offset(param_straight_t &front,
   // back.dist += offset * ROOT2;
 }
 __attribute__((noinline, section(".time_critical.motion_planning")))
-void MotionPlanning::system_identification(MotionType mt, float volt_l,
-                                           float volt_r, float time) {
+void MotionPlanning::system_identification(MotionType mt, float duty_l,
+                                           float duty_r, float time) {
   req_error_reset();
   sleep_ms(2);
   tgt_val->nmr.v_max = 0;
@@ -1967,13 +1967,20 @@ void MotionPlanning::system_identification(MotionType mt, float volt_l,
   tgt_val->nmr.motion_type = mt;
   tgt_val->nmr.dia_mode = false;
   tgt_val->ego_in.sla_param.counter = 1;
-  tgt_val->nmr.sys_id.left_v = volt_l;
-  tgt_val->nmr.sys_id.right_v = volt_r;
+  tgt_val->nmr.sys_id.left_v = duty_l;
+  tgt_val->nmr.sys_id.right_v = duty_r;
   tgt_val->nmr.sys_id.enable = true;
   tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   pt->send_command(*tgt_val);
 
   sleep_ms((uint32_t)time);
+
+  // send_command()はnmrをCore1側バッファへコピーするだけなので、ここで
+  // enable=falseにするだけでなく再送しないとCore1は開ループduty出力を
+  // 続けてしまう(motor_disable()側の安全策とは別に、この関数単体でも
+  // 正しく後始末する)。
   tgt_val->nmr.sys_id.enable = false;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
+  pt->send_command(*tgt_val);
 }
