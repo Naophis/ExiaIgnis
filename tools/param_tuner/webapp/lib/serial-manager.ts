@@ -381,11 +381,18 @@ class SerialManager extends EventEmitter {
     if (dump.dumpToCsvReady) {
       const parts = data.split(":");
       if (parts.length === 3) {
-        dump.dataStruct.push({
-          name: parts[0],
-          type: parts[1] as FieldType,
-          size: parseInt(parts[2], 10),
-        });
+        const size = parseInt(parts[2], 10);
+        // A dropped/garbled byte on this line (serial noise) can turn the
+        // size field into NaN, which would otherwise poison the
+        // recordByteSize sum (NaN + n = NaN) used by switchToBinaryMode and
+        // crash array construction later with no clue which field caused
+        // it. Log the exact raw line so the bad field is traceable, and
+        // skip it rather than pushing a field we can't offset by.
+        if (!Number.isFinite(size) || size <= 0) {
+          this.emit("log", `[LoggingTask] corrupt data_struct line, skipping: ${JSON.stringify(data)}`);
+        } else {
+          dump.dataStruct.push({ name: parts[0], type: parts[1] as FieldType, size });
+        }
       }
     } else if (dump.dumpToMap) {
       if (/^end___/.test(data)) {
@@ -469,17 +476,22 @@ class SerialManager extends EventEmitter {
     const fieldSizes = dump.dataStruct.map((d) => d.size);
 
     parser.once("data", (binaryData: Buffer) => {
-      // dataStruct comes from ready___-preceded name:type:size lines; if
-      // that header was missing or corrupted (e.g. dropped by serial noise,
-      // or start___ arrived without a ready___ first), fieldCount/recordByteSize
-      // are 0 and there's no valid layout to parse - discard the payload
-      // instead of building a bogus (or, for NaN/negative recordNum, crashing)
-      // array.
+      // dataStruct comes from ready___-preceded name:type:size lines; if that
+      // header was missing entirely (e.g. start___ arrived without a
+      // ready___ first), fieldCount/recordByteSize are 0 and there's no
+      // known layout to split the bytes by - can't build the normal table,
+      // but the bytes themselves are still real data, so write them out raw
+      // (one column) instead of losing the capture. Log the full context so
+      // the actual cause (usually upstream: a dropped ready___ line, or a
+      // firmware-side size mismatch) is traceable from this line alone.
       if (fieldCount === 0 || recordByteSize <= 0) {
         this.emit(
           "log",
-          `[LoggingTask] dump header missing/corrupt (fields=${fieldCount}, recordByteSize=${recordByteSize}); discarding ${binaryData.length} bytes`
+          `[LoggingTask] dump header missing/corrupt (fields=${fieldCount}, recordByteSize=${recordByteSize}, totalBytes=${totalBytes}, dataStruct=${JSON.stringify(dump.dataStruct)}); writing raw bytes instead`
         );
+        const content = `raw_byte\n${Array.from(binaryData).join("\n")}\n`;
+        this.writeLogFile(dump.fileName, content);
+        this.emit("saved", { type: "csv", file: dump.fileName });
       } else {
         const rows = new Array<string>(recordNum + 1);
         rows[0] = header;
