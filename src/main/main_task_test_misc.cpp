@@ -385,6 +385,12 @@ void MainTask::dump1() {
            planning_->tgt_val->gyro2_zero_p_offset);
     printf("accel_x: %f\t(%f)\n", se->ego.accel_x_raw,
            se->ego.accel_x_raw / 9806.65 * param_->accel_x_param.gain);
+    printf("accel_y: %f\t(%f)\n", se->accel_y.data,
+           se->accel_y.data / 9806.65 * param_->accel_y_param.gain);
+    printf("accel_z: %f\t(%f)\n", se->accel_z.data,
+           se->accel_z.data / 9806.65 * param_->accel_z_param.gain);
+    printf("accel_corr(gyro_pos補正後): %f, %f, %f\n", se->ego.accel_x_corr,
+           se->ego.accel_y_corr, se->ego.accel_z_corr);
     printf("battery: %0.3f (%d)\n", se->ego.battery_lp, se->battery.raw);
     printf("encoder: %5ld, %5ld\n", (long)se->encoder.left,
            (long)se->encoder.right);

@@ -10,6 +10,9 @@
 #define ASM330_CTRL7_G    0x16
 #define ASM330_CTRL8_XL   0x17
 #define ASM330_OUTZ_L_G   0x26
+#define ASM330_OUTX_L_XL  0x28
+#define ASM330_OUTY_L_XL  0x2A
+#define ASM330_OUTZ_L_XL  0x2C
 
 #define ASM330LHH_CTRL1_XL 0x10U
 #define ASM330LHH_CTRL6_C 0x15U

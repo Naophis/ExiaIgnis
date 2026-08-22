@@ -49,8 +49,13 @@ private:
     int dma_rx_spi1_ = -1;
     int dma_tx_bat_  = -1;
     int dma_rx_bat_  = -1;
-    uint8_t  gyro_dma_tx_[3]{};
-    uint8_t  gyro_dma_rx_[3]{};
+    // 1(アドレス) + ジャイロZ軸2 + 加速度X軸2 + Y軸2 + Z軸2バイト。
+    // OUTZ_L_G(0x26)起点でIF_INCにより加速度計のOUTX_L_XL(0x28)〜
+    // OUTZ_H_XL(0x2D)まで連続読み出しする(ASM330LHHのレジスタ配置が
+    // OUTZ_H_G(0x27)の直後からOUTX/Y/Z_XLへ連続しているため)。
+    // 加速度Zはピッチング等で重力成分がX/Y軸に漏れ込む影響の把握用。
+    uint8_t  gyro_dma_tx_[9]{};
+    uint8_t  gyro_dma_rx_[9]{};
     uint16_t bat_dma_tx_ = 0;
     uint16_t bat_dma_rx_ = 0;
     dma_channel_config dma_cfg_tx_spi1_{};
@@ -63,6 +68,8 @@ private:
     int64_t gyro_timestamp_now = 0;
     int64_t gyro2_timestamp_old = 0;
     int64_t gyro2_timestamp_now = 0;
+    int64_t accel_timestamp_old = 0;
+    int64_t accel_timestamp_now = 0;
     int64_t enc_r_timestamp_old = 0;
     int64_t enc_r_timestamp_now = 0;
     int64_t enc_l_timestamp_old = 0;

@@ -41,12 +41,18 @@ void ASM330LHH::setup() {
   write_reg(ASM330_CTRL2_G, 0x91); // ODR: 3333Hz, FS: ±4000dps
   sleep_ms(25);
   write_reg(ASM330_CTRL8_XL, 0x00); // XL LPF2 OFF
+  sleep_ms(25);
+  // ODR: 3333Hz(0x9), FS: ±16g(0x1), LPF2_XL_EN: OFF(CTRL8_XLと合わせる)
+  write_reg(ASM330LHH_CTRL1_XL, 0x94);
 
+  uint8_t ctrl1_xl = read_reg(ASM330LHH_CTRL1_XL);
   uint8_t ctrl2 = read_reg(ASM330_CTRL2_G);
   uint8_t ctrl3 = read_reg(ASM330_CTRL3_C);
   uint8_t ctrl4 = read_reg(ASM330_CTRL4_C);
-  printf("ASM330LHH regs: CTRL2_G=0x%02X(%s) CTRL3_C=0x%02X CTRL4_C=0x%02X\n",
-         ctrl2, ctrl2 == 0x98 ? "OK" : "NG", ctrl3, ctrl4);
+  printf("ASM330LHH regs: CTRL1_XL=0x%02X(%s) CTRL2_G=0x%02X(%s) CTRL3_C=0x%02X "
+         "CTRL4_C=0x%02X\n",
+         ctrl1_xl, ctrl1_xl == 0x94 ? "OK" : "NG", ctrl2,
+         ctrl2 == 0x98 ? "OK" : "NG", ctrl3, ctrl4);
 }
 
 __attribute__((noinline, section(".time_critical.sensing.asm330_read")))

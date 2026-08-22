@@ -126,6 +126,13 @@ typedef struct {
   float batt_kf = 0;
   float accel_x_raw = 0;
 
+  // gyro_pos(取り付け位置・向き)補正後、車体基準点での加速度[mm/s^2]。
+  // EgoEstimator::update()で算出(センサー座標系→車体座標系の回転 +
+  // レバーアーム補正 a_ref = a_body - alpha×r - w×(w×r)、roll/pitch角速度は無視)。
+  float accel_x_corr = 0;
+  float accel_y_corr = 0;
+  float accel_z_corr = 0;
+
   float v_ave = 0;
   float v_lp = 0;
   float integrate_accl_x_ave = 0;
@@ -271,6 +278,7 @@ typedef struct {
   sensing_data_t gyro2;
   sensing_data_t accel_x;
   sensing_data_t accel_y;
+  sensing_data_t accel_z;
   int gyro_list[5];
   deque<int> enc_r_list;
   deque<int> enc_l_list;
@@ -533,6 +541,19 @@ typedef struct {
   float windup_deg = 0;
 } kanayama_t;
 
+// ASM330LHHの取り付け位置(車体基準点=v/wの基準点からのオフセット、mm)・
+// 向き(センサー座標系→車体座標系への回転角、deg)。EgoEstimatorで
+// 加速度のレバーアーム補正・座標変換に使う。全ゼロなら補正なし(単位行列
+// ・オフセットなし)。
+typedef struct {
+  float x = 0;       // mm
+  float y = 0;       // mm
+  float z = 0;       // mm
+  float x_theta = 0; // deg
+  float y_theta = 0; // deg
+  float z_theta = 0; // deg
+} gyro_pos_t;
+
 typedef struct {
   float dt = 0.001;
   int trj_length = 1;
@@ -617,6 +638,9 @@ typedef struct {
   gyro_param_t gyro_param;
   gyro_param_t gyro2_param;
   accel_param_t accel_x_param;
+  accel_param_t accel_y_param;
+  accel_param_t accel_z_param;
+  gyro_pos_t gyro_pos;
   comp_param_t comp_param;
   sen_param_t battery_param;
   sen_param_t led_param;
@@ -1416,6 +1440,13 @@ typedef struct {
   real16_T mpc_d_estimated;
   real16_T sat_roll_dir; // apply_duty_limitter()判定のduty飽和方向(+1/-1/0)
 
+  real16_T accel_x; // ASM330LHH加速度計X軸[mm/s^2], gain補正前
+  real16_T accel_y; // ASM330LHH加速度計Y軸[mm/s^2], gain補正前
+  real16_T accel_z; // ASM330LHH加速度計Z軸[mm/s^2], gain補正前(ピッチング検知用)
+  real16_T accel_x_corr; // gyro_pos補正後(車体基準点, 車体座標系)[mm/s^2]
+  real16_T accel_y_corr;
+  real16_T accel_z_corr;
+
   int16_t pln_t_ego;
   int16_t pln_t_sensor;
   int16_t pln_t_trj;
@@ -1648,6 +1679,12 @@ typedef struct {
   float ff_friction_torque_l = 133;
   float v_kf_l = 134; // kf_v.update()に渡るkf_v_l/kf_v_rの状態(v_c2の入力の可視化用)
   float v_kf_r = 135;
+  float accel_x = 136; // ASM330LHH加速度計X軸[mm/s^2], gain補正前
+  float accel_y = 137;
+  float accel_z = 138; // ピッチング検知用
+  float accel_x_corr = 139; // gyro_pos補正後(車体基準点, 車体座標系)[mm/s^2]
+  float accel_y_corr = 140;
+  float accel_z_corr = 141;
 } LogStruct11;
 
 #endif

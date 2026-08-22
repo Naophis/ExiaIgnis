@@ -34,4 +34,5 @@ private:
   std::shared_ptr<sensing_result_entity_t> se;
   std::shared_ptr<input_param_t> param;
   std::shared_ptr<motion_tgt_val_t> tgt_val;
+  float w_lp_old_ = 0; // 角加速度(dw_lp/dt)算出用、加速度レバーアーム補正で使用
 };

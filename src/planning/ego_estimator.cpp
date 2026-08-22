@@ -25,6 +25,46 @@ EgoEstimator::update(bool motor_en) {
   se->ego.w_lp2 = se->ego.w_lp2 * (1 - param->gyro_param.lp_delay) +
                   se->ego.w_raw2 * param->gyro_param.lp_delay;
 
+  // ASM330LHHの取り付け位置・向き(gyro_pos)による加速度補正。
+  // (1) センサー座標系→車体座標系への回転(x_theta/y_theta/z_theta)
+  // (2) レバーアーム補正 a_ref = a_body - alpha×r - w×(w×r)
+  //     (roll/pitch角速度は未計測のため0とみなし、yaw(w_lp)のみ考慮)
+  // gyro_pos全ゼロなら回転=単位行列・オフセット=0で補正なしと等価。
+  {
+    constexpr float kDegToRad = 0.017453292519943295f;
+    const float rx = param->gyro_pos.x_theta * kDegToRad;
+    const float ry = param->gyro_pos.y_theta * kDegToRad;
+    const float rz = param->gyro_pos.z_theta * kDegToRad;
+    const float cx = cosf(rx), sx = sinf(rx);
+    const float cy = cosf(ry), sy = sinf(ry);
+    const float cz = cosf(rz), sz = sinf(rz);
+
+    // R = Rz * Ry * Rx (センサー座標系ベクトル→車体座標系ベクトル)
+    const float r00 = cy * cz, r01 = sx * sy * cz - cx * sz,
+                r02 = cx * sy * cz + sx * sz;
+    const float r10 = cy * sz, r11 = sx * sy * sz + cx * cz,
+                r12 = cx * sy * sz - sx * cz;
+    const float r20 = -sy, r21 = sx * cy, r22 = cx * cy;
+
+    const float ax_s = se->accel_x.data;
+    const float ay_s = se->accel_y.data;
+    const float az_s = se->accel_z.data;
+    const float ax_b = r00 * ax_s + r01 * ay_s + r02 * az_s;
+    const float ay_b = r10 * ax_s + r11 * ay_s + r12 * az_s;
+    const float az_b = r20 * ax_s + r21 * ay_s + r22 * az_s;
+
+    const float w = se->ego.w_lp;
+    const float alpha = (w - w_lp_old_) / dt;
+    w_lp_old_ = w;
+
+    const float rx_mm = param->gyro_pos.x;
+    const float ry_mm = param->gyro_pos.y;
+
+    se->ego.accel_x_corr = ax_b + alpha * ry_mm + w * w * rx_mm;
+    se->ego.accel_y_corr = ay_b - alpha * rx_mm + w * w * ry_mm;
+    se->ego.accel_z_corr = az_b; // z方向はyaw回転レバーアームの影響を受けない
+  }
+
   if (std::isfinite(tgt_val->ego_in.accl) && std::isfinite(se->ego.v_c)) {
     auto tmp_v_l = kf_v_l.get_state();
     auto tmp_v_r = kf_v_r.get_state();

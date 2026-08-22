@@ -569,6 +569,7 @@ SensingTask::read_spi_sensors() {
   se->encoder.left_old = se->encoder.left;
   se->encoder.right_old = se->encoder.right;
   gyro_timestamp_old = gyro_timestamp_now;
+  accel_timestamp_old = accel_timestamp_now;
   enc_r_timestamp_old = enc_r_timestamp_now;
   enc_l_timestamp_old = enc_l_timestamp_now;
 
@@ -582,23 +583,39 @@ SensingTask::read_spi_sensors() {
   spi_set_format_safe(GYRO_SPI, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
   busy_wait_us_32(2);  // SCK settling after mode0→mode3 switch
 
+  // OUTZ_L_G(0x26)起点、IF_INC(CTRL3_C)によりOUTZ_H_G→OUTX_L_XL→OUTX_H_XL→
+  // OUTY_L_XL→OUTY_H_XLまで連続読み出し(加速度計レジスタがジャイロZ直後の
+  // 0x28/0x2Aに連続配置されているため、CS再アサートなしで一括取得できる)。
   gyro_dma_tx_[0] = ASM330_OUTZ_L_G | 0x80;
-  gyro_dma_tx_[1] = 0;
-  gyro_dma_tx_[2] = 0;
+  for (int i = 1; i < 9; i++) gyro_dma_tx_[i] = 0;
 
   // ジャイロ CS アサート → TX/RX DMA を同時スタート → 完了待ち
-  gyro_timestamp_now = time_us_64();
+  gyro_timestamp_now = accel_timestamp_now = time_us_64();
   gpio_put(GYRO_CS_PIN, 0);
   dma_channel_configure(dma_tx_spi1_, &dma_cfg_tx_spi1_,
-                        &spi_get_hw(GYRO_SPI)->dr, gyro_dma_tx_, 3, false);
+                        &spi_get_hw(GYRO_SPI)->dr, gyro_dma_tx_, 9, false);
   dma_channel_configure(dma_rx_spi1_, &dma_cfg_rx_spi1_,
-                        gyro_dma_rx_, &spi_get_hw(GYRO_SPI)->dr, 3, false);
+                        gyro_dma_rx_, &spi_get_hw(GYRO_SPI)->dr, 9, false);
   dma_start_channel_mask((1u << dma_tx_spi1_) | (1u << dma_rx_spi1_));
   dma_channel_wait_for_finish_blocking(dma_rx_spi1_);
   gpio_put(GYRO_CS_PIN, 1);
   se->t_gyro = (int16_t)(time_us_64() - spi_t0);
   int16_t gyro = static_cast<int16_t>(
       static_cast<uint16_t>(gyro_dma_rx_[2]) << 8 | gyro_dma_rx_[1]);
+  se->accel_x.raw = static_cast<int16_t>(
+      static_cast<uint16_t>(gyro_dma_rx_[4]) << 8 | gyro_dma_rx_[3]);
+  se->accel_y.raw = static_cast<int16_t>(
+      static_cast<uint16_t>(gyro_dma_rx_[6]) << 8 | gyro_dma_rx_[5]);
+  se->accel_z.raw = static_cast<int16_t>(
+      static_cast<uint16_t>(gyro_dma_rx_[8]) << 8 | gyro_dma_rx_[7]);
+  // ±16g設定時の感度0.488mg/LSB(ST IMU一般値、要データシート照合)で
+  // mm/s^2へ換算。gain補正は未適用(param_->accel_x_param.gainを使う側で
+  // 別途乗じる、既存main_task_test_misc.cppのprintf参照)。
+  constexpr float kAccelMmS2PerLsb = 0.488e-3f * 9806.65f;
+  se->accel_x.data = se->accel_x.raw * kAccelMmS2PerLsb;
+  se->accel_y.data = se->accel_y.raw * kAccelMmS2PerLsb;
+  se->accel_z.data = se->accel_z.raw * kAccelMmS2PerLsb;
+  se->ego.accel_x_raw = se->accel_x.data;
 
   // ================================================================
   // Phase B: 左エンコーダ CPU → 右エンコーダ CPU (SPI1, mode1)

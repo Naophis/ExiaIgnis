@@ -192,6 +192,19 @@ inline void convertFromJson(JsonVariantConst src, accel_param_t& dst) {
 
 /**
  * hardware.txt
+ * root → gyro_pos
+ */
+inline void convertFromJson(JsonVariantConst src, gyro_pos_t& dst) {
+    from_json_field(src, "x", dst.x);
+    from_json_field(src, "y", dst.y);
+    from_json_field(src, "z", dst.z);
+    from_json_field(src, "x_theta", dst.x_theta);
+    from_json_field(src, "y_theta", dst.y_theta);
+    from_json_field(src, "z_theta", dst.z_theta);
+}
+
+/**
+ * hardware.txt
  * root → sen_param
  */
 inline void convertFromJson(JsonVariantConst src, sen_param_t& dst) {
@@ -586,6 +599,9 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "gyro_param", dst.gyro_param);
     from_json_nested(src, "gyro2_param", dst.gyro2_param);
     from_json_nested(src, "accel_x_param", dst.accel_x_param);
+    from_json_nested(src, "accel_y_param", dst.accel_y_param);
+    from_json_nested(src, "accel_z_param", dst.accel_z_param);
+    from_json_nested(src, "gyro_pos", dst.gyro_pos);
     from_json_nested(src, "comp_param", dst.comp_param);
     from_json_nested(src, "battery_param", dst.battery_param);
     from_json_nested(src, "led_param", dst.led_param);

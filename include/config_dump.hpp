@@ -66,6 +66,15 @@ inline void convertToJson(const accel_param_t& src, JsonVariant dst) {
     dst["gain"] = src.gain;
 }
 
+inline void convertToJson(const gyro_pos_t& src, JsonVariant dst) {
+    dst["x"]       = src.x;
+    dst["y"]       = src.y;
+    dst["z"]       = src.z;
+    dst["x_theta"] = src.x_theta;
+    dst["y_theta"] = src.y_theta;
+    dst["z_theta"] = src.z_theta;
+}
+
 inline void convertToJson(const sen_param_t& src, JsonVariant dst) {
     dst["lp_delay"] = src.lp_delay;
 }
@@ -306,6 +315,9 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["gyro_param"]                  = src.gyro_param;
     dst["gyro2_param"]                 = src.gyro2_param;
     dst["accel_x_param"]               = src.accel_x_param;
+    dst["accel_y_param"]               = src.accel_y_param;
+    dst["accel_z_param"]               = src.accel_z_param;
+    dst["gyro_pos"]                    = src.gyro_pos;
     dst["comp_param"]                  = src.comp_param;
     dst["battery_param"]               = src.battery_param;
     dst["led_param"]                   = src.led_param;

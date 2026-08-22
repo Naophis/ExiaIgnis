@@ -327,6 +327,13 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.sat_roll_dir = floatToHalf(ee->aw_log.sat_roll_dir);
   }
 
+  ld.accel_x = floatToHalf(sr->accel_x.data);
+  ld.accel_y = floatToHalf(sr->accel_y.data);
+  ld.accel_z = floatToHalf(sr->accel_z.data);
+  ld.accel_x_corr = floatToHalf(sr->ego.accel_x_corr);
+  ld.accel_y_corr = floatToHalf(sr->ego.accel_y_corr);
+  ld.accel_z_corr = floatToHalf(sr->ego.accel_z_corr);
+
   self->log_vec_.emplace_back(std::move(ld));
   return true;
 }
@@ -511,6 +518,12 @@ void LoggingTask::dump_csv() const {
   printf("ff_friction_torque_l:float:%d\n", (int)sizeof(ls11.ff_friction_torque_l));
   printf("v_kf_l:float:%d\n", (int)sizeof(ls11.v_kf_l));
   printf("v_kf_r:float:%d\n", (int)sizeof(ls11.v_kf_r));
+  printf("accel_x:float:%d\n", (int)sizeof(ls11.accel_x));
+  printf("accel_y:float:%d\n", (int)sizeof(ls11.accel_y));
+  printf("accel_z:float:%d\n", (int)sizeof(ls11.accel_z));
+  printf("accel_x_corr:float:%d\n", (int)sizeof(ls11.accel_x_corr));
+  printf("accel_y_corr:float:%d\n", (int)sizeof(ls11.accel_y_corr));
+  printf("accel_z_corr:float:%d\n", (int)sizeof(ls11.accel_z_corr));
 
   fflush(stdout);
   sleep_ms(50);
@@ -755,6 +768,12 @@ void LoggingTask::dump_csv() const {
     ls11.ff_friction_torque_l = halfToFloat(e.ff_friction_torque_l);
     ls11.v_kf_l = halfToFloat(e.v_kf_l);
     ls11.v_kf_r = halfToFloat(e.v_kf_r);
+    ls11.accel_x = halfToFloat(e.accel_x);
+    ls11.accel_y = halfToFloat(e.accel_y);
+    ls11.accel_z = halfToFloat(e.accel_z);
+    ls11.accel_x_corr = halfToFloat(e.accel_x_corr);
+    ls11.accel_y_corr = halfToFloat(e.accel_y_corr);
+    ls11.accel_z_corr = halfToFloat(e.accel_z_corr);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));
@@ -815,7 +834,8 @@ void LoggingTask::dump_csv_text() const {
          "pln_t_ego,pln_t_sensor,pln_t_trj,pln_t_kanayama,pln_t_copy,pln_t_ctl,"
          "ff_front,ff_roll,ff_rpm_r,ff_rpm_l,"
          "pos_x,pos_y,odm_x,odm_y,odm_theta,kim_x,kim_y,kim_theta,"
-         "knym_v,knym_w,ang_kf_sum,img_ang_sum\n");
+         "knym_v,knym_w,ang_kf_sum,img_ang_sum,accel_x,accel_y,accel_z,"
+         "accel_x_corr,accel_y_corr,accel_z_corr\n");
 
   int flush_cnt = 0;
   for (size_t i = 0; i < n; ++i) {
@@ -833,7 +853,7 @@ void LoggingTask::dump_csv_text() const {
         "%d,%d,%d,%d,%d,%d,"
         "%.3f,%.3f,%.3f,%.3f,"
         "%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.4f,"
-        "%.3f,%.3f,%.4f,%.4f\n",
+        "%.3f,%.3f,%.4f,%.4f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
         i, halfToFloat(e.img_v), halfToFloat(e.v_c), halfToFloat(e.v_c2),
         halfToFloat(e.v_l), halfToFloat(e.v_r), (int)e.v_l_enc, (int)e.v_r_enc,
         halfToFloat(e.accl), halfToFloat(e.accl_x), halfToFloat(e.img_w),
@@ -857,7 +877,10 @@ void LoggingTask::dump_csv_text() const {
         halfToFloat(e.odm_y), halfToFloat(e.odm_theta), halfToFloat(e.kim_x),
         halfToFloat(e.kim_y), halfToFloat(e.kim_theta), halfToFloat(e.knym_v),
         halfToFloat(e.knym_w), halfToFloat(e.ang_kf_sum),
-        halfToFloat(e.img_ang_sum));
+        halfToFloat(e.img_ang_sum), halfToFloat(e.accel_x),
+        halfToFloat(e.accel_y), halfToFloat(e.accel_z),
+        halfToFloat(e.accel_x_corr), halfToFloat(e.accel_y_corr),
+        halfToFloat(e.accel_z_corr));
 
     if (++flush_cnt >= 50) {
       flush_cnt = 0;
