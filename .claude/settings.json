@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c ' *)",
+      "Bash(python3 *)",
       "Bash(find ~/.pico-sdk -name \"stdio_usb.c\" 2>/dev/null | head -5; find /usr -name \"stdio_usb.c\" 2>/dev/null | head -5)",
       "Read(//usr/**)",
       "Bash(ninja -C build -v)",
