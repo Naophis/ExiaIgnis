@@ -483,6 +483,30 @@ inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
     from_json_field(src, "windup_deg", dst.windup_deg);
 }
 
+inline void convertFromJson(JsonVariantConst src, turn_end_brake_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "w_th", dst.w_th);
+    from_json_field(src, "err_th", dst.err_th);
+    from_json_field(src, "p", dst.p);
+    from_json_field(src, "d", dst.d);
+}
+
+inline void convertFromJson(JsonVariantConst src, turn_angle_fb_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "gain", dst.gain);
+    from_json_field(src, "gain_i", dst.gain_i);
+    from_json_field(src, "i_max", dst.i_max);
+    from_json_field(src, "i_w_gate", dst.i_w_gate);
+    from_json_field(src, "gain_d", dst.gain_d);
+    from_json_field(src, "w_gain", dst.w_gain);
+}
+
+inline void convertFromJson(JsonVariantConst src, turn_w_pid_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "b", dst.b);
+    from_json_field(src, "d", dst.d);
+}
+
 /**
  * hardware.txt | offset.txt | sensor.txt
  * root
@@ -590,6 +614,9 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "motor_pid3", dst.motor_pid3);
     from_json_nested(src, "gyro_pid", dst.gyro_pid);
     from_json_nested(src, "gyro_pid_gain_limitter", dst.gyro_pid_gain_limitter);
+    from_json_nested(src, "turn_end_brake", dst.turn_end_brake);
+    from_json_nested(src, "turn_angle_fb", dst.turn_angle_fb);
+    from_json_nested(src, "turn_w_pid", dst.turn_w_pid);
     from_json_nested(src, "str_ang_pid", dst.str_ang_pid);
     from_json_nested(src, "str_ang_pid_fast", dst.str_ang_pid_fast);
     from_json_nested(src, "str_ang_dia_pid", dst.str_ang_dia_pid);

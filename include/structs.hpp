@@ -546,6 +546,90 @@ typedef struct {
   float windup_deg = 0;
 } kanayama_t;
 
+// 旋回終端(SLALOM/SLA_BACK_STR)でff_duty_rollがideal_wと共にゼロへ落ちた後、
+// 実測角速度(w_lp)が慣性で収束しきらず残ってしまう問題への対策
+// (2026-08-23、20260823_032339.csv/20260823_032239.csvで解析)。
+// |ego_in.w|(計画角速度)がw_th未満まで小さくなり、かつ|w.error_p|(残差)が
+// err_thを超えている間だけ、通常のgyro_pid.p/dの代わりにこのp/dを使う。
+// gyro_pid.p/d自体はFF主導設計を維持するため極小のまま変更しない
+// (control_law.cpp calc_angle_velocity_ctrl()参照)。
+typedef struct {
+  int enable = 0;
+  float w_th = 0.5f;   // |ideal_w|がこれ未満で「終端」とみなす(rad/s)
+  float err_th = 0.3f; // |w.error_p|がこれ以上でブレーキ発動(rad/s)
+  float p = 0.0f;
+  float d = 0.0f;
+} turn_end_brake_t;
+
+// 旋回角度不足(SLALOM/SLA_BACK_STR)への追加角度フィードバック(2026-08-23)。
+// ee->ang.i_bias(=img_ang-kim.theta、calc_angle_i_bias()参照)は実測との
+// ズレを正しい符号・大きさで検出できている(20260823_040833.csv解析:
+// 旋回終盤で-2.7deg相当、目標-45degに対し実測-42.3degの不足と一致)が、
+// 既存のkc_gain(=gyro_pid.c*i_bias、他モーションと共用)だけではduty%換算で
+// 最大1.7〜3.5%程度にしかならず力不足で埋めきれない。gyro_pid.cを直接上げると
+// STRAIGHT等他のモーションにも影響するため、SLALOM/SLA_BACK_STR専用の
+// 追加ゲインとして分離する(control_law.cpp calc_angle_velocity_ctrl()参照)。
+// SLALOM/SLA_BACK_STR用、実測kim_thetaを基準にした本物のPID(2026-08-23)。
+// angle_pid(p=4.5,d=4.5)は本来この役割を担うはずだったが、(1)基準が
+// ang_kf(=ego_in.ang、enable_kalman_gyro=0では計画値そのもの)で実測と
+// 無関係、(2)出力duty_roll_angがw目標へのオフセットとしてしか作用せず
+// gyro_pid.p(0.000325)経由で1/1000以下に希釈される、という二重の理由で
+// 実質何も収束させていなかった(2026-08-23判明)。ee->ang.i_bias
+// (=img_ang-kim.theta、calc_angle_i_bias()参照)は実測基準の正しい信号なので、
+// これに対してduty_rollへ直接加算する(希釈経路を通らない)本物のP+I+D
+// として作り直す。
+typedef struct {
+  int enable = 0;
+  float gain = 0.0f; // P: ee->ang.i_biasに掛けてduty_rollへ追加(gyro_pid.cとは別枠)
+  // I: ang.i_bias専用の積分項。既存w_error_i(アンチワインドヒステリシス付き)
+  // の流用は実機で発散したため、単純なクランプ付き積分を別途新設
+  // (turn_angle_fb_integral_参照)。旋回開始でゼロクリアされ、
+  // SLALOM/SLA_BACK_STR中のみ積算。
+  float gain_i = 0.0f;
+  float i_max = 0.0f; // 積分状態(rad*s)の絶対値クランプ。0なら無効
+  // I項の蓄積ウェイト閾値(2026-08-23追加): |実測w_lp|=0でweight=1、
+  // |w_lp|>=i_w_gateでweight=0となる線形ランプで積分の蓄積速度を連続的に
+  // 絞る(control_law.cpp calc_angle_velocity_ctrl()参照)。同一config・
+  // 同一FFでも旋回終端の残留角速度が実機ばらつきで2〜3倍変わり
+  // (20260823_054917.csv vs 054824.csv、w_lp突入後2.6〜3.2rad/s vs
+  // 0.9〜1.0rad/s)、積分が過渡回転そのものに巻き込まれて育つ量がrun毎に
+  // 違うことがオシレーション有無の分岐点になっていた。on/offのハード
+  // ゲートも試したが(20260823_060428.csv)、ゲートが開く瞬間に凍結中の
+  // i_biasが一気にフル蓄積を再開すること自体がステップ的な再点火となり
+  // 2段目の発振を生んだため、連続的な重み付けに変更した。0なら無効
+  // (常時フル蓄積、従来動作)。
+  float i_w_gate = 0.0f;
+  // D: ang.i_biasの1tick差分(turn_angle_fb_i_bias_prev_参照)に掛けて
+  // duty_rollへ追加。積分(gain_i)による位相遅れ・発振を減衰させる狙い。
+  float gain_d = 0.0f;
+  // w目標offsetへのΔw(2026-08-23追加、rad/s per rad): ee->ang.i_biasに
+  // 掛けてcalc_pid_val_ang_vel()のoffsetへ加算する(sen_kanayama_dwと同じ
+  // 経路)。gain/gain_i/gain_dはduty_rollへ直接加算するため、i_biasが長時間
+  // 一定値を保つ(STRAIGHT走行中の定常オフセット)と既存gyro_pid.bの積分
+  // (w_error_i)が「外乱」とみなして正確に打ち消してしまい、正味トルクが
+  // ゼロに収束して向きが直らないことが判明した(20260823_062913.csv/
+  // 062821.csv、kim_thetaが2.4°付近で数百tick停滞。gyro_pid.bのkb_gainが
+  // 逆算したturn_angle_fb出力とほぼ完全に相殺していた)。w_gainはw目標
+  // 自体をずらす経路なので、gyro_pid.bはこれと戦わずΔwへ実測wを追従させる
+  // 側に回る(既存kanayama_straightのk_theta*sin(e_theta)と同じ発想だが、
+  // k_theta=0.0005は壁追従用のゲインで弱すぎるため、旋回後の残差解消専用
+  // に独立させる)。gain/gain_i/gain_dは旋回直後の速い過渡分の減衰用として
+  // 残す(gyro_pid.bの反応は遅いため短時間なら相殺されない)。0なら無効。
+  float w_gain = 0.0f;
+} turn_angle_fb_t;
+
+// SLALOM/SLA_BACK_STR限定の角速度PID(積分b+減衰d)ブースト(2026-08-23)。
+// gyro_pid.b(角速度誤差の積分)を直接上げると収束は改善するが、積分特有の
+// 位相遅れにより発振しやすくなる(実機確認済み)。bを増やすときは同時にd
+// (減衰)も増やして位相余裕を確保するのがセオリー。gyro_pid.b/dはSTRAIGHT等
+// 他モーションと共用のため変更せず、SLALOM/SLA_BACK_STR限定の追加項として
+// 分離する(control_law.cpp calc_angle_velocity_ctrl()参照)。
+typedef struct {
+  int enable = 0;
+  float b = 0.0f; // w_error_iに掛けてduty_rollへ追加(gyro_pid.bとは別枠)
+  float d = 0.0f; // w_error_dに掛けてduty_rollへ追加(gyro_pid.dとは別枠、bとペアで減衰を確保)
+} turn_w_pid_t;
+
 // ASM330LHHの取り付け位置(車体基準点=v/wの基準点からのオフセット、mm)・
 // 向き(センサー座標系→車体座標系への回転角、deg)。EgoEstimatorで
 // 加速度のレバーアーム補正・座標変換に使う。全ゼロなら補正なし(単位行列
@@ -628,6 +712,9 @@ typedef struct {
   pid_param_t motor_pid3;
   pid_param_t gyro_pid;
   pid_param_t gyro_pid_gain_limitter;
+  turn_end_brake_t turn_end_brake;
+  turn_angle_fb_t turn_angle_fb;
+  turn_w_pid_t turn_w_pid;
   pid_param_t str_ang_pid;
   // 高速走行(非探索)時の壁PD専用ゲイン。str_ang_pidは.p/.iを探索モードの
   // P/D、.b/.dを高速モードのP/Dとして兼用する紛らわしい構成だったため、

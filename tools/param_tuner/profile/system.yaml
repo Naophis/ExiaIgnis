@@ -62,12 +62,12 @@ debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
 # mode: 0 # メイン
-# mode: 1 # 最短スローム
+mode: 1 # 最短スローム
 # mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
-mode: 9 # wall off: search_mode(1)->search_wall_off, 0->fast_run_wall_off
+# mode: 9 # wall off: search_mode(1)->search_wall_off, 0->fast_run_wall_off
 # mode: 11 # vacume: suction test
 # mode: 12 # silent_keep:
 # mode: 13 # keep_pos:
@@ -94,7 +94,7 @@ test: # テスト走行時に使用するパラメータ群
   decel: -2500
   dia_accl: 2500
   dia_decel: -2500
-  dist: 720 #直進
+  dist: 120 #直進
   suction_active: 0
 
   end_v: 10
@@ -102,7 +102,7 @@ test: # テスト走行時に使用するパラメータ群
   w_max: 12.5
   alpha: 180
   ang: 3600
-  search_mode: 1
+  search_mode: 0
   
   # [重要] AM32 ESC移行により、suction_duty系は0〜100%のduty%ではなく
   # ESCへの目標パルス幅を「us(1000〜2000)」で直接指定する値になった
@@ -188,7 +188,7 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 8
+  file_idx: 1
   sla_dist: 90
   # sla_type: 3
   sla_type: 4

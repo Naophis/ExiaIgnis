@@ -126,6 +126,13 @@ private:
   float last_accl                  = 0.0f;
   bool  gyro_pid_windup_histerisis = false;
   float gyro_pid_histerisis_i      = 0.0f;
+  // SLALOM/SLA_BACK_STR限定のang.i_bias専用積分(turn_angle_fb.gain_i)。
+  // 既存のw_error_i(アンチワインドヒステリシス付き)を再利用すると実機で
+  // 発散したため(2026-08-23、20260823_050137.csv)、これとは独立の単純な
+  // クランプ付き積分として新設する(control_law.cpp calc_angle_velocity_ctrl()
+  // 参照、旋回開始でゼロクリア)。
+  float turn_angle_fb_integral_    = 0.0f;
+  float turn_angle_fb_i_bias_prev_ = 0.0f; // D項用、旋回開始でゼロクリア
 
   // ---- デューティ中間値 ----
   float duty_c                    = 0.0f;
@@ -149,6 +156,7 @@ private:
   void  calc_pid_val_front_ctrl();
   void  reset_pid_val();
   void  calc_angle_i_bias();
+  bool  angle_i_bias_active(MotionType mt) const;
   void  calc_translational_ctrl();
   void  calc_angle_velocity_ctrl();
   void  calc_front_ctrl_duty();

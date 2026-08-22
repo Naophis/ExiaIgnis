@@ -839,6 +839,15 @@ ControlLaw::calc_pid_val_ang_vel() {
     }
   }
   offset += sen_kanayama_dw;
+
+  // turn_angle_fb.w_gain(2026-08-23追加): ee->ang.i_biasをw目標offsetへ
+  // 直接加算する(sen_kanayama_dwと同じ経路)。duty_rollへ直接足すgain/
+  // gain_i/gain_dと違い、既存gyro_pid.bの積分(w_error_i)と戦わない
+  // (calc_angle_velocity_ctrl()側のturn_angle_fb_gainコメント参照)。
+  if (param_->turn_angle_fb.enable &&
+      angle_i_bias_active(tgt->motion_type)) {
+    offset += param_->turn_angle_fb.w_gain * ee->ang.i_bias;
+  }
   ee->aw_log.duty_roll_before = (tgt->ego_in.w + offset);
 
   ee->w.error_p = (tgt->ego_in.w + offset) - se->ego.w_lp;
@@ -909,21 +918,22 @@ void ControlLaw::reset_pid_val() {
   ee->w_val.z = ee->w_val.zz = 0;
 }
 
+// ee->ang.i_bias(=img_ang-kim.theta、実測基準の姿勢誤差)を計算する対象
+// motion_typeか。PIVOT系/BACK_STRAIGHT/READY/FRONT_CTRLは基準となる
+// img_ang自体の意味が異なる(またはこの区間で姿勢保持が不要)ため除外。
+bool ControlLaw::angle_i_bias_active(MotionType mt) const {
+  if (search_mode_) return false;
+  return !(mt == MotionType::NONE || mt == MotionType::PIVOT ||
+           mt == MotionType::PIVOT_PRE || mt == MotionType::PIVOT_PRE2 ||
+           mt == MotionType::PIVOT_AFTER || mt == MotionType::PIVOT_OFFSET ||
+           mt == MotionType::BACK_STRAIGHT || mt == MotionType::READY ||
+           mt == MotionType::FRONT_CTRL);
+}
+
 void ControlLaw::calc_angle_i_bias() {
-  if (tgt_val_->motion_type == MotionType::NONE ||
-      tgt_val_->motion_type == MotionType::PIVOT ||
-      tgt_val_->motion_type == MotionType::PIVOT_PRE ||
-      tgt_val_->motion_type == MotionType::PIVOT_PRE2 ||
-      tgt_val_->motion_type == MotionType::PIVOT_AFTER ||
-      tgt_val_->motion_type == MotionType::PIVOT_OFFSET ||
-      tgt_val_->motion_type == MotionType::BACK_STRAIGHT ||
-      tgt_val_->motion_type == MotionType::READY ||
-      tgt_val_->motion_type == MotionType::FRONT_CTRL) {
-    ee->ang.i_bias = 0;
-  } else {
+  if (angle_i_bias_active(tgt_val_->motion_type)) {
     ee->ang.i_bias = tgt_val_->ego_in.img_ang - ego_->kim.theta;
-  }
-  if (search_mode_) {
+  } else {
     ee->ang.i_bias = 0;
   }
 }
@@ -1070,6 +1080,30 @@ ControlLaw::calc_angle_velocity_ctrl() {
                           prev_mt == MotionType::SLA_BACK_STR);
     const bool now_turn = (tgt_val_->motion_type == MotionType::SLALOM ||
                           tgt_val_->motion_type == MotionType::SLA_BACK_STR);
+    // turn_angle_fb(2026-08-23、当初SLALOM/SLA_BACK_STR限定で実装したが、
+    // STRAIGHT走行中もkim_thetaが無補正で単調にドリフトし続ける問題が発覚
+    // したため、calc_angle_i_bias()がi_biasを計算する対象と同じ範囲
+    // (angle_i_bias_active()、探索モード除く実質全モーション)に拡張する)。
+    const bool was_active = angle_i_bias_active(prev_mt);
+    const bool now_active = angle_i_bias_active(tgt_val_->motion_type);
+    if ((!was_active && now_active) || (was_turn && !now_turn)) {
+      // 対象区間への突入、および旋回(SLALOM/SLA_BACK_STR)からの離脱で
+      // 積分をゼロクリアする。後者を入れないと旋回中に貯めた「追いつく
+      // ための蓄積値」がそのままSTRAIGHTへ持ち越され、既に旋回は終わって
+      // いるのに古い積分値が余計な補正をかけ続けて発振の引き金になる
+      // (2026-08-23、20260823_054151.csv: 旋回直後のSTRAIGHTでw_lp±6rad/s
+      // 級の振動、idx820付近まで約250tick持続してから収束)。
+      turn_angle_fb_integral_ = 0.0f;
+    }
+    if (now_active) {
+      // 対象区間内でのmotion_type切り替え全て(SLALOM<->SLA_BACK_STR境界
+      // 含む)でD項の前回値を現在値に同期する。img_angはmotion_type境界で
+      // 新セグメントの基準に切り替わりi_bias(=img_ang-kim.theta)が
+      // 不連続にジャンプするため、そのまま差分を取ると1tickだけ巨大な
+      // 偽の変化量を拾ってしまう(2026-08-23、20260823_052617.csvで
+      // duty急変・大振動を確認して発覚)。
+      turn_angle_fb_i_bias_prev_ = ee->ang.i_bias;
+    }
     if (was_turn && !now_turn) {
       // 旋回終了: ヨーレートI項を0クリアする。v=2200でフェアなベースライン
       // (n=4, angOsc平均12.00°)比 angOsc平均8.22°への改善を確認済み
@@ -1170,14 +1204,116 @@ ControlLaw::calc_angle_velocity_ctrl() {
       ang_sum = 0;
     }
 
-    auto kp_gain = param_->gyro_pid.p * ee->w.error_p;
+    // 旋回終端ブレーキ(2026-08-23): SLALOM/SLA_BACK_STRでff_duty_rollが
+    // ideal_wと共にゼロへ落ちた後、実測角速度(w_lp)が慣性で収束しきらず
+    // 残留する問題への対策(20260823_032339.csv/20260823_032239.csvで確認、
+    // SLA_BACK_STR突入後もw_lpが収束せず増大するケースあり)。gyro_pid.p/dは
+    // FF主導設計を保つため極小(p=0.000325等)のままにし、計画角速度が
+    // ほぼゼロ(=FFがもう仕事をしていない)かつ実残差が大きい間だけ、
+    // 専用ゲインturn_end_brake.p/dに切り替えて能動的に残留回転を止める。
+    //
+    // [2026-08-23 修正] 当初SLALOMも対象に含めていたが、|ideal_w|<w_thは
+    // 旋回終盤だけでなく旋回"開始"直後(idealwがまだ0から立ち上がる途中)にも
+    // 成立してしまい、旋回入り口で誤爆して過大なduty(飽和→発振)を起こした
+    // (20260823_033928.csvで確認)。SLA_BACK_STRは常にideal_w=0で立ち上がり
+    // 局面が存在しないため、SLA_BACK_STRのみを対象にして誤爆を構造的に排除する。
+    //
+    // [単位に関する注意] duty_roll(=kp_gain+ki_gain+...の合計)はduty%では
+    // なくトルクとして扱われ、summation_duty()で
+    // torque*Resist/(Km*gear_a/gear_b)/battery*100 (≈4650倍、実測値から算出)
+    // という変換を経てduty%になる(control_law.cpp:1305-1313)。通常の
+    // gyro_pid.p=0.000325が極小なのはこの増幅を見込んだ値であり、
+    // turn_end_brake.p/dも同じ増幅を受けることに注意(小さい値で十分効く)。
+    const bool turn_end_brake_active =
+        param_->turn_end_brake.enable &&
+        tgt_val_->motion_type == MotionType::SLA_BACK_STR &&
+        ABS(tgt_val_->ego_in.w) < param_->turn_end_brake.w_th &&
+        ABS(ee->w.error_p) > param_->turn_end_brake.err_th;
+
+    auto kp_gain = (turn_end_brake_active ? param_->turn_end_brake.p
+                                           : param_->gyro_pid.p) *
+                   ee->w.error_p;
     auto ki_gain = param_->gyro_pid.i * diff_ang;
     auto kb_gain = param_->gyro_pid.b * w_error_i;
+    // auto kb_gain = param_->gyro_pid.b * ee->w.error_i;
     auto kc_gain = param_->gyro_pid.c * ee->ang.i_bias;
-    auto kd_gain = param_->gyro_pid.d * w_error_d;
+    auto kd_gain = (turn_end_brake_active ? param_->turn_end_brake.d
+                                           : param_->gyro_pid.d) *
+                   w_error_d;
     limitter(kp_gain, ki_gain, kb_gain, kd_gain,
              param_->gyro_pid_gain_limitter);
+
+    // 姿勢保持フィードバック(2026-08-23): ee->ang.i_bias(=img_ang-kim.theta)
+    // 自体は正しい符号・大きさで実測とのズレを検出できている(20260823_040833.
+    // csv解析: 旋回終盤で-2.7deg相当、目標-45degに対し実測-42.3degの不足と
+    // 一致)が、既存kc_gain(=gyro_pid.c*i_bias、他モーションと共用)だけでは
+    // 力不足。当初SLALOM/SLA_BACK_STR限定で追加していたが、STRAIGHT走行中も
+    // kim_thetaが無補正で単調ドリフトし続ける問題が発覚した(2026-08-23、
+    // 20260823_053234.csv: STRAIGHT区間708tickでkim_thetaが0→5.1degへ単調
+    // 増加)ため、calc_angle_i_bias()がi_biasを計算する対象と同じ範囲
+    // (angle_i_bias_active())に適用範囲を拡張する(structs.hpp
+    // turn_angle_fb_t参照)。
+    float turn_angle_fb_gain = 0.0f;
+    if (param_->turn_angle_fb.enable &&
+        angle_i_bias_active(tgt_val_->motion_type)) {
+      turn_angle_fb_gain = param_->turn_angle_fb.gain * ee->ang.i_bias;
+
+      // ang.i_bias専用の積分(2026-08-23): 既存w_error_i(アンチワインド
+      // ヒステリシス付き)を再利用したturn_w_pidは実機で発散した
+      // (20260823_050137.csv、duty全飽和・kim_thetaオーバーシュート)。
+      // ヒステリシスの離散的な切り替えが原因と見て、これとは無関係な
+      // 単純クランプ付き積分をi_bias専用に新設する。
+      // I蓄積ウェイト(2026-08-23): |実測w_lp|が大きいほど積分の蓄積速度を
+      // 連続的に絞る(w_lp=0でweight=1、|w_lp|>=i_w_gateでweight=0への線形
+      // ランプ)。旋回終端の残留角速度は同一config・同一FFでも実機ばらつきで
+      // 2〜3倍変わり(20260823_054917.csv vs 054824.csv)、無条件蓄積だと
+      // その過渡回転そのものに巻き込まれて育つ量がrun毎に違ってしまい、
+      // オシレーション有無の分岐点になっていた。
+      // [2026-08-23 修正] 当初on/offのハードゲートで実装したが
+      // (20260823_060428.csv)、ゲートが開いた瞬間に凍結中に持ち越された
+      // i_biasが一気にフル蓄積を再開してしまい、それ自体がステップ的な
+      // 再点火となって2段目の発振を生んだ(アンチワインドヒステリシスの
+      // 離散切り替えで発散したturn_w_pidと同じ落とし穴)。on/offではなく
+      // 連続的な重み付けにすることで、この再点火時のステップを無くす。
+      // i_w_gate=0なら従来通り常時フル蓄積。
+      float i_weight = 1.0f;
+      if (param_->turn_angle_fb.i_w_gate > 0) {
+        i_weight = std::clamp(
+            1.0f - ABS(se->ego.w_lp) / param_->turn_angle_fb.i_w_gate, 0.0f,
+            1.0f);
+      }
+      turn_angle_fb_integral_ += ee->ang.i_bias * dt_ * i_weight;
+      if (param_->turn_angle_fb.i_max > 0) {
+        turn_angle_fb_integral_ = std::clamp(turn_angle_fb_integral_,
+                                             -param_->turn_angle_fb.i_max,
+                                             param_->turn_angle_fb.i_max);
+      }
+      turn_angle_fb_gain +=
+          param_->turn_angle_fb.gain_i * turn_angle_fb_integral_;
+
+      // D: ang.i_biasの1tick差分に掛けてduty_rollへ追加。angle_pid本来の
+      // d=4.5相当の減衰役をここで担う(2026-08-23、angle_pidはgyro_pid.p
+      // 経由の希釈により実質無効だったため、この直接加算経路に統合)。
+      const float i_bias_d = ee->ang.i_bias - turn_angle_fb_i_bias_prev_;
+      turn_angle_fb_i_bias_prev_ = ee->ang.i_bias;
+      turn_angle_fb_gain += param_->turn_angle_fb.gain_d * i_bias_d;
+    }
+
+    // SLALOM/SLA_BACK_STR限定の角速度PID(積分b+減衰d)ブースト(2026-08-23):
+    // gyro_pid.bを直接上げると収束は改善するが発振しやすい(実機確認)。積分の
+    // 位相遅れをdの増量で相殺するため、bとdを必ずペアで上乗せする
+    // (structs.hpp turn_w_pid_t参照、gyro_pid.b/d自体は他モーションと共用の
+    // ため変更しない)。
+    float turn_w_b_gain = 0.0f, turn_w_d_gain = 0.0f;
+    if (param_->turn_w_pid.enable &&
+        (tgt_val_->motion_type == MotionType::SLALOM ||
+         tgt_val_->motion_type == MotionType::SLA_BACK_STR)) {
+      turn_w_b_gain = param_->turn_w_pid.b * w_error_i;
+      turn_w_d_gain = param_->turn_w_pid.d * w_error_d;
+    }
+
     duty_roll = kp_gain + ki_gain + kb_gain + kc_gain + kd_gain +
+                turn_angle_fb_gain + turn_w_b_gain + turn_w_d_gain +
                 (ee->ang_log.gain_z - ee->ang_log.gain_zz) * dt_;
 
     ee->ang_log.gain_zz = ee->ang_log.gain_z;
@@ -1269,7 +1405,13 @@ ControlLaw::summation_duty() {
         se->ego.battery_lp * 100;
   } else if (param_->torque_mode == 2) {
     auto ff_front2 = trj_->mpc_next_ego.ff_front_torque;
-    auto ff_roll2 = trj_->mpc_next_ego.ff_roll_torque;
+    // ff_roll_torqueはmpc_tgt_calc.cpp(Simulinkコード生成、
+    // ff_roll_torque = 0.5*Lm*alpha2*Resist)側で既にResistが掛かっている。
+    // 下でtorque_r/torque_lごとResist/km_gearを掛けるため、ここで割らないと
+    // ff_roll2だけResistが二重適用(実効Resist^2)になり、ff_front_torque
+    // (Resist抜きで生成される)や他の項とスケールが揃わない(2026-08-23発見、
+    // 旋回終端ブレーキの検討中に判明)。ここで一度割って二重適用を相殺する。
+    auto ff_roll2 = trj_->mpc_next_ego.ff_roll_torque / param_->Resist;
     auto ff_duty_r2 = trj_->mpc_next_ego.ff_duty_rpm_r;
     auto ff_duty_l2 = trj_->mpc_next_ego.ff_duty_rpm_l;
     auto ff_friction_r = trj_->mpc_next_ego.ff_friction_torque_r;
@@ -1353,6 +1495,8 @@ void ControlLaw::apply_duty_limitter() {
 void ControlLaw::clear_ctrl_val() {
   duty_c = duty_roll = duty_front_ctrl_roll_keep = duty_roll_ang = 0;
   sen_kanayama_dw = 0;
+  turn_angle_fb_integral_ = 0;
+  turn_angle_fb_i_bias_prev_ = 0;
   ee->v.error_i = ee->v.error_d = ee->v.error_dd = 0;
   ee->dist.error_i = ee->dist.error_d = ee->dist.error_dd = 0;
   ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;
