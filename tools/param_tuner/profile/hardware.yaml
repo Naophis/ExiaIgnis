@@ -50,11 +50,11 @@ Ke: 0.000945  # 大：逆起電力大
 # Km: 0.00260946 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00130473 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00145 # トルク定数：　大-> 縦系の出力小
-Km: 0.00180 # トルク定数：　大-> 縦系の出力小
-Lm: 0.00000035 # 大：横系の出力大
+Km: 0.00160 # トルク定数：　大-> 縦系の出力小
+Lm: 0.00000275 # 大：横系の出力大
 
-coulomb_friction: 0.0000125 # クーロン摩擦
-viscous_friction: 0.000825 # 粘性摩擦
+coulomb_friction: 0.000075 # クーロン摩擦
+viscous_friction: 0.000925 # 粘性摩擦
 
 # coulomb_friction: 0.0 # クーロン摩擦
 # viscous_friction: 0.0 # 粘性摩擦
@@ -188,12 +188,7 @@ motor_pid2:
   #AS5147P 
   mode: 7
 
-  # p: 0.0000065
-  # i: 0.00000375
-  # b: 0.00
-  # d: 0.0000125
-
-  p: 0.00001375
+  p: 0.00001325
   i: 0.00000425
   b: 0.00
   d: 0.0000175
@@ -349,8 +344,8 @@ str_ang_pid:
 # 保守的な初期値)。
 str_ang_pid_fast:
   mode: 2
-  p: 0.035
-  i: 0.0035
+  p: 0.0375
+  i: 0.00375
   d: 0.0325
   c: 0
 
@@ -380,8 +375,8 @@ sensor_pid_dia:
   c: 0
   mode: 0
 gyro_param:
-  gyro_w_gain_left: 0.00245450
-  gyro_w_gain_right: 0.00245450
+  gyro_w_gain_left: 0.002456125
+  gyro_w_gain_right: 0.002456125
   retry_min_th: 0
   retry_max_th: 3
   robust_th: 0.95
