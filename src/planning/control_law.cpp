@@ -116,17 +116,15 @@ ControlLaw::calc_tgt_duty() {
     ee->sen_log_dia.gain_zz = 0;
     ee->sen_log_dia.gain_z = 0;
   } else if (tgt_val_->nmr.sct == SensorCtrlType::Dia) {
+    // sen_kanayama_dwはcalc_sensor_pid_dia()内で毎回設定される(kanayama_dia
+    // 有効時のみ非0、無効時/柱ロスト時は同関数内で0にする)。2026-08-23の
+    // SLALOM/SLA_BACK_STR跨ぎ凍結バグ(20260823_072147.csv)と同じ理由で、
+    // ここで呼ばれない他sct(Straight/NONE)遷移時にも凍結が残らないよう、
+    // 呼び出し元(calc_sensor_pid_dia)側で毎tick明示的に更新する。
     duty_sen = calc_sensor_pid_dia();
     ee->sen.error_i = 0;
     ee->sen_log.gain_zz = 0;
     ee->sen_log.gain_z = 0;
-    // sen_kanayama_dwはcalc_sensor_pid()(sct==Straightの時だけ呼ばれる)内でしか
-    // 更新されないメンバ変数。ここで呼ばれない間は直前(直進区間)の値が
-    // そのまま凍結して残ってしまうため、duty_sen/ee->sen.error_iと同様に
-    // ゼロクリアする(2026-08-23、SLA_FRONT_STR終端の壁追従値0.39rad/sが
-    // SLALOM/SLA_BACK_STRを跨いで凍結し、旋回後STRAIGHTのw目標offsetを
-    // 支配して収束を妨げていたバグを修正、20260823_072147.csv解析)。
-    sen_kanayama_dw = 0;
   } else if (tgt_val_->nmr.sct == SensorCtrlType::NONE) {
     duty_sen = sen_ang = 0;
     ee->sen.error_i = 0;
@@ -385,6 +383,15 @@ ControlLaw::calc_sensor_pid_dia() {
   SensingControlType type = SensingControlType::None;
   ee->sen_dia.error_d = ee->sen_dia.error_p;
   ee->sen_dia.error_p = check_sen_error_dia(type);
+  // 90度センサー(left90_mid/right90_mid)は斜め走行中はほぼ正面(柱の角)を
+  // 向いており、真横を向く45度センサーのような線形な横偏差計測にはなって
+  // いない(2026-08-24、ユーザー指摘)。柱近傍で幾何的に歪んだ値が出ても
+  // 暴走しないよう誤差の絶対値をth(mm)でクランプする。th<=0なら無効
+  // (要実機チューニング、まずは控えめな値から)。
+  if (param_->sensor_pid_dia.th > 0) {
+    ee->sen_dia.error_p = std::clamp(
+        ee->sen_dia.error_p, -param_->sensor_pid_dia.th, param_->sensor_pid_dia.th);
+  }
   ee->sen_dia.error_d = ee->sen_dia.error_p - ee->sen_dia.error_d;
 
   if (type == SensingControlType::DiaPiller && ee->sen_dia.error_p != 0) {
@@ -405,6 +412,20 @@ ControlLaw::calc_sensor_pid_dia() {
     duty = 0;
     set_ctrl_val(ee->s_val, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   }
+
+  // kanayama_dia(2026-08-24): kanayama_straightとは別パラメータにする
+  // (ユーザー方針)。ey(柱距離誤差、上でクランプ済みだが依然として非単調)
+  // はky/kiに使わず0固定運用とし、kim_theta基準の実測ヘディング誤差
+  // e_thetaに対するk_thetaのみ角速度ループへ直結する。ky/ki相当が今後
+  // 欲しくなってもkanayama_straightのki発散を踏まえ別チューニングが要る。
+  if (type == SensingControlType::DiaPiller && param_->kanayama_dia.enable) {
+    const float e_theta =
+        tgt_val_->ego_in.ang - sensing_result_->ego.kim_theta;
+    sen_kanayama_dw = param_->kanayama_dia.k_theta * sinf(e_theta);
+  } else {
+    sen_kanayama_dw = 0;
+  }
+
   float limit = 0;
   if (type == SensingControlType::None) {
     return 0;

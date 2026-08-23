@@ -523,6 +523,25 @@ sensor_pid_dia:
   b: 0
   c: 0
   mode: 0
+  # error_p(mm)の絶対値クランプ(2026-08-24追加)。left90/right90_midは斜め
+  # 走行中ほぼ正面を向いており45度センサーのような線形な横偏差計測になって
+  # いないため、柱近傍の幾何的に歪んだ値が暴走しないよう抑える。要実機
+  # チューニング、まずは控えめな値から。0以下で無効。
+  th: 15
+
+# calc_sensor_pid_dia()専用のKanayamaカスケード(2026-08-24追加)。
+# kanayama_straightとは別パラメータ: ey(柱距離誤差)は進行状況で非単調に
+# 変化しky/kiと相性が悪いため、kx/ky/kiは使わずe_theta(kim_theta基準の
+# 実測ヘディング誤差)のk_thetaのみ角速度ループへ直結する想定。要実機
+# チューニングのためenable=0で開始する。
+kanayama_dia:
+  kx: 0
+  ky: 0
+  ki: 0
+  k_theta: 0.0005
+  enable: 1
+  windup: 0
+  windup_deg: 0
 gyro_param:
   gyro_w_gain_left: 0.002456125
   gyro_w_gain_right: 0.002456125

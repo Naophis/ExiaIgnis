@@ -503,6 +503,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["dia90_offset"]             = src.dia90_offset;
     dst["kanayama"]                 = src.kanayama;
     dst["kanayama_straight"]        = src.kanayama_straight;
+    dst["kanayama_dia"]             = src.kanayama_dia;
     {
         JsonArray a = dst["axel_degenerate_x"].to<JsonArray>();
         for (float v : src.axel_degenerate_x) a.add(v);

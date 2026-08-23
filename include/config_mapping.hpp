@@ -793,6 +793,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "dia90_offset", dst.dia90_offset);
     from_json_nested(src, "kanayama", dst.kanayama);
     from_json_nested(src, "kanayama_straight", dst.kanayama_straight);
+    from_json_nested(src, "kanayama_dia", dst.kanayama_dia);
     // 軸退化ゲインテーブル (hardware.yaml: axel_degenerate_*)
     from_json_vector(src, "axel_degenerate_x",          dst.axel_degenerate_x);
     from_json_vector(src, "axel_degenerate_y",          dst.axel_degenerate_y);

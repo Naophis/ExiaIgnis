@@ -916,9 +916,16 @@ typedef struct {
   float dia90_offset = 0;
   kanayama_t kanayama;
   // STRAIGHT壁追従用Kanayamaカスケード(calc_sensor_pid()参照)。kxは未使用。
-  // enable=0(既定)はstr_ang_pid_fastのduty直接注入のまま、enable=1で
-  // ey(壁センサー横偏差)→Δw→既存gyro_pidという経路に切り替える。
+  // str_ang_pid_fastのP+D直接duty注入と排他ではなく常時並行実行し、
+  // ey(壁センサー横偏差)・e_theta(kim_theta基準の向き誤差)からのΔwを
+  // 角速度ループへ追加offsetとして加算する(2026-08-23の並行構成)。
   kanayama_t kanayama_straight;
+  // Dia壁/柱追従用Kanayamaカスケード(calc_sensor_pid_dia()参照、2026-08-24
+  // 追加)。kanayama_straightとは別パラメータにする: 斜めのey(柱距離誤差)は
+  // 進行状況で非単調に変化し、ky/kiをそのまま流用すると遅い積分が暴れる
+  // リスクが高いため、kxとkyとkiは未使用のまま0固定運用とし、kim_theta基準の
+  // e_theta(実測ヘディング)を使うk_thetaのみ使う想定。
+  kanayama_t kanayama_dia;
 
   // 軸退化ゲインテーブル (control_law で interp1d に渡す)
   std::vector<float> axel_degenerate_x;
