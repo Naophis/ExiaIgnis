@@ -24,8 +24,10 @@ interface Props {
   connectedPath: string | null;
   status: ConnectionStatus;
   autoConnect: boolean;
+  flashing: boolean;
   onDisconnect: () => void;
   onEnableAutoConnect: () => void;
+  onFlash: () => void;
 }
 
 export function PortPanel({
@@ -33,8 +35,10 @@ export function PortPanel({
   connectedPath,
   status,
   autoConnect,
+  flashing,
   onDisconnect,
   onEnableAutoConnect,
+  onFlash,
 }: Props) {
   const label = !autoConnect
     ? "Disconnected (auto-connect paused)"
@@ -50,6 +54,9 @@ export function PortPanel({
         {connectedPath ?? (ports[0]?.path ? `検出済み: ${ports[0].path}` : "デバイス未検出")}
       </span>
       <div className="flex-1" />
+      <Button size="sm" variant="outline" disabled={flashing} onClick={onFlash}>
+        {flashing ? "Flashing..." : "Flash"}
+      </Button>
       {status === "disconnected" && !autoConnect ? (
         <Button size="sm" onClick={onEnableAutoConnect}>
           自動接続を再開

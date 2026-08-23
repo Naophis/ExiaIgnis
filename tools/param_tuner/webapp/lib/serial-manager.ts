@@ -41,6 +41,11 @@ interface DumpState {
   fileName: string;
   record: string;
   totalBytes: number;
+  // The record byte size the device declared in ready___:<byteSize>, kept
+  // around as ground truth to cross-check the summed dataStruct sizes
+  // against in switchToBinaryMode - see the comment there for why the sum
+  // alone can't be trusted.
+  expectedRecordByteSize: number;
 }
 
 interface PendingAck {
@@ -126,6 +131,7 @@ function freshDumpState(): DumpState {
     fileName: nowStamp("csv"),
     record: "",
     totalBytes: 0,
+    expectedRecordByteSize: 0,
   };
 }
 
@@ -386,9 +392,13 @@ class SerialManager extends EventEmitter {
         // size field into NaN, which would otherwise poison the
         // recordByteSize sum (NaN + n = NaN) used by switchToBinaryMode and
         // crash array construction later with no clue which field caused
-        // it. Log the exact raw line so the bad field is traceable, and
-        // skip it rather than pushing a field we can't offset by.
-        if (!Number.isFinite(size) || size <= 0) {
+        // it. Also reject an unrecognized type: an unrelated telemetry line
+        // (e.g. "ADC0:123:4") that happens to contain two colons would
+        // otherwise get mistaken for a real field. Log the exact raw line so
+        // the bad field is traceable, and skip it rather than pushing a
+        // field we can't offset by.
+        const validType = parts[1] === "float" || parts[1] === "int" || parts[1] === "short";
+        if (!validType || !Number.isFinite(size) || size <= 0) {
           this.emit("log", `[LoggingTask] corrupt data_struct line, skipping: ${JSON.stringify(data)}`);
         } else {
           dump.dataStruct.push({ name: parts[0], type: parts[1] as FieldType, size });
@@ -424,6 +434,7 @@ class SerialManager extends EventEmitter {
       dump.fileName = nowStamp("csv");
       dump.record = "";
       dump.dataStruct = [];
+      dump.expectedRecordByteSize = parseInt(data.split(":")[1] ?? "0", 10);
     }
 
     if (/^start___/.test(data)) {
@@ -457,7 +468,17 @@ class SerialManager extends EventEmitter {
 
     const fieldCount = dump.dataStruct.length;
     const recordByteSize = dump.dataStruct.reduce((s, d) => s + d.size, 0);
-    const recordNum = recordByteSize > 0 ? Math.floor(totalBytes / recordByteSize) : 0;
+    // ready___:<byteSize> already told us the true per-record size computed
+    // firmware-side (sizeof all the LogStructs). If our accumulated
+    // dataStruct sums to something else, a name:type:size line was dropped
+    // or an extra one slipped in during the ~120-line header burst - the
+    // resulting recordByteSize would still be a normal-looking positive
+    // number, so without this check every field after the gap would read
+    // from the wrong offset and silently produce a garbled-but-plausible
+    // CSV instead of a clearly-detected failure.
+    const expected = dump.expectedRecordByteSize;
+    const headerMismatch = expected > 0 && recordByteSize !== expected;
+    const recordNum = recordByteSize > 0 && !headerMismatch ? Math.floor(totalBytes / recordByteSize) : 0;
 
     this.binaryMode = true;
     if (this.parser) this.port.unpipe(this.parser as NodeJS.WritableStream);
@@ -478,16 +499,17 @@ class SerialManager extends EventEmitter {
     parser.once("data", (binaryData: Buffer) => {
       // dataStruct comes from ready___-preceded name:type:size lines; if that
       // header was missing entirely (e.g. start___ arrived without a
-      // ready___ first), fieldCount/recordByteSize are 0 and there's no
-      // known layout to split the bytes by - can't build the normal table,
-      // but the bytes themselves are still real data, so write them out raw
-      // (one column) instead of losing the capture. Log the full context so
-      // the actual cause (usually upstream: a dropped ready___ line, or a
-      // firmware-side size mismatch) is traceable from this line alone.
-      if (fieldCount === 0 || recordByteSize <= 0) {
+      // ready___ first) or doesn't sum to the byteSize the device declared
+      // in ready___ (a line got dropped or an extra one slipped in), there's
+      // no trustworthy layout to split the bytes by - can't build the
+      // normal table, but the bytes themselves are still real data, so
+      // write them out raw (one column) instead of losing the capture or
+      // silently misaligning every field after the gap. Log the full
+      // context so the actual cause is traceable from this line alone.
+      if (fieldCount === 0 || recordByteSize <= 0 || headerMismatch) {
         this.emit(
           "log",
-          `[LoggingTask] dump header missing/corrupt (fields=${fieldCount}, recordByteSize=${recordByteSize}, totalBytes=${totalBytes}, dataStruct=${JSON.stringify(dump.dataStruct)}); writing raw bytes instead`
+          `[LoggingTask] dump header missing/corrupt (fields=${fieldCount}, recordByteSize=${recordByteSize}, expectedRecordByteSize=${expected}, totalBytes=${totalBytes}, dataStruct=${JSON.stringify(dump.dataStruct)}); writing raw bytes instead`
         );
         const content = `raw_byte\n${Array.from(binaryData).join("\n")}\n`;
         this.writeLogFile(dump.fileName, content);

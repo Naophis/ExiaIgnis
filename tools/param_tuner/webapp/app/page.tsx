@@ -41,6 +41,7 @@ export default function Home() {
   const [sending, setSending] = useState<string | null>(null);
 
   const [rightTab, setRightTab] = useState<"console" | "plot">("console");
+  const [flashing, setFlashing] = useState(false);
   const [plotAutoOpen, setPlotAutoOpen] = useState<{ file: string; nonce: number } | null>(null);
 
   const [editing, setEditing] = useState<EditTarget | null>(null);
@@ -162,6 +163,20 @@ export default function Home() {
 
   const handleDisconnect = async () => {
     await fetch("/api/disconnect", { method: "POST" });
+  };
+
+  const handleFlash = async () => {
+    setFlashing(true);
+    try {
+      const res = await fetch("/api/flash", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "flashに失敗しました");
+      toast.success("flash完了");
+    } catch (err) {
+      toast.error(`flash失敗: ${(err as Error).message}`);
+    } finally {
+      setFlashing(false);
+    }
   };
 
   const sendOne = async (scope: SendScope, file: string) => {
@@ -322,8 +337,10 @@ export default function Home() {
         connectedPath={connectedPath}
         status={status}
         autoConnect={autoConnect}
+        flashing={flashing}
         onDisconnect={handleDisconnect}
         onEnableAutoConnect={handleEnableAutoConnect}
+        onFlash={handleFlash}
       />
       {showMatrix ? (
         <div className="flex flex-1 overflow-hidden">
