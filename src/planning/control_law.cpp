@@ -383,20 +383,24 @@ __attribute__((noinline, section(".time_critical.control_law"))) float
 ControlLaw::calc_sensor_pid_dia() {
   float duty = 0;
   SensingControlType type = SensingControlType::None;
-  ee->sen_dia.error_i += ee->sen_dia.error_p;
   ee->sen_dia.error_d = ee->sen_dia.error_p;
   ee->sen_dia.error_p = check_sen_error_dia(type);
   ee->sen_dia.error_d = ee->sen_dia.error_p - ee->sen_dia.error_d;
 
   if (type == SensingControlType::DiaPiller && ee->sen_dia.error_p != 0) {
-    duty = param_->sensor_pid_dia.p * ee->sen_dia.error_p -
-           param_->sensor_pid_dia.d * sensing_result_->ego.w_kf;
+    // I項は使わない(2026-08-24、ユーザー判断): 斜めは壁/柱までの距離が
+    // 進行状況に応じて凸凹し定常値に収束しないため積分と相性が悪い。
+    // D項もerror_d(距離差分)ではなくw_kf基準の残差角速度を使う: 同じ理由
+    // でerror_dもノイズだらけになる。raw w_kfだとtrj_->w_cmd由来の計画的な
+    // 旋回成分まで抑制対象に入ってしまうため、w_cmdを差し引いた残差
+    // (=計画外の回転)だけを減衰対象にする。
+    const float w_residual = sensing_result_->ego.w_kf - trj_->w_cmd;
+    const float p_gain = param_->sensor_pid_dia.p * ee->sen_dia.error_p;
+    const float d_gain = -param_->sensor_pid_dia.d * w_residual;
+    duty = p_gain + d_gain;
     const float gain = 0.1f;
     set_ctrl_val(ee->s_val, ee->sen_dia.error_p * gain, 0, 0,
-                 ee->sen_dia.error_d * gain,
-                 param_->sensor_pid_dia.p * ee->sen_dia.error_p * gain,
-                 param_->sensor_pid_dia.i * ee->sen_dia.error_i * gain, 0,
-                 param_->sensor_pid_dia.d * ee->sen_dia.error_d * gain, 0, 0);
+                 w_residual * gain, p_gain * gain, 0, 0, d_gain * gain, 0, 0);
   } else {
     duty = 0;
     set_ctrl_val(ee->s_val, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -409,6 +413,11 @@ ControlLaw::calc_sensor_pid_dia() {
                               param_->sensor_deg_limitter_dia,
                               tgt_val_->ego_in.v, false);
   }
+  // 直進側calc_sensor_pid()と同じ度→rad変換が抜けていたバグ修正(2026-08-24)。
+  // sensor_deg_limitter_diaは度で設定されているが、この変換がないと事実上
+  // ノーリミットになる(1.5〜6.5度のつもりが1.5〜6.5radになっていた、
+  // 20260824_005119.csv index1208-1253でduty_sen=0.42まで到達して発覚)。
+  limit = limit / 180.0f * M_PI;
   duty = std::clamp(duty, -limit, limit);
   return duty;
 }
