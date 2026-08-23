@@ -360,18 +360,20 @@ ControlLaw::calc_sensor_pid() {
   } else if (type == SensingControlType::Wall) {
     limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
                               param_->sensor_deg_limitter_str,
-                              tgt_val_->ego_in.v, false) / 180.0f * M_PI;
+                              tgt_val_->ego_in.v, false);
   } else if (type == SensingControlType::Piller) {
     limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
                               param_->sensor_deg_limitter_piller,
-                              tgt_val_->ego_in.v, false) / 180.0f * M_PI;
+                              tgt_val_->ego_in.v, false);
   }
+  limit = limit / 180.0f * M_PI;
   duty = std::clamp(duty, -limit, limit);
   if (!search_mode_) {
     if (tgt_val_->motion_type == MotionType::WALL_OFF ||
         tgt_val_->motion_type == MotionType::SLA_FRONT_STR ||
         tgt_val_->motion_type == MotionType::SLA_BACK_STR) {
-      duty = std::clamp(duty, -param_->angle_pid.b, param_->angle_pid.b);
+      limit = param_->angle_pid.b / 180.0f * M_PI;
+      duty = std::clamp(duty, -limit, limit);
     }
   }
   return duty;
