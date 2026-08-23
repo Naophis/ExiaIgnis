@@ -360,11 +360,11 @@ ControlLaw::calc_sensor_pid() {
   } else if (type == SensingControlType::Wall) {
     limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
                               param_->sensor_deg_limitter_str,
-                              tgt_val_->ego_in.v, false);
+                              tgt_val_->ego_in.v, false) / 180.0f * M_PI;
   } else if (type == SensingControlType::Piller) {
     limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
                               param_->sensor_deg_limitter_piller,
-                              tgt_val_->ego_in.v, false);
+                              tgt_val_->ego_in.v, false) / 180.0f * M_PI;
   }
   duty = std::clamp(duty, -limit, limit);
   if (!search_mode_) {
