@@ -18,6 +18,36 @@ void MainTask::wait_button() {
     sleep_ms(10);
 }
 
+// ─── v_max→decel絶対値LUT ──────────────────────────────
+// param_->decel_v_max_x/y(hardware.yaml)を線形補間して引く。LUT未設定
+// (size<2または長さ不一致)ならbase_decelをそのまま返す(従来通り無効)。
+// 減速中に値を変えるのではなく、区間開始前にv_max(既知)から1回だけ選ぶ
+// ため、距離から逆算する既存のclosed-form計算(go_straight_dummy等)は
+// 一切変更しない(2026-08-23追加、高速域での片輪スリップ対策)。
+float MainTask::apply_decel_v_max_lut(float v_max, float base_decel) const {
+  const auto &vx = param_->decel_v_max_x;
+  const auto &vy = param_->decel_v_max_y;
+  if (vx.size() < 2 || vx.size() != vy.size()) {
+    return base_decel;
+  }
+  float decel_mag;
+  if (v_max <= vx.front()) {
+    decel_mag = vy.front();
+  } else if (v_max >= vx.back()) {
+    decel_mag = vy.back();
+  } else {
+    decel_mag = vy.back();
+    for (size_t i = 0; i + 1 < vx.size(); ++i) {
+      if (v_max >= vx[i] && v_max <= vx[i + 1]) {
+        const float t = (v_max - vx[i]) / (vx[i + 1] - vx[i]);
+        decel_mag = vy[i] + t * (vy[i + 1] - vy[i]);
+        break;
+      }
+    }
+  }
+  return (base_decel < 0) ? -decel_mag : decel_mag;
+}
+
 // ─── LittleFS マウント管理───────────────────────────────
 // ConfigLoader が起動時に init() 済みのため、ここでは再初期化は不要。
 // 将来的にファイルシステムの排他制御が必要になった際にここに実装する。
@@ -233,6 +263,7 @@ void MainTask::load_straight(
 
     straight_param_t sp{};
     convertFromJson(sp_json, sp);
+    sp.decel = apply_decel_v_max_lut(sp.v_max, sp.decel);
     str_map[p.first] = sp;
 
     if (!silent_load) {

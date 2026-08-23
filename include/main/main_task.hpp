@@ -73,6 +73,11 @@ private:
                  std::unordered_map<TurnType, slalom_param2_t> &sla_map);
   void load_straight(int idx,
                      std::unordered_map<StraightType, straight_param_t> &str_map);
+  // v_max→decel絶対値のLUT(param_->decel_v_max_x/y)を引いてdecelを求める。
+  // LUT未設定(size<2)ならbase_decelをそのまま返す(従来通り無効)。
+  // 減速中に値を変える必要はなく、区間開始前に1回だけ選ぶ(2026-08-23追加、
+  // 高速domainでの片輪スリップ対策、main_task_util.cpp参照)。
+  float apply_decel_v_max_lut(float v_max, float base_decel) const;
 
   bool silent_load = false;
   void setup_components();

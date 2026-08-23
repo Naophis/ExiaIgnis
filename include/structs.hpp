@@ -634,6 +634,18 @@ typedef struct {
   float Lm = 0;
   float coulomb_friction = 0;
   float viscous_friction = 0;
+  // 吸引ON時用の摩擦FF(2026-08-23追加、要実機チューニング)。coulomb_friction/
+  // viscous_frictionは吸引OFF状態でチューニングされた値だが、吸引ONだと
+  // 荷重(押し付け力)が約250g増加し摩擦も増えるため、OFF基準の値のままだと
+  // 加速フェーズでFFが摩擦分を過小評価し、vel_pid(FB)がその穴埋めを
+  // 背負って過大反応する(latest.csv解析: ff_duty_frontがほぼ一定・
+  // ff_duty_rpmも最大2.3%止まりなのに対しduty_lが最大99.9%まで張り付き、
+  // v_cが目標の2倍近く跳ねる"羽"状のオーバーシュートを確認)。
+  // TrajectoryGenerator::copy_tgt()でtgt_val->duty_suction(実際の吸引
+  // パルス幅)を見てON/OFFを二値判定し、切り替えて使う。初期値は
+  // coulomb_friction/viscous_frictionと同じ(未チューニング、要実機調整)。
+  float coulomb_friction_suction = 0;
+  float viscous_friction_suction = 0;
   int MotorHz = 37500; // 駆動モーターPWM周波数(MotorActuator::init())
 
   float battery_init_cov = 0.95;
@@ -882,6 +894,19 @@ typedef struct {
   // 速度→加速度テーブル (control_law で tgt_in.accl 書き換えに使用)
   std::vector<float> accl_v_x;
   std::vector<float> accl_v_y;
+
+  // v_max→decel絶対値のLUT(2026-08-23追加、要実機チューニング)。
+  // decel自体は距離から逆算するclosed-formの1定数のままなので減速中に
+  // 値を変える必要はない(non-linearなテーブルは距離再計算が難しくなる
+  // ため避ける、というユーザー方針)。代わりにセグメント開始前、既知の
+  // v_max(区間の最高速度)を1回だけ引いてdecelを選ぶ(MainTask::
+  // apply_decel_v_max_lut()、main_task_util.cpp load_straight()参照)。
+  // 高速域ほど吸引荷重込みの片輪スリップでヨーキック→位置ずれが起きる
+  // ことを確認(20260823_150751.csv等)、v_maxが高いほどdecelの絶対値を
+  // 小さくする単調減少の形を想定。空(size<2)なら従来通り無効
+  // (str_map/sys_.test.decelの値をそのまま使う)。
+  std::vector<float> decel_v_max_x;
+  std::vector<float> decel_v_max_y;
 
   // センサー角速度リミッタテーブル (control_law で interp1d に渡す)
   std::vector<float> sensor_deg_limitter_v;
@@ -1520,6 +1545,12 @@ typedef struct {
   int16_t pln_t_kanayama;
   int16_t pln_t_copy;
   int16_t pln_t_ctl;
+
+  // battery(=batt_kf、duty%換算の分母に使うため強くLPF/KF済み)は速い電圧
+  // 降下(加速時の瞬間的な負荷変動等)を捉えられない。battery_rawは生ADC値
+  // (ego_estimator.cpp参照)で、フィルタなしの実電圧変動を直接確認する
+  // ためのデバッグ用フィールド(2026-08-23追加)。
+  real16_T battery_raw;
 } log_data_t2;
 
 typedef struct {
@@ -1752,6 +1783,7 @@ typedef struct {
   float accel_x_corr = 139; // gyro_pos補正後(車体基準点, 車体座標系)[mm/s^2]
   float accel_y_corr = 140;
   float accel_z_corr = 141;
+  float battery_raw = 142; // フィルタ無しの生バッテリ電圧(structs.hpp log_data_t2参照)
 } LogStruct11;
 
 #endif

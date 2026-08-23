@@ -515,6 +515,8 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "Lm", dst.Lm);
     from_json_field(src, "coulomb_friction", dst.coulomb_friction);
     from_json_field(src, "viscous_friction", dst.viscous_friction);
+    from_json_field(src, "coulomb_friction_suction", dst.coulomb_friction_suction);
+    from_json_field(src, "viscous_friction_suction", dst.viscous_friction_suction);
     from_json_field(src, "MotorHz", dst.MotorHz);
     from_json_field(src, "battery_init_cov", dst.battery_init_cov);
     from_json_field(src, "battery_p_noise", dst.battery_p_noise);
@@ -782,6 +784,9 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     // 速度→加速度テーブル (hardware.yaml: accl_v_*)
     from_json_vector(src, "accl_v_x",                   dst.accl_v_x);
     from_json_vector(src, "accl_v_y",                   dst.accl_v_y);
+    // v_max→decel絶対値テーブル (hardware.yaml: decel_v_max_*)
+    from_json_vector(src, "decel_v_max_x",              dst.decel_v_max_x);
+    from_json_vector(src, "decel_v_max_y",              dst.decel_v_max_y);
     // センサー角速度リミッタテーブル (hardware.yaml: sensor_deg_limitter_*)
     from_json_vector(src, "sensor_deg_limitter_v",      dst.sensor_deg_limitter_v);
     from_json_vector(src, "sensor_deg_limitter_str",    dst.sensor_deg_limitter_str);

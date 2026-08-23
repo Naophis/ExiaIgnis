@@ -220,6 +220,7 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
 
   // ld.battery_lp = floatToHalf(sr->ego.battery_raw);
   ld.battery_lp = floatToHalf(sr->ego.batt_kf);
+  ld.battery_raw = floatToHalf(sr->ego.battery_raw);
   ld.duty_l = floatToHalf(sr->ego.duty.duty_l);
   ld.duty_r = floatToHalf(sr->ego.duty.duty_r);
 
@@ -524,6 +525,7 @@ void LoggingTask::dump_csv() const {
   printf("accel_x_corr:float:%d\n", (int)sizeof(ls11.accel_x_corr));
   printf("accel_y_corr:float:%d\n", (int)sizeof(ls11.accel_y_corr));
   printf("accel_z_corr:float:%d\n", (int)sizeof(ls11.accel_z_corr));
+  printf("battery_raw:float:%d\n", (int)sizeof(ls11.battery_raw));
 
   fflush(stdout);
   sleep_ms(50);
@@ -774,6 +776,7 @@ void LoggingTask::dump_csv() const {
     ls11.accel_x_corr = halfToFloat(e.accel_x_corr);
     ls11.accel_y_corr = halfToFloat(e.accel_y_corr);
     ls11.accel_z_corr = halfToFloat(e.accel_z_corr);
+    ls11.battery_raw = halfToFloat(e.battery_raw);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

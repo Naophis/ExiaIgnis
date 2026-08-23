@@ -62,8 +62,8 @@ debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
 # mode: 0 # メイン
-mode: 1 # 最短スローム
-# mode: 2 # 直進
+# mode: 1 # 最短スローム
+mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
@@ -85,16 +85,21 @@ mode: 1 # 最短スローム
 
 
 test: # テスト走行時に使用するパラメータ群
-  v_max: 1500
+  v_max: 7500
   accl: 42500
   # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
   # 減速(decel)には効かない。
   accl_v_x: [0,      2500, 5000, 7500, 8000]
-  accl_v_y: [57000, 55000, 42000, 35000, 30000]
+  # accl_v_y: [57000, 55000, 42000, 35000, 30000]
+  accl_v_y: [42500, t2500, 42500, 42500, 42500]
+
+  ecel_v_max_x: [0,3000,4500,6000,7000]
+  decel_v_max_y: [57500,57500,45000,28000,22000]
+  
   decel: -47500
   dia_accl: 45000
   dia_decel: -47500
-  dist: 120 #直進
+  dist: 720 #直進
   suction_active: 2
 
   end_v: 10

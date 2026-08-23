@@ -1,4 +1,5 @@
 #include "planning/trajectory_generator.hpp"
+#include "define.hpp" // SUCTION_ESC_PULSE_MIN_US
 #include <algorithm>
 #include <cmath>
 
@@ -189,6 +190,21 @@ void TrajectoryGenerator::copy_tgt(float dt) {
   dynamics.ke = param->Ke;
   dynamics.tire = param->tire;
   dynamics.gear_ratio = param->gear_a / param->gear_b;
-  dynamics.coulomb_friction = param->coulomb_friction;
-  dynamics.viscous_friction = param->viscous_friction;
+  // 吸引ON/OFFで摩擦FFを切り替える(2026-08-23追加、要実機チューニング)。
+  // coulomb_friction/viscous_frictionは吸引OFF基準でチューニングされた値。
+  // 吸引ONだと荷重(押し付け力)が約250g増えて摩擦も増えるため、OFF基準の
+  // ままだと加速時にFFが摩擦分を過小評価しFB側が過大反応する(latest.csv
+  // 解析、structs.hpp coulomb_friction_suction参照)。tgt_val->duty_suctionは
+  // ControlLaw::set_next_duty()が書き込む実際の吸引パルス幅(1000=OFF,
+  // 2000=フル)で、1tick遅れ(TrajectoryGenerator→ControlLawの実行順)だが
+  // 吸引は0.5秒スケールでランプするため無視できる。中間値の補間はせず、
+  // まずは閾値越えでの二値切替とする。
+  constexpr float kSuctionActiveThresholdUs =
+      (float)SUCTION_ESC_PULSE_MIN_US + 100.0f;
+  const bool suction_active =
+      tgt_val->duty_suction > kSuctionActiveThresholdUs;
+  dynamics.coulomb_friction = suction_active ? param->coulomb_friction_suction
+                                              : param->coulomb_friction;
+  dynamics.viscous_friction = suction_active ? param->viscous_friction_suction
+                                              : param->viscous_friction;
 }

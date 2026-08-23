@@ -53,7 +53,7 @@ void MainTask::test_run() {
   ps.v_end = 20;
   ps.dist = sys_.test.dist - 5;
   ps.accl = sys_.test.accl;
-  ps.decel = sys_.test.decel;
+  ps.decel = apply_decel_v_max_lut(ps.v_max, sys_.test.decel);
   ps.sct = SensorCtrlType::Straight;
   if (sys_.test.dia == 1) {
     ps.sct = SensorCtrlType::Dia;
@@ -66,7 +66,7 @@ void MainTask::test_run() {
   ps.v_end = sys_.test.end_v;
   ps.dist = 5;
   ps.accl = sys_.test.accl;
-  ps.decel = sys_.test.decel;
+  ps.decel = apply_decel_v_max_lut(ps.v_max, sys_.test.decel);
   mp->go_straight(ps);
   planning_->motor_disable();
   lt_->stop();

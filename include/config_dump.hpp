@@ -268,6 +268,8 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["Lm"]               = src.Lm;
     dst["coulomb_friction"] = src.coulomb_friction;
     dst["viscous_friction"] = src.viscous_friction;
+    dst["coulomb_friction_suction"] = src.coulomb_friction_suction;
+    dst["viscous_friction_suction"] = src.viscous_friction_suction;
     dst["MotorHz"] = src.MotorHz;
     dst["battery_init_cov"] = src.battery_init_cov;
     dst["battery_p_noise"]  = src.battery_p_noise;
@@ -507,6 +509,14 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     {
         JsonArray a = dst["accl_v_y"].to<JsonArray>();
         for (float v : src.accl_v_y) a.add(v);
+    }
+    {
+        JsonArray a = dst["decel_v_max_x"].to<JsonArray>();
+        for (float v : src.decel_v_max_x) a.add(v);
+    }
+    {
+        JsonArray a = dst["decel_v_max_y"].to<JsonArray>();
+        for (float v : src.decel_v_max_y) a.add(v);
     }
     {
         JsonArray a = dst["sensor_deg_limitter_v"].to<JsonArray>();

@@ -65,11 +65,20 @@ Km: 0.00160 # トルク定数：　大-> 縦系の出力小
 Lm: 0.00000175 # 大：横系の出力大
 # Lm: 0.00000035 # 大：横系の出力大
 
-coulomb_friction: 0.000075 # クーロン摩擦
-viscous_friction: 0.000925 # 粘性摩擦
+coulomb_friction: 0.000075 # クーロン摩擦(吸引OFF基準でチューニング済み)
+viscous_friction: 0.000925 # 粘性摩擦(吸引OFF基準でチューニング済み)
 
 # coulomb_friction: 0.0 # クーロン摩擦
 # viscous_friction: 0.0 # 粘性摩擦
+
+# 吸引ON時用の摩擦FF(2026-08-23追加、要実機チューニング)。吸引ONで荷重が
+# 約250g増えて摩擦も増えるが、上のcoulomb_friction/viscous_frictionは吸引
+# OFF基準の値のため、吸引ON中は加速フェーズでFFが摩擦分を過小評価しFB
+# (vel_pid.i)が過大反応する現象を確認(latest.csv、trajectory_generator.cpp
+# copy_tgt()参照)。初期値は上と同じ(未チューニング)、実機で吸引ON状態の
+# 加速テストをしながら増やしていく想定。
+coulomb_friction_suction: 0.000075
+viscous_friction_suction: 0.00125
 
 Resist: 4.4
 Mass: 0.040
@@ -130,6 +139,18 @@ axel_degenerate_dia_y: [1, 1, 1, 0.95, 0.85, 0.75, 0.25, -0.1]
 # 移設予定のため、ここでは未設定のままにする。
 # accl_v_x: [0, 1000, 2000, 3000, 4000]
 # accl_v_y: [10000, 10000, 8000, 6000, 4000]
+
+# v_max→decel絶対値のLUT(2026-08-23追加、要実機チューニング、初期仮値)。
+# str_map/sys_.test.decelの絶対値をこのLUTで上書きする(MainTask::
+# apply_decel_v_max_lut()、main_task_util.cpp/main_task_test_run.cpp参照)。
+# 減速中に値を変えるわけではなく、区間開始前にv_max(既知)から1回だけ
+# decelを選ぶだけなので、距離から逆算するclosed-form計算はそのまま。
+# 吸引ON(荷重+250g)状態でv_max=3700程度は問題なし、v_max=6000だと
+# 片輪スリップで-2〜3°級のヨーキック(20260823_150751.csv/152414.csv)、
+# v_max=3688では-0.53°程度(20260823_151600.csv)だった実測を踏まえた
+# 初期仮値。要素数2未満なら無効(従来通りstr_map/sys_.test.decelそのまま)。
+decel_v_max_x: [0, 3000, 4500, 6000, 7000]
+decel_v_max_y: [47500, 47500, 38000, 28000, 22000]
 
 decel_delay_cnt: 5
 decel_delay_n: 4
