@@ -18,6 +18,12 @@ export interface AnalysisEvent {
   anchored: "robot" | "sensor";
   kind: "drop" | "rise" | "state-start" | "state-end" | "trough" | "trough-rise";
   label: string;
+  // Set only for column-specific events (drop/rise/trough/trough-rise), so a
+  // value-vs-index time-series chart can place the same marker on its own
+  // axes instead of the spatial (x, y) ones above.
+  column?: string;
+  seriesIndex?: number;
+  seriesValue?: number;
 }
 
 // Maps a raw CSV row (by object identity) to the TrajectoryPoint built from
@@ -106,6 +112,9 @@ export function computeSensorDropEvents(rows: Record<string, number>[], opts: Se
           ...pos,
           kind: "drop",
           label: `${col} <=${opts.low} start=${startIndex} idx=${fmt(dropRow, "index")} val=${fmt(dropRow, col)}`,
+          column: col,
+          seriesIndex: asNum(dropRow, "index"),
+          seriesValue: asNum(dropRow, col),
         });
       }
 
@@ -128,6 +137,9 @@ export function computeSensorDropEvents(rows: Record<string, number>[], opts: Se
           ...pos,
           kind: "rise",
           label: `${col} >=${opts.high} start=${startIndex} idx=${fmt(riseRow, "index")} val=${fmt(riseRow, col)} diff=${diff}`,
+          column: col,
+          seriesIndex: asNum(riseRow, "index"),
+          seriesValue: asNum(riseRow, col),
         });
       }
     }
@@ -272,6 +284,9 @@ export function computeSensorTroughEvents(
             ...pos,
             kind: "trough",
             label: `${col} [${n + 1}] 極小 end=${endIndex} idx=${fmt(troughRow, "index")} val=${fmt(troughRow, col)}`,
+            column: col,
+            seriesIndex: asNum(troughRow, "index"),
+            seriesValue: asNum(troughRow, col),
           });
         }
         if (t.riseRow === null) return;
@@ -286,6 +301,9 @@ export function computeSensorTroughEvents(
             ...pos,
             kind: "trough-rise",
             label: `${col} [${n + 1}] 上昇開始 end=${endIndex} idx=${fmt(riseRow, "index")} val=${fmt(riseRow, col)} diff=${diff}`,
+            column: col,
+            seriesIndex: asNum(riseRow, "index"),
+            seriesValue: asNum(riseRow, col),
           });
         }
       });

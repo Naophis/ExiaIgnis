@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { SensorTimeseriesPlot, type TimeSeries } from "@/components/sensor-timeseries-plot";
 import { TrajectoryPlot } from "@/components/trajectory-plot";
 import {
   computeMotionTransitionEvents,
@@ -18,6 +19,20 @@ import { buildTrajectoryData, parseCsv, type TrajectoryPoint } from "@/lib/traje
 
 const TRANSITION_COLUMNS = ["left45_d", "left45_2_d", "left45_3_d", "right45_d", "right45_2_d", "right45_3_d"];
 const TROUGH_COLUMNS = ["left45_d", "right45_d", "left90_d", "right90_d"] as const;
+
+const COLUMN_COLOR: Record<(typeof TROUGH_COLUMNS)[number], string> = {
+  left45_d: "#e06c75",
+  right45_d: "#61afef",
+  left90_d: "#98c379",
+  right90_d: "#d19a66",
+};
+
+// left45_d/right45_d はセンサー生値からの変換後の距離。同時に、変換元の
+// 生距離(sen_dist_l45/sen_dist_r45)も破線で重ねて見比べられるようにする。
+const COMPANION_COLUMN: Partial<Record<(typeof TROUGH_COLUMNS)[number], string>> = {
+  left45_d: "sen_dist_l45",
+  right45_d: "sen_dist_r45",
+};
 
 const EVENT_COLOR: Record<AnalysisEvent["kind"], string> = {
   drop: "text-red-400",
@@ -87,6 +102,11 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     left90_d: false,
     right90_d: false,
   });
+
+  // 通常の横軸=index の時系列折れ線グラフ(空間プロットとは別物)。
+  // troughColumns で選んだ列を表示し、センサートラフ解析が有効なら
+  // trough/rise マーカーも重畳する。
+  const [chartEnabled, setChartEnabled] = useState(false);
 
   const refreshFiles = useCallback(async () => {
     const res = await fetch("/api/logs");
@@ -189,6 +209,31 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   const analysisEvents = useMemo(
     () => [...dropEvents, ...transitionEvents, ...troughEvents],
     [dropEvents, transitionEvents, troughEvents]
+  );
+
+  const chartSeries = useMemo<TimeSeries[]>(() => {
+    if (!chartEnabled || rawRows.length === 0) return [];
+    const toPoints = (col: string) =>
+      rawRows
+        .map((r) => ({ x: r.index, y: r[col] }))
+        .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.y > 0);
+
+    const series: TimeSeries[] = [];
+    for (const col of TROUGH_COLUMNS) {
+      if (!troughColumns[col]) continue;
+      series.push({ column: col, color: COLUMN_COLOR[col], points: toPoints(col) });
+
+      const companion = COMPANION_COLUMN[col];
+      if (companion && companion in rawRows[0]) {
+        series.push({ column: companion, color: COLUMN_COLOR[col], dash: true, points: toPoints(companion) });
+      }
+    }
+    return series;
+  }, [chartEnabled, rawRows, troughColumns]);
+
+  const chartMarkers = useMemo(
+    () => (troughEnabled ? troughEvents.filter((e) => e.seriesIndex !== undefined) : []),
+    [troughEnabled, troughEvents]
   );
 
   const openPlotJuggler = useCallback(async (name?: string) => {
@@ -457,6 +502,10 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
                   {col}
                 </label>
               ))}
+              <label className="flex items-center gap-1">
+                <input type="checkbox" checked={chartEnabled} onChange={(e) => setChartEnabled(e.target.checked)} />
+                時系列グラフ表示(上のチェック列)
+              </label>
             </>
           )}
         </div>
@@ -470,6 +519,14 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
             onPointClick={(p) => setClickInfo(p ? formatClickInfo(p) : null)}
           />
         </div>
+        {chartEnabled && chartSeries.length > 0 && (
+          <>
+            <Separator />
+            <div className="h-56 shrink-0">
+              <SensorTimeseriesPlot series={chartSeries} markers={chartMarkers} />
+            </div>
+          </>
+        )}
         <Separator />
         <div className="p-2 font-mono text-xs text-muted-foreground">
           {clickInfo ?? (trajectoryData ? "点をクリックすると詳細を表示します" : "x/y列を含むログを選択してください")}
