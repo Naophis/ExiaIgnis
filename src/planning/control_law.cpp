@@ -854,21 +854,27 @@ ControlLaw::calc_pid_val_ang_vel() {
   ee->w_kf.error_d = ee->w_kf.error_p;
 
   float offset = 0;
+  ee->aw_log.dbg_off_ang = 0;
   if (param_->torque_mode == 2) {
     if (!(tgt->motion_type == MotionType::PIVOT ||
           tgt->motion_type == MotionType::FRONT_CTRL)) {
       offset += duty_roll_ang;
+      ee->aw_log.dbg_off_ang = duty_roll_ang; // デバッグ用一時フィールド
     }
   }
   offset += sen_kanayama_dw;
+  ee->aw_log.dbg_off_kny = sen_kanayama_dw; // デバッグ用一時フィールド
 
   // turn_angle_fb.w_gain(2026-08-23追加): ee->ang.i_biasをw目標offsetへ
   // 直接加算する(sen_kanayama_dwと同じ経路)。duty_rollへ直接足すgain/
   // gain_i/gain_dと違い、既存gyro_pid.bの積分(w_error_i)と戦わない
   // (calc_angle_velocity_ctrl()側のturn_angle_fb_gainコメント参照)。
+  ee->aw_log.dbg_off_wgain = 0;
   if (param_->turn_angle_fb.enable &&
       angle_i_bias_active(tgt->motion_type)) {
-    offset += param_->turn_angle_fb.w_gain * ee->ang.i_bias;
+    ee->aw_log.dbg_off_wgain = // デバッグ用一時フィールド
+        param_->turn_angle_fb.w_gain * ee->ang.i_bias;
+    offset += ee->aw_log.dbg_off_wgain;
   }
   // trj_->w_cmd(2026-08-23、常時Kanayama化): kanayama.enable時はego_in.wの
   // 代わりにcalc_kanayama()が2D姿勢誤差(dx/dy/e_theta)から補正したw_cmdを
@@ -1228,12 +1234,50 @@ ControlLaw::calc_angle_velocity_ctrl() {
       ang_sum = 0;
     }
 
-    auto kp_gain = param_->gyro_pid.p * ee->w.error_p;
+    // 旋回終端ブレーキ(2026-08-23): SLALOM/SLA_BACK_STRでff_duty_rollが
+    // ideal_wと共にゼロへ落ちた後、実測角速度(w_lp)が慣性で収束しきらず
+    // 残留する問題への対策(20260823_032339.csv/20260823_032239.csvで確認、
+    // SLA_BACK_STR突入後もw_lpが収束せず増大するケースあり)。gyro_pid.p/dは
+    // FF主導設計を保つため極小(p=0.000325等)のままにし、計画角速度が
+    // ほぼゼロ(=FFがもう仕事をしていない)かつ実残差が大きい間だけ、
+    // 専用ゲインturn_end_brake.p/dに切り替えて能動的に残留回転を止める。
+    //
+    // [2026-08-23 修正] 当初SLALOMも対象に含めていたが、|ideal_w|<w_thは
+    // 旋回終盤だけでなく旋回"開始"直後(idealwがまだ0から立ち上がる途中)にも
+    // 成立してしまい、旋回入り口で誤爆して過大なduty(飽和→発振)を起こした
+    // (20260823_033928.csvで確認)。SLA_BACK_STRは常にideal_w=0で立ち上がり
+    // 局面が存在しないため、SLA_BACK_STRのみを対象にして誤爆を構造的に排除する。
+    //
+    // [単位に関する注意] duty_roll(=kp_gain+ki_gain+...の合計)はduty%では
+    // なくトルクとして扱われ、summation_duty()で
+    // torque*Resist/(Km*gear_a/gear_b)/battery*100 (≈4650倍、実測値から算出)
+    // という変換を経てduty%になる(control_law.cpp:1305-1313)。通常の
+    // gyro_pid.p=0.000325が極小なのはこの増幅を見込んだ値であり、
+    // turn_end_brake.p/dも同じ増幅を受けることに注意(小さい値で十分効く)。
+    const bool turn_end_brake_active =
+        param_->turn_end_brake.enable &&
+        tgt_val_->motion_type == MotionType::SLA_BACK_STR &&
+        ABS(tgt_val_->ego_in.w) < param_->turn_end_brake.w_th;
+    // [2026-08-23夜 修正] err_thによるON/OFFゲートを撤去。ゼロ交差の瞬間に
+    // |error_p|が一瞬err_th未満へ落ちてbrakeがOFFになり、その間に誤差が
+    // 育った状態で再点火すると強いゲインがフル飽和を起こし、二段目の
+    // オーバーシュートを生んでいた(20260823_212145.csvで確認、idx142で
+    // 一瞬OFF→idx143で誤差3.08まで育った状態にp=0.0025が掛かりduty即飽和
+    // →w_lpが-34まで急落)。turn_angle_fb.i_w_gateで既に踏んだのと同じ
+    // 「ハードゲート再点火」の踏み間違い([[project-kanayama-2d-bugfix-2026-08-23]]
+    // 参照)。SLA_BACK_STRは短い過渡区間でerr_thが想定していた定常チャタ
+    // リング対策は不要なため、motion_type+w_thのみでゲートする。
+
+    auto kp_gain = (turn_end_brake_active ? param_->turn_end_brake.p
+                                           : param_->gyro_pid.p) *
+                   ee->w.error_p;
     auto ki_gain = param_->gyro_pid.i * diff_ang;
     auto kb_gain = param_->gyro_pid.b * w_error_i;
     // auto kb_gain = param_->gyro_pid.b * ee->w.error_i;
     auto kc_gain = param_->gyro_pid.c * ee->ang.i_bias;
-    auto kd_gain = param_->gyro_pid.d * w_error_d;
+    auto kd_gain = (turn_end_brake_active ? param_->turn_end_brake.d
+                                           : param_->gyro_pid.d) *
+                   w_error_d;
     limitter(kp_gain, ki_gain, kb_gain, kd_gain,
              param_->gyro_pid_gain_limitter);
 
@@ -1303,6 +1347,18 @@ ControlLaw::calc_angle_velocity_ctrl() {
     duty_roll = kp_gain + ki_gain + kb_gain + kc_gain + kd_gain +
                 turn_angle_fb_gain +
                 (ee->ang_log.gain_z - ee->ang_log.gain_zz) * dt_;
+
+    // turn_end_brakeスルーレート制限(2026-08-23夜): p/dだけではゼロ交差
+    // 直後に数tickでduty_rollがフル反転し、グリップ音・kim_thetaの発散気味
+    // な収束の原因になっていた(structs.hpp turn_end_brake_t参照)。
+    // turn_end_brake_active中のみ、前tickからの変化量をslewでクランプする。
+    if (turn_end_brake_active && param_->turn_end_brake.slew > 0) {
+      const float max_step = param_->turn_end_brake.slew;
+      duty_roll = std::clamp(duty_roll,
+                              turn_end_brake_duty_prev_ - max_step,
+                              turn_end_brake_duty_prev_ + max_step);
+    }
+    turn_end_brake_duty_prev_ = duty_roll;
 
     ee->ang_log.gain_zz = ee->ang_log.gain_z;
     ee->ang_log.gain_z = duty_roll;

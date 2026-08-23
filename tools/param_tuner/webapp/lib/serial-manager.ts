@@ -507,11 +507,14 @@ class SerialManager extends EventEmitter {
       // silently misaligning every field after the gap. Log the full
       // context so the actual cause is traceable from this line alone.
       if (fieldCount === 0 || recordByteSize <= 0 || headerMismatch) {
-        this.emit(
-          "log",
-          `[LoggingTask] dump header missing/corrupt (fields=${fieldCount}, recordByteSize=${recordByteSize}, expectedRecordByteSize=${expected}, totalBytes=${totalBytes}, dataStruct=${JSON.stringify(dump.dataStruct)}); writing raw bytes instead`
-        );
-        const content = `raw_byte\n${Array.from(binaryData).join("\n")}\n`;
+        // Also written as the file's first line (not just emitted live) so
+        // the cause is still inspectable after the fact - the live console
+        // log isn't persisted anywhere, so a fallback file with only
+        // "raw_byte" as context previously left no trace of why it happened
+        // once the SSE line scrolled out of view.
+        const diagnostic = `# dump header missing/corrupt: fields=${fieldCount} recordByteSize=${recordByteSize} expectedRecordByteSize=${expected} totalBytes=${totalBytes} dataStruct=${JSON.stringify(dump.dataStruct)}`;
+        this.emit("log", `[LoggingTask] ${diagnostic.slice(2)}; writing raw bytes instead`);
+        const content = `${diagnostic}\nraw_byte\n${Array.from(binaryData).join("\n")}\n`;
         this.writeLogFile(dump.fileName, content);
         this.emit("saved", { type: "csv", file: dump.fileName });
       } else {

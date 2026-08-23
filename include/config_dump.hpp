@@ -240,6 +240,15 @@ inline void convertToJson(const kanayama_t& src, JsonVariant dst) {
     dst["windup_deg"] = src.windup_deg;
 }
 
+inline void convertToJson(const turn_end_brake_t& src, JsonVariant dst) {
+    dst["enable"] = src.enable;
+    dst["w_th"]   = src.w_th;
+    dst["err_th"] = src.err_th;
+    dst["p"]      = src.p;
+    dst["d"]      = src.d;
+    dst["slew"]   = src.slew;
+}
+
 inline void convertToJson(const turn_angle_fb_t& src, JsonVariant dst) {
     dst["enable"] = src.enable;
     dst["gain"]   = src.gain;
@@ -248,6 +257,12 @@ inline void convertToJson(const turn_angle_fb_t& src, JsonVariant dst) {
     dst["i_w_gate"] = src.i_w_gate;
     dst["gain_d"] = src.gain_d;
     dst["w_gain"] = src.w_gain;
+}
+
+inline void convertToJson(const turn_w_pid_t& src, JsonVariant dst) {
+    dst["enable"] = src.enable;
+    dst["b"]      = src.b;
+    dst["d"]      = src.d;
 }
 
 inline void convertToJson(const input_param_t& src, JsonVariant dst) {
@@ -318,7 +333,9 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["motor_pid3"]                  = src.motor_pid3;
     dst["gyro_pid"]                    = src.gyro_pid;
     dst["gyro_pid_gain_limitter"]      = src.gyro_pid_gain_limitter;
+    dst["turn_end_brake"]              = src.turn_end_brake;
     dst["turn_angle_fb"]               = src.turn_angle_fb;
+    dst["turn_w_pid"]                  = src.turn_w_pid;
     dst["str_ang_pid"]                 = src.str_ang_pid;
     dst["str_ang_pid_fast"]            = src.str_ang_pid_fast;
     dst["str_ang_dia_pid"]             = src.str_ang_dia_pid;

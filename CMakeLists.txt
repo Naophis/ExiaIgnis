@@ -213,6 +213,12 @@ pico_set_linker_script(ExiaIgnis ${CMAKE_CURRENT_LIST_DIR}/memmap_custom.ld)
 target_compile_definitions(ExiaIgnis PRIVATE
     PICO_CORE1_STACK_SIZE=0        # no SDK core1_stack[]; Core1 uses g_core1_stack (8KB in BSS)
     PICO_STACK_SIZE=0x2000         # Core0 stack 8KB (spans SCRATCH_X+SCRATCH_Y in custom ld)
+    # stdio_usb_out_chars()'s default (500ms) silently discards unwritten
+    # output once the host stops draining the CDC TX FIFO for that long -
+    # raised as a defensive margin after LoggingTask::dump_csv()'s log
+    # header occasionally arrived corrupted/truncated at the Param Console
+    # (tools/param_tuner/webapp), traced to this discard-on-timeout behavior.
+    PICO_STDIO_USB_STDOUT_TIMEOUT_US=3000000
 )
 
 pico_add_extra_outputs(ExiaIgnis)

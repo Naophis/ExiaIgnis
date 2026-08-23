@@ -78,12 +78,17 @@ void TrajectoryGenerator::calc_kanayama(
     dx = dy = 0;
   }
 
-  dx = std::clamp(dx, 0.0f, ABS(dx));
+  // ang_kfはenable_kalman_gyro=0時ego_in.ang(目標値)のコピーに過ぎず
+  // e_thetaが常に0になる退化バグがあったため、kanayama_straight
+  // (control_law.cpp)と同様に実測kim.thetaを使う。last_tgt_angleは
+  // odm側(trajectory_points)の基準に合わせるためのオフセット
+  // (cp_request()でkim.thetaにも同じオフセットが適用される)。
+  const float kim_theta_g = ego.kim.theta + last_tgt_angle;
 
-  float d_theta = ego.odm.theta - (se->ego.ang_kf + last_tgt_angle);
+  float d_theta = ego.odm.theta - kim_theta_g;
   float e_theta = d_theta;
-  const float cos_theta = std::cos(se->ego.ang_kf);
-  const float sin_theta = std::sin(se->ego.ang_kf);
+  const float cos_theta = std::cos(kim_theta_g);
+  const float sin_theta = std::sin(kim_theta_g);
   if (tgt_val->ego_in.v < 10) {
     e_theta = 0;
   }
@@ -106,24 +111,17 @@ void TrajectoryGenerator::calc_kanayama(
   se->ego.kim_y     = ego.kim.y;
   se->ego.kim_theta = ego.kim.theta;
 
-  // 2026-08-23: 当初SLALOM/SLA_BACK_STR限定だったが、v_cmd/w_cmdは
-  // control_law.cpp calc_pid_val_ang_vel()のee->w.error_p計算にも配線した
-  // (=ヨーの主力ゲインkp/kb/kcにもKanayama補正が及ぶ)ため、対象範囲を
-  // ControlLaw::angle_i_bias_active()と同じ「実質全モーション」に拡張する。
-  // PIVOT系/BACK_STRAIGHT/READY/FRONT_CTRLはimg_ang自体の意味が異なる
-  // (またはこの区間で軌道追従補正が不要)ため除外(control_law.cpp参照、
-  // 両者は将来ズレないよう同じ除外リストを保つこと)。
+  // 2026-08-23: STRAIGHT等へ「実質全モーション」に拡張していた版から
+  // SLALOM/SLA_BACK_STR限定に戻した。STRAIGHTのe_theta(kim.theta基準)は
+  // 壁センサーのような絶対基準を持たないデッドレコニングのため、セグメント0で
+  // 一度乱れた残留角度誤差を自力で戻せず、次セグメントへそのまま持ち越されて
+  // 張り付く実機不具合を確認したため([[project-kanayama-2d-bugfix-2026-08-23]])。
+  // STRAIGHTの向き補正は絶対基準(壁センサー)を持つkanayama_straight/
+  // str_ang_pid_fastに委ねる。
   const bool kanayama_active =
       param->kanayama.enable > 0 &&
-      !(tgt_val->motion_type == MotionType::NONE ||
-        tgt_val->motion_type == MotionType::PIVOT ||
-        tgt_val->motion_type == MotionType::PIVOT_PRE ||
-        tgt_val->motion_type == MotionType::PIVOT_PRE2 ||
-        tgt_val->motion_type == MotionType::PIVOT_AFTER ||
-        tgt_val->motion_type == MotionType::PIVOT_OFFSET ||
-        tgt_val->motion_type == MotionType::BACK_STRAIGHT ||
-        tgt_val->motion_type == MotionType::READY ||
-        tgt_val->motion_type == MotionType::FRONT_CTRL);
+      (tgt_val->motion_type == MotionType::SLALOM ||
+       tgt_val->motion_type == MotionType::SLA_BACK_STR);
   if (kanayama_active) {
     v_cmd = se->ego.knym_v;
     w_cmd = se->ego.knym_w;
@@ -131,11 +129,8 @@ void TrajectoryGenerator::calc_kanayama(
     v_cmd = tgt_val->ego_in.v;
     w_cmd = tgt_val->ego_in.w;
   }
-  if (tgt_val->motion_type != MotionType::SLALOM ||
-      tgt_val->motion_type == MotionType::SLA_BACK_STR) {
-    se->ego.knym_v = tgt_val->ego_in.v;
-    se->ego.knym_w = tgt_val->ego_in.w;
-  }
+  se->ego.knym_v = v_cmd;
+  se->ego.knym_w = w_cmd;
 }
 
 __attribute__((noinline, section(".time_critical.trajectory")))
