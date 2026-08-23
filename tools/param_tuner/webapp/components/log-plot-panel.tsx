@@ -11,11 +11,22 @@ import { TrajectoryPlot } from "@/components/trajectory-plot";
 import {
   computeMotionTransitionEvents,
   computeSensorDropEvents,
+  computeSensorTroughEvents,
   type AnalysisEvent,
 } from "@/lib/log-analysis";
 import { buildTrajectoryData, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
 
 const TRANSITION_COLUMNS = ["left45_d", "left45_2_d", "left45_3_d", "right45_d", "right45_2_d", "right45_3_d"];
+const TROUGH_COLUMNS = ["left45_d", "right45_d", "left90_d", "right90_d"] as const;
+
+const EVENT_COLOR: Record<AnalysisEvent["kind"], string> = {
+  drop: "text-red-400",
+  rise: "text-emerald-400",
+  "state-start": "text-amber-400",
+  "state-end": "text-sky-400",
+  trough: "text-purple-400",
+  "trough-rise": "text-cyan-400",
+};
 
 interface LogFileInfo {
   name: string;
@@ -63,6 +74,19 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   // analyze_motion_state_transitions.py 相当のオーバーレイ設定
   const [transitionEnabled, setTransitionEnabled] = useState(false);
   const [transitionStates, setTransitionStates] = useState("6,13");
+
+  // analyze_sensor_trough.py 相当のオーバーレイ設定
+  const [troughEnabled, setTroughEnabled] = useState(false);
+  const [troughMotionState, setTroughMotionState] = useState(4);
+  const [troughStates, setTroughStates] = useState("14,1");
+  const [troughEps, setTroughEps] = useState(3);
+  const [troughMedianWindow, setTroughMedianWindow] = useState(3);
+  const [troughColumns, setTroughColumns] = useState<Record<(typeof TROUGH_COLUMNS)[number], boolean>>({
+    left45_d: true,
+    right45_d: true,
+    left90_d: false,
+    right90_d: false,
+  });
 
   const refreshFiles = useCallback(async () => {
     const res = await fetch("/api/logs");
@@ -134,7 +158,38 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     return computeMotionTransitionEvents(rawRows, { states, columns: TRANSITION_COLUMNS });
   }, [rawRows, transitionEnabled, transitionStates]);
 
-  const analysisEvents = useMemo(() => [...dropEvents, ...transitionEvents], [dropEvents, transitionEvents]);
+  const troughEvents = useMemo<AnalysisEvent[]>(() => {
+    if (!troughEnabled || rawRows.length === 0) return [];
+    const columns = TROUGH_COLUMNS.filter((c) => troughColumns[c]);
+    if (columns.length === 0) return [];
+    const states = troughStates
+      .split(",")
+      .map((s) => parseFloat(s.trim()))
+      .filter((n) => !Number.isNaN(n));
+    if (states.length === 0) return [];
+    return computeSensorTroughEvents(rawRows, {
+      motionState: troughMotionState,
+      states,
+      eps: troughEps,
+      medianWindow: troughMedianWindow,
+      columns,
+      pointByRow,
+    });
+  }, [
+    rawRows,
+    troughEnabled,
+    troughMotionState,
+    troughStates,
+    troughEps,
+    troughMedianWindow,
+    troughColumns,
+    pointByRow,
+  ]);
+
+  const analysisEvents = useMemo(
+    () => [...dropEvents, ...transitionEvents, ...troughEvents],
+    [dropEvents, transitionEvents, troughEvents]
+  );
 
   const openPlotJuggler = useCallback(async (name?: string) => {
     const target = name ?? selected;
@@ -347,6 +402,64 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
             </label>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={troughEnabled} onChange={(e) => setTroughEnabled(e.target.checked)} />
+            センサートラフ解析
+          </label>
+          {troughEnabled && (
+            <>
+              <label className="flex items-center gap-1">
+                motion_state終了
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={troughMotionState}
+                  onChange={(e) => setTroughMotionState(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                探索区間states
+                <input
+                  type="text"
+                  className="w-16 rounded border border-border bg-background px-1"
+                  value={troughStates}
+                  onChange={(e) => setTroughStates(e.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                eps
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={troughEps}
+                  onChange={(e) => setTroughEps(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                median窓
+                <input
+                  type="number"
+                  min={1}
+                  step={2}
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={troughMedianWindow}
+                  onChange={(e) => setTroughMedianWindow(parseInt(e.target.value, 10))}
+                />
+              </label>
+              {TROUGH_COLUMNS.map((col) => (
+                <label key={col} className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={troughColumns[col]}
+                    onChange={(e) => setTroughColumns((prev) => ({ ...prev, [col]: e.target.checked }))}
+                  />
+                  {col}
+                </label>
+              ))}
+            </>
+          )}
+        </div>
         <Separator />
         <div className="min-h-0 flex-1">
           <TrajectoryPlot
@@ -367,18 +480,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
             <ScrollArea className="max-h-32 min-h-0">
               <div className="flex flex-col gap-0.5 p-2 font-mono text-xs">
                 {analysisEvents.map((ev, i) => (
-                  <span
-                    key={i}
-                    className={
-                      ev.kind === "drop"
-                        ? "text-red-400"
-                        : ev.kind === "rise"
-                          ? "text-emerald-400"
-                          : ev.kind === "state-start"
-                            ? "text-amber-400"
-                            : "text-sky-400"
-                    }
-                  >
+                  <span key={i} className={EVENT_COLOR[ev.kind]}>
                     {ev.label}
                   </span>
                 ))}

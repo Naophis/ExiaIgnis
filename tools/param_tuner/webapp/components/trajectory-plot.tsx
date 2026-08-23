@@ -12,11 +12,13 @@ interface Props {
   onPointClick: (point: TrajectoryPoint | null) => void;
 }
 
-const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | "diamond" }> = {
+const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | "diamond" | "circle" }> = {
   drop: { color: "#ff5555", shape: "x" },
   rise: { color: "#3ddc84", shape: "x" },
   "state-start": { color: "#f5a623", shape: "diamond" },
   "state-end": { color: "#5aa9ff", shape: "diamond" },
+  trough: { color: "#c678f5", shape: "circle" },
+  "trough-rise": { color: "#4ad4d4", shape: "circle" },
 };
 
 const PADDING = 24;
@@ -198,12 +200,15 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
           ctx.moveTo(cx + r, cy - r);
           ctx.lineTo(cx - r, cy + r);
           ctx.stroke();
-        } else {
+        } else if (style.shape === "diamond") {
           ctx.moveTo(cx, cy - r);
           ctx.lineTo(cx + r, cy);
           ctx.lineTo(cx, cy + r);
           ctx.lineTo(cx - r, cy);
           ctx.closePath();
+          ctx.stroke();
+        } else {
+          ctx.arc(cx, cy, r * 0.75, 0, Math.PI * 2);
           ctx.stroke();
         }
       }

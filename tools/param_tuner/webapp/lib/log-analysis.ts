@@ -16,7 +16,7 @@ export interface AnalysisEvent {
   // "robot": (x,y) is the raw logged position, needs the same offset the
   // trajectory plot applies to robot-position points at draw time.
   anchored: "robot" | "sensor";
-  kind: "drop" | "rise" | "state-start" | "state-end";
+  kind: "drop" | "rise" | "state-start" | "state-end" | "trough" | "trough-rise";
   label: string;
 }
 
@@ -130,6 +130,165 @@ export function computeSensorDropEvents(rows: Record<string, number>[], opts: Se
           label: `${col} >=${opts.high} start=${startIndex} idx=${fmt(riseRow, "index")} val=${fmt(riseRow, col)} diff=${diff}`,
         });
       }
+    }
+  }
+  return events;
+}
+
+// Port of analyze_sensor_trough.py.
+
+function asSensorNum(row: Record<string, number>, key: string): number | undefined {
+  const v = asNum(row, key);
+  return v !== undefined && v > 0 ? v : undefined;
+}
+
+function findMotionStateEnds(rows: Record<string, number>[], motionState: number): number[] {
+  const ends: number[] = [];
+  let prev: number | undefined;
+  for (let i = 0; i < rows.length; i++) {
+    const ms = asNum(rows[i], "motion_state");
+    if (prev === motionState && ms !== undefined && ms !== motionState) ends.push(i);
+    prev = ms;
+  }
+  return ends;
+}
+
+interface TroughResult {
+  troughRow: number;
+  riseRow: number | null;
+}
+
+// Rejects single-sample outlier spikes before zigzag detection runs.
+// left90_d/right90_d read larger absolute distances than left45_d/right45_d,
+// so their single-frame read noise is also larger in absolute mm - large
+// enough to fool the eps-hysteresis zigzag below into treating an isolated
+// glitchy sample as a genuine reversal. A median-of-`window` filter removes
+// those without blurring out a real, sustained trend reversal.
+function medianFilter(values: number[], window: number): number[] {
+  if (window <= 1) return values.slice();
+  const half = Math.floor(window / 2);
+  const out: number[] = [];
+  for (let k = 0; k < values.length; k++) {
+    const seg = values.slice(Math.max(0, k - half), Math.min(values.length, k + half + 1)).slice().sort((a, b) => a - b);
+    out.push(seg[Math.floor(seg.length / 2)]);
+  }
+  return out;
+}
+
+// Zigzag trough/rise detector, matching analyze_sensor_trough.py::find_troughs:
+// hunts the column's running minimum ("trough" mode) until it climbs back up
+// by more than `eps`, then switches to hunting the running maximum ("peak"
+// mode) until it falls by more than `eps`, and so on - repeating within the
+// [start, window-exit) span instead of stopping at the first cycle. Reversal
+// decisions run on the median-filtered series; returned indices point at the
+// original (unfiltered) rows.
+function findTroughs(
+  rows: Record<string, number>[],
+  col: string,
+  start: number,
+  eps: number,
+  inStates?: Set<number>,
+  medianWindow = 3
+): TroughResult[] {
+  const n = rows.length;
+  const inWindow = (i: number) => (inStates ? inStates.has(asNum(rows[i], "motion_state") ?? NaN) : true);
+
+  const idxs: number[] = [];
+  const raws: number[] = [];
+  let i = start;
+  while (i < n && inWindow(i)) {
+    const v = asSensorNum(rows[i], col);
+    if (v !== undefined) {
+      idxs.push(i);
+      raws.push(v);
+    }
+    i++;
+  }
+  if (raws.length === 0) return [];
+
+  const smoothed = medianFilter(raws, medianWindow);
+
+  const results: TroughResult[] = [];
+  let mode: "trough" | "peak" = "trough";
+  let cycleStartV = smoothed[0];
+  let extremeK = 0;
+  let extremeV = smoothed[0];
+  for (let k = 1; k < smoothed.length; k++) {
+    const v = smoothed[k];
+    if (mode === "trough") {
+      if (v < extremeV) {
+        extremeK = k;
+        extremeV = v;
+      } else if (v > extremeV + eps) {
+        if (extremeV <= cycleStartV - eps) results.push({ troughRow: idxs[extremeK], riseRow: idxs[k] });
+        mode = "peak";
+        cycleStartV = extremeV;
+        extremeK = k;
+        extremeV = v;
+      }
+    } else {
+      if (v > extremeV) {
+        extremeK = k;
+        extremeV = v;
+      } else if (v < extremeV - eps) {
+        mode = "trough";
+        cycleStartV = extremeV;
+        extremeK = k;
+        extremeV = v;
+      }
+    }
+  }
+  if (mode === "trough" && extremeV <= cycleStartV - eps) results.push({ troughRow: idxs[extremeK], riseRow: null });
+
+  return results;
+}
+
+export interface SensorTroughOptions {
+  motionState: number;
+  states: number[];
+  eps: number;
+  medianWindow?: number;
+  columns: string[];
+  pointByRow?: RowPointMap;
+}
+
+export function computeSensorTroughEvents(
+  rows: Record<string, number>[],
+  opts: SensorTroughOptions
+): AnalysisEvent[] {
+  const ends = findMotionStateEnds(rows, opts.motionState);
+  const inStates = new Set(opts.states);
+  const events: AnalysisEvent[] = [];
+
+  for (const col of opts.columns) {
+    for (const e of ends) {
+      const endIndex = fmt(rows[e], "index");
+      const troughs = findTroughs(rows, col, e, opts.eps, inStates, opts.medianWindow);
+      troughs.forEach((t, n) => {
+        const troughRow = rows[t.troughRow];
+        if (hasXY(troughRow)) {
+          const pos = resolvePos(troughRow, col, opts.pointByRow);
+          events.push({
+            ...pos,
+            kind: "trough",
+            label: `${col} [${n + 1}] 極小 end=${endIndex} idx=${fmt(troughRow, "index")} val=${fmt(troughRow, col)}`,
+          });
+        }
+        if (t.riseRow === null) return;
+        const riseRow = rows[t.riseRow];
+        if (hasXY(riseRow)) {
+          const diff =
+            asNum(riseRow, "index") !== undefined && asNum(troughRow, "index") !== undefined
+              ? (riseRow.index - troughRow.index).toFixed(0)
+              : "?";
+          const pos = resolvePos(riseRow, col, opts.pointByRow);
+          events.push({
+            ...pos,
+            kind: "trough-rise",
+            label: `${col} [${n + 1}] 上昇開始 end=${endIndex} idx=${fmt(riseRow, "index")} val=${fmt(riseRow, col)} diff=${diff}`,
+          });
+        }
+      });
     }
   }
   return events;

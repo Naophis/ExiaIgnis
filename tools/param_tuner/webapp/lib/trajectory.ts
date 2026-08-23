@@ -8,10 +8,8 @@ const SEN_MAX = 80.5;
 const SENSOR_X_OFFSET = 25.0; // mm forward from robot center
 const SENSOR_ANGLE_RAD = (58 * Math.PI) / 180; // sensor mounting angle
 const DEVIATION_DEG_TH = 25; // deg
-// Applied to trajectory points (and baked into wall-sensor projections) when
-// plotting, but deliberately NOT applied to the wall-grid extent below -
-// this mirrors plot_gui.py's own plot_file()/`_plot_wall_sensor`, which is
-// inconsistent about it in exactly this way.
+// Applied to trajectory points, wall-sensor projections, and the maze-cell
+// grid lines below so all three line up in the same world-space.
 const POS_OFFSET_X = 45 - 9;
 
 export interface TrajectoryPoint {
@@ -164,17 +162,44 @@ function projectWallSensor(
   }
 }
 
-function buildGridLines(xMax: number, yMin: number, yMax: number, yMaxAbs: number): GridLine[] {
-  const lines: GridLine[] = [];
-  const flip = yMaxAbs > 100 && yMin < 0;
-  for (let i = 0; i < xMax + 90; i += 90) {
-    lines.push(flip ? { x1: i, y1: 45, x2: i, y2: yMin - 45 } : { x1: i, y1: 45, x2: i, y2: yMax + 45 });
+const CELL_SIZE = 90; // mm, one maze cell
+const CELL_Y_OFFSET = 45; // matches the historical plot_gui.py row-boundary offset
+
+// Draws maze-cell (90mm) outlines only for cells the trajectory actually
+// passes through, instead of a blanket rectangle over the whole bounding
+// box - a full-extent grid ends up drawing lines far from any real data
+// whenever worldBounds gets pulled wide by an outlier point (wall-sensor
+// projection, a stray return-run excursion, etc).
+// `points` must already be in the same offset world-space the trajectory
+// dots are drawn in (x + POS_OFFSET_X, y) so cell boundaries line up with
+// what's on screen.
+function buildGridLines(points: { x: number; y: number }[]): GridLine[] {
+  const cells = new Set<string>();
+  for (const p of points) {
+    const cx = Math.floor(p.x / CELL_SIZE);
+    const cy = Math.floor((p.y - CELL_Y_OFFSET) / CELL_SIZE);
+    cells.add(`${cx},${cy}`);
   }
-  const horizExtent = Math.max(-yMin, yMax) + 90;
-  for (let i = 0; i < horizExtent; i += 90) {
-    lines.push(
-      flip ? { x1: 0, y1: -i + 45, x2: xMax + 90, y2: -i + 45 } : { x1: 0, y1: i + 45, x2: xMax + 90, y2: i + 45 }
-    );
+
+  const lines: GridLine[] = [];
+  const seen = new Set<string>();
+  const addLine = (x1: number, y1: number, x2: number, y2: number) => {
+    const key = `${x1},${y1},${x2},${y2}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    lines.push({ x1, y1, x2, y2 });
+  };
+
+  for (const key of cells) {
+    const [cx, cy] = key.split(",").map(Number);
+    const x0 = cx * CELL_SIZE;
+    const x1 = x0 + CELL_SIZE;
+    const y0 = cy * CELL_SIZE + CELL_Y_OFFSET;
+    const y1 = y0 + CELL_SIZE;
+    addLine(x0, y0, x0, y1);
+    addLine(x1, y0, x1, y1);
+    addLine(x0, y0, x1, y0);
+    addLine(x0, y1, x1, y1);
   }
   return lines;
 }
@@ -189,13 +214,11 @@ export function buildTrajectoryData(rawRows: Record<string, number>[]): Trajecto
   let xMax = -Infinity;
   let yMin = Infinity;
   let yMax = -Infinity;
-  let yMaxAbs = 0;
   for (const r of sorted) {
     if (r.x < xMin) xMin = r.x;
     if (r.x > xMax) xMax = r.x;
     if (r.y < yMin) yMin = r.y;
     if (r.y > yMax) yMax = r.y;
-    if (Math.abs(r.y) > yMaxAbs) yMaxAbs = Math.abs(r.y);
   }
 
   // filtered_data = data[data['timestamp'].diff().fillna(0) >= 0]
@@ -244,7 +267,7 @@ export function buildTrajectoryData(rawRows: Record<string, number>[]): Trajecto
   worldXMin = Math.min(worldXMin, xMin);
   worldXMax = Math.max(worldXMax, xMax);
 
-  const gridLines = buildGridLines(xMax, yMin, yMax, yMaxAbs);
+  const gridLines = buildGridLines(allPoints.map((p) => ({ x: p.x + POS_OFFSET_X, y: p.y })));
   for (const l of gridLines) {
     grow(l.x1, l.y1);
     grow(l.x2, l.y2);
