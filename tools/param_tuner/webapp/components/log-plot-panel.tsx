@@ -8,7 +8,14 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { TrajectoryPlot } from "@/components/trajectory-plot";
+import {
+  computeMotionTransitionEvents,
+  computeSensorDropEvents,
+  type AnalysisEvent,
+} from "@/lib/log-analysis";
 import { buildTrajectoryData, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
+
+const TRANSITION_COLUMNS = ["left45_d", "left45_2_d", "left45_3_d", "right45_d", "right45_2_d", "right45_3_d"];
 
 interface LogFileInfo {
   name: string;
@@ -45,6 +52,18 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   const [clickInfo, setClickInfo] = useState<string | null>(null);
   const [pjBusy, setPjBusy] = useState(false);
 
+  // analyze_sensor_drop.py 相当のオーバーレイ設定
+  const [dropEnabled, setDropEnabled] = useState(false);
+  const [dropMotionState, setDropMotionState] = useState(4);
+  const [dropLow, setDropLow] = useState(70);
+  const [dropHigh, setDropHigh] = useState(80);
+  const [dropColLeft, setDropColLeft] = useState(true);
+  const [dropColRight, setDropColRight] = useState(true);
+
+  // analyze_motion_state_transitions.py 相当のオーバーレイ設定
+  const [transitionEnabled, setTransitionEnabled] = useState(false);
+  const [transitionStates, setTransitionStates] = useState("6,13");
+
   const refreshFiles = useCallback(async () => {
     const res = await fetch("/api/logs");
     const data = await res.json();
@@ -77,10 +96,45 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     };
   }, [selected]);
 
-  const trajectoryData = useMemo(() => {
-    if (!csvText) return null;
-    return buildTrajectoryData(parseCsv(csvText));
-  }, [csvText]);
+  // 解析(旧 analyze_*.py)は CSV ファイル出現順に対して行うため、
+  // trajectory.ts のタイムスタンプソート済み行とは別に生の行を保持する。
+  const rawRows = useMemo(() => (csvText ? parseCsv(csvText) : []), [csvText]);
+
+  const trajectoryData = useMemo(() => buildTrajectoryData(rawRows), [rawRows]);
+
+  // buildTrajectoryData() reuses row objects verbatim as TrajectoryPoint.raw,
+  // so this identity-keyed map lets drop/rise markers re-anchor to the
+  // sensor's projected wall position (same as the left45/right45 dots)
+  // instead of the robot's own (x, y).
+  const pointByRow = useMemo(
+    () => new Map(trajectoryData?.allPoints.map((p) => [p.raw, p]) ?? []),
+    [trajectoryData]
+  );
+
+  const dropEvents = useMemo<AnalysisEvent[]>(() => {
+    if (!dropEnabled || rawRows.length === 0) return [];
+    const columns = [dropColLeft && "left45_d", dropColRight && "right45_d"].filter(Boolean) as string[];
+    if (columns.length === 0) return [];
+    return computeSensorDropEvents(rawRows, {
+      motionState: dropMotionState,
+      low: dropLow,
+      high: dropHigh,
+      columns,
+      pointByRow,
+    });
+  }, [rawRows, dropEnabled, dropMotionState, dropLow, dropHigh, dropColLeft, dropColRight, pointByRow]);
+
+  const transitionEvents = useMemo<AnalysisEvent[]>(() => {
+    if (!transitionEnabled || rawRows.length === 0) return [];
+    const states = transitionStates
+      .split(",")
+      .map((s) => parseFloat(s.trim()))
+      .filter((n) => !Number.isNaN(n));
+    if (states.length === 0) return [];
+    return computeMotionTransitionEvents(rawRows, { states, columns: TRANSITION_COLUMNS });
+  }, [rawRows, transitionEnabled, transitionStates]);
+
+  const analysisEvents = useMemo(() => [...dropEvents, ...transitionEvents], [dropEvents, transitionEvents]);
 
   const openPlotJuggler = useCallback(async (name?: string) => {
     const target = name ?? selected;
@@ -227,11 +281,79 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
           </Button>
         </div>
         <Separator />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 p-2 text-xs">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={dropEnabled} onChange={(e) => setDropEnabled(e.target.checked)} />
+            センサードロップ解析
+          </label>
+          {dropEnabled && (
+            <>
+              <label className="flex items-center gap-1">
+                motion_state
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={dropMotionState}
+                  onChange={(e) => setDropMotionState(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                low
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={dropLow}
+                  onChange={(e) => setDropLow(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                high
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={dropHigh}
+                  onChange={(e) => setDropHigh(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" checked={dropColLeft} onChange={(e) => setDropColLeft(e.target.checked)} />
+                left45_d
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" checked={dropColRight} onChange={(e) => setDropColRight(e.target.checked)} />
+                right45_d
+              </label>
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={transitionEnabled}
+              onChange={(e) => setTransitionEnabled(e.target.checked)}
+            />
+            状態遷移解析
+          </label>
+          {transitionEnabled && (
+            <label className="flex items-center gap-1">
+              states
+              <input
+                type="text"
+                className="w-24 rounded border border-border bg-background px-1"
+                value={transitionStates}
+                onChange={(e) => setTransitionStates(e.target.value)}
+              />
+            </label>
+          )}
+        </div>
+        <Separator />
         <div className="min-h-0 flex-1">
           <TrajectoryPlot
             data={trajectoryData}
             showLeft45={showLeft45}
             showRight45={showRight45}
+            markers={analysisEvents}
             onPointClick={(p) => setClickInfo(p ? formatClickInfo(p) : null)}
           />
         </div>
@@ -239,6 +361,31 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
         <div className="p-2 font-mono text-xs text-muted-foreground">
           {clickInfo ?? (trajectoryData ? "点をクリックすると詳細を表示します" : "x/y列を含むログを選択してください")}
         </div>
+        {analysisEvents.length > 0 && (
+          <>
+            <Separator />
+            <ScrollArea className="max-h-32 min-h-0">
+              <div className="flex flex-col gap-0.5 p-2 font-mono text-xs">
+                {analysisEvents.map((ev, i) => (
+                  <span
+                    key={i}
+                    className={
+                      ev.kind === "drop"
+                        ? "text-red-400"
+                        : ev.kind === "rise"
+                          ? "text-emerald-400"
+                          : ev.kind === "state-start"
+                            ? "text-amber-400"
+                            : "text-sky-400"
+                    }
+                  >
+                    {ev.label}
+                  </span>
+                ))}
+              </div>
+            </ScrollArea>
+          </>
+        )}
       </div>
     </Card>
   );

@@ -129,6 +129,29 @@ function sequentialColor(t: number): string {
   return `rgb(${lerp(a.r, b.r)},${lerp(a.g, b.g)},${lerp(a.b, b.b)})`;
 }
 
+// Projects a single trajectory point's 45deg wall-sensor reading onto its
+// world-space wall-contact position (same math as the bulk `_plot_wall_sensor`
+// projection below, factored out so callers with a single point - e.g. an
+// analysis-event marker - can reuse it instead of duplicating the geometry).
+export function projectSensorPoint(
+  p: Pick<TrajectoryPoint, "x" | "y" | "angleCorrected" | "raw">,
+  column: "left45_d" | "right45_d",
+  sideSign: 1 | -1
+): WallPoint | null {
+  const sensorD = p.raw[column];
+  if (sensorD === undefined || Number.isNaN(sensorD)) return null;
+  if (!(sensorD >= SEN_MIN && sensorD < SEN_MAX)) return null;
+  const angle = p.angleCorrected;
+  const sensorY = sensorD;
+  const sensorX = sensorY / Math.tan(SENSOR_ANGLE_RAD);
+  const mountX = p.x + SENSOR_X_OFFSET * Math.cos(angle);
+  const mountY = p.y + SENSOR_X_OFFSET * Math.sin(angle);
+  return {
+    x: mountX + sensorX * Math.cos(angle) - sideSign * sensorY * Math.sin(angle) + POS_OFFSET_X,
+    y: mountY + sensorX * Math.sin(angle) + sideSign * sensorY * Math.cos(angle),
+  };
+}
+
 function projectWallSensor(
   points: TrajectoryPoint[],
   column: "left45_d" | "right45_d",
@@ -136,18 +159,8 @@ function projectWallSensor(
   out: WallPoint[]
 ) {
   for (const p of points) {
-    const sensorD = p.raw[column];
-    if (sensorD === undefined || Number.isNaN(sensorD)) continue;
-    if (!(sensorD >= SEN_MIN && sensorD < SEN_MAX)) continue;
-    const angle = p.angleCorrected;
-    const sensorY = sensorD;
-    const sensorX = sensorY / Math.tan(SENSOR_ANGLE_RAD);
-    const mountX = p.x + SENSOR_X_OFFSET * Math.cos(angle);
-    const mountY = p.y + SENSOR_X_OFFSET * Math.sin(angle);
-    out.push({
-      x: mountX + sensorX * Math.cos(angle) - sideSign * sensorY * Math.sin(angle) + POS_OFFSET_X,
-      y: mountY + sensorX * Math.sin(angle) + sideSign * sensorY * Math.cos(angle),
-    });
+    const wp = projectSensorPoint(p, column, sideSign);
+    if (wp) out.push(wp);
   }
 }
 
