@@ -510,6 +510,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
         JsonArray a = dst["accl_v_y"].to<JsonArray>();
         for (float v : src.accl_v_y) a.add(v);
     }
+    dst["decel_v_max_enable"] = src.decel_v_max_enable;
     {
         JsonArray a = dst["decel_v_max_x"].to<JsonArray>();
         for (float v : src.decel_v_max_x) a.add(v);
@@ -556,6 +557,15 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     {
         JsonArray a = dst["accl_v_y"].to<JsonArray>();
         for (float v : src.accl_v_y) a.add(v);
+    }
+    dst["decel_v_max_enable"]  = src.decel_v_max_enable;
+    {
+        JsonArray a = dst["decel_v_max_x"].to<JsonArray>();
+        for (float v : src.decel_v_max_x) a.add(v);
+    }
+    {
+        JsonArray a = dst["decel_v_max_y"].to<JsonArray>();
+        for (float v : src.decel_v_max_y) a.add(v);
     }
     dst["dia_accl"]            = src.dia_accl;
     dst["dia_decel"]           = src.dia_decel;

@@ -19,12 +19,19 @@ void MainTask::wait_button() {
 }
 
 // ─── v_max→decel絶対値LUT ──────────────────────────────
-// param_->decel_v_max_x/y(hardware.yaml)を線形補間して引く。LUT未設定
-// (size<2または長さ不一致)ならbase_decelをそのまま返す(従来通り無効)。
+// param_->decel_v_max_x/y(hardware.yaml)を線形補間して引く。
+// decel_v_max_enable=0(デフォルト)なら常にbase_decelをそのまま返す。
+// [2026-08-23修正] 当初「配列が空(size<2)なら無効」としていたが、
+// from_json_vector()はJSONキーが無いとdst.clear()まで到達せず前回値が
+// 残ってしまい、yamlから行を消す/コメントアウトしても無効化できない実害を
+// 確認した。配列の空/非空に頼らず、明示的なenableフラグで確実にON/OFFする。
 // 減速中に値を変えるのではなく、区間開始前にv_max(既知)から1回だけ選ぶ
 // ため、距離から逆算する既存のclosed-form計算(go_straight_dummy等)は
-// 一切変更しない(2026-08-23追加、高速域での片輪スリップ対策)。
+// 一切変更しない。
 float MainTask::apply_decel_v_max_lut(float v_max, float base_decel) const {
+  if (!param_->decel_v_max_enable) {
+    return base_decel;
+  }
   const auto &vx = param_->decel_v_max_x;
   const auto &vy = param_->decel_v_max_y;
   if (vx.size() < 2 || vx.size() != vy.size()) {
@@ -263,7 +270,9 @@ void MainTask::load_straight(
 
     straight_param_t sp{};
     convertFromJson(sp_json, sp);
-    sp.decel = apply_decel_v_max_lut(sp.v_max, sp.decel);
+    // decel_v_max LUTは吸引ON時限定の対策(main_task_test_run.cpp参照)。
+    // load_straight()は設定ロード時に1回だけ呼ばれ、その時点では対象走行が
+    // 吸引ONかどうか分からないため、ここでは適用しない。
     str_map[p.first] = sp;
 
     if (!silent_load) {

@@ -895,16 +895,17 @@ typedef struct {
   std::vector<float> accl_v_x;
   std::vector<float> accl_v_y;
 
-  // v_max→decel絶対値のLUT(2026-08-23追加、要実機チューニング)。
-  // decel自体は距離から逆算するclosed-formの1定数のままなので減速中に
-  // 値を変える必要はない(non-linearなテーブルは距離再計算が難しくなる
-  // ため避ける、というユーザー方針)。代わりにセグメント開始前、既知の
-  // v_max(区間の最高速度)を1回だけ引いてdecelを選ぶ(MainTask::
-  // apply_decel_v_max_lut()、main_task_util.cpp load_straight()参照)。
-  // 高速域ほど吸引荷重込みの片輪スリップでヨーキック→位置ずれが起きる
-  // ことを確認(20260823_150751.csv等)、v_maxが高いほどdecelの絶対値を
-  // 小さくする単調減少の形を想定。空(size<2)なら従来通り無効
-  // (str_map/sys_.test.decelの値をそのまま使う)。
+  // v_max→decel絶対値のLUT(2026-08-23追加)。
+  // [2026-08-23 修正] 当初「空配列(size<2)なら無効」としていたが、
+  // from_json_vector()はJSONキーが存在しない場合dst.clear()まで到達せず
+  // 前回ロードされた値が残ってしまう(yamlから行を削除/コメントアウトして
+  // pushしても無効化されない実害を確認)。配列の空/非空に頼るのをやめ、
+  // 明示的なenableフラグで確実にON/OFFする。
+  // なお本機能自体、mpc_tgt_calc側が残り距離から実際の減速度を毎tick
+  // 再計算するため、この`decel`入力は「いつ減速フェーズに切り替えるか」
+  // の閾値にしか効かず、片輪スリップ対策としては効果が無いことが判明
+  // 済み(20260823_155443.csv等)。enable=0がデフォルト。
+  int decel_v_max_enable = 0;
   std::vector<float> decel_v_max_x;
   std::vector<float> decel_v_max_y;
 
@@ -1170,6 +1171,15 @@ typedef struct {
   // (ControlLaw::calc()参照、main_task_test_run.cpp)。
   std::vector<float> accl_v_x;
   std::vector<float> accl_v_y;
+  // v_max→decel絶対値LUT(2026-08-23追加)。accl_v_x/yと同じくtestモード
+  // 開始時にinput_param_t.decel_v_max_*へコピーして使う
+  // (MainTask::apply_decel_v_max_lut()、main_task_test_run.cpp参照)。
+  // decel_v_max_enable=0がデフォルト(mpc_tgt_calc側が残り距離から実際の
+  // 減速度を毎tick再計算するため、この`decel`入力は閾値にしか効かず片輪
+  // スリップ対策としては効果が無いことが判明済み、20260823_155443.csv)。
+  int decel_v_max_enable = 0;
+  std::vector<float> decel_v_max_x;
+  std::vector<float> decel_v_max_y;
   float dia_accl = 0;
   float dia_decel = 0;
   float dist = 0;

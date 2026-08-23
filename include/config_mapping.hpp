@@ -785,6 +785,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_vector(src, "accl_v_x",                   dst.accl_v_x);
     from_json_vector(src, "accl_v_y",                   dst.accl_v_y);
     // v_max→decel絶対値テーブル (hardware.yaml: decel_v_max_*)
+    from_json_field(src, "decel_v_max_enable",          dst.decel_v_max_enable);
     from_json_vector(src, "decel_v_max_x",              dst.decel_v_max_x);
     from_json_vector(src, "decel_v_max_y",              dst.decel_v_max_y);
     // センサー角速度リミッタテーブル (hardware.yaml: sensor_deg_limitter_*)
@@ -807,6 +808,9 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "decel", dst.decel);
     from_json_vector(src, "accl_v_x", dst.accl_v_x);
     from_json_vector(src, "accl_v_y", dst.accl_v_y);
+    from_json_field(src, "decel_v_max_enable", dst.decel_v_max_enable);
+    from_json_vector(src, "decel_v_max_x", dst.decel_v_max_x);
+    from_json_vector(src, "decel_v_max_y", dst.decel_v_max_y);
     from_json_field(src, "dia_accl", dst.dia_accl);
     from_json_field(src, "dia_decel", dst.dia_decel);
     from_json_field(src, "dist", dst.dist);

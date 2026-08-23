@@ -870,10 +870,15 @@ ControlLaw::calc_pid_val_ang_vel() {
       angle_i_bias_active(tgt->motion_type)) {
     offset += param_->turn_angle_fb.w_gain * ee->ang.i_bias;
   }
-  ee->aw_log.duty_roll_before = (tgt->ego_in.w + offset);
+  // trj_->w_cmd(2026-08-23、常時Kanayama化): kanayama.enable時はego_in.wの
+  // 代わりにcalc_kanayama()が2D姿勢誤差(dx/dy/e_theta)から補正したw_cmdを
+  // 使う。kanayama無効時はcalc_kanayama()内でw_cmd=ego_in.wにフォール
+  // バックされるため、この置き換えは無効時の挙動を一切変えない
+  // (trajectory_generator.cpp calc_kanayama()参照)。
+  ee->aw_log.duty_roll_before = (trj_->w_cmd + offset);
 
-  ee->w.error_p = (tgt->ego_in.w + offset) - se->ego.w_lp;
-  ee->w_kf.error_p = (tgt_val_->ego_in.w + offset) - se->ego.w_kf;
+  ee->w.error_p = (trj_->w_cmd + offset) - se->ego.w_lp;
+  ee->w_kf.error_p = (trj_->w_cmd + offset) - se->ego.w_kf;
 
   ee->w.error_d = ee->w.error_p - ee->w.error_d;
   ee->w_kf.error_d = ee->w_kf.error_p - ee->w_kf.error_d;

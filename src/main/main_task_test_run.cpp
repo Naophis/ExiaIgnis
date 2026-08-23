@@ -49,6 +49,20 @@ void MainTask::test_run() {
     param_->accl_v_y.clear();
   }
 
+  // v_max→decel絶対値LUTもaccl_v_x/yと同じくsystem.yaml(sys_.test)側で
+  // 管理し、testモード開始時にinput_param_tへコピーする(hardware.yamlには
+  // 値を置かない、MainTask::apply_decel_v_max_lut()参照)。非吸引時は
+  // accl_v_x/yと同じ理由でLUTを使わない。
+  if (sys_.test.suction_active != 0) {
+    param_->decel_v_max_enable = sys_.test.decel_v_max_enable;
+    param_->decel_v_max_x = sys_.test.decel_v_max_x;
+    param_->decel_v_max_y = sys_.test.decel_v_max_y;
+  } else {
+    param_->decel_v_max_enable = 0;
+    param_->decel_v_max_x.clear();
+    param_->decel_v_max_y.clear();
+  }
+
   ps.v_max = sys_.test.v_max;
   ps.v_end = 20;
   ps.dist = sys_.test.dist - 5;

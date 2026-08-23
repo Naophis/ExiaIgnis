@@ -241,6 +241,14 @@ trj_length: 1 # Number of trajectory points to generate
 trj_idx_v: [0, 10000] 
 # trj_idx_val: [0, 0, 0, 10, 15, 20, 24, 24, 24, 24] # max = trj_length-1
 trj_idx_val: [0, 4] # max = trj_length-1
+# 2026-08-23: 対象範囲をSLALOM/SLA_BACK_STR限定からほぼ全モーションに拡張し、
+# w_cmdをcalc_pid_val_ang_vel()のee->w.error_p(ヨー主力ゲインkp/kb/kcの
+# 入力)にも配線した(trajectory_generator.cpp calc_kanayama()、
+# control_law.cpp参照)。実機テストの結果、enable=1でSTRAIGHT走行の壁追従・
+# 向き保持が明確に悪化した(20260823_165521.csv enable=0: 平均|sen_error_p|
+# =0.35mm・平均|kim_theta|=0.34° / 20260823_165611.csv enable=1: 2.71mm・
+# 5.42°、8〜16倍悪化)。kanayama_straightとの干渉か、kx=10/ky=0.0005が
+# SLALOM用のまま流用されているのが原因かは未切り分け。enable=0に戻す。
 kanayama:
   kx: 10
   ky: 0.0005
@@ -259,11 +267,17 @@ kanayama:
 # 2026-08-23: str_ang_pid_fast(速いP+D直接duty)より収束が遅いと判明したため
 # 排他をやめ、str_ang_pid_fast.i=0にした上で両方を並行実行する「いいとこ取り」
 # 構成に変更(control_law.cpp calc_sensor_pid()参照)。
+# 2026-08-23: kanayama(2D姿勢、trajectory_generator.cpp calc_kanayama())を
+# SLALOM/SLA_BACK_STR限定からほぼ全モーションに拡張し、w_cmd経由でヨーの
+# 主力ゲイン(kp/kb/kc、ee->w.error_p)にも配線した。ky*ey(壁センサー基準の
+# 横方向補正)は2D kanayamaが持たない独立した情報源(実壁との距離)なので
+# そのまま残すが、k_theta*sin(e_theta)(向き補正)は2D kanayama側の向き補正
+# (dead-reckoning基準)と役割が重複するため無効化して二重補正を避ける。
 kanayama_straight:
   kx: 0
   ky: 0.03
   ki: 0.006
-  k_theta: 0.0005
+  k_theta: 0.0  # 2D kanayamaの向き補正と重複するため無効化(上記コメント参照)
   enable: 1
   windup: 1
   windup_deg: 2.5

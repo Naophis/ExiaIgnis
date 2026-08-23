@@ -106,9 +106,25 @@ void TrajectoryGenerator::calc_kanayama(
   se->ego.kim_y     = ego.kim.y;
   se->ego.kim_theta = ego.kim.theta;
 
-  if (param->kanayama.enable > 0 &&
-      (tgt_val->motion_type == MotionType::SLALOM ||
-       tgt_val->motion_type == MotionType::SLA_BACK_STR)) {
+  // 2026-08-23: 当初SLALOM/SLA_BACK_STR限定だったが、v_cmd/w_cmdは
+  // control_law.cpp calc_pid_val_ang_vel()のee->w.error_p計算にも配線した
+  // (=ヨーの主力ゲインkp/kb/kcにもKanayama補正が及ぶ)ため、対象範囲を
+  // ControlLaw::angle_i_bias_active()と同じ「実質全モーション」に拡張する。
+  // PIVOT系/BACK_STRAIGHT/READY/FRONT_CTRLはimg_ang自体の意味が異なる
+  // (またはこの区間で軌道追従補正が不要)ため除外(control_law.cpp参照、
+  // 両者は将来ズレないよう同じ除外リストを保つこと)。
+  const bool kanayama_active =
+      param->kanayama.enable > 0 &&
+      !(tgt_val->motion_type == MotionType::NONE ||
+        tgt_val->motion_type == MotionType::PIVOT ||
+        tgt_val->motion_type == MotionType::PIVOT_PRE ||
+        tgt_val->motion_type == MotionType::PIVOT_PRE2 ||
+        tgt_val->motion_type == MotionType::PIVOT_AFTER ||
+        tgt_val->motion_type == MotionType::PIVOT_OFFSET ||
+        tgt_val->motion_type == MotionType::BACK_STRAIGHT ||
+        tgt_val->motion_type == MotionType::READY ||
+        tgt_val->motion_type == MotionType::FRONT_CTRL);
+  if (kanayama_active) {
     v_cmd = se->ego.knym_v;
     w_cmd = se->ego.knym_w;
   } else {
