@@ -65,8 +65,11 @@ Km: 0.00160 # トルク定数：　大-> 縦系の出力小
 Lm: 0.0000015 # 大：横系の出力大
 # Lm: 0.00000035 # 大：横系の出力大
 
-coulomb_friction: 0.000075 # クーロン摩擦(吸引OFF基準でチューニング済み)
-viscous_friction: 0.000925 # 粘性摩擦(吸引OFF基準でチューニング済み)
+coulomb_friction: 0.000015 # クーロン摩擦(吸引OFF基準でチューニング済み)
+viscous_friction: 0.000825 # 粘性摩擦(吸引OFF基準でチューニング済み)
+
+# coulomb_friction: 0.000015 # クーロン摩擦
+# viscous_friction: 0.001475 # 粘性摩擦
 
 # coulomb_friction: 0.0 # クーロン摩擦
 # viscous_friction: 0.0 # 粘性摩擦
@@ -77,7 +80,7 @@ viscous_friction: 0.000925 # 粘性摩擦(吸引OFF基準でチューニング�
 # (vel_pid.i)が過大反応する現象を確認(latest.csv、trajectory_generator.cpp
 # copy_tgt()参照)。初期値は上と同じ(未チューニング)、実機で吸引ON状態の
 # 加速テストをしながら増やしていく想定。
-coulomb_friction_suction: 0.000075
+coulomb_friction_suction: 0.000015
 viscous_friction_suction: 0.00125
 
 Resist: 4.4
@@ -202,6 +205,10 @@ sensor_deg_limitter_dia: [3, 3, 3, 3, 3, 3, 6, 6.5, 4.5, 4.5]
 # sensor_deg_limitter_dia: [3, 3, 4.5, 4.5, 4.5, 4.6, 4.5, 4.5, 4.5]
 sensor_deg_limitter_piller: [3, 3, 3, 3, 10, 10, 10, 3, 3, 3]
 # sensor_deg_limitter_piller: [0, 0, 0, 0, 3, 3, 3, 3, 3, 3]
+
+# sensor_deg_limitter_dia: [3, 3, 6, 12, 12, 8, 6, 4.5, 4.5, 4.5]
+# sensor_deg_limitter_piller: [3, 3, 3, 10, 10, 10, 10, 3, 3, 3]
+
 
 front_ctrl_roll_pid:
   mode: 3
@@ -530,13 +537,14 @@ sensor_pid_dia:
   th: 15
 
 # calc_sensor_pid_dia()専用のKanayamaカスケード(2026-08-24追加)。
-# kanayama_straightとは別パラメータ: ey(柱距離誤差)は進行状況で非単調に
-# 変化しky/kiと相性が悪いため、kx/ky/kiは使わずe_theta(kim_theta基準の
-# 実測ヘディング誤差)のk_thetaのみ角速度ループへ直結する想定。要実機
-# チューニングのためenable=0で開始する。
+# kanayama_straightとは別パラメータ。kiはey(柱距離誤差)が進行状況で
+# 非単調に変化し積分と相性が悪いため未実装のまま様子見。kyは積分と違い
+# 蓄積して発散する経路がないためsensor_pid_dia.thでクランプ済みのeyに
+# 追加(2026-08-24)。ただしsensor_pid_dia.pも同じeyに反応する比例項(経路A)
+# のため、kanayama_straight.ky(0.03)よりだいぶ小さい値から様子を見る。
 kanayama_dia:
   kx: 0
-  ky: 0
+  ky: 0.01
   ki: 0
   k_theta: 0.0005
   enable: 1

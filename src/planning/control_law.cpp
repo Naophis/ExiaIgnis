@@ -414,14 +414,37 @@ ControlLaw::calc_sensor_pid_dia() {
   }
 
   // kanayama_dia(2026-08-24): kanayama_straightとは別パラメータにする
-  // (ユーザー方針)。ey(柱距離誤差、上でクランプ済みだが依然として非単調)
-  // はky/kiに使わず0固定運用とし、kim_theta基準の実測ヘディング誤差
-  // e_thetaに対するk_thetaのみ角速度ループへ直結する。ky/ki相当が今後
-  // 欲しくなってもkanayama_straightのki発散を踏まえ別チューニングが要る。
+  // (ユーザー方針)。ki(積分)はey(柱距離誤差)が進行状況で非単調に変化する
+  // ため未実装のまま様子見。kyは積分と違い今の誤差にその場で比例するだけで
+  // 蓄積して発散する経路がないため、クランプ済みのeyに対して追加(2026-08-24)。
+  // ただしsensor_pid_dia.pも同じeyに反応する比例項(経路A、角度ループ経由)
+  // のため、kyを足すと同じ誤差に対する二重のP相当になる。kanayama_straight.ky
+  // (0.03)よりだいぶ小さい値から始めてduty_senの効きを削らない範囲で
+  // 調整すること。
+  //
+  // 出力クランプ(2026-08-24追加): duty_senはsensor_deg_limitter_diaで
+  // ±3°等に抑えられるが、sen_kanayama_dwは角速度ループへ直結しておりこの
+  // クランプを経由しない。ey(柱距離誤差)は幾何的に大きく歪みth(mm)でしか
+  // 抑えていないため、ky×eyがthに張り付いた状態が何十tickも続くと
+  // 無制限のΔwオフセットが乗り続け、中心に収束せずbang-bang的に符号反転する
+  // 不具合を実機で確認した(20260824_030238.csv、ky=0.01でs_pid_pが±15mm
+  // (th上限)に60tick以上張り付き続けていた)。windup_deg(deg/s相当、未使用
+  // フィールドを流用)でsen_kanayama_dw自体もクランプする。
   if (type == SensingControlType::DiaPiller && param_->kanayama_dia.enable) {
+    const float ey = ee->sen_dia.error_p;
     const float e_theta =
         tgt_val_->ego_in.ang - sensing_result_->ego.kim_theta;
-    sen_kanayama_dw = param_->kanayama_dia.k_theta * sinf(e_theta);
+    const float ky_gain = param_->kanayama_dia.ky * ey;
+    const float ktheta_gain = param_->kanayama_dia.k_theta * sinf(e_theta);
+    sen_kanayama_dw = ky_gain + ktheta_gain;
+    if (param_->kanayama_dia.windup_deg > 0) {
+      const float dw_limit = param_->kanayama_dia.windup_deg / 180.0f * M_PI;
+      sen_kanayama_dw = std::clamp(sen_kanayama_dw, -dw_limit, dw_limit);
+    }
+    // [ログ注意] kanayama_straightと同様、enable時はここでee->s_valを
+    // ky/e_theta/Δw内訳で上書きする(duty_l/r等の実効値には影響しない)。
+    set_ctrl_val(ee->s_val, ey, 0, 0, e_theta, ky_gain, 0, 0, ktheta_gain,
+                 sen_kanayama_dw, sen_kanayama_dw);
   } else {
     sen_kanayama_dw = 0;
   }
