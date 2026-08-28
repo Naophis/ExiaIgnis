@@ -1,0 +1,73 @@
+;
+; dshot_bidir.pio - Bidirectional(inverted) DShot 用 半二重PIOプログラム。
+; ESCape32移行に向けた実装(現状は未使用・未検証)。ControlLaw等の実行系には
+; まだ結線されていない。実機(ロジックアナライザ)での波形検証をしてから
+; suction_esc_dshot_actuator.cpp経由で有効化すること。
+;
+; 想定仕様(bidirectional DShot、AM32/ESCape32/BLHeli32等が共通実装する
+; デファクトスタンダードに基づく。include/driver/dshot_gcr.hppのコメントも参照):
+;   - idle = HIGH (inverted)。通常DShotのidle=LOWとは逆。
+;   - 1ビット = 8 PIOサイクル固定(TXのclkdivで実際の時間が決まる。
+;     DShot600なら 8cycle = 1/600000sec になるようclkdivを選ぶ)。
+;     bit='1': 高6サイクル+低2サイクル(75%)、bit='0': 高3サイクル+低5サイクル(37.5%)。
+;     MSB firstで16bitフレーム(スロットル11bit+telemetry要求1bit+CRC4bit)を送出する。
+;   - テレメトリ応答(ESC→host、GCR符号化20bit)は同じ極性・同じ変調方式だが
+;     ビットレートがコマンド側の4/5倍に遅くなる(GCRが4bitを5bitへ展開するため)。
+;     つまり1bit=10 PIOサイクル相当になるようRX側のclkdivをTX側の1.25倍にする。
+
+.program dshot_tx
+.side_set 1
+
+; OUT pin 0 と side-set pin 0 は両方とも同一GPIO(半二重信号線)にマップする。
+; Cライブラリ側は送出するフレーム(16bit)をuint32_tの上位16bitに詰めて
+; pio_sm_put()する(out shift方向=left, 32bit分をpullし、上位16bitのみ使う)。
+.wrap_target
+frame_start:
+    pull            side 1 [7]  ; 次フレームをFIFOから取得するまでidle-high維持
+    set y, 15       side 1      ; ビットカウンタ = 15 (16回ループ、15..0)
+bitloop:
+    out x, 1        side 1 [1]  ; OSR上位ビットから1bit shift out、high継続(2cyc)
+    jmp !x do_zero  side 1      ; high継続(1cyc、ここまでhigh計3cyc)。bit=0ならdo_zeroへ
+do_one:
+    nop             side 1 [2]  ; bit=1: high をさらに3cyc延長(high計6cyc=75%)
+    jmp y-- bitloop side 0 [1]  ; low 2cyc(bit計8cyc)、y!=0ならbitloopへ継続
+    jmp frame_start side 1      ; (最終ビットが'1'だった場合のみ到達) idle-highへ復帰
+do_zero:
+    jmp y-- bitloop side 0 [4]  ; bit=0: low 5cyc(bit計8cyc、high3cyc=37.5%)、継続
+    jmp frame_start side 1      ; (最終ビットが'0'だった場合のみ到達) idle-highへ復帰
+.wrap
+
+% c-sdk {
+static inline void dshot_tx_program_init(PIO pio, uint sm, uint offset, uint pin, float clkdiv) {
+    pio_sm_config c = dshot_tx_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, false, false, 32); // shift_right=false(MSB first)、autopull無効(明示pull使用)
+    sm_config_set_sideset_pins(&c, pin);
+    sm_config_set_clkdiv(&c, clkdiv);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}
+
+; ------------------------------------------------------------------
+; dshot_rx: テレメトリ応答(GCR符号化20bit)を「立ち上がりエッジ検出+
+; 固定ディレイ後にサンプル」方式でデコードする。bit='1'(75%duty)は
+; サンプル時点でまだHighのはず、bit='0'(37.5%duty)は既にLowに落ちて
+; いるはず、という前提でサンプル点(SAMPLE_DELAY)を選ぶ。
+; C側はRX側SMのclkdivをTX側の1.25倍(=1bit 10cycle相当)にして呼ぶこと。
+
+.program dshot_rx
+.wrap_target
+    wait 1 pin 0        ; 立ち上がり(=次ビット開始)を待つ
+    nop            [4]  ; サンプル点まで待機(10cycle中の中間、bit=0/1境界の間を狙う)
+    in pins, 1           ; そのビット値をISRへ積む(high=1、low=0)
+    wait 0 pin 0          ; このビットがlowに落ちるのを待ってから次のwait 1へ(疑似エッジ検出)
+.wrap
+
+% c-sdk {
+static inline void dshot_rx_program_init(PIO pio, uint sm, uint offset, uint pin, float clkdiv) {
+    pio_sm_config c = dshot_rx_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin);
+    sm_config_set_in_shift(&c, false, true, 20); // shift_right=false(MSB first)、autopush、20bit毎にpush
+    sm_config_set_clkdiv(&c, clkdiv);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

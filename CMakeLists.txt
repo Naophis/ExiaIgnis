@@ -99,6 +99,7 @@ add_executable(ExiaIgnis
     src/planning/motor_actuator.cpp
     src/planning/bldc_actuator.cpp
     src/planning/suction_esc_actuator.cpp
+    src/planning/suction_esc_dshot_actuator.cpp
     src/planning/ego_estimator.cpp
     src/planning/sensor_processor.cpp
     src/planning/trajectory_generator.cpp
@@ -124,6 +125,8 @@ add_executable(ExiaIgnis
     src/driver/ads7042.cpp
     src/driver/am32_protocol.cpp
     src/driver/am32_config.cpp
+    src/driver/dshot_gcr.cpp
+    src/driver/dshot_bidir.cpp
     src/config_loader.cpp
 
     src/utils/kalman_filter.cpp
@@ -163,6 +166,9 @@ pico_generate_pio_header(ExiaIgnis
 )
 pico_generate_pio_header(ExiaIgnis
     ${CMAKE_CURRENT_LIST_DIR}/pio/am32_halfduplex.pio
+)
+pico_generate_pio_header(ExiaIgnis
+    ${CMAKE_CURRENT_LIST_DIR}/pio/dshot_bidir.pio
 )
 
 # Modify the below lines to enable/disable output over UART/USB
