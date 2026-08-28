@@ -140,6 +140,7 @@ void MainTask::run_main_mode() {
     } else if (mode_num == (2 + exec_param_list.size() + 1)) {
       // dump1(); // taskの最終行に配置すること
       printf("suction\n");
+      planning_->suction_power_on();
       mp->reset_gyro_ref_with_check();
       planning_->suction_enable(sys_.test.suction_duty,
                                sys_.test.suction_duty_low);

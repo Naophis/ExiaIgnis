@@ -23,6 +23,10 @@ constexpr uint8_t kClkDivInt = 16;
 } // namespace
 
 void SuctionEscActuator::init() {
+  gpio_init(SUCTION_POWER_EN);
+  gpio_set_dir(SUCTION_POWER_EN, GPIO_OUT);
+  gpio_put(SUCTION_POWER_EN, false); // 初期状態はOFF(enable()まで通電しない)
+
   gpio_set_function(SUCTION_ESC_PWM, GPIO_FUNC_PWM);
   slice_   = pwm_gpio_to_slice_num(SUCTION_ESC_PWM);
   channel_ = pwm_gpio_to_channel(SUCTION_ESC_PWM);
@@ -77,6 +81,15 @@ void SuctionEscActuator::write_ticks(float pulse_us) {
 // パルスへ)。ここで即座に最小パルスへ叩き落とすと、まだ高速回転して
 // いるモーターに急ブレーキ相当のコマンドを送ることになり、大きな
 // 逆起電力/回生電流の原因になり得るため行わない。
-void SuctionEscActuator::enable() { enabled_ = true; }
+void SuctionEscActuator::enable() {
+  enabled_ = true;
+  power_on();
+}
 
-void SuctionEscActuator::disable() { enabled_ = false; }
+void SuctionEscActuator::disable() {
+  enabled_ = false;
+  power_off();
+}
+
+void SuctionEscActuator::power_on()  { gpio_put(SUCTION_POWER_EN, true); }
+void SuctionEscActuator::power_off() { gpio_put(SUCTION_POWER_EN, false); }

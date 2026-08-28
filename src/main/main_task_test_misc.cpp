@@ -337,6 +337,8 @@ void MainTask::test_suction() {
   const float target_v = sys_.test.suction_duty;
 
   while (1) {
+    // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+    planning_->suction_power_on();
     mp->reset_gyro_ref_with_check();
     sleep_ms(250);
 

@@ -10,7 +10,18 @@
 //
 // GPIO11(SUCTION_PWM3)を流用し、ESCのスロットル信号線として使う
 // (define.hpp の SUCTION_ESC_PWM 参照)。BldcActuatorが使っていた
-// GPIO8/9/10は未使用のまま残る。
+// GPIO8/9は未使用のまま残る。GPIO10(SUCTION_POWER_EN)はESC電源用の
+// ロジックゲートICのイネーブル入力に接続されており、enable()/disable()
+// でHIGH/LOWを連動させ、ESCそのものへの通電を制御する。
+//
+// [起動レイテンシ対策] ESCの電源投入(GPIO10 HIGH)後、実際に起動しきる
+// までロジックゲートIC+ESC側でそれなりの時間がかかる。enable()は
+// duty目標セットと同時に行われることが多く、その直後にすぐ回転させたい
+// 呼び出し側では待ち時間が丸ごと直列に乗ってしまう。power_on()を
+// duty指令より前(例: reset_gyro_ref_with_check()等、他の初期化と並行
+// できるタイミング)で単独に呼んでおくことで、ESCの起動時間を他の処理と
+// 重ねて隠せる。enable()はpower_on()を内包する(二重に呼んでも副作用なし)
+// ので、power_on()を呼ばずにenable()だけ呼ぶ既存の使い方も引き続き動く。
 //
 // [重要] apply(0%)="最小パルス(1000us)"は「停止」であって「信号なし」
 // ではない。ESCがアーム状態を保つには継続的なパルス出力が必要なため、
@@ -40,6 +51,12 @@ public:
   void enable();
   void disable();
   bool is_enabled() const { return enabled_; }
+
+  // GPIO10(SUCTION_POWER_EN)のHIGH/LOWのみを切り替える(duty目標や
+  // enabled_フラグには触れない)。ESC起動レイテンシを隠すため、
+  // enable()より前に単独で呼べる(クラスコメント参照)。
+  void power_on();
+  void power_off();
 
 private:
   void write_ticks(float pulse_us);

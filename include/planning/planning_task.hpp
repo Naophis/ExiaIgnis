@@ -60,6 +60,11 @@ public:
   void motor_disable();
   void suction_enable(float duty, float duty_low);
   void suction_disable();
+  // ESC電源(GPIO10)だけを先行してONにする。起動レイテンシを他の初期化
+  // (reset_gyro_ref_with_check()等)と並行させて隠すための呼び出し。
+  // suction_enable()自体も内部でONにするため、呼ばなくても動作は変わらない。
+  void suction_power_on()  { esc_.power_on(); }
+  void suction_power_off() { esc_.power_off(); }
   // 吸引duty指令がControlLaw内でまだ目標値へランプ中かどうか。
   // 旧BldcActuator::is_ramping()の代替(ControlLaw::is_suction_ramping()参照)。
   bool is_suction_ramping() const { return ctl_.is_suction_ramping(); }

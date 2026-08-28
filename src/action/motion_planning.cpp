@@ -1369,6 +1369,11 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
   ps.search_str_wide_ctrl_l = false;
   ps.search_str_wide_ctrl_r = false;
 
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す
+  // (SuctionEscActuator::power_on()参照)。
+  if (p_set.suction) {
+    pt->suction_power_on();
+  }
   reset_gyro_ref_with_check();
   reset_tgt_data();
   reset_ego_data();

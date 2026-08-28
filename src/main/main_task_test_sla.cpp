@@ -49,6 +49,10 @@ void MainTask::test_sla() {
     param_->sen_ref_p.normal.exist.right45 += 10;
   }
 
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+  if (sys_.test.suction_active != 0) {
+    planning_->suction_power_on();
+  }
   mp->reset_gyro_ref_with_check();
 
   if (sys_.test.suction_active == 1) {
@@ -261,6 +265,10 @@ void MainTask::test_sla() {
 }
 
 void MainTask::test_run_sla() {
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+  if (sys_.test.suction_active != 0) {
+    planning_->suction_power_on();
+  }
   mp->reset_gyro_ref_with_check();
 
   reset_tgt_data();
@@ -491,6 +499,10 @@ void MainTask::test_sla_walloff() {
       param_->sen_ref_p.normal.expand.right45_2 = 1;
       param_->left_keep_dist_th = -1;
     }
+  }
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+  if (sys_.test.suction_active != 0) {
+    planning_->suction_power_on();
   }
   mp->reset_gyro_ref_with_check();
 

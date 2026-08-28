@@ -7,6 +7,10 @@
 #include <stdio.h>
 
 void MainTask::test_run() {
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+  if (sys_.test.suction_active != 0) {
+    planning_->suction_power_on();
+  }
   mp->reset_gyro_ref_with_check();
   reset_tgt_data();
   reset_ego_data();
@@ -114,6 +118,10 @@ void MainTask::test_run() {
 }
 
 void MainTask::test_back() {
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+  if (sys_.test.suction_active != 0) {
+    planning_->suction_power_on();
+  }
   mp->reset_gyro_ref_with_check();
 
   if (sys_.test.suction_active == 1) {
@@ -190,6 +198,10 @@ void MainTask::test_front_wall_offset() {
          param_->sen_ref_p.search_exist.offset_l,
          param_->sen_ref_p.search_exist.offset_r);
 
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+  if (sys_.test.suction_active != 0) {
+    planning_->suction_power_on();
+  }
   mp->reset_gyro_ref_with_check();
 
   if (sys_.test.suction_active == 1) {

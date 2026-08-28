@@ -80,15 +80,20 @@ static const char *trace_state_name(uint8_t s) {
 // init
 // ============================================================
 void BldcActuator::init() {
+  // [注意] init()はどこからも呼ばれていない(AM32 ESC移行によりesc_側が
+  // 実行系。planning_task.cpp参照)完全な未使用パスだが、コンパイルは通す。
+  // GPIO10はSUCTION_PWM2(V相)としてハードウェア設計されていたが、実機で
+  // ESC電源用ロジックゲートICのイネーブル入力(SUCTION_POWER_EN)として
+  // 配線し直したため、このV相PWMはもう物理的に存在しない。
   gpio_set_function(SUCTION_PWM1, GPIO_FUNC_PWM);
-  gpio_set_function(SUCTION_PWM2, GPIO_FUNC_PWM);
+  gpio_set_function(SUCTION_POWER_EN, GPIO_FUNC_PWM);
   gpio_set_function(SUCTION_PWM3, GPIO_FUNC_PWM);
   gpio_init(SUCTION_EN);
   gpio_set_dir(SUCTION_EN, GPIO_OUT);
   gpio_put(SUCTION_EN, 0);
 
   slice_s1_   = pwm_gpio_to_slice_num(SUCTION_PWM1);
-  slice_s2_   = pwm_gpio_to_slice_num(SUCTION_PWM2);
+  slice_s2_   = pwm_gpio_to_slice_num(SUCTION_POWER_EN);
   slice_pace_ = PACE_SLICE;
   sys_clk_hz_ = clock_get_hz(clk_sys);
   wrap_ = (uint32_t)(sys_clk_hz_ / BLDC_PWM_FREQ_HZ) - 1u;  // = 1874

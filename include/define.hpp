@@ -44,7 +44,9 @@
 #define M_PWM_R2      7   // PWM3 B
 #define SUCTION_EN    8   // GPIO output — HIGH = driver enabled (BldcActuator専用、現在未使用)
 #define SUCTION_PWM1  9   // PWM4 B  (V phase, BldcActuator専用、現在未使用)
-#define SUCTION_PWM2  10  // PWM5 A  (V phase, BldcActuator専用、現在未使用)
+// GPIO10: ESC電源用ロジックゲートICのイネーブル入力。HIGH = ESC通電。
+// SuctionEscActuatorのenable()/disable()と連動して駆動する。
+#define SUCTION_POWER_EN  10
 #define SUCTION_PWM3  11  // PWM5 B  (BldcActuator W相 / SuctionEscActuator兼用)
 
 #define MOTOR_PWM_FREQ_HZ  37500u
