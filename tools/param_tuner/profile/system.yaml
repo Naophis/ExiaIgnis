@@ -61,7 +61,7 @@ maze_size: 32
 debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
-# mode: 0 # メイン
+mode: 0 # メイン
 # mode: 1 # 最短スローム
 # mode: 2 # 直進
 # mode: 3 # 超信地
@@ -71,7 +71,7 @@ hf_cl: 0 # half(0) or classic(1)
 # mode: 11 # vacume: suction test
 # mode: 12 # silent_keep:
 # mode: 13 # keep_pos:
-mode: 14 # sensing:
+# mode: 14 # sensing:
 # mode: 15 # sensor calib:
 # mode: 16 # sysi(para)
 # mode: 17 # sysi(roll)
@@ -85,8 +85,8 @@ mode: 14 # sensing:
 
 
 test: # テスト走行時に使用するパラメータ群
-  v_max: 1500
-  accl: 42500
+  v_max: 400
+  accl: 2500
   # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
   # 減速(decel)には効かない。
   accl_v_x: [0,      2500, 5000, 7500, 8000]
@@ -101,11 +101,11 @@ test: # テスト走行時に使用するパラメータ群
   decel_v_max_x: [0, 3000, 4500, 6000, 7000]
   decel_v_max_y: [57500, 52500, 46000, 45000, 42500]
 
-  decel: -47500
-  dia_accl: 45000
-  dia_decel: -47500
+  decel: -2500
+  dia_accl: 2500
+  dia_decel: -2500
   dist: 120 #直進
-  suction_active: 2
+  suction_active: 0
 
   end_v: 10
   dia: 0
@@ -157,7 +157,7 @@ test: # テスト走行時に使用するパラメータ群
   # 確定(ControlLaw::set_next_duty()参照)。
   # 空にすれば従来通りsuction_esc_ramp_us_per_secの固定レートに戻る。
   suction_ramp_rate_us_x: [1000, 1600, 1800, 1999]
-  suction_ramp_rate_us_y: [250, 650,  600,  450 ]
+  suction_ramp_rate_us_y: [350, 650,  600,  450 ]
 
   # バッテリー電圧が低いほど始動失敗が顕著という実測傾向への対策。
   # AM32 ESCは閉ループRPM制御ではなく、指令dutyをバッテリー電圧に対する
@@ -198,12 +198,12 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 4
+  file_idx: 1
   sla_dist: 90
   # sla_type: 3
   sla_type: 4
   sla_type2: 8 # 復路ターン種類
-  sla_return: 0 # 往復フラグ
+  sla_return: 1 # 往復フラグ
   # sla_type: 1 normal
   # sla_type: 2 #orval
   # sla_type: 3 #large

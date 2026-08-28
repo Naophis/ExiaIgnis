@@ -53,7 +53,7 @@
   },
   "1800": {
     "status": {
-      "large90": null,
+      "large90": "o",
       "orval180": null,
       "dia45": null,
       "dia45_2": null,
@@ -105,7 +105,7 @@
   },
   "2000": {
     "status": {
-      "large90": null,
+      "large90": "o",
       "orval180": null,
       "dia45": null,
       "dia45_2": null,

@@ -137,8 +137,27 @@ EgoEstimator::update(bool motor_en) {
       const auto d_y = se->ego.pos_y - pos_y_z;
       const auto d_ang = se->ego.pos_ang - pos_theta_z;
 
-      kim.x += d_x;
-      kim.y += d_y;
+      // 2026-08-29: pos.ang/pos_x/pos_yはセグメント境界を跨いでも一切
+      // リベースされないワールド座標系の値だが、kim.thetaはcp_request()の
+      // セグメント遷移時に-= last_tgt_angleでセグメントローカル座標系へ
+      // リベースされる(planning_task.cpp参照)。trajectory_generator.cppの
+      // odm.x/y(trajectory_points由来)もセグメントローカル座標系のため、
+      // d_x/d_yをそのままkim.x/yへ加算すると、ターンを経た2本目以降の
+      // セグメントでkim(ワールド座標系)とodm(セグメントローカル座標系)の
+      // 座標系がズレる。放置するとターンの回転角分だけ前進成分がy側に
+      // 漏れ出し(左→右のように連続ターンすると顕著)、calc_kanayama()の
+      // ey(横偏差)が実在しない横ズレを拾ってヨーレート制御が荒れる原因に
+      // なっていた(20260829_010034.csv解析、kim_yがkim_xとほぼ1:1で
+      // 成長し続ける形で確認)。d_x/d_yを(pos_theta_z - kim.theta)分だけ
+      // 逆回転し、セグメントローカル座標系に投影してから加算する。
+      const float frame_rotation = pos_theta_z - kim.theta;
+      const float cos_fr = cosf(frame_rotation);
+      const float sin_fr = sinf(frame_rotation);
+      const auto d_x_local = d_x * cos_fr + d_y * sin_fr;
+      const auto d_y_local = -d_x * sin_fr + d_y * cos_fr;
+
+      kim.x += d_x_local;
+      kim.y += d_y_local;
       kim.theta += d_ang;
 
       se->ang_kf_sum += d_ang;
