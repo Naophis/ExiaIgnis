@@ -246,7 +246,14 @@ ControlLaw::calc_sensor_pid() {
       !search_mode_ && param_->str_ang_pid_fast.antiwindup &&
       ABS(ee->sen.error_p) > param_->str_ang_pid_fast.windup_dead_bind;
   if (!freeze_sen_i) {
-    ee->sen.error_i += ee->sen.error_p;
+    // 2026-08-30: dtスケーリングなしで生の誤差(mm)をそのまま積算していた
+    // ため、1kHzでは実質1000倍の強さで積分され、わずかな定常偏差でも
+    // 1秒未満でwindup_i_maxクランプに張り付いたまま常時飽和/チャタリング
+    // していた(20260830_162335.csv、s_pid_pは終始2.5mm未満なのにs_pid_iは
+    // idx120から常時クランプ近辺)。dt_を掛けて本来の時間積分に修正
+    // (windup_i_max/kanayama_straight.kiは1/dt倍・dt倍で再スケール済み、
+    // hardware.yaml参照)。
+    ee->sen.error_i += ee->sen.error_p * dt_;
   }
   if (param_->str_ang_pid_fast.windup_i_max > 0) {
     ee->sen.error_i =
@@ -1655,6 +1662,12 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
       duty_l = tgt_val_->nmr.sys_id.left_v;
       duty_r = tgt_val_->nmr.sys_id.right_v;
     }
+    // 上記の最終段オーバーライドはローカル変数のみを差し替えるため、
+    // これより前(control_law.cpp:180)でログ済みのsensing_result_->ego.duty
+    // は無関係なPID計算値のままになってしまう。実際にモーターへ送る値で
+    // 上書きし、ログが実duty(motor_->apply()への入力)と一致するようにする。
+    sensing_result_->ego.duty.duty_l = duty_l;
+    sensing_result_->ego.duty.duty_r = duty_r;
   } else {
     duty_l = 0.0f;
     duty_r = 0.0f;

@@ -638,9 +638,21 @@ void MainTask::test_system_identification(bool para) {
   // sysid_time[ms]間出力し(control_law.cpp set_next_duty()参照)、その間の
   // エンコーダ速度・バッテリー電圧をログして、後でオフラインでResist等を
   // 解析する。
+  // 2026-08-30: 左右モーターの個体差(右ターンだけ角速度が系統的に不足する
+  // 現象、[[project-kim-frame-rebase-bugfix-2026-08-29]]参照)を定量化する
+  // ため、既存だが未使用だったsysid_test_modeを左右選択に転用する
+  // (para==falseの直進系のみ対象。0=両輪(従来通り)、1=左輪のみ、
+  // 2=右輪のみ。駆動しない側はduty=0で自由回転させ、v_kf_l/v_kf_rの
+  // 立ち上がり・定常速度を左右で比較する)。
   const float duty = sys_.test.sysid_duty;
   if (!para) {
-    mp->system_identification(MotionType::STRAIGHT, duty, duty,
+    float duty_l = duty, duty_r = duty;
+    if (sys_.test.sysid_test_mode == 1) {
+      duty_r = 0;
+    } else if (sys_.test.sysid_test_mode == 2) {
+      duty_l = 0;
+    }
+    mp->system_identification(MotionType::STRAIGHT, duty_l, duty_r,
                               sys_.test.sysid_time);
   } else {
     mp->system_identification(MotionType::PIVOT, -duty, duty,
