@@ -1251,25 +1251,49 @@ ControlLaw::calc_angle_velocity_ctrl() {
           tgt_val_->tgt_in.v_max < 500) {
         db *= param_->gyro_pid.windup_gain;
       }
-      if ((w_error_i * ee->w.error_p < 0) &&
+      // ヒステリシスの突入/脱出判定をそのまま毎tick反映すると、
+      // (w_error_i*error_p<0)の判定がdeadband境界付近でノイズにより毎tick
+      // 反転し、脱出のたびに再点火(下記、実質1000倍)が発火してw_error_iが
+      // 巨大値と小さい値を交互に繰り返すチャタリングを起こす
+      // (20260830_215101.csv解析、旋回直後のSTRAIGHTで毎tick g_i2が
+      // -180台/+数十を往復し角度収束を乱していた)。判定が
+      // kGyroPidWindupDebounceTicks回連続で一致するまで確定状態を更新せず、
+      // 再点火も「確定状態がtrue→falseへ実際に変わったtick」のみで行う
+      // (確定falseが続く間は毎tick再点火しない)ようエッジ検出する。
+      constexpr int kGyroPidWindupDebounceTicks = 3;
+      const bool want_histerisis =
+          (w_error_i * ee->w.error_p < 0) &&
           ((ABS(ee->w.error_p) > db) ||
-           (gyro_pid_windup_histerisis && ABS(ee->w.error_p) > db * 0.75f))) {
+           (gyro_pid_windup_histerisis && ABS(ee->w.error_p) > db * 0.75f));
+      if (want_histerisis == gyro_pid_windup_histerisis) {
+        gyro_pid_windup_debounce_cnt_ = 0;
+      } else {
+        gyro_pid_windup_debounce_cnt_++;
+      }
+
+      const bool was_histerisis = gyro_pid_windup_histerisis;
+      bool just_exited = false;
+      if (gyro_pid_windup_debounce_cnt_ >= kGyroPidWindupDebounceTicks) {
+        gyro_pid_windup_debounce_cnt_ = 0;
+        gyro_pid_windup_histerisis = want_histerisis;
+        just_exited = was_histerisis && !gyro_pid_windup_histerisis;
+      }
+
+      if (gyro_pid_windup_histerisis) {
         gyro_pid_histerisis_i += ee->w.error_p;
         w_error_i = gyro_pid_histerisis_i;
-        gyro_pid_windup_histerisis = true;
+      } else if (just_exited) {
+        // 2026-08-30: 当初のerror_p版を一旦元に戻す。同日中にi_bias版
+        // ([[project-turn-control-tuning]]の前作踏襲)・kim.theta直接版も
+        // 試したが、旋回終了時点の残差自体(SLA_BACK_STR突入時のkim.theta)
+        // がrunごとに7.5〜24.4°と大きくばらつき、n=1のログ比較では
+        // どの再点火元が優れているか切り分けられなかった。チャタリング
+        // debounceは有効と確認済みなのでそれだけ残し、再点火の式自体は
+        // 変更前のerror_pに戻して、n≥4の同一条件反復でまず旋回残差自体の
+        // ばらつきとSTRAIGHT収束のばらつきを定量化してから再検討する。
+        w_error_i = ee->w.error_i = ee->ang.error_p / dt_;
+        gyro_pid_histerisis_i = 0;
       } else {
-        if (gyro_pid_windup_histerisis) {
-          // i_bias(= img_ang - kim.theta)ではなく ee->ang.error_p
-          // (= img_ang + offset - ang_kf、実際にheading PIDが使っている
-          // 誤差)から再着火する。img_ang/ang_kfはlast_tgt_angle_のオフセット
-          // 簿記を通して一貫した基準で管理されているが、kim.thetaは
-          // EgoEstimator内で独立に積分される値でこの簿記に乗っておらず、
-          // i_biasは基準の異なる値同士の引き算になっていた(数十度相当の
-          // 汚染値を生む原因)。error_pなら「適切な残差でI項を復元する」
-          // という本来の意図を保ったまま基準ズレを避けられる。
-          w_error_i = ee->w.error_i = ee->ang.error_p / dt_;
-        }
-        gyro_pid_windup_histerisis = false;
         gyro_pid_histerisis_i = 0;
       }
 

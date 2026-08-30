@@ -126,6 +126,14 @@ private:
   float last_accl                  = 0.0f;
   bool  gyro_pid_windup_histerisis = false;
   float gyro_pid_histerisis_i      = 0.0f;
+  // アンチワインド・ヒステリシスのON/OFF判定デバウンス用カウンタ(2026-08-30)。
+  // control_law.cpp calc_angle_velocity_ctrl()参照。判定条件がdeadband境界
+  // 付近でノイズにより毎tick反転すると、脱出時の再点火(ee->ang.error_p/dt_、
+  // 実質1000倍)が毎tick発火してw_error_i(ログg_pid_i2)が巨大値と小さい値を
+  // 交互に繰り返すチャタリングを起こす(20260830_215101.csv解析、旋回直後の
+  // 角度収束が遅い症状の一因と判明)。判定が数tick連続で一致するまで実際の
+  // 状態遷移(=再点火含む)を保留することでチャタリングを防ぐ。
+  int   gyro_pid_windup_debounce_cnt_ = 0;
   // SLALOM/SLA_BACK_STR限定のang.i_bias専用積分(turn_angle_fb.gain_i)。
   // 既存のw_error_i(アンチワインドヒステリシス付き)を再利用すると実機で
   // 発散したため(2026-08-23、20260823_050137.csv)、これとは独立の単純な
