@@ -306,7 +306,7 @@
      <DockSplitter count="3" orientation="|" sizes="0.333333;0.333333;0.333333">
       <DockArea name="xy_plot">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="XYPlot">
-        <range bottom="-210.395695" left="-34.257019" right="1382.737976" top="193.139836"/>
+        <range bottom="-210.835276" left="-34.257019" right="1382.737976" top="193.579417"/>
         <limitY/>
         <curve color="#1f77b4" curve_x="x" curve_y="y" name="[x;y]"/>
        </plot>
@@ -678,7 +678,7 @@
       </DockArea>
       <DockArea name="xy_plot">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="XYPlot">
-        <range bottom="-456.553399" left="-34.257019" right="1382.737976" top="439.297540"/>
+        <range bottom="-457.919026" left="-34.257019" right="1382.737976" top="440.663166"/>
         <limitY/>
         <curve color="#1f77b4" curve_x="x" curve_y="y" name="[x;y]"/>
        </plot>
@@ -714,11 +714,23 @@
       </DockArea>
       <DockArea name="accel_corr_xyz">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
-        <range bottom="-68218.400000" left="0.000000" right="631.000000" top="67290.400000"/>
+        <range bottom="-43789.980000" left="0.000000" right="631.000000" top="40662.780000"/>
         <limitY/>
-        <curve color="#1f77b4" name="accel_x_corr"/>
-        <curve color="#d62728" name="accel_y_corr"/>
-        <curve color="#1ac938" name="accel_z_corr"/>
+        <curve color="#1f77b4" name="accel_x_corr">
+         <transform alias="accel_x_corr[Moving Average]" name="Moving Average">
+          <options compensate_offset="false" value="10"/>
+         </transform>
+        </curve>
+        <curve color="#d62728" name="accel_y_corr">
+         <transform alias="accel_y_corr[Moving Average]" name="Moving Average">
+          <options compensate_offset="false" value="10"/>
+         </transform>
+        </curve>
+        <curve color="#1ac938" name="accel_z_corr">
+         <transform alias="accel_z_corr[Moving Average]" name="Moving Average">
+          <options compensate_offset="false" value="10"/>
+         </transform>
+        </curve>
        </plot>
       </DockArea>
      </DockSplitter>
@@ -761,7 +773,7 @@
   </Tab>
   <Tab containers="1" tab_name="encoder">
    <Container>
-    <DockSplitter count="2" orientation="-" sizes="0.5;0.5">
+    <DockSplitter count="2" orientation="-" sizes="0.500542;0.499458">
      <DockSplitter count="2" orientation="|" sizes="0.5;0.5">
       <DockArea name="enc_raw">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
@@ -780,7 +792,7 @@
        </plot>
       </DockArea>
      </DockSplitter>
-     <DockSplitter count="3" orientation="|" sizes="0.336957;0.336957;0.326087">
+     <DockSplitter count="3" orientation="|" sizes="0.333333;0.333333;0.333333">
       <DockArea name="v_kf_wheel">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-208.371094" left="0.000000" right="631.000000" top="6901.277344"/>
@@ -852,7 +864,7 @@
   </Tab>
   <Tab containers="1" tab_name="debug_misc">
    <Container>
-    <DockSplitter count="2" orientation="-" sizes="0.5;0.5">
+    <DockSplitter count="2" orientation="-" sizes="0.500542;0.499458">
      <DockSplitter count="2" orientation="|" sizes="0.5;0.5">
       <DockArea name="dbg_off">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
