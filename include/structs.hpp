@@ -722,6 +722,11 @@ typedef struct {
   float ff_roll_gain_before = 1;
   float ff_roll_gain_after = 1;
   float ff_front_gain_decel = 1;
+  // 2026-08-30: SLALOM旋回入り口(角加速度がbase_alphaと同符号=立ち上がり)の
+  // ff_roll減衰ゲイン。ff_roll_gain_beforeは既にWALL_OFFのff_front用に
+  // チューニング済みで流用すると干渉するため別フィールドにする
+  // (control_law.cpp calc_translational_ctrl()参照)。
+  float ff_roll_gain_entry = 1;
   pid_param_t front_ctrl_roll_pid;
   pid_param_t motor_pid;
   pid_param_t motor_pid_gain_limitter;

@@ -236,11 +236,16 @@ dia_turn_offset_calc_th: 52
 cell: 90.0
 cell2: 90.0
 
-trj_length: 1 # Number of trajectory points to generate
+# 2026-08-30: trj_length=15を試したところ、旋回終盤でodm_xが85.9に張り付いた
+# まま動かなくなり(15ms先=既にモーションフェーズが変わった後の状態を参照して
+# しまうため)、kim_xとの乖離が17mm以上・knym_wも35.5まで過大補正になる悪化を
+# 確認(20260830_224534.csv)。処理負荷(pln_time_diff)は1000のまま問題なかった
+# が、先読みが長すぎるとモーション境界を跨いで参照点が不整合になるとわかった
+# ため、実測で良好だったtrj_length=5に戻す。
+trj_length: 5 # Number of trajectory points to generate
 
-trj_idx_v: [0, 10000] 
-# trj_idx_val: [0, 0, 0, 10, 15, 20, 24, 24, 24, 24] # max = trj_length-1
-trj_idx_val: [0, 4] # max = trj_length-1
+trj_idx_v:   [0,   300, 1000, 2000, 3000]
+trj_idx_val: [0,   0,   0,    2,    3]
 # 2026-08-23: 対象範囲をSLALOM/SLA_BACK_STR限定からほぼ全モーションに拡張し、
 # w_cmdをcalc_pid_val_ang_vel()のee->w.error_p(ヨー主力ゲインkp/kb/kcの
 # 入力)にも配線した(trajectory_generator.cpp calc_kanayama()、
@@ -251,9 +256,20 @@ trj_idx_val: [0, 4] # max = trj_length-1
 # SLALOM用のまま流用されているのが原因かは未切り分け。enable=0に戻す。
 kanayama:
   kx: 10
+  # 2026-08-30: 高速SLALOM(v≈2500)でknym_wが最大38まで伸び「きつい」と
+  # 感じたが、内訳を見るとknym_wの大部分はideal_w(そのターン半径・速度で
+  # 元々必要なベース角速度)で、Kanayama補正分(ky*ey+k_theta*sin(e_theta))
+  # は±1〜9程度の小さな上乗せに過ぎないと判明(20260830_230226.csv)。
+  # ky=0.0003に下げてもknym_w最大値はほぼ変わらなかった(37.96→36.72)。
+  # 「きつい」の正体はKanayamaではなくその速度帯のターン半径プロファイル
+  # 側の問題と判断し、ky は元に戻す。
   ky: 0.0005
   k_theta: 0.0005
-  enable: 0
+  # 2026-08-30: kim.x/y座標系リベースバグ([[project-kim-frame-rebase-bugfix-2026-08-29]])
+  # とe_theta基準バグ([[project-kanayama-2d-bugfix-2026-08-23]])を修正済み、
+  # かつturn_end_brake/turn_angle_fb再有効化・アンチワインドチャタリング修正も
+  # 済んだ状態で再テストする。
+  enable: 1
   windup: 1
   windup_deg: 2.5
 

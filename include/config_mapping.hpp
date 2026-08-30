@@ -608,6 +608,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "ff_front_gain_14", dst.ff_front_gain_14);
     from_json_field(src, "ff_roll_gain_before", dst.ff_roll_gain_before);
     from_json_field(src, "ff_roll_gain_after", dst.ff_roll_gain_after);
+    from_json_field(src, "ff_roll_gain_entry", dst.ff_roll_gain_entry);
     from_json_field(src, "ff_front_gain_decel", dst.ff_front_gain_decel);
     from_json_nested(src, "front_ctrl_roll_pid", dst.front_ctrl_roll_pid);
     from_json_nested(src, "motor_pid", dst.motor_pid);

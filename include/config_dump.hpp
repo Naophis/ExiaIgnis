@@ -324,6 +324,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["ff_front_gain_14"]    = src.ff_front_gain_14;
     dst["ff_roll_gain_before"] = src.ff_roll_gain_before;
     dst["ff_roll_gain_after"]  = src.ff_roll_gain_after;
+    dst["ff_roll_gain_entry"]  = src.ff_roll_gain_entry;
     dst["ff_front_gain_decel"] = src.ff_front_gain_decel;
     dst["front_ctrl_roll_pid"]         = src.front_ctrl_roll_pid;
     dst["motor_pid"]                   = src.motor_pid;

@@ -1506,14 +1506,20 @@ ControlLaw::summation_duty() {
     trj_->mpc_next_ego.ff_duty_front = ff_front;
   }
   if (tgt_val_->motion_type == MotionType::SLALOM) {
+    // 2026-08-30: ff_roll_gain_beforeはstructs.hppに定義済みだったが、
+    // SLALOMの立ち上がり(角加速度がbase_alphaと同符号=ターン入り口)側には
+    // 一度も配線されていなかった(減速側のff_roll_gain_afterのみ適用)。
+    // ターン入り口でw_lpがideal_wを最大58%超過する現象を確認
+    // (20260830_231723.csv、「すべる」感覚の原因と推定)、立ち上がり側にも
+    // 減衰ゲインを掛けて検証する。
     if (tgt_val_->ego_in.sla_param.base_alpha > 0) {
       ff_roll = (tgt_val_->ego_in.alpha < 0)
                     ? param_->ff_roll_gain_after * ff_roll
-                    : ff_roll;
+                    : param_->ff_roll_gain_entry * ff_roll;
     } else if (tgt_val_->ego_in.sla_param.base_alpha < 0) {
       ff_roll = (tgt_val_->ego_in.alpha > 0)
                     ? param_->ff_roll_gain_after * ff_roll
-                    : ff_roll;
+                    : param_->ff_roll_gain_entry * ff_roll;
     }
   }
   se->ego.duty.ff_duty_roll = trj_->mpc_next_ego.ff_duty_roll = ff_roll;

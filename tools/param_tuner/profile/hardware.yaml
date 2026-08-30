@@ -173,6 +173,12 @@ torque_mode: 2
 ff_front_gain_14: 0.325
 ff_roll_gain_before: 0.25
 ff_roll_gain_after: 0.75
+# 2026-08-30: SLALOM旋回入り口でw_lpがideal_wを最大58%超過する現象を確認
+# (20260830_231723.csv)。ff_roll_gain_beforeはWALL_OFF用に既にチューニング
+# 済みで流用すると干渉するため、専用にff_roll_gain_entryを新設して配線
+# (control_law.cpp参照)。まずはff_roll_gain_afterと同じ0.75から試す。
+# ff_roll_gain_entry: 0.75 # 0.75では58%→44%とまだ改善不十分(20260830_232416.csv)
+ff_roll_gain_entry: 0.5
 ff_front_gain_decel: 0.5
 
 enable_kalman_gyro: 0
@@ -367,8 +373,13 @@ turn_end_brake:
 # (control_law.cpp calc_angle_velocity_ctrl()参照)。gain=0.02はgyro_pid.c
 # と合わせて実効ゲインを約3.7倍にする初期仮値、要実機検証。
 turn_angle_fb:
-  # 2026-08-30: turn_end_brakeと同様、良好だった2026-08-28時点はenable:1
-  # だったのがenable:0に戻っていた。1に戻す。
+  # 2026-08-30: 良好だった2026-08-28時点の値(enable:1)に一度戻して高速SLALOM
+  # (v_max1800〜2884)では問題なかったが、低速ターン(v_max〜1032)でw_lpが
+  # -6〜29.5まで激しく発振(目標ideal_w≈11.6の2.5倍以上)する重度の不安定を
+  # 確認(20260830_231343.csv)。knym_wはideal_wに滑らかに追従しておりKanayama
+  # 側は無関係、gyro_pid/turn_angle_fb側の問題と判断。turn_angle_fb自体には
+  # 低速向けのゲート(gyro_pidのantiwindupにはv<500分岐があるがこちらには
+  # ない)がなく、高速側でしか検証していなかったため一旦無効化する。
   enable: 1
   gain: 0.03
   # ang.i_bias専用の積分(2026-08-23追加、要実機チューニング)。既存w_error_i
