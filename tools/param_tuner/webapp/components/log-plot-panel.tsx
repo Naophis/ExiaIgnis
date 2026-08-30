@@ -5,6 +5,7 @@ import { CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SensorTimeseriesPlot, type TimeSeries } from "@/components/sensor-timeseries-plot";
@@ -304,7 +305,9 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
 
   return (
     <Card className="flex flex-1 flex-row overflow-hidden">
-      <div className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-border">
+      <ResizablePanelGroup direction="horizontal" autoSaveId="param-console-logplot">
+      <ResizablePanel defaultSize={22} minSize={12} maxSize={45} className="min-w-0">
+      <div className="flex h-full flex-col overflow-hidden border-r border-border">
         <div className="flex items-center justify-between p-2">
           <span className="text-sm font-medium">ログファイル</span>
           <div className="flex gap-1">
@@ -361,8 +364,10 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
           </div>
         </ScrollArea>
       </div>
-
-      <div className="flex flex-1 flex-col overflow-hidden">
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={78} minSize={30} className="min-w-0">
+      <div className="flex h-full flex-col overflow-hidden">
         <div className="flex items-center gap-2 p-2">
           <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={showLeft45} onChange={(e) => setShowLeft45(e.target.checked)} />
@@ -546,6 +551,8 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
           </>
         )}
       </div>
+      </ResizablePanel>
+      </ResizablePanelGroup>
     </Card>
   );
 }

@@ -9,6 +9,7 @@ import { LogPlotPanel } from "@/components/log-plot-panel";
 import { ParamMatrixPanel } from "@/components/param-matrix-panel";
 import { ALL_SENTINEL, ProfilePanel } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { SlalomSimPanel } from "@/components/slalom-sim-panel";
 import { TestTemplatePanel } from "@/components/test-template-panel";
 import { YamlEditor } from "@/components/yaml-editor";
@@ -347,23 +348,49 @@ export default function Home() {
           <ParamMatrixPanel onClose={() => setShowMatrix(false)} />
         </div>
       ) : (
-      <div className="flex flex-1 gap-4 overflow-hidden">
-        <ProfilePanel
-          profiles={profiles}
-          sending={sending}
-          onSendFile={sendOne}
-          onSendAll={sendAll}
-          onEditFile={openEditor}
-          onOpenTemplates={openTemplates}
-          onOpenMatrix={openMatrix}
-        />
-        {editing ? (
-          editorContent === null ? (
-            <Card className="flex flex-1 items-center justify-center overflow-hidden">
-              <span className="text-sm text-muted-foreground">読み込み中...</span>
-            </Card>
-          ) : (
-            <>
+      <ResizablePanelGroup direction="horizontal" autoSaveId="param-console-main" className="flex-1 overflow-hidden">
+        <ResizablePanel defaultSize={22} minSize={15} maxSize={40} className="min-w-0">
+          <ProfilePanel
+            profiles={profiles}
+            sending={sending}
+            onSendFile={sendOne}
+            onSendAll={sendAll}
+            onEditFile={openEditor}
+            onOpenTemplates={openTemplates}
+            onOpenMatrix={openMatrix}
+          />
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={78} minSize={30} className="min-w-0 overflow-hidden">
+          {editing ? (
+            editorContent === null ? (
+              <Card className="flex h-full items-center justify-center overflow-hidden">
+                <span className="text-sm text-muted-foreground">読み込み中...</span>
+              </Card>
+            ) : editing.scope === "mode" && TURN_PROFILE_FILE_RE.test(editing.file) ? (
+              <ResizablePanelGroup direction="horizontal" autoSaveId="param-console-editor" className="h-full">
+                <ResizablePanel defaultSize={60} minSize={30} className="min-w-0">
+                  <YamlEditor
+                    key={`${editing.scope}:${editing.file}:${draftPatchNonce}`}
+                    file={editing.file}
+                    content={editorContent}
+                    initialDraft={liveDraft ?? undefined}
+                    saving={saving}
+                    onSave={saveEditor}
+                    onClose={closeEditor}
+                    onDraftChange={setLiveDraft}
+                  />
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={40} minSize={20} className="min-w-0">
+                  <SlalomSimPanel
+                    file={editing.file}
+                    draft={liveDraft ?? editorContent}
+                    onApply={applySimResultToDraft}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
               <YamlEditor
                 key={`${editing.scope}:${editing.file}:${draftPatchNonce}`}
                 file={editing.file}
@@ -374,61 +401,54 @@ export default function Home() {
                 onClose={closeEditor}
                 onDraftChange={setLiveDraft}
               />
-              {editing.scope === "mode" && TURN_PROFILE_FILE_RE.test(editing.file) && (
-                <SlalomSimPanel
-                  file={editing.file}
-                  draft={liveDraft ?? editorContent}
-                  onApply={applySimResultToDraft}
+            )
+          ) : showTemplates ? (
+            <TestTemplatePanel
+              templates={templates}
+              applying={applyingTemplate}
+              saving={savingTemplate}
+              onApply={applyTemplate}
+              onSave={saveTemplate}
+              onDelete={deleteTemplate}
+              onClose={() => setShowTemplates(false)}
+            />
+          ) : (
+            <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
+              <div className="flex shrink-0 gap-1">
+                <Button
+                  size="sm"
+                  variant={rightTab === "console" ? "default" : "outline"}
+                  onClick={() => setRightTab("console")}
+                >
+                  コンソール
+                </Button>
+                <Button
+                  size="sm"
+                  variant={rightTab === "plot" ? "default" : "outline"}
+                  onClick={() => setRightTab("plot")}
+                >
+                  プロット
+                </Button>
+              </div>
+              {/* Both tabs render inside the same flex column; only their
+                  visibility toggles so the SSE-fed `lines` state above keeps
+                  accumulating in the background regardless of which tab is
+                  showing. */}
+              <div className={`min-h-0 flex-1 ${rightTab === "console" ? "flex" : "hidden"}`}>
+                <ConsoleLog
+                  lines={paused && frozenLines !== null ? frozenLines : lines}
+                  paused={paused}
+                  onClear={clearConsole}
+                  onTogglePause={togglePause}
                 />
-              )}
-            </>
-          )
-        ) : showTemplates ? (
-          <TestTemplatePanel
-            templates={templates}
-            applying={applyingTemplate}
-            saving={savingTemplate}
-            onApply={applyTemplate}
-            onSave={saveTemplate}
-            onDelete={deleteTemplate}
-            onClose={() => setShowTemplates(false)}
-          />
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-            <div className="flex shrink-0 gap-1">
-              <Button
-                size="sm"
-                variant={rightTab === "console" ? "default" : "outline"}
-                onClick={() => setRightTab("console")}
-              >
-                コンソール
-              </Button>
-              <Button
-                size="sm"
-                variant={rightTab === "plot" ? "default" : "outline"}
-                onClick={() => setRightTab("plot")}
-              >
-                プロット
-              </Button>
+              </div>
+              <div className={`min-h-0 flex-1 ${rightTab === "plot" ? "flex" : "hidden"}`}>
+                <LogPlotPanel autoOpen={plotAutoOpen} />
+              </div>
             </div>
-            {/* Both tabs render inside the same flex column; only their
-                visibility toggles so the SSE-fed `lines` state above keeps
-                accumulating in the background regardless of which tab is
-                showing. */}
-            <div className={`min-h-0 flex-1 ${rightTab === "console" ? "flex" : "hidden"}`}>
-              <ConsoleLog
-                lines={paused && frozenLines !== null ? frozenLines : lines}
-                paused={paused}
-                onClear={clearConsole}
-                onTogglePause={togglePause}
-              />
-            </div>
-            <div className={`min-h-0 flex-1 ${rightTab === "plot" ? "flex" : "hidden"}`}>
-              <LogPlotPanel autoOpen={plotAutoOpen} />
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </ResizablePanel>
+      </ResizablePanelGroup>
       )}
     </div>
   );

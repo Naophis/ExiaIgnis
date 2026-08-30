@@ -45,7 +45,7 @@ export function ProfilePanel({
   const shown = base.length + mode.length;
 
   return (
-    <Card className="flex w-80 shrink-0 flex-col overflow-hidden">
+    <Card className="flex h-full min-w-0 flex-col overflow-hidden">
       <CardHeader className="gap-1">
         <div className="flex items-center justify-between">
           <CardTitle>パラメータ送信 (hf)</CardTitle>

@@ -49,7 +49,7 @@ export function YamlEditor({ file, content, initialDraft, saving, onSave, onClos
   }, [draft, dirty, saving, onSave]);
 
   return (
-    <Card className="flex flex-1 flex-col overflow-hidden">
+    <Card className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="truncate">編集: {file}</CardTitle>
         <Button size="sm" variant="outline" onClick={onClose}>

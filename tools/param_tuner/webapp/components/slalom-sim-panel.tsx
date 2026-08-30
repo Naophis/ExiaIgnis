@@ -161,7 +161,7 @@ export function SlalomSimPanel({ file, draft, onApply }: Props) {
   };
 
   return (
-    <Card className="flex w-[34rem] min-w-[20rem] shrink flex-col overflow-hidden">
+    <Card className="flex h-full min-w-0 flex-col overflow-hidden">
       <CardHeader className="gap-1">
         <div className="flex items-center justify-between">
           <CardTitle>スラロームシミュレータ</CardTitle>
