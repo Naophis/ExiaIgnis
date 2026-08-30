@@ -61,8 +61,8 @@ maze_size: 32
 debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
-mode: 0 # メイン
-# mode: 1 # 最短スローム
+# mode: 0 # メイン
+mode: 1 # 最短スローム
 # mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
@@ -74,7 +74,8 @@ mode: 0 # メイン
 # mode: 14 # sensing:
 # mode: 15 # sensor calib:
 # mode: 16 # sysi(para)
-# mode: 17 # sysi(roll)
+#mode: 17 # sysi(roll)
+# mode: 2 # 直進
 # mode: 20 # pivot turn n
 # mode: 21 # pivot turn n2
 # mode: 22 # encoder_test
@@ -85,13 +86,16 @@ mode: 0 # メイン
 
 
 test: # テスト走行時に使用するパラメータ群
-  v_max: 400
-  accl: 2500
+  # 2026-08-30: sysid(duty5/10)実測の定常速度と同じ目標速度で定速直進させ、
+  # そのときのFF出力duty%が実測のduty5/10と一致するかを検証する用
+  # (v_inf@duty5=414mm/s, v_inf@duty10=997mm/s)。まずv_max=414から。
+  v_max: 1500
+  accl: 42500
   # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
   # 減速(decel)には効かない。
   accl_v_x: [0,      2500, 5000, 7500, 8000]
   # accl_v_y: [57000, 55000, 42000, 35000, 30000]
-  accl_v_y: [42500, 42500, 35000, 35000, 35000]
+  accl_v_y: [47500, 45000, 35000, 35000, 35000]
 
   # v_max→decel絶対値LUT(2026-08-23追加)。mpc_tgt_calc側が残り距離から
   # 実際の減速度を毎tick再計算するため、この`decel`入力は閾値にしか効かず
@@ -99,13 +103,13 @@ test: # テスト走行時に使用するパラメータ群
   # decel_v_max_enable: 0 がデフォルト。
   decel_v_max_enable: 1
   decel_v_max_x: [0, 3000, 4500, 6000, 7000]
-  decel_v_max_y: [57500, 52500, 46000, 45000, 42500]
+  decel_v_max_y: [47500, 42500, 46000, 45000, 42500]
 
-  decel: -2500
-  dia_accl: 2500
-  dia_decel: -2500
+  decel: -47500
+  dia_accl: 45000
+  dia_decel: -47500
   dist: 120 #直進
-  suction_active: 0
+  suction_active: 2
 
   end_v: 10
   dia: 0
@@ -121,15 +125,15 @@ test: # テスト走行時に使用するパラメータ群
   # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
   # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
   # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
-  suction_duty: 2000
-  suction_duty_low: 2000
+  suction_duty: 1999
+  suction_duty_low: 1999
 
   # Alter
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.750
   # Nova
-  suction_duty_burst: 2000
-  suction_duty_burst_low: 2000 # suction_duty_burst -0.25
+  suction_duty_burst: 1999
+  suction_duty_burst_low: 1999 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
@@ -198,12 +202,12 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 1
+  file_idx: 4
   sla_dist: 90
   # sla_type: 3
-  sla_type: 4
-  sla_type2: 8 # 復路ターン種類
-  sla_return: 1 # 往復フラグ
+  sla_type: 3
+  sla_type2: 3 # 復路ターン種類
+  sla_return: 0 # 往復フラグ
   # sla_type: 1 normal
   # sla_type: 2 #orval
   # sla_type: 3 #large
@@ -214,9 +218,14 @@ test: # テスト走行時に使用するパラメータ群
   # sla_type: 8 #dia45_2
   # sla_type: 9 #dia135_2
   turn_times: 0
-  ignore_opp_sen: 2 #斜めターン後の直進テスト 0無効、1斜め制御なし、2斜め制御あり
-  sysid_test_mode: 0 #システム同定のテスト:0 直進、1回転
-  sysid_duty: 1.5 #duty 
+  ignore_opp_sen: 1 #斜めターン後の直進テスト 0無効、1斜め制御なし、2斜め制御あり
+  # 2026-08-30: 従来コード上未使用だったフィールドを左右モーター個体差の
+  # 定量化用に転用(main_task_test_misc.cpp test_system_identification()
+  # 参照)。mode16(sys id para)実行時のみ効く。0=両輪(従来通り)、
+  # 1=左輪のみ駆動(右輪はduty0で自由回転)、2=右輪のみ駆動。
+  sysid_test_mode: 0 #システム同定のテスト(直進系): 0=両輪, 1=左輪のみ, 2=右輪のみ
+  sysid_duty: 20 #duty 
+
   sysid_time: 1250 #duty 
   start_turn: 0 #開幕ターンテスト
   

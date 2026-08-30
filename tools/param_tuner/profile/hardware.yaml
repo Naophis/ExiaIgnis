@@ -1,12 +1,10 @@
 dt: 0.001
-# tire: 13.60125
-# tire2: 13.60125
 
 # tire_tread: 38.0
 # tire_tread: 37.72230756
 tire_tread: 38.72230756
-tire: 14.0250 #30deg 
-tire2: 14.0250 #30deg
+tire: 13.9750 #30deg 
+tire2: 13.9750 #30deg
 
 battery_gain: 4.057349148300616
 # battery_gain: 4.253592106693843
@@ -51,22 +49,34 @@ SuctionResolution: 40
 # 30-35%→40.7%、v_c2のideal_vからのズレstdev 85/64→138.6mm/sと明確に悪化
 # したためリバート(2026-08-22)。ギアボックス損失等、モーター単体のデータ
 # シート値では捉えきれない実効特性差があると考えられる。経験的に合って
-# いた旧値の方を正とする。
-Ke: 0.000945  # 大：逆起電力大
+# # いた旧値の方を正とする。
+# Ke: 0.000945  # 大：逆起電力大
+# # Km: 0.00260946 # トルク定数：　大-> 縦系の出力小
+# # Km: 0.00130473 # トルク定数：　大-> 縦系の出力小
+# # Km: 0.00145 # トルク定数：　大-> 縦系の出力小
+# # データシートのTorque Constant(13.3 g・cm/A)から0.0013043[Nm/A]を逆算した
+# # が、Ke変更と同時に実機で発振悪化を確認したためリバート(2026-08-22、詳細
+# # は上のKeコメント参照)。
+# Km: 0.001750 # トルク定数：　大-> 縦系の出力小
+# # ff_roll_torqueのResist二重適用バグ(control_law.cpp参照、2026-08-23修正)を
+# # 打ち消すために1/5(0.00000035)に下げていたが、バグ修正済みのため元に戻す。
+# Lm: 0.0000015 # 大：横系の出力大
+# # Lm: 0.00000035 # 大：横系の出力大
+
+# coulomb_friction: 0.000015 # クーロン摩擦(吸引OFF基準でチューニング済み)
+# viscous_friction: 0.000725 # 粘性摩擦(吸引OFF基準でチューニング済み)
+
+
+Ke: 0.000975  # 大：逆起電力大
 # Km: 0.00260946 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00130473 # トルク定数：　大-> 縦系の出力小
 # Km: 0.00145 # トルク定数：　大-> 縦系の出力小
-# データシートのTorque Constant(13.3 g・cm/A)から0.0013043[Nm/A]を逆算した
-# が、Ke変更と同時に実機で発振悪化を確認したためリバート(2026-08-22、詳細
-# は上のKeコメント参照)。
-Km: 0.00160 # トルク定数：　大-> 縦系の出力小
-# ff_roll_torqueのResist二重適用バグ(control_law.cpp参照、2026-08-23修正)を
-# 打ち消すために1/5(0.00000035)に下げていたが、バグ修正済みのため元に戻す。
-Lm: 0.0000015 # 大：横系の出力大
-# Lm: 0.00000035 # 大：横系の出力大
+Km: 0.00180 # トルク定数：　大-> 縦系の出力小
+Lm: 0.00000035 # 大：横系の出力大
 
-coulomb_friction: 0.000015 # クーロン摩擦(吸引OFF基準でチューニング済み)
-viscous_friction: 0.000825 # 粘性摩擦(吸引OFF基準でチューニング済み)
+coulomb_friction: 0.000015 # クーロン摩擦
+viscous_friction: 0.001475 # 粘性摩擦
+
 
 # coulomb_friction: 0.000015 # クーロン摩擦
 # viscous_friction: 0.001475 # 粘性摩擦
@@ -81,7 +91,7 @@ viscous_friction: 0.000825 # 粘性摩擦(吸引OFF基準でチューニング�
 # copy_tgt()参照)。初期値は上と同じ(未チューニング)、実機で吸引ON状態の
 # 加速テストをしながら増やしていく想定。
 coulomb_friction_suction: 0.000015
-viscous_friction_suction: 0.00125
+viscous_friction_suction: 0.001475
 
 Resist: 4.4
 Mass: 0.040
@@ -253,6 +263,13 @@ motor_pid2:
 gyro_pid:
   mode: 3
 
+  # 2026-08-30: 旋回直後STRAIGHT区間でkim_theta/ang_kfが約34ms周期で
+  # 2〜3回リンギングしてから収束するアンダーダンプ挙動を確認
+  # (20260830_220054.csv、アンチワインド・チャタリングバグ修正後も残存)。
+  # antiwindup=0で試したところ逆に悪化(20260830_220816/220847/220926.csv、
+  # 2段目オーバーシュートが最初の残差より大きくなり、3.7〜4°付近に高止まり
+  # して収束しなくなった)。アンチワインド自体は振動を抑える側に効いている
+  # ため元に戻す。dゲイン側の検討に戻る。
   antiwindup: 1
   windup_gain: 10.0
   windup_dead_bind: 1.50
@@ -260,6 +277,10 @@ gyro_pid:
   p: 0.000325
   i: 0.01465 # dif angle
   b: 0.0000595 #summation
+  # 2026-08-30: turn_end_brake/turn_angle_fb再有効化後のベースラインでd=0.0005
+  # を試したところ、旋回終端で duty_l/duty_r が±100%近くまで飽和し
+  # v_kf_rが-448まで振れる(左右逆回転)重度の悪化を確認(20260830_222932.csv)。
+  # 即座に元へ戻す。
   d: 0.000295
 
   # p: 0.00
@@ -303,6 +324,9 @@ gyro_pid:
 # w_lp負オーバーシュートの原因調査から復元した。turn_angle_fb.w_gain(既存)
 # と役割が重複しないか要実機確認のうえenableすること。
 turn_end_brake:
+  # 2026-08-30: git履歴確認の結果、良好だった2026-08-28(a7f03e9)時点では
+  # enable:1だったのが、いつの間にかenable:0になっていたと判明(今日一日
+  # 追いかけていたリンギングの真因)。1に戻す。
   enable: 1
   w_th: 0.5     # |ideal_w|がこれ未満で「終端」とみなす(rad/s)。SLA_BACK_STRは常時0なので実質無条件
   err_th: 0.3   # 2026-08-23夜: ON/OFFゲートとしては撤去済み(control_law.cpp参照)、値自体は未使用
@@ -343,6 +367,8 @@ turn_end_brake:
 # (control_law.cpp calc_angle_velocity_ctrl()参照)。gain=0.02はgyro_pid.c
 # と合わせて実効ゲインを約3.7倍にする初期仮値、要実機検証。
 turn_angle_fb:
+  # 2026-08-30: turn_end_brakeと同様、良好だった2026-08-28時点はenable:1
+  # だったのがenable:0に戻っていた。1に戻す。
   enable: 1
   gain: 0.03
   # ang.i_bias専用の積分(2026-08-23追加、要実機チューニング)。既存w_error_i
@@ -507,7 +533,16 @@ str_ang_pid_fast:
 
   antiwindup: 1
   windup_dead_bind: 15  # |error_p|(mm)がこれを超えている間はI項の積算を停止
-  windup_i_max: 90      # I項積算値(error_i)の絶対値クランプ
+  # 2026-08-30: error_iはdtスケーリングなしで毎tick生誤差(mm)を積算する設計
+  # だったため、windup_i_max=90だと|error_p|=2.5mm程度でも100ms未満でクランプに
+  # 張り付き、以降ずっと飽和/チャタリングし続けていた(20260830_162335.csv、
+  # s_pid_pは終始2.5mm未満なのにs_pid_iはidx120から常時-10〜-90で暴れる)。
+  # kanayama_straight.kiがこの暴れたerror_iに掛かりΔwへ常時注入され、姿勢の
+  # 微振動("ぷるぷる")の原因と診断。windup_i_maxを1/3に絞っただけでは根本
+  # 解決しない(サチる速さ・振れ幅が変わるだけ)と判明したため、
+  # control_law.cpp側でerror_i積算にdt_を掛ける本修正を実施。それに伴い
+  # windup_i_maxを90*dt=0.09相当まで縮小(要実機再検証、初期仮値)。
+  windup_i_max: 0.09    # I項積算値(error_i)の絶対値クランプ(dtスケーリング後)
 
 # str_ang_dia_pid: #not use
 #   # p: 0.095
@@ -551,8 +586,8 @@ kanayama_dia:
   windup: 0
   windup_deg: 0
 gyro_param:
-  gyro_w_gain_left: 0.002456125
-  gyro_w_gain_right: 0.002456125
+  gyro_w_gain_left: 0.00246565
+  gyro_w_gain_right: 0.00246565
   retry_min_th: 0
   retry_max_th: 3
   robust_th: 0.95
@@ -666,8 +701,8 @@ normal_sla_r_wall_off_th_in: 70 #[mm]
 normal_sla_l_wall_off_th_out: 80 #[mm]
 normal_sla_r_wall_off_th_out: 80 #[mm]
 
-normal_sla_l_wall_off_ref_cnt: 130 #413 -274 = 139 #125~144 
-normal_sla_r_wall_off_ref_cnt: 131 #404-274 = 130 #125~144
+normal_sla_l_wall_off_ref_cnt: 134 #413 -274 = 139 #125~144 
+normal_sla_r_wall_off_ref_cnt: 132 #404-274 = 130 #125~144
 
 normal_sla_l_wall_off_dist: 6
 normal_sla_r_wall_off_dist: 6
