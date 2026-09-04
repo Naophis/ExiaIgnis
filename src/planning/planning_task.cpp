@@ -492,8 +492,19 @@ void PlanningTask::cp_request() {
     // }
   }
 
+  // 2026-09-05: SLA_BACK_STRを追加。上の`else`分岐(この関数の前半)で
+  // kim.thetaは -= last_tgt_angle でセグメントローカル座標系へリベース
+  // されるが、SLA_BACK_STRがここのリストに無いためkim.x/yとideal_px/py
+  // だけが前セグメント(旋回前)の値のまま残っていた。結果、kimは新しいθ
+  // (≈0)で+x方向へ、odm(trajectory_points由来)は旧フレームのまま+y方向へ
+  // 進み、dx/dyが毎tick v*dt(=2.2mm@2200)ずつ開き続ける。Kanayamaはこれを
+  // 横偏差と解釈してknym_wを -6→+39rad/s まで直線ランプさせ、両輪duty飽和
+  // →旋回後の角度が一度収束してから8°台まで戻る、という症状になっていた
+  // (20260905_041034.csv / 040737.csv、SLA_BACK_STR区間でodm_y-kim_yが
+  // +3.6→+46.8mmまで単調増加)。θのリベースとx/yのリセットを揃える。
   if (receive_req->nmr.motion_type == MotionType::STRAIGHT ||
-      receive_req->nmr.motion_type == MotionType::SLA_FRONT_STR) {
+      receive_req->nmr.motion_type == MotionType::SLA_FRONT_STR ||
+      receive_req->nmr.motion_type == MotionType::SLA_BACK_STR) {
     ego.kim.x = ego.kim.y = 0;
     tgt_val->ego_in.ideal_px = tgt_val->ego_in.ideal_py =
         tgt_val->ego_in.img_ang = 0;

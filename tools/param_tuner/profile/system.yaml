@@ -202,7 +202,7 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 12
+  file_idx: 16
   sla_dist: 90
   # sla_type: 3
   sla_type: 3

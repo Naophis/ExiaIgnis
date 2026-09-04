@@ -72,8 +72,25 @@ void TrajectoryGenerator::calc_kanayama(
   float vd = ego.odm.v = trajectory_points[idx].v;
   float wd = ego.odm.w = trajectory_points[idx].w;
 
-  float dx = ego.odm.x - ego.kim.x;
-  float dy = ego.odm.y - ego.kim.y;
+  // 2026-09-05: kim.x/yもlast_tgt_angle分だけodm座標系へ回してから差を取る。
+  // odm(trajectory_points由来)はgenerate()が`ego_in.img_ang += last_tgt_angle`
+  // を掛けてmpcへ渡すため前セグメント基準のグローバル座標系で積分される一方、
+  // kimはcp_request()で`kim.theta -= last_tgt_angle`とリベースされた
+  // セグメントローカル座標系にある。下のkim_theta_gでthetaだけは揃えていたが
+  // x/yを回していなかったため、last_tgt_angle!=0になる唯一のケースである
+  // SLA_BACK_STR(直前が必ずSLALOMなのでlast_tgt_angle=±90°)で、odmは+y方向・
+  // kimは+x方向へ進み、dx/dyが毎tick v*dt(=2.2mm@2200)ずつ乖離していた。
+  // Kanayamaがこれを横偏差と誤認してknym_wを-6→+39rad/sまで直線ランプさせ、
+  // 両輪duty飽和・旋回後の角度が一度収束してから8〜10°まで戻る症状になっていた
+  // (20260905_042530.csv: dy +3.9→+42.0mm。この回転を入れるとey は-0.95→
+  // -5.10mmに収まる)。last_tgt_angle==0の他モーションでは恒等変換。
+  const float cos_lta = std::cos(last_tgt_angle);
+  const float sin_lta = std::sin(last_tgt_angle);
+  const float kim_x_g = cos_lta * ego.kim.x - sin_lta * ego.kim.y;
+  const float kim_y_g = sin_lta * ego.kim.x + cos_lta * ego.kim.y;
+
+  float dx = ego.odm.x - kim_x_g;
+  float dy = ego.odm.y - kim_y_g;
   if (tgt_val->ego_in.v < 10) {
     dx = dy = 0;
   }
