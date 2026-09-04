@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { AM32_FILE, type Am32Action } from "@/lib/am32-shared";
 import type { ProfileList, SendScope } from "@/lib/serial-manager";
 
 const ALL_SENTINEL = "__all__";
@@ -13,23 +14,29 @@ const ALL_SENTINEL = "__all__";
 interface Props {
   profiles: ProfileList;
   sending: string | null;
+  am32Action: Am32Action | null;
   onSendFile: (scope: SendScope, file: string) => void;
   onSendAll: () => void;
   onEditFile: (scope: SendScope, file: string) => void;
   onOpenTemplates: () => void;
   onOpenMatrix: () => void;
+  onAm32Sync: () => void;
+  onAm32Read: () => void;
 }
 
 export function ProfilePanel({
   profiles,
   sending,
+  am32Action,
   onSendFile,
   onSendAll,
   onEditFile,
   onOpenTemplates,
   onOpenMatrix,
+  onAm32Sync,
+  onAm32Read,
 }: Props) {
-  const isBusy = sending !== null;
+  const isBusy = sending !== null || am32Action !== null;
   const total = profiles.base.length + profiles.mode.length;
 
   const [query, setQuery] = useState("");
@@ -93,6 +100,37 @@ export function ProfilePanel({
                     >
                       テンプレート
                     </Button>
+                  ) : file === AM32_FILE ? (
+                    // Plain "Send" only drops am32.yaml into the device's
+                    // LittleFS; nothing reaches the ESC until write_am32_param()
+                    // runs. These two are that missing half (send_file.py's
+                    // am32sync / am32read).
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={isBusy}
+                        title="ESCの現在値を読み出してコンソールへ表示 (AM32READ)"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAm32Read();
+                        }}
+                      >
+                        {am32Action === "read" ? "読出中..." : "ESC読出"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={isBusy}
+                        title="am32.yaml を送信してESCのflashへ書き込む (送信 + AM32WRITE)"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAm32Sync();
+                        }}
+                      >
+                        {am32Action === "sync" ? "書込中..." : "ESC書込"}
+                      </Button>
+                    </>
                   ) : undefined
                 }
               />

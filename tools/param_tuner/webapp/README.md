@@ -25,6 +25,7 @@ npm run dev
 - **コンソール**: シリアル受信をリアルタイム表示。Pause/Clear、`ESC[2J`(画面クリア)を検知して自動リセット。
 - **パラメータ送信**: `profile/hf/` 配下と `system.yaml`/`hardware.yaml`/`am32.yaml` を一覧表示し、個別送信・全送信・検索フィルタ・クリックでのYAML編集(CodeMirror+VSCodeテーマ、Ctrl+Sで保存)に対応。
 - **system.yaml テストテンプレート**: `test:` ブロックの特定キー(v_max/accl/decel/dia_accl/dia_decel/dist/suction_active/file_idx/sla_type/sla_type2/sla_return/ignore_opp_sen/search_mode)とトップレベルの `mode` を、コメントを一切壊さずに書き換える仕組み。名前付きテンプレートの保存/適用に加え、よく変える値(mode/file_idx/sla_type/sla_type2/sla_return)はワンクリックで即時反映できる「クイック適用」ボタンを用意。
+- **AM32 ESC書き込み**: `am32.yaml` の行(と編集画面)から「ESC書込」でファイル送信+`AM32WRITE`(=`send_file.py am32sync` 相当)、「ESC読出」で `AM32READ` を実行。進捗はコンソールにそのまま流れる。デバイスが起動直後のボタン待ちループにいる必要がある。
 - **ログプロット**: `tools/param_tuner/logs/` のCSVから走行軌跡を描画(状態ごとに色分け、壁センサー検出点、90mmグリッド)。PlotJugglerでの詳細解析への連携ボタンつき。
 
 アーキテクチャ・プロトコルの詳細は [CLAUDE.md](./CLAUDE.md) を参照してください。

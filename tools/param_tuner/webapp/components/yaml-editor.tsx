@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { yaml } from "@codemirror/lang-yaml";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import CodeMirror from "@uiw/react-codemirror";
@@ -21,6 +21,10 @@ interface Props {
   // Fired on every keystroke so a sibling panel (e.g. the slalom simulator)
   // can react to unsaved edits without owning the draft itself.
   onDraftChange?: (content: string) => void;
+  // File-specific actions rendered next to 閉じる (e.g. am32.yaml's
+  // "保存してESC書込"). The parent owns them since they usually combine a save
+  // with something outside the editor's scope.
+  headerActions?: ReactNode;
 }
 
 const EXTENSIONS = [yaml()];
@@ -29,7 +33,16 @@ const EXTENSIONS = [yaml()];
 // own loading placeholder until then) - draft is seeded from `content` (or
 // `initialDraft`, if provided) once, at mount time, so there's no prop/state
 // to keep in sync afterwards.
-export function YamlEditor({ file, content, initialDraft, saving, onSave, onClose, onDraftChange }: Props) {
+export function YamlEditor({
+  file,
+  content,
+  initialDraft,
+  saving,
+  onSave,
+  onClose,
+  onDraftChange,
+  headerActions,
+}: Props) {
   const [draft, setDraft] = useState(initialDraft ?? content);
   const dirty = draft !== content;
 
@@ -52,9 +65,12 @@ export function YamlEditor({ file, content, initialDraft, saving, onSave, onClos
     <Card className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="truncate">編集: {file}</CardTitle>
-        <Button size="sm" variant="outline" onClick={onClose}>
-          閉じる
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {headerActions}
+          <Button size="sm" variant="outline" onClick={onClose}>
+            閉じる
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-2 overflow-hidden">
         <div className="min-h-0 flex-1 overflow-auto rounded-md border text-xs">

@@ -37,6 +37,7 @@ motor_debug_mode_duty_r: -10
 motor_debug_mode_duty_l: 10
 
 MotorHz: 37500
+# MotorHz: 75000
 SuctionHz: 42500
 MotorResolution: 40
 SuctionResolution: 40
@@ -175,11 +176,31 @@ ff_roll_gain_before: 0.25
 ff_roll_gain_after: 0.75
 # 2026-08-30: SLALOM旋回入り口でw_lpがideal_wを最大58%超過する現象を確認
 # (20260830_231723.csv)。ff_roll_gain_beforeはWALL_OFF用に既にチューニング
-# 済みで流用すると干渉するため、専用にff_roll_gain_entryを新設して配線
-# (control_law.cpp参照)。まずはff_roll_gain_afterと同じ0.75から試す。
-# ff_roll_gain_entry: 0.75 # 0.75では58%→44%とまだ改善不十分(20260830_232416.csv)
-ff_roll_gain_entry: 0.5
+# 済みで流用すると干渉するため、専用にff_roll_gain_entryを新設して配線。
+# 0.75/0.5と試しても改善が薄い/むしろ悪化した原因は、torque_mode=2下では
+# このゲインが実際に使われるff_roll_torque経路に配線されておらず死んでいた
+# ためと判明(2026-08-31、control_law.cpp summation_duty()で配線修正済み)。
+# 修正後は本当に効くはずだが、ff_roll_torque自体の絶対値が終始小さく
+# (0.0001〜0.0002)、大半のトルクはヨーレートI項(gyro_pid.b)由来と判明して
+# いる。gyro_pid.bを実機で1/3程度まで下げてもオーバーシュート率がほぼ
+# 変わらなかった(20260831_123811/124237.csv)ことから、feedback(P/I)側の
+# チューニングでは解決しないと判断([[project_slalom_entry_overshoot_2026-08-30]]
+# 参照)。次に見るべきは各ターンプロファイル(t_1800.yaml等)のpow_n。
+ff_roll_gain_entry: 1
 ff_front_gain_decel: 0.5
+
+# 2026-09-04: SLALOM/SLA_BACK_STR中、内側車輪のduty指令が負(逆回転)になり
+# 実測v_l/v_rが大きくマイナスに振れてスリップする現象を確認(t_2200、
+# SLA_BACK_STR突入直後にv_rが-313〜-833まで振れる)。turn_duty_floor=3.0+
+# turn_duty_slew=2.0を試したところ逆効果と判明: このマイナスduty自体が
+# turn_end_brakeによる残留角速度の意図的な補正動作だったらしく、floorで
+# 抑え込んだ結果補正しきれなかった誤差が蓄積し、SLA_BACK_STR→STRAIGHT
+# 切替の瞬間に両輪-99.94のフルブレーキとして噴き出す、より酷い症状に
+# 悪化した(20260904_205323.csv、v_lが7000超・v_rが-3702まで悪化)。
+# 0(無効)に戻したら症状が緩和(v_r最悪-817.5まで改善、20260904_205624.csv)。
+# 対症療法での抑え込みは筋が悪いと判断、フィールド自体は残すが無効のまま。
+turn_duty_floor: 0.0
+turn_duty_slew: 0.0
 
 enable_kalman_gyro: 0
 enable_mpc: 0
@@ -279,10 +300,20 @@ gyro_pid:
   antiwindup: 1
   windup_gain: 10.0
   windup_dead_bind: 1.50
+  # 2026-09-04: SLA_BACK_STR中、w_error_i(g_i2)がw_lpの同符号残差により
+  # 20tick程度で-477→+517まで単調に膨れ上がる暴走を確認(20260904_205624.csv)。
+  # 既存のtgt_angle基準クランプ(90°→約90000相当)は緩すぎて無効、かつ
+  # antiwindupの突入条件(符号反転検知)もこの同符号ケースを捕捉できない
+  # ため、実用的な絶対値クランプを追加(control_law.cpp参照)。まずは150から
+  # 試したが(150→250)、クランプ値を上げるほど元の暴走(517)に近づくだけの
+  # 対症療法と判断し撤回。本質的な問題は「なぜSLA_BACK_STR中にw_lpが長時間
+  # 同じ方向にズレ続けるのか」(=I項がそれだけ働かないと収まらない残差が
+  # そもそもなぜ発生するのか)の方。0(無効)に戻す。
+  windup_i_max: 0
 
-  p: 0.000325
+  p: 0.000295
   i: 0.01465 # dif angle
-  b: 0.0000595 #summation
+  b: 0.0000195 #summation
   # 2026-08-30: turn_end_brake/turn_angle_fb再有効化後のベースラインでd=0.0005
   # を試したところ、旋回終端で duty_l/duty_r が±100%近くまで飽和し
   # v_kf_rが-448まで振れる(左右逆回転)重度の悪化を確認(20260830_222932.csv)。

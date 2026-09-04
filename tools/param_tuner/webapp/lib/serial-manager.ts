@@ -5,6 +5,7 @@ import { load as loadYaml } from "js-yaml";
 import { SerialPort } from "serialport";
 import { ReadlineParser } from "@serialport/parser-readline";
 import { ByteLengthParser } from "@serialport/parser-byte-length";
+import { AM32_FILE } from "./am32-shared";
 
 // This must stay a single, persistent connection: console.sh (rx_term.js)
 // and update_param.sh (tx_term.js -> send_file.py) used to each open their
@@ -15,6 +16,11 @@ const BAUD_RATE = 3_000_000;
 // Matches rx_term.js's waitForPico() poll cadence.
 const SEARCH_INTERVAL_MS = 200;
 const ACK_TIMEOUT_MS = 10_000;
+// write_am32_param()/read_am32_param() hold the device for a full
+// enterConfigMode() poll window (10s by default, spent waiting for the ESC
+// battery to be plugged back in) plus the read/write/save/verify exchange, so
+// the completion line legitimately takes far longer than a file-upload ack.
+const AM32_DONE_TIMEOUT_MS = 40_000;
 
 // webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
 const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
@@ -24,7 +30,20 @@ const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
 
 // Ported from tx_term.js: these three are always read from profile/ directly
 // (not profile/<mode>/), regardless of which mode is selected.
-const BASE_FILES = ["system.yaml", "hardware.yaml", "am32.yaml"];
+const BASE_FILES = ["system.yaml", "hardware.yaml", AM32_FILE];
+
+export type Am32Command = "write" | "read";
+
+// Ported from send_file.py's _stream_am32_log(): the firmware prints one of
+// these once the run is over. The failure prefixes are the paths that return
+// early *without* ever printing a "done" line (see write_am32_param() /
+// read_am32_param() in main_task_test_misc.cpp) - matching them turns what
+// would be a 40s timeout into an immediate, explained failure.
+const AM32_DONE_PREFIX: Record<Am32Command, string> = {
+  write: "== AM32 write done",
+  read: "== AM32 read done",
+};
+const AM32_FAIL_PREFIXES = ["enterConfigMode failed", "am32: /am32.txt not found"];
 
 type FieldType = "float" | "int" | "short";
 interface FieldDef {
@@ -46,6 +65,13 @@ interface DumpState {
   // against in switchToBinaryMode - see the comment there for why the sum
   // alone can't be trusted.
   expectedRecordByteSize: number;
+}
+
+interface Am32Wait {
+  resolve: () => void;
+  reject: (err: Error) => void;
+  timer: NodeJS.Timeout;
+  donePrefix: string;
 }
 
 interface PendingAck {
@@ -141,6 +167,7 @@ class SerialManager extends EventEmitter {
   private binaryMode = false;
   private dump: DumpState = freshDumpState();
   private pendingAck: PendingAck | null = null;
+  private am32Wait: Am32Wait | null = null;
   private connectedPath: string | null = null;
   private status: ConnectionStatus = "disconnected";
   private autoConnectEnabled = true;
@@ -173,6 +200,7 @@ class SerialManager extends EventEmitter {
   disconnect(): void {
     this.autoConnectEnabled = false;
     this.rejectPendingAck(new Error("disconnected"));
+    this.rejectAm32Wait(new Error("disconnected"));
     this.port?.close();
     this.port = null;
     this.connectedPath = null;
@@ -321,6 +349,10 @@ class SerialManager extends EventEmitter {
       this.setStatus("disconnected");
       this.emit("log", "[serial] disconnected");
       this.rejectPendingAck(new Error("port closed"));
+      // An AM32 run reboots nothing on our side, but losing the port means
+      // its completion line can never arrive - fail now instead of after the
+      // 40s timeout.
+      this.rejectAm32Wait(new Error("port closed"));
     });
 
     port.on("error", (err) => {
@@ -333,6 +365,14 @@ class SerialManager extends EventEmitter {
       clearTimeout(this.pendingAck.timer);
       this.pendingAck.reject(err);
       this.pendingAck = null;
+    }
+  }
+
+  private rejectAm32Wait(err: Error) {
+    if (this.am32Wait) {
+      clearTimeout(this.am32Wait.timer);
+      this.am32Wait.reject(err);
+      this.am32Wait = null;
     }
   }
 
@@ -369,6 +409,22 @@ class SerialManager extends EventEmitter {
       this.pendingAck = null;
       clearTimeout(ack.timer);
       ack.resolve(data);
+    }
+
+    // AM32 run completion. The firmware streams its whole progress log as
+    // ordinary lines (already emitted above, so the console shows it live);
+    // all that's left is to spot the final line and settle runAm32Command().
+    if (this.am32Wait && data.length > 0) {
+      const wait = this.am32Wait;
+      if (data.startsWith(wait.donePrefix)) {
+        this.am32Wait = null;
+        clearTimeout(wait.timer);
+        wait.resolve();
+      } else if (AM32_FAIL_PREFIXES.some((prefix) => data.startsWith(prefix))) {
+        this.am32Wait = null;
+        clearTimeout(wait.timer);
+        wait.reject(new Error(data));
+      }
     }
 
     const dump = this.dump;
@@ -546,9 +602,46 @@ class SerialManager extends EventEmitter {
     fs.copyFileSync(filePath, path.join(LOGS_DIR, "latest.csv"));
   }
 
+  // ===== AM32: ported from send_file.py's cmd_am32write/read/sync =====
+
+  // Sends "AM32WRITE"/"AM32READ" and follows the device log until the run
+  // reports done. rx_usb_cmd() only sets these flags, and main_task.cpp's
+  // button-wait loop is what polls and executes them - so the device has to
+  // still be sitting at "[main] waiting..." (i.e. before a mode was chosen)
+  // for this to do anything.
+  async runAm32Command(kind: Am32Command): Promise<void> {
+    const cmd = kind === "write" ? "AM32WRITE" : "AM32READ";
+    await this.writeLineAndWaitAck(cmd, cmd);
+    this.emit(
+      "log",
+      `[am32] ${cmd} 実行中... (ESCの電源制御が無い構成では、表示に従ってESCのバッテリを挿し直してください)`
+    );
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.am32Wait = null;
+        reject(new Error(`AM32応答タイムアウト (${cmd})`));
+      }, AM32_DONE_TIMEOUT_MS);
+      this.am32Wait = { resolve, reject, timer, donePrefix: AM32_DONE_PREFIX[kind] };
+    });
+  }
+
+  // send_file.py's am32sync: upload am32.yaml as /am32.txt, then have the
+  // firmware push it into the ESC's flash. Uploading alone changes nothing on
+  // the ESC, so this is the operation that actually matters when tuning.
+  async syncAm32(mode: string): Promise<void> {
+    await this.sendFile(mode, "base", AM32_FILE);
+    await this.runAm32Command("write");
+  }
+
   // ===== TX: ported from send_file.py's cmd_write() request/response =====
 
   private async writeAndWaitAck(remoteName: string, content: string): Promise<void> {
+    return this.writeLineAndWaitAck(`${remoteName}@${content}`, remoteName);
+  }
+
+  // The request/response half shared by file uploads and the AM32*
+  // commands: write one line, wait for the device's single ack line.
+  private async writeLineAndWaitAck(line: string, label: string): Promise<void> {
     if (!this.port || this.status !== "connected") {
       throw new Error("シリアル未接続です");
     }
@@ -558,12 +651,15 @@ class SerialManager extends EventEmitter {
     if (this.pendingAck) {
       throw new Error("別の送信が進行中です");
     }
+    if (this.am32Wait) {
+      throw new Error("AM32コマンドの実行中です。完了まで待ってください");
+    }
 
-    const payload = `${remoteName}@${content}\n`;
+    const payload = `${line}\n`;
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingAck = null;
-        reject(new Error(`応答タイムアウト (${remoteName})`));
+        reject(new Error(`応答タイムアウト (${label})`));
       }, ACK_TIMEOUT_MS);
 
       this.pendingAck = {

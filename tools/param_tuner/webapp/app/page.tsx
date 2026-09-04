@@ -13,6 +13,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { SlalomSimPanel } from "@/components/slalom-sim-panel";
 import { TestTemplatePanel } from "@/components/test-template-panel";
 import { YamlEditor } from "@/components/yaml-editor";
+import { AM32_FILE, type Am32Action } from "@/lib/am32-shared";
 import type { ConnectionStatus, PortInfo, ProfileList, SendScope } from "@/lib/serial-manager";
 import type { TestTemplate, TestTemplateValues } from "@/lib/test-template-shared";
 
@@ -40,6 +41,7 @@ export default function Home() {
   // up instantly instead of losing anything that arrived while paused.
   const [frozenLines, setFrozenLines] = useState<string[] | null>(null);
   const [sending, setSending] = useState<string | null>(null);
+  const [am32Action, setAm32Action] = useState<Am32Action | null>(null);
 
   const [rightTab, setRightTab] = useState<"console" | "plot">("console");
   const [flashing, setFlashing] = useState(false);
@@ -230,8 +232,8 @@ export default function Home() {
     setDraftPatchNonce((n) => n + 1);
   };
 
-  const saveEditor = async (content: string) => {
-    if (!editing) return;
+  const saveEditor = async (content: string): Promise<boolean> => {
+    if (!editing) return false;
     setSaving(true);
     try {
       const res = await fetch("/api/profile-file", {
@@ -245,11 +247,47 @@ export default function Home() {
       // Stay in the editor; sync editorContent so the dirty flag clears
       // instead of staying stuck true (YamlEditor keeps its own draft state).
       setEditorContent(content);
+      return true;
     } catch (err) {
       toast.error(`${editing.file}: ${(err as Error).message}`);
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  // Uploading am32.yaml only writes it to the device's LittleFS - the ESC
+  // itself is untouched until write_am32_param() runs. "sync" does both
+  // (send_file.py am32sync); "read" dumps the ESC's current values instead.
+  const runAm32 = async (action: Am32Action) => {
+    setAm32Action(action);
+    const label = action === "sync" ? "ESC書込" : "ESC読出";
+    try {
+      const res = await fetch("/api/am32", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, mode: MODE }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `${label}に失敗しました`);
+      toast.success(`${label}: 完了 (詳細はコンソール)`);
+    } catch (err) {
+      toast.error(`${label}: ${(err as Error).message}`);
+    } finally {
+      setAm32Action(null);
+    }
+  };
+
+  // am32.yaml の編集画面から「保存 → 送信 → ESC書込」を1操作で回すためのもの。
+  // 未保存のドラフトがあるときは先に保存する(ESCへ送られるのは保存済みの
+  // ファイル内容なので、保存を挟まないと編集が反映されないままになる)。
+  const saveAndSyncAm32 = async () => {
+    const draft = liveDraft ?? editorContent;
+    if (draft !== null && draft !== editorContent) {
+      const ok = await saveEditor(draft);
+      if (!ok) return;
+    }
+    await runAm32("sync");
   };
 
   const openTemplates = () => {
@@ -358,6 +396,9 @@ export default function Home() {
             onEditFile={openEditor}
             onOpenTemplates={openTemplates}
             onOpenMatrix={openMatrix}
+            am32Action={am32Action}
+            onAm32Sync={() => void runAm32("sync")}
+            onAm32Read={() => void runAm32("read")}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />
@@ -400,6 +441,18 @@ export default function Home() {
                 onSave={saveEditor}
                 onClose={closeEditor}
                 onDraftChange={setLiveDraft}
+                headerActions={
+                  editing.scope === "base" && editing.file === AM32_FILE ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={saving || am32Action !== null}
+                      onClick={() => void saveAndSyncAm32()}
+                    >
+                      {am32Action === "sync" ? "書込中..." : "保存してESC書込"}
+                    </Button>
+                  ) : undefined
+                }
               />
             )
           ) : showTemplates ? (

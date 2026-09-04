@@ -146,10 +146,12 @@ void MainTask::read_am32_param() {
 }
 
 void MainTask::write_am32_param() {
-  planning_->suction_disable();
-  while (planning_->is_suction_ramping()) {
-    sleep_ms(5);
-  }
+  // planning_->suction_disable();
+
+  planning_->suction_power_on();
+  // while (planning_->is_suction_ramping()) {
+  // }
+  sleep_ms(1500);
 
   // /am32.txt の読み込みはESCとのconfig session開始前に済ませる
   // (apply_am32_target_doc()のコメント参照: session中のLittleFSアクセスは
@@ -171,6 +173,7 @@ void MainTask::write_am32_param() {
            am32_config_status_to_string(st),
            Am32Protocol::status_to_string(esc.last_protocol_status()));
     restore_suction_pwm_pin();
+    planning_->suction_disable();
     return;
   }
 
@@ -250,6 +253,7 @@ void MainTask::write_am32_param() {
     backup_am32_settings(settings);
   }
   printf("== AM32 write done ==\n");
+    planning_->suction_disable();
 }
 
 // read_am32_param()/write_am32_param()が保存したバックアップ(/am32_backup.bin)

@@ -37,6 +37,20 @@
 - mode files は `profile/hf/`、リモート名は `.hf` 拡張子。`.maze` は中身を `| 0xf0` してswap変換後 `maze.txt` として送信。
 - 「全て送信」は mode dir の `*.yaml`(`*.maze` は含まない)→ base files の順。
 
+## AM32 ESC設定の書き込み — `runAm32Command`/`syncAm32`
+
+`am32.yaml` の送信は **`/am32.txt` をデバイスのLittleFSへ置くだけ**で、ESC自体には何も届かない。実際にESCのflashへ書くのはファーム側の `write_am32_param()` で、これは USBコマンド `AM32WRITE`(`src/main/main_task_usb.cpp`)で起動する。`send_file.py` の `am32sync`/`am32write`/`am32read` と同じ流れをアプリ内に持たせたのがこの2メソッド:
+
+- `runAm32Command(kind)`: `AM32WRITE`/`AM32READ` を1行送信 → `OK` ackを待つ → 完了行(`== AM32 write done` / `== AM32 read done`)まで待つ。途中経過のログは通常の `log` イベントとしてコンソールにそのまま流れる。
+- `syncAm32(mode)`: `am32.yaml` 送信 → `AM32WRITE`。UIの「ESC書込」ボタン(と編集画面の「保存してESC書込」)がこれ。
+
+注意点:
+
+- **デバイスが起動直後のボタン待ちループにいること**が前提。`rx_usb_cmd()` はフラグを立てるだけで、実行するのは `main_task.cpp` のボタン待ちループのポーリング(`consume_am32_write_request()`)。モード選択に入った後は無視される。
+- 完了待ちのタイムアウトは **40秒**。電源制御GPIOが無い構成では `enterConfigMode()` が最大10秒「ESCのバッテリを挿し直せ」とpollingするため、通常のackタイムアウト(10秒)では足りない。
+- ファーム側が **完了行を出さずにreturnする経路**(`enterConfigMode failed` / `am32: /am32.txt not found`)を `AM32_FAIL_PREFIXES` で拾い、40秒待たずに即エラーにしている。ファーム側のメッセージを変えたらここも合わせること。
+- 「全て送信」は `am32.yaml` も送るが **`AM32WRITE` は撃たない**(ESCのflash書き込み+バッテリ抜き差しを毎回強制するのは重すぎるため)。ESCへ反映したいときは明示的に「ESC書込」を押す。
+
 ## system.yaml の編集 — `lib/test-templates.ts`
 
 **YAMLパース+ダンプの往復は禁止。** system.yaml は goals 履歴やAM32移行メモなど150行超のコメントを持つため、パースし直すと全部消える。代わりに**テキスト行レベルの外科的置換**を行う。
@@ -81,6 +95,7 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 | `/api/profiles` | GET | 指定モードのファイル一覧(base/mode) |
 | `/api/profile-file` | GET/POST | YAMLファイルの読み込み/保存 |
 | `/api/send` | POST | 個別ファイル送信 / 全送信 |
+| `/api/am32` | POST | `sync`(am32.yaml送信+AM32WRITE) / `write` / `read` |
 | `/api/test-templates` | GET/POST/DELETE | テンプレート一覧/作成更新/削除 |
 | `/api/test-templates/apply` | POST | 保存済みテンプレートをsystem.yamlへ適用 |
 | `/api/test-templates/quick-apply` | GET/POST | 現在値取得 / 単一キーの即時適用 |
