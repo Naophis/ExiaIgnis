@@ -62,8 +62,8 @@ debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
 # mode: 0 # メイン
-mode: 1 # 最短スローム
-# mode: 2 # 直進
+# mode: 1 # 最短スローム
+mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
@@ -89,7 +89,7 @@ test: # テスト走行時に使用するパラメータ群
   # 2026-08-30: sysid(duty5/10)実測の定常速度と同じ目標速度で定速直進させ、
   # そのときのFF出力duty%が実測のduty5/10と一致するかを検証する用
   # (v_inf@duty5=414mm/s, v_inf@duty10=997mm/s)。まずv_max=414から。
-  v_max: 1500
+  v_max: 7500
   accl: 42500
   # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
   # 減速(decel)には効かない。
@@ -108,7 +108,7 @@ test: # テスト走行時に使用するパラメータ群
   decel: -47500
   dia_accl: 45000
   dia_decel: -47500
-  dist: 120 #直進
+  dist: 720 #直進
   suction_active: 2
 
   end_v: 10
