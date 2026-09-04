@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
@@ -130,14 +131,18 @@ export function TestTemplatePanel({
   };
 
   return (
-    <Card className="flex flex-1 flex-col overflow-hidden">
+    <Card className="flex h-full min-w-0 flex-col overflow-hidden">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle>system.yaml テストテンプレート</CardTitle>
         <Button size="sm" variant="outline" onClick={onClose}>
           閉じる
         </Button>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3 overflow-hidden">
+      <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+      <ResizablePanelGroup direction="vertical" autoSaveId="param-console-test-template">
+      <ResizablePanel defaultSize={55} minSize={20} className="min-h-0">
+      <ScrollArea className="h-full">
+      <div className="flex flex-col gap-3 px-(--card-spacing) py-3">
         <div className="flex flex-col gap-2 rounded-md border p-3">
           <span className="text-xs font-medium text-muted-foreground">クイック適用</span>
           {QUICK_APPLY_KEYS.map((key) => {
@@ -229,9 +234,13 @@ export function TestTemplatePanel({
             ＋ 新規テンプレート
           </Button>
         )}
-        <Separator />
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-2 pr-2">
+      </div>
+      </ScrollArea>
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={45} minSize={15} className="min-h-0">
+      <ScrollArea className="h-full">
+        <div className="flex flex-col gap-2 px-(--card-spacing) py-3">
             {templates.map((t) => (
               <div
                 key={t.id}
@@ -278,8 +287,10 @@ export function TestTemplatePanel({
             {templates.length === 0 && (
               <span className="px-2 py-1 text-sm text-muted-foreground">テンプレートがありません</span>
             )}
-          </div>
-        </ScrollArea>
+        </div>
+      </ScrollArea>
+      </ResizablePanel>
+      </ResizablePanelGroup>
       </CardContent>
     </Card>
   );
