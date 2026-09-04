@@ -1310,6 +1310,20 @@ ControlLaw::calc_angle_velocity_ctrl() {
                                ABS(last_tgt_angle_)) /
                     dt_;
       }
+
+      // 2026-09-04: 上のtgt_angle基準クランプは旋回角度分(例: 90°→dt_で
+      // 割り戻すと約90000)まで許容する非常に緩い安全弁で、実際の暴走
+      // (SLA_BACK_STR中にg_i2が20tick程度で-477→+517まで膨れ上がる)には
+      // 全く効いていなかった。しかもこのケースはw_error_iとerror_pが
+      // 同符号(=w_lpが同じ方向へ長時間乗り続ける単調な残差)で、上の
+      // アンチワインド突入条件(w_error_i*error_p<0、符号反転=オーバー
+      // シュート検知)ではそもそも捕捉できない種類の暴走だった。積算値
+      // そのものへの実用的な絶対値クランプ(gyro_pid.windup_i_max、
+      // 既存str_ang_pid_fastと同じ仕組み)を追加する。0なら無効。
+      if (param_->gyro_pid.windup_i_max > 0) {
+        w_error_i = std::clamp(w_error_i, -param_->gyro_pid.windup_i_max,
+                               param_->gyro_pid.windup_i_max);
+      }
       ee->aw_log.w_error_i_clamped = w_error_i;
     }
 
@@ -1505,23 +1519,27 @@ ControlLaw::summation_duty() {
     ff_front = param_->ff_front_gain_14 * ff_front;
     trj_->mpc_next_ego.ff_duty_front = ff_front;
   }
+  // 2026-08-30: ff_roll_gain_before/after/entryはこのff_roll(=mpc_next_ego.
+  // ff_duty_roll)に掛けていたが、hardware.yamlのtorque_mode=2運用下では
+  // ff_roll_torque(下のtorque_mode==2分岐)が実際の出力に使われ、ff_roll/
+  // ff_duty_rollはFRONT_CTRL専用の未使用経路だった。そのためff_roll_gain_
+  // entry/afterを0.75/0.5と振っても実機挙動が一切変わらなかった
+  // (20260830_231723/232416/233252.csv、[[project_slalom_entry_overshoot_2026-08-30]]
+  // 参照)。ゲイン係数を一度だけ計算し、torque_mode問わず両方の経路(ff_roll
+  // とff_roll_torque由来のff_roll2)に適用するよう修正する。
+  float ff_roll_gain_factor = 1.0f;
   if (tgt_val_->motion_type == MotionType::SLALOM) {
-    // 2026-08-30: ff_roll_gain_beforeはstructs.hppに定義済みだったが、
-    // SLALOMの立ち上がり(角加速度がbase_alphaと同符号=ターン入り口)側には
-    // 一度も配線されていなかった(減速側のff_roll_gain_afterのみ適用)。
-    // ターン入り口でw_lpがideal_wを最大58%超過する現象を確認
-    // (20260830_231723.csv、「すべる」感覚の原因と推定)、立ち上がり側にも
-    // 減衰ゲインを掛けて検証する。
     if (tgt_val_->ego_in.sla_param.base_alpha > 0) {
-      ff_roll = (tgt_val_->ego_in.alpha < 0)
-                    ? param_->ff_roll_gain_after * ff_roll
-                    : param_->ff_roll_gain_entry * ff_roll;
+      ff_roll_gain_factor = (tgt_val_->ego_in.alpha < 0)
+                                 ? param_->ff_roll_gain_after
+                                 : param_->ff_roll_gain_entry;
     } else if (tgt_val_->ego_in.sla_param.base_alpha < 0) {
-      ff_roll = (tgt_val_->ego_in.alpha > 0)
-                    ? param_->ff_roll_gain_after * ff_roll
-                    : param_->ff_roll_gain_entry * ff_roll;
+      ff_roll_gain_factor = (tgt_val_->ego_in.alpha > 0)
+                                 ? param_->ff_roll_gain_after
+                                 : param_->ff_roll_gain_entry;
     }
   }
+  ff_roll *= ff_roll_gain_factor;
   se->ego.duty.ff_duty_roll = trj_->mpc_next_ego.ff_duty_roll = ff_roll;
   auto ff_duty_r = ff_front + ff_roll + trj_->mpc_next_ego.ff_duty_rpm_r;
   auto ff_duty_l = ff_front - ff_roll + trj_->mpc_next_ego.ff_duty_rpm_l;
@@ -1547,7 +1565,8 @@ ControlLaw::summation_duty() {
     // ff_roll2だけResistが二重適用(実効Resist^2)になり、ff_front_torque
     // (Resist抜きで生成される)や他の項とスケールが揃わない(2026-08-23発見、
     // 旋回終端ブレーキの検討中に判明)。ここで一度割って二重適用を相殺する。
-    auto ff_roll2 = trj_->mpc_next_ego.ff_roll_torque / param_->Resist;
+    auto ff_roll2 =
+        ff_roll_gain_factor * trj_->mpc_next_ego.ff_roll_torque / param_->Resist;
     auto ff_duty_r2 = trj_->mpc_next_ego.ff_duty_rpm_r;
     auto ff_duty_l2 = trj_->mpc_next_ego.ff_duty_rpm_l;
     auto ff_friction_r = trj_->mpc_next_ego.ff_friction_torque_r;
@@ -1556,7 +1575,26 @@ ControlLaw::summation_duty() {
     if (param_->FF_keV == 0) {
       ff_front2 = ff_roll2 = ff_duty_r2 = ff_duty_l2 = ff_friction_r =
           ff_friction_l = 0;
+    } else if (ABS(tgt_val_->ego_in.v) > 1.0f) {
+      // mpc_tgt_calc.cpp(Simulink自動生成)のsign()実装が、入力がちょうど
+      // 0.0fを跨ぐ瞬間だけ0を返す仕様のため、走行中でも数tickおきに
+      // ff_front_torque/ff_friction_torque_r/lが瞬間的に0へ落ちる
+      // チャタリングを確認(20260904_171508.csv)。走行中(v>1)に限り、
+      // 直前値が非ゼロだったのに今回だけ厳密に0.0fになった場合は
+      // 直前値を保持してこの瞬間的な落ち込みを吸収する。
+      if (ff_front2 == 0.0f && ff_front_torque_prev_ != 0.0f) {
+        ff_front2 = ff_front_torque_prev_;
+      }
+      if (ff_friction_r == 0.0f && ff_friction_torque_r_prev_ != 0.0f) {
+        ff_friction_r = ff_friction_torque_r_prev_;
+      }
+      if (ff_friction_l == 0.0f && ff_friction_torque_l_prev_ != 0.0f) {
+        ff_friction_l = ff_friction_torque_l_prev_;
+      }
     }
+    ff_front_torque_prev_ = ff_front2;
+    ff_friction_torque_r_prev_ = ff_friction_r;
+    ff_friction_torque_l_prev_ = ff_friction_l;
     se->ego.duty.ff_front_torque = ff_front2;
     se->ego.duty.ff_roll_torque = ff_roll2;
     se->ego.duty.ff_friction_torque_r = ff_friction_r;
@@ -1589,6 +1627,31 @@ void ControlLaw::apply_duty_limitter() {
       tgt_duty.duty_l = min_duty;
     else if (-min_duty < tgt_duty.duty_l && tgt_duty.duty_l <= 0)
       tgt_duty.duty_l = -min_duty;
+
+    // 2026-09-04: SLALOM/SLA_BACK_STR中、ff_rollがff_frontを上回ると内側
+    // 車輪のduty指令が負(=逆回転)になり実測v_l/v_rが大きくマイナスに振れて
+    // スリップする現象を確認(t_2200)。PIVOT(その場旋回、両輪逆符号が正常)は
+    // 対象外。下限クランプ(turn_duty_floor)だけだと「落ちきってから頭打ち」
+    // にしかならず、落ちる速度自体が速いと間に合わずスリップするため、
+    // duty変化速度自体もスルーレート制限(turn_duty_slew)する。
+    if (tgt_val_->motion_type == MotionType::SLALOM ||
+        tgt_val_->motion_type == MotionType::SLA_BACK_STR) {
+      if (param_->turn_duty_slew > 0) {
+        const float max_step = param_->turn_duty_slew;
+        tgt_duty.duty_r = std::clamp(tgt_duty.duty_r,
+                                     turn_duty_r_prev_ - max_step,
+                                     turn_duty_r_prev_ + max_step);
+        tgt_duty.duty_l = std::clamp(tgt_duty.duty_l,
+                                     turn_duty_l_prev_ - max_step,
+                                     turn_duty_l_prev_ + max_step);
+      }
+      if (param_->turn_duty_floor > 0) {
+        tgt_duty.duty_r = std::max(tgt_duty.duty_r, param_->turn_duty_floor);
+        tgt_duty.duty_l = std::max(tgt_duty.duty_l, param_->turn_duty_floor);
+      }
+    }
+    turn_duty_r_prev_ = tgt_duty.duty_r;
+    turn_duty_l_prev_ = tgt_duty.duty_l;
   } else if (tgt_val_->motion_type == MotionType::FRONT_CTRL) {
     const auto max_duty = param_->sen_ref_p.search_exist.offset_l;
     tgt_duty.duty_r = std::clamp(tgt_duty.duty_r, -max_duty, max_duty);

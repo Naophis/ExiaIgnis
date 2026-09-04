@@ -727,6 +727,16 @@ typedef struct {
   // チューニング済みで流用すると干渉するため別フィールドにする
   // (control_law.cpp calc_translational_ctrl()参照)。
   float ff_roll_gain_entry = 1;
+  // 2026-09-04: SLALOM/SLA_BACK_STR中、ff_roll(横系差動)がff_front(前進系)を
+  // 上回ると内側車輪のduty指令が負(=逆回転)になり、実測v_l/v_rが大きく
+  // マイナスに振れてスリップする現象を確認(t_2200、SLA_BACK_STR突入直後
+  // v_rが-313〜-833まで振れる)。この2モーションに限り、車輪dutyがこの値を
+  // 下回らないようフロアを掛ける(apply_duty_limitter()参照)。0なら無効。
+  float turn_duty_floor = 0;
+  // 2026-09-04: turn_duty_floorだけでは変化が速すぎる場合に間に合わないため、
+  // SLALOM/SLA_BACK_STR中のduty変化量を1tickあたりこの値までに制限する
+  // (apply_duty_limitter()参照)。0なら無効(スルーレート制限なし)。
+  float turn_duty_slew = 0;
   pid_param_t front_ctrl_roll_pid;
   pid_param_t motor_pid;
   pid_param_t motor_pid_gain_limitter;

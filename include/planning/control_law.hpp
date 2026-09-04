@@ -149,6 +149,21 @@ private:
   // 検出した瞬間(calc_sensor_pid()参照)にゼロクリアして、信頼できる基準
   // (壁と正対=0)へスナップし直すための直前tickの壁検出状態。
   bool  wall_found_prev_           = false;
+  // 2026-08-30: mpc_tgt_calc.cpp(Simulink自動生成)のsign()実装が、入力が
+  // ちょうど0.0fを跨ぐ瞬間だけ0を返す仕様のため、ff_front_torque/
+  // ff_friction_torque_r/lが走行中(速度が明確に非ゼロ)でも数tickおきに
+  // 瞬間的に0へ落ちるチャタリングを確認(20260904_171508.csv)。モデル側
+  // (.slx)を直さずに、走行中の異常な0だけ直前値で保持するガードを
+  // calc_translational_ctrl()に追加する。
+  float ff_front_torque_prev_      = 0.0f;
+  float ff_friction_torque_r_prev_ = 0.0f;
+  float ff_friction_torque_l_prev_ = 0.0f;
+  // 2026-09-04: turn_duty_floor(下限クランプ)だけでは「落ちきってから
+  // 頭打ち」にしかならず、落ちる速度自体が速いと間に合わずスリップする
+  // (apply_duty_limitter()参照)。SLALOM/SLA_BACK_STR中のduty変化速度自体を
+  // スルーレート制限するための前回値。
+  float turn_duty_r_prev_ = 0.0f;
+  float turn_duty_l_prev_ = 0.0f;
 
   // ---- デューティ中間値 ----
   float duty_c                    = 0.0f;
