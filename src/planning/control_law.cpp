@@ -221,9 +221,13 @@ ControlLaw::calc_translational_ctrl() {
     auto kd_gain = param_->motor_pid2.d * ee->v_kf.error_d;
     duty_c = kp_gain + ki_gain + kb_gain + kd_gain;
 
-    set_ctrl_val(ee->v_val, ee->v.error_p, v_error_i, diff_dist, ee->v.error_d,
-                 kp_gain, ki_gain, kb_gain, kd_gain, ee->v_log.gain_zz,
-                 ee->v_log.gain_z);
+    // 2026-09-05: kd_gain は v_kf.error_d から作っているのに、ログ(CSVの
+    // m_pid_d 列)には v.error_d を渡していたため m_pid_d と m_pid_d_v が
+    // 対応せず、ログから motor_pid2.d の実効値だけ逆算できなかった
+    // (p/i は逆算できていた)。kd_gain と同じ量を渡す。制御出力は不変。
+    set_ctrl_val(ee->v_val, ee->v.error_p, v_error_i, diff_dist,
+                 ee->v_kf.error_d, kp_gain, ki_gain, kb_gain, kd_gain,
+                 ee->v_log.gain_zz, ee->v_log.gain_z);
   }
   if (w_reset_ == 0 || !motor_en_) {
     ee->w.error_i = ee->w.error_d = 0;
@@ -1578,17 +1582,31 @@ ControlLaw::summation_duty() {
     } else if (ABS(tgt_val_->ego_in.v) > 1.0f) {
       // mpc_tgt_calc.cpp(Simulink自動生成)のsign()実装が、入力がちょうど
       // 0.0fを跨ぐ瞬間だけ0を返す仕様のため、走行中でも数tickおきに
-      // ff_front_torque/ff_friction_torque_r/lが瞬間的に0へ落ちる
-      // チャタリングを確認(20260904_171508.csv)。走行中(v>1)に限り、
-      // 直前値が非ゼロだったのに今回だけ厳密に0.0fになった場合は
-      // 直前値を保持してこの瞬間的な落ち込みを吸収する。
-      if (ff_front2 == 0.0f && ff_front_torque_prev_ != 0.0f) {
+      // ff_friction_torque_r/lが瞬間的に0へ落ちるチャタリングを確認
+      // (20260904_171508.csv)。直前値が非ゼロだったのに今回だけ厳密に
+      // 0.0fになった場合は直前値を保持してこの瞬間的な落ち込みを吸収する。
+      //
+      // 2026-09-05: ただし「本当に0が正しい」ケースまで保持してしまうと、
+      // 直前の非ゼロ値を永久にラッチしたままになる。実際の式は
+      //   ff_front_torque      = Mass * accl * (tire/2)      (sign()を含まない)
+      //   ff_friction_torque_x = sign(v_x)*coulomb + v_x*viscous
+      // なので、それぞれ accl / ideal_v_x がゼロなら 0 が正解。
+      // 保持対象を「元の入力が非ゼロなのに出力だけ0になった」場合に限定する。
+      // 元の 20260904_171508.csv でも 0 に落ちていたのは ff_friction_torque_r
+      // だけ(idx53)で、ff_front_torque が 0 だったのは accl==0 の定速巡航中
+      // だったため。この誤保持で v=400mm/s 定速中に ff_front_torque=0.000527
+      // (=+0.27V, duty約2%)が1627tick張り付き、I項が-0.34Vでそれを打ち消して
+      // いた(20260905_045305.csv)。
+      if (ABS(tgt_val_->ego_in.accl) > 1.0f && ff_front2 == 0.0f &&
+          ff_front_torque_prev_ != 0.0f) {
         ff_front2 = ff_front_torque_prev_;
       }
-      if (ff_friction_r == 0.0f && ff_friction_torque_r_prev_ != 0.0f) {
+      if (ABS(trj_->ideal_v_r) > 1.0f && ff_friction_r == 0.0f &&
+          ff_friction_torque_r_prev_ != 0.0f) {
         ff_friction_r = ff_friction_torque_r_prev_;
       }
-      if (ff_friction_l == 0.0f && ff_friction_torque_l_prev_ != 0.0f) {
+      if (ABS(trj_->ideal_v_l) > 1.0f && ff_friction_l == 0.0f &&
+          ff_friction_torque_l_prev_ != 0.0f) {
         ff_friction_l = ff_friction_torque_l_prev_;
       }
     }
