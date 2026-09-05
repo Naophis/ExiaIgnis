@@ -851,11 +851,16 @@ DiagonalWallOffStrategy &WallOffController::get_left_dia_strategy() {
                se->ego.right45_dist < param->dia_turn_th_r && valid_right90;
       },
       // detect_wall_off_exist
+      // 2026-09-05: 直進側のdetect_wall_off(get_right_strategy()参照)と同じ
+      // 理由・同じ形で、絶対しきい値(noexist_dia_th_l)にsen.l45.sensor_dist
+      // 基準の相対偏差をORで追加。姿勢依存の検出遅れ/ばらつきを避ける。
       [this]() -> bool {
         const auto p_wall_off = get_wall_off_param();
         const auto se = get_sensing_entity();
-        return (se->ego.left45_dist > p_wall_off.noexist_dia_th_l &&
-                se->ego.left45_dist_diff > 0) &&
+        return ((se->ego.left45_dist > p_wall_off.noexist_dia_th_l) ||
+                (se->ego.left45_dist >
+                 se->sen.l45.sensor_dist + p_wall_off.exist_delta_dia_l)) &&
+               se->ego.left45_dist_diff > 0 &&
                (se->ego.left45_dist_diff > p_wall_off.div_th_dia_l &&
                 se->ego.left45_2_dist_diff > 0 &&
                 se->ego.left45_dist < 100);
@@ -922,11 +927,15 @@ DiagonalWallOffStrategy &WallOffController::get_right_dia_strategy() {
                se->ego.left45_dist < param->dia_turn_th_l && valid_left90;
       },
       // detect_wall_off_exist
+      // 2026-09-05: 左側と同様、絶対しきい値にsen.r45.sensor_dist基準の
+      // 相対偏差をORで追加(理由はget_left_dia_strategy()参照)。
       [this]() -> bool {
         const auto p_wall_off = get_wall_off_param();
         const auto se = get_sensing_entity();
-        return (se->ego.right45_dist > p_wall_off.noexist_dia_th_r &&
-                se->ego.right45_dist_diff > 0) &&
+        return ((se->ego.right45_dist > p_wall_off.noexist_dia_th_r) ||
+                (se->ego.right45_dist >
+                 se->sen.r45.sensor_dist + p_wall_off.exist_delta_dia_r)) &&
+               se->ego.right45_dist_diff > 0 &&
                (se->ego.right45_dist_diff > p_wall_off.div_th_dia_r &&
                 se->ego.right45_2_dist_diff > 0 &&
                 se->ego.right45_dist < 100);

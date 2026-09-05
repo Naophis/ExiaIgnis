@@ -510,6 +510,12 @@ typedef struct {
   float noexist_dia_th_r;
   float noexist_dia_th_l2;
   float noexist_dia_th_r2;
+  // detect_wall_off_exist(斜めexist=true側)にsen.l45/r45.sensor_dist基準の
+  // 相対偏差をORで追加(2026-09-05)。noexist_dia_th_l/rの絶対値のみだと
+  // 直進側で既に確認済みの姿勢依存の検出遅れ/ばらつきが同様に起こりうる。
+  // exist_delta_l/r(直進側)と同じ考え方、値は要実機検証の初期値。
+  float exist_delta_dia_l = 5.0f;
+  float exist_delta_dia_r = 5.0f;
 
   float wall_off_exist_wall_th_l;
   float wall_off_exist_wall_th_r;

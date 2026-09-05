@@ -199,6 +199,8 @@ inline void convertToJson(const wall_off_hold_dist_t& src, JsonVariant dst) {
     dst["noexist_dia_th_r"]            = src.noexist_dia_th_r;
     dst["noexist_dia_th_l2"]           = src.noexist_dia_th_l2;
     dst["noexist_dia_th_r2"]           = src.noexist_dia_th_r2;
+    dst["exist_delta_dia_l"]           = src.exist_delta_dia_l;
+    dst["exist_delta_dia_r"]           = src.exist_delta_dia_r;
     dst["wall_off_exist_wall_th_l"]    = src.wall_off_exist_wall_th_l;
     dst["wall_off_exist_wall_th_r"]    = src.wall_off_exist_wall_th_r;
     dst["wall_off_exist_dia_wall_th_l"] = src.wall_off_exist_dia_wall_th_l;

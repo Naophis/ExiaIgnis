@@ -430,6 +430,10 @@ inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
     from_json_field(src, "wall_off_hold_noexist_dia_th_l2",   dst.noexist_dia_th_l2);
     from_json_field(src, "noexist_dia_th_r2",                 dst.noexist_dia_th_r2);
     from_json_field(src, "wall_off_hold_noexist_dia_th_r2",   dst.noexist_dia_th_r2);
+    from_json_field(src, "exist_delta_dia_l",                 dst.exist_delta_dia_l);
+    from_json_field(src, "wall_off_hold_exist_delta_dia_l",   dst.exist_delta_dia_l);
+    from_json_field(src, "exist_delta_dia_r",                 dst.exist_delta_dia_r);
+    from_json_field(src, "wall_off_hold_exist_delta_dia_r",   dst.exist_delta_dia_r);
     from_json_field(src, "wall_off_exist_wall_th_l",          dst.wall_off_exist_wall_th_l);
     from_json_field(src, "wall_off_exist_wall_th_r",          dst.wall_off_exist_wall_th_r);
     from_json_field(src, "wall_off_exist_dia_wall_th_l",      dst.wall_off_exist_dia_wall_th_l);

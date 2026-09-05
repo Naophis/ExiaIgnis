@@ -175,9 +175,14 @@ wall_off_hold_exist_dist_dia_r: 39
 # 壁切れ Out(斜め)
 wall_off_hold_noexist_dia_th_l: 40
 wall_off_hold_noexist_dia_th_r: 40
+# 壁切れ Out(斜め、相対偏差版。2026-09-05〜絶対値とORで併用。直進側の
+# exist_delta_l/rと同じ理由(wall_off_controller.cppのdetect_wall_off_exist
+# コメント参照)。値は直進側と同じ初期値から開始、要実機検証。
+wall_off_hold_exist_delta_dia_l: 5.0
+wall_off_hold_exist_delta_dia_r: 5.0
 # 壁切れ オフセット距離
-wall_off_hold_dist_dia_l: 4.5
-wall_off_hold_dist_dia_r: 2.5
+wall_off_hold_dist_dia_l: 7.0
+wall_off_hold_dist_dia_r: 4.0
 #斜め壁切れ時のmax接近距離
 # dia_wall_off_ref_l: 35.0
 # dia_wall_off_ref_r: 32.0
