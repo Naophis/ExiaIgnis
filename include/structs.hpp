@@ -486,6 +486,13 @@ typedef struct {
   float noexist_th_r;
   float noexist_th_l2;
   float noexist_th_r2;
+  // sen.l45/r45.sensor_dist(壁に最も寄った時の最小値保持)からの相対偏差
+  // でexist=true側の壁切れを判定するしきい値[mm]。noexist_th_l/rの絶対値
+  // 判定は壁までの距離(=姿勢/寄り)でベースラインが変わるぶんだけ検出が
+  // 遅れる/ばらつくため、2026-09-05の実測検証を経てこちらに置き換えた。
+  // exist=false側のdetect_wall_missing_by_deviation()と同じ考え方。
+  float exist_delta_l = 2.5f;
+  float exist_delta_r = 5.0f;
   float div_th_l;
   float div_th_r;
   float div_th_l2;
