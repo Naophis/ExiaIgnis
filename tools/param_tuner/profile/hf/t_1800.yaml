@@ -85,7 +85,7 @@ dia45:
   rad: 44.0
   # front: { left: 9.25716513994989235, right: 9.00716513994989235 }
   # back: { left: 40.07891890533133, right: 40.07891890533133 }
-  front: { left: 12.225, right: 3.225 }
+  front: { left: 10.225, right: 4.725 }
   back: { left: 38.298, right: 38.298 }
 # 2026-09-05: dia45と同じ理由で pow_n 4 -> 2。
 #   n=4 rad=60: alpha=6652 FF=86.7% a_lat=5.50G

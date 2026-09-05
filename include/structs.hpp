@@ -588,6 +588,58 @@ typedef struct {
   float slew = 0.0f;
 } turn_end_brake_t;
 
+// 走り出し姿勢リセット(start_align、2026-09-06)。吸引ランプ中のhold()で
+// 機体が物理的に1〜2°回ったまま走行を開始すると(20260906_034820.csv:
+// 走り出し直後に壁PDが機体を右へ約2°戻している間、ジャイロ積分の
+// ego_in.ang/kim.thetaは逆に-1.9°へ育ち、以後その分だけ角度目標がずれた
+// まま走り続ける)、angle_pidが偽の-1.9°を戻そうとし壁PDのduty_senが
+// それを打ち消す均衡(横に約1mmずれた位置で走る)になり、旋回もその
+// ずれた座標系で実行される。壁追従が収束した時点(=壁と平行)を「向き0」
+// の絶対基準として、ego_in.ang/kim.theta/global_pos.ang/各積分を一度だけ
+// ゼロへ再アンカーする(control_law.cpp update_start_align()参照)。
+// 判定: 非探索のSTRAIGHTで壁を見ている間、ヘディング(ego_in.ang)の変化が
+// ang_th[deg]以内かつ壁誤差(sen.error_p)の変化がerr_th[mm]以内の状態が
+// ticks回連続したら発火。motor_en立ち上がり(走行開始)で武装し、一度
+// 発火したらその走行中は再発火しない。
+typedef struct {
+  int enable = 0;
+  int ticks = 15;       // 連続tick数(1kHz)
+  // 窓の最小走行距離[mm]。低速発進(v=240mm/s等)では15tickが4mm弱しか進まず
+  // 壁PDがまだゆっくり向きを変えている途中で発火しうるため、tick数と
+  // 距離の両方を満たすまで待つ。0で距離条件なし。
+  float dist_mm = 20.0f;
+  float ang_th = 0.25f; // ヘディング変化しきい値[deg]
+  float err_th = 0.5f;  // 壁誤差変化しきい値[mm]
+  // 走行開始からこの距離[mm](global_pos.dist)までは、calc_sensor_pid()の
+  // 「壁を新規検出した瞬間にego_in.ang=0へスナップ」を止める。走り出し
+  // 1tick目で必ず壁を新規検出するため、このスナップがhold残差(unhold時の
+  // ang、20260906_0439xx.csv: +0.39〜+0.63°)を0に上書きし、kim.thetaだけ残差
+  // を持ち越す食い違いを作っていた(idx2451→2452でang 0.44→-0.02、kimは
+  // 0.64のまま)。start_alignが未発火の間だけ、かつこの距離内だけ止める
+  // (それ以降は従来通りドリフト補正として働く)。0で従来通り。
+  float snap_skip_dist = 360.0f;
+} start_align_t;
+
+// hold()の吸引プラトー後の待ち時間を「向きが収束するまで(上限付き)」に
+// する(2026-09-06)。従来はsleep_ms(2450/2500)固定で、プラトー中にファンの
+// 突発トルクで動いた場合(20260906_045232.csv: idx2160前後で+0.4°動き、残り
+// 0.2秒ではI項が育ち切らず+0.25°を残してunhold)に取り返せなかった。
+// min_msは従来の固定待ちと同じ(ここまでは無条件に待つ)。その後、
+// |kim_theta|<ang_th[deg]がstable_ms連続したら抜ける。max_msで打ち切り。
+// 実際に待った時間はmotion_tgt_val_t::hold_settle_msに残す。
+typedef struct {
+  int min_ms = 2450;
+  int max_ms = 3500;
+  float ang_th = 0.15f;
+  int stable_ms = 300;
+  // 判定に使うkim_thetaの1次LPF時定数[ms](Core0側10ms周期で更新)。0で生値。
+  // 2026-09-06 04:58-05:01: 生値・0.1°判定だと機体が固着せず±0.2°程度
+  // 揺れ続けるrun(20260906_050006.csv)や角度ジッタの大きいrunで
+  // 300ms連続が成立せずmax_msまで待った(4.5s/3.55s)。揺れ続ける機体は
+  // 待っても収まらないので、100msのLPFで揺れを均した値で判定して抜ける。
+  int lp_ms = 100;
+} hold_settle_t;
+
 // 旋回角度不足(SLALOM/SLA_BACK_STR)への追加角度フィードバック(2026-08-23)。
 // ee->ang.i_bias(=img_ang-kim.theta、calc_angle_i_bias()参照)は実測との
 // ズレを正しい符号・大きさで検出できている(20260823_040833.csv解析:
@@ -813,6 +865,32 @@ typedef struct {
   // (control_law.cpp calc_angle_velocity_ctrl()参照)。時間さえかければ
   // 定常偏差をゼロへ追い込める。初期値は暫定、要実機チューニング。
   float hold_ang_i_gain = 0.02;
+  // 2026-09-06: hold中のI項を「動いたらリセット」する(reset-on-move)。
+  // 吸引プラトー後は吸引スカートの摩擦で機体が固着し、差動duty±6〜8%を
+  // 出しても動かない(20260905_22xx-23xx.csv、hold_ang_gain=0.06/4.0どちらも
+  // 残留0.2〜0.8°)。従来のI(0.04)はこの固着を破る水準に達するまで数十秒
+  // かかり実質無効だった。I項をスティクション破り用のランプとして使う:
+  // 固着中は積分が育ちdutyが増え、機体が動いた瞬間に積分を0へ戻す→dutyが
+  // 落ちて機体は小さく回って再び固着→残差が小さくなるほどランプは遅くなり
+  // 収束する。
+  // 「動いた」判定は角度で行う: 積分開始(または前回リセット)時点の
+  // kim.thetaを基準に、|kim.theta-基準|がこの値[deg]を超えたらリセット。
+  // 当初は|w_lp|>0.1rad/sで判定していたが、吸引プラトー中は機体が固着して
+  // いてもファン振動でw_lpが±0.25rad/s(std)揺れ、プラトーの78〜97%のtickで
+  // リセットが掛かって積分が一切育たなかった(20260906_0439xx-0441xx.csv、
+  // ang_pid_i_v=0のまま)。角度(ang/kim.theta)の振動振幅はstd0.02°/p99 0.06°
+  // なのでこちらで判定する。0で無効(常時積分)。
+  float hold_ang_i_reset_ang_th = 0;
+  // 上の「動いた」判定に使うkim.thetaの1次LPF時定数[ms]。0で生値。
+  // 2026-09-06 04:58-05:01: 生値判定だと、角度振動の大きいrun(プラトー中の
+  // |kim-移動平均| p99 0.08°、20260906_050006/045232.csv)で数tickおきに
+  // リセットが掛かり(30tickに6回)I項が育たなかった。固着破りのクリープは
+  // 0.2°/130tick程度と遅いので50msのLPFで十分追従する。
+  float hold_ang_i_reset_lp_ms = 0;
+  // hold中のI項出力の上限[duty%](summation_duty()の変換で換算)。0で無効。
+  float hold_ang_i_max_duty = 0;
+  hold_settle_t hold_settle;
+  start_align_t start_align;
   float search_sen_ctrl_limitter = 1;
   // v > accl_param.limit(5500固定, motion_planning.cpp/planning_task.cpp)
   // 域での加減速ソフトスタート用パラメータ。mpc_tgt_calc.cppのdecel/accl
@@ -1261,6 +1339,12 @@ typedef struct {
   // トルクのような持続的な外乱をP制御だけでは消しきれなかったため追加、
   // [[project_dia45_lr_asymmetry_2026-09-05]]参照)。
   volatile bool hold_active = false;
+  // start_align(走り出し姿勢リセット、control_law.cpp update_start_align())
+  // の発火回数と、発火時に捨てた角度[rad](Core0側の確認用)。
+  volatile int start_align_count = 0;
+  volatile float start_align_ang = 0;
+  // hold_settle_wait()が実際に待った時間[ms](Core0確認用)。
+  volatile int hold_settle_ms = 0;
 } motion_tgt_val_t;
 
 typedef struct {

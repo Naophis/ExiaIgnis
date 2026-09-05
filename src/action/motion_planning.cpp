@@ -399,6 +399,35 @@ void MotionPlanning::hold() {
   pt->send_command(*tgt_val);
 }
 
+void MotionPlanning::hold_settle_wait() {
+  const auto &hs = param->hold_settle;
+  const float th = hs.ang_th / 180.0f * M_PI;
+  // 判定は10ms周期の1次LPF(時定数lp_ms)を掛けたkim_thetaで行う
+  // (structs.hpp hold_settle_t::lp_msのコメント参照)。
+  const float alpha =
+      hs.lp_ms > 0 ? std::min(1.0f, 10.0f / (float)hs.lp_ms) : 1.0f;
+  float kim_lp = sensing_result->ego.kim_theta;
+  int t = 0;
+  int stable = 0;
+  while (true) {
+    sleep_ms(10);
+    t += 10;
+    kim_lp += (sensing_result->ego.kim_theta - kim_lp) * alpha;
+    if (std::abs(kim_lp) < th) {
+      stable += 10;
+    } else {
+      stable = 0;
+    }
+    if (t >= hs.min_ms && stable >= hs.stable_ms) {
+      break;
+    }
+    if (t >= hs.max_ms) {
+      break;
+    }
+  }
+  tgt_val->hold_settle_ms = t;
+}
+
 __attribute__((noinline, section(".time_critical.motion_planning")))
 void MotionPlanning::unhold() {
   tgt_val->hold_active = false;
@@ -1439,9 +1468,20 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
     while (pt->is_suction_ramping()) {
       sleep_ms(10);
     }
-    sleep_ms(2500);
+    hold_settle_wait();
     unhold();
   }
+  // 2026-09-06: hold中に残った向き(ジャイロ積分ego_in.ang、hold開始時の
+  // reset_ego_data()基準=置いた向き)を走行へ引き継ぐ。従来は直後の
+  // reset_ego_data()で ego_in.ang=0 に戻していたため、hold中に物理的に回った
+  // 分(20260906_0424xx.csv: unhold時kim_theta=-0.48〜+0.38°)を「向き0」と
+  // 宣言して走り出し、angle_pidはそのズレを知らず壁PDだけが後追いで直す
+  // 形になっていた(kim.thetaはリセットされないので、angとkimの座標系も
+  // ここで食い違っていた)。残留分をangへ戻して、走り出しの瞬間から
+  // angle_pidがhold残差を打ち消す方向へ働くようにする。壁基準の再アンカー
+  // (start_align、control_law.cpp)は、この後さらに壁追従が収束した時点で
+  // ジャイロに見えないズレ(置き方等)を吸収する二段構え。
+  const float hold_residual_ang = tgt_val->ego_in.ang;
   if (param->fast_log_enable > 0) {
     tgt_val->global_pos.ang = 0;
     tgt_val->global_pos.dist = 0;
@@ -1453,6 +1493,8 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
   reset_tgt_data();
   reset_ego_data();
   pt->motor_enable();
+  tgt_val->ego_in.ang = hold_residual_ang;
+  tgt_val->global_pos.ang = hold_residual_ang;
   auto path_size = pc->path_s.size();
   for (int i = 0; i < path_size; i++) {
     float dist = 0.5 * pc->path_s[i] - 1;

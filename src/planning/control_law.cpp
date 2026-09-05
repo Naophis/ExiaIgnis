@@ -31,6 +31,19 @@ ControlLaw::calc(bool motor_en, bool suction_en, bool search_mode,
   last_tgt_angle_ = last_tgt_angle;
   dt_ = dt;
 
+  // 2026-09-06: 走行開始(motor_enの立ち上がり)で走り出し姿勢リセットを武装
+  // する(update_start_align()参照)。path_run()はhold()の前と後で
+  // motor_enable()を呼ぶが、Core1側のmotor_enは最初の呼び出しでtrueになった
+  // まま維持されるため立ち上がりは走行あたり一度だけ。
+  if (motor_en_ && !motor_en_prev_) {
+    start_align_pending_ = true;
+    start_align_cnt_ = 0;
+  } else if (!motor_en_) {
+    start_align_pending_ = false;
+    start_align_cnt_ = 0;
+  }
+  motor_en_prev_ = motor_en_;
+
   const bool ctl_log = (g_ctl_debug_ticks > 0);
   if (ctl_log)
     g_irq_log.push("Ca"); // calc() start, before axel_degenerate block
@@ -282,11 +295,22 @@ ControlLaw::calc_sensor_pid() {
   // (壁と正対しているはず、という前提)にego_in.ang/global_pos.angを
   // ゼロへスナップし、それまでのドリフト蓄積をリセットする。
   const bool wall_found_now = (type == SensingControlType::Wall);
-  if (wall_found_now && !wall_found_prev_) {
+  // 2026-09-06: 走り出し直後はこのスナップを止める(structs.hpp
+  // start_align_t::snap_skip_distのコメント参照)。走行1tick目で必ず壁を
+  // 新規検出するため、hold中に残った向き(unhold時のang)をここで0に上書き
+  // してしまい、kim.thetaだけが残差を持ち越す食い違いになっていた
+  // (20260906_0439xx.csv idx2451→2452)。start_align未発火かつ走行開始から
+  // snap_skip_dist以内のときだけ抑止し、それ以外は従来通り。
+  const bool skip_snap =
+      param_->start_align.enable > 0 && start_align_pending_ &&
+      !search_mode_ &&
+      tgt_val_->global_pos.dist < param_->start_align.snap_skip_dist;
+  if (wall_found_now && !wall_found_prev_ && !skip_snap) {
     tgt_val_->ego_in.ang = 0;
     tgt_val_->global_pos.ang = 0;
   }
   wall_found_prev_ = wall_found_now;
+  update_start_align(type);
 
   if (search_mode_) {
     if (ee->sen.error_p > param_->search_sen_ctrl_limitter) {
@@ -404,6 +428,79 @@ ControlLaw::calc_sensor_pid() {
     }
   }
   return duty;
+}
+
+// 走り出し姿勢リセット(start_align、2026-09-06)。structs.hpp start_align_t
+// のコメント参照。calc_sensor_pid()からtype確定後に毎tick呼ばれる。
+//
+// 「壁追従が収束した」= 壁を見ている状態で、ヘディング(ego_in.ang)の変化
+// と壁誤差(sen.error_p)の変化がどちらもしきい値以内でticks回連続。壁との
+// 距離が一定でヘディングも一定なら機体は壁と平行(=迷路座標で向き0)と
+// みなせるので、その瞬間にジャイロ積分系の基準をゼロへ揃える。
+// ・ego_in.ang/ang_kf: angle_pid(img_ang+duty_sen-ang_kf)の実測側。ここに
+//   残っていた偽の角度(20260906_034820.csvでは-1.9°)が、angle_pidと壁PDが
+//   互いに打ち消し合う均衡(横に約1mmずれて走る)の原因だった。
+// ・kim.theta: 2D Kanayama(SLALOM/SLA_BACK_STR)とang.i_bias(kc_gain,
+//   turn_angle_fb.w_gain)の実測側。既存の壁検出スナップ(上のwall_found)
+//   はang側しか触らないため、両者が食い違うのを避ける意味でも揃える。
+// ・積分(w.error_i/ang.error_i/sen.error_i等): 偽の角度を打ち消すために
+//   育っていた分をclear_dist再アンカー(check_sen_error())と同様に捨てる。
+// 発火は走行あたり一度(motor_enの立ち上がりで再武装)。hold中はsct=NONEで
+// ここへ来ないため対象外。探索走行は既存のclear_dist再アンカーに任せる。
+void ControlLaw::update_start_align(SensingControlType type) {
+  if (!start_align_pending_ || search_mode_ ||
+      param_->start_align.enable <= 0) {
+    return;
+  }
+  const bool judging = tgt_val_->motion_type == MotionType::STRAIGHT &&
+                       type == SensingControlType::Wall &&
+                       !tgt_val_->hold_active && tgt_val_->ego_in.v > 10.0f;
+  if (!judging) {
+    start_align_cnt_ = 0;
+    start_align_dist_ = 0;
+    return;
+  }
+  const float ang = tgt_val_->ego_in.ang;
+  const float err = ee->sen.error_p;
+  if (start_align_cnt_ == 0) {
+    start_align_ang0_ = ang;
+    start_align_err0_ = err;
+    start_align_dist_ = 0;
+  }
+  const float ang_th = param_->start_align.ang_th / 180.0f * M_PI;
+  if (ABS(ang - start_align_ang0_) > ang_th ||
+      ABS(err - start_align_err0_) > param_->start_align.err_th) {
+    // 窓をやり直す(次tickで現在値を窓の基準に取り直す)
+    start_align_cnt_ = 0;
+    start_align_dist_ = 0;
+    return;
+  }
+  start_align_cnt_++;
+  start_align_dist_ += ABS(tgt_val_->ego_in.v) * dt_;
+  if (start_align_cnt_ < param_->start_align.ticks ||
+      start_align_dist_ < param_->start_align.dist_mm) {
+    return;
+  }
+
+  // 再アンカー: 現在の向きを迷路座標の0とする
+  const float ang_before = tgt_val_->ego_in.ang;
+  tgt_val_->ego_in.ang = 0;
+  tgt_val_->global_pos.ang = 0;
+  sensing_result_->ego.ang_kf = 0;
+  sensing_result_->ego.ang_kf2 = 0;
+  ego_->kf_ang.offset(-ang_before);
+  ego_->kim.theta = 0;
+  ee->ang.error_i = ee->ang.error_d = ee->ang.error_dd = 0;
+  ee->ang.i_slow = ee->ang.i_bias = 0;
+  ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;
+  ee->w_kf.error_i = ee->w_kf.error_d = ee->w_kf.error_dd = 0;
+  ee->sen.error_i = 0;
+  tgt_val_->start_align_count = tgt_val_->start_align_count + 1;
+  tgt_val_->start_align_ang = ang_before;
+
+  start_align_pending_ = false;
+  start_align_cnt_ = 0;
+  start_align_dist_ = 0;
 }
 
 __attribute__((noinline, section(".time_critical.control_law"))) float
@@ -1452,10 +1549,52 @@ ControlLaw::calc_angle_velocity_ctrl() {
     // (STRAIGHT区間はduty_roll側の他ループとの相互作用を避けるため対象外の
     // まま)。
     if (tgt_val_->hold_active) {
-      hold_ang_integral_ += ee->ang.i_bias * dt_;
+      // 2026-09-06: reset-on-move + duty上限(structs.hpp
+      // hold_ang_i_reset_ang_thのコメント参照)。吸引プラトー後は吸引スカート
+      // の摩擦で機体が固着し、差動duty±6〜8%では動かない(20260905_22xx-23xx
+      // .csv、P=0.06でも4.0でも残留0.2〜0.8°)ため、I項は「固着を破るまで
+      // ランプ→動いたら捨てる」スティクション破りとして働かせる。
+      // 「動いた」は角度で判定する。当初|w_lp|>0.1rad/sで判定したが、固着中
+      // でもファン振動でw_lpが±0.25rad/s揺れ、プラトーの78〜97%のtickで
+      // リセットが掛かり積分が育たなかった(20260906_0439xx-0441xx.csv)。
+      const float kim_theta_raw = ego_->kim.theta;
+      if (!hold_active_prev_) {
+        hold_kim_lp_ = kim_theta_raw;
+        hold_i_ang_ref_ = kim_theta_raw;
+        hold_ang_integral_ = 0.0f;
+      }
+      // 判定用LPF(structs.hpp hold_ang_i_reset_lp_msのコメント参照)。
+      // 角度ジッタの大きいrunで生値判定が数tickおきにリセットを掛けて
+      // I項が育たなかったため、揺れを均してから動き量を見る。
+      if (param_->hold_ang_i_reset_lp_ms > 0) {
+        const float alpha = std::min(
+            1.0f, dt_ * 1000.0f / param_->hold_ang_i_reset_lp_ms);
+        hold_kim_lp_ += (kim_theta_raw - hold_kim_lp_) * alpha;
+      } else {
+        hold_kim_lp_ = kim_theta_raw;
+      }
+      const float reset_th =
+          param_->hold_ang_i_reset_ang_th / 180.0f * M_PI;
+      if (reset_th > 0 && ABS(hold_kim_lp_ - hold_i_ang_ref_) > reset_th) {
+        hold_ang_integral_ = 0.0f;
+        hold_i_ang_ref_ = hold_kim_lp_;
+      } else {
+        hold_ang_integral_ += ee->ang.i_bias * dt_;
+      }
+      if (param_->hold_ang_i_max_duty > 0 && param_->hold_ang_i_gain > 0 &&
+          param_->Resist > 0) {
+        // duty%→トルク単位(summation_duty()のtorque_mode==2変換の逆)
+        const float km_gear = param_->Km * (param_->gear_a / param_->gear_b);
+        const float i_max_torque = param_->hold_ang_i_max_duty / 100.0f *
+                                   se->ego.battery_lp * km_gear /
+                                   param_->Resist;
+        const float i_max = i_max_torque / param_->hold_ang_i_gain;
+        hold_ang_integral_ = std::clamp(hold_ang_integral_, -i_max, i_max);
+      }
     } else {
       hold_ang_integral_ = 0.0f;
     }
+    hold_active_prev_ = tgt_val_->hold_active;
     const float hold_kc_i_gain = param_->hold_ang_i_gain * hold_ang_integral_;
     kc_gain += hold_kc_i_gain;
 

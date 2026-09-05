@@ -48,6 +48,9 @@ public:
   // 実走行前に元のゲインへ戻す責任を持つこと。
   void hold();
   void unhold();
+  // 吸引プラトー後、向き(kim_theta)が収束するまで待つ(上限付き、
+  // structs.hpp hold_settle_t参照)。hold()〜unhold()の間で呼ぶ。
+  void hold_settle_wait();
   MotionResult pivot_turn(param_roll_t &p);
   void normal_slalom(param_normal_slalom_t &p, param_straight_t &p_str);
 

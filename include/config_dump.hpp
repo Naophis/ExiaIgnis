@@ -253,6 +253,23 @@ inline void convertToJson(const turn_end_brake_t& src, JsonVariant dst) {
     dst["slew"]   = src.slew;
 }
 
+inline void convertToJson(const hold_settle_t& src, JsonVariant dst) {
+    dst["min_ms"]    = src.min_ms;
+    dst["max_ms"]    = src.max_ms;
+    dst["ang_th"]    = src.ang_th;
+    dst["stable_ms"] = src.stable_ms;
+    dst["lp_ms"]     = src.lp_ms;
+}
+
+inline void convertToJson(const start_align_t& src, JsonVariant dst) {
+    dst["enable"] = src.enable;
+    dst["ticks"]  = src.ticks;
+    dst["dist_mm"] = src.dist_mm;
+    dst["ang_th"] = src.ang_th;
+    dst["err_th"] = src.err_th;
+    dst["snap_skip_dist"] = src.snap_skip_dist;
+}
+
 inline void convertToJson(const turn_angle_fb_t& src, JsonVariant dst) {
     dst["enable"] = src.enable;
     dst["gain"]   = src.gain;
@@ -366,6 +383,11 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["sakiyomi_time"]            = src.sakiyomi_time;
     dst["hold_ang_gain"]            = src.hold_ang_gain;
     dst["hold_ang_i_gain"]          = src.hold_ang_i_gain;
+    dst["hold_ang_i_reset_ang_th"]  = src.hold_ang_i_reset_ang_th;
+    dst["hold_ang_i_reset_lp_ms"]   = src.hold_ang_i_reset_lp_ms;
+    dst["hold_ang_i_max_duty"]      = src.hold_ang_i_max_duty;
+    dst["hold_settle"]              = src.hold_settle;
+    dst["start_align"]              = src.start_align;
     dst["search_sen_ctrl_limitter"] = src.search_sen_ctrl_limitter;
     dst["decel_delay_cnt"]          = src.decel_delay_cnt;
     dst["decel_delay_n"]            = src.decel_delay_n;

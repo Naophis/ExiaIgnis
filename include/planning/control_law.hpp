@@ -147,6 +147,21 @@ private:
   // hold_active(MotionPlanning::hold())専用の角度積分I項(2026-09-05)。
   // hold_active開始でゼロクリア、control_law.cpp calc_angle_velocity_ctrl()参照。
   float hold_ang_integral_ = 0.0f;
+  // reset-on-move用: 積分開始/前回リセット時点のkim.theta[rad]と、
+  // hold_activeの立ち上がり検出用の前tick値(structs.hpp
+  // hold_ang_i_reset_ang_thのコメント参照)。
+  float hold_i_ang_ref_    = 0.0f;
+  float hold_kim_lp_       = 0.0f; // 判定用にLPFしたkim.theta[rad]
+  bool  hold_active_prev_  = false;
+  // 走り出し姿勢リセット(start_align、2026-09-06、structs.hpp start_align_t
+  // 参照)。motor_enの立ち上がりで武装し、壁追従が収束したらego_in.ang/
+  // kim.theta等を一度だけゼロへ再アンカーする(update_start_align()参照)。
+  bool  motor_en_prev_       = false;
+  bool  start_align_pending_ = false;
+  int   start_align_cnt_     = 0;
+  float start_align_dist_    = 0.0f; // 判定窓内の走行距離[mm]
+  float start_align_ang0_    = 0.0f; // 判定窓開始時のego_in.ang
+  float start_align_err0_    = 0.0f; // 判定窓開始時のsen.error_p
   // ego_in.ang(=生ジャイロ積分ヘディング、sensing_task.cpp calc_vel()
   // 参照)は壁を検出していない間は無補正でドリフトし続ける。壁を新規に
   // 検出した瞬間(calc_sensor_pid()参照)にゼロクリアして、信頼できる基準
@@ -209,6 +224,7 @@ private:
   void  check_fail_safe();
   float calc_sensor_pid();
   float calc_sensor_pid_dia();
+  void  update_start_align(SensingControlType type);
   float check_sen_error(SensingControlType &type);
   float check_sen_error_dia(SensingControlType &type);
   void  check_left_sensor_error(float &error, int &check,

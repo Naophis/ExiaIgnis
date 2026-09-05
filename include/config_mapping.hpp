@@ -500,6 +500,23 @@ inline void convertFromJson(JsonVariantConst src, turn_end_brake_t& dst) {
     from_json_field(src, "slew", dst.slew);
 }
 
+inline void convertFromJson(JsonVariantConst src, hold_settle_t& dst) {
+    from_json_field(src, "min_ms", dst.min_ms);
+    from_json_field(src, "max_ms", dst.max_ms);
+    from_json_field(src, "ang_th", dst.ang_th);
+    from_json_field(src, "stable_ms", dst.stable_ms);
+    from_json_field(src, "lp_ms", dst.lp_ms);
+}
+
+inline void convertFromJson(JsonVariantConst src, start_align_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "ticks", dst.ticks);
+    from_json_field(src, "dist_mm", dst.dist_mm);
+    from_json_field(src, "ang_th", dst.ang_th);
+    from_json_field(src, "err_th", dst.err_th);
+    from_json_field(src, "snap_skip_dist", dst.snap_skip_dist);
+}
+
 inline void convertFromJson(JsonVariantConst src, turn_angle_fb_t& dst) {
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "gain", dst.gain);
@@ -661,6 +678,11 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "sakiyomi_time", dst.sakiyomi_time);
     from_json_field(src, "hold_ang_gain", dst.hold_ang_gain);
     from_json_field(src, "hold_ang_i_gain", dst.hold_ang_i_gain);
+    from_json_field(src, "hold_ang_i_reset_ang_th", dst.hold_ang_i_reset_ang_th);
+    from_json_field(src, "hold_ang_i_reset_lp_ms", dst.hold_ang_i_reset_lp_ms);
+    from_json_field(src, "hold_ang_i_max_duty", dst.hold_ang_i_max_duty);
+    from_json_nested(src, "hold_settle", dst.hold_settle);
+    from_json_nested(src, "start_align", dst.start_align);
     from_json_field(src, "search_sen_ctrl_limitter", dst.search_sen_ctrl_limitter);
     from_json_field(src, "decel_delay_cnt", dst.decel_delay_cnt);
     from_json_field(src, "decel_delay_n", dst.decel_delay_n);
