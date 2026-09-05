@@ -465,11 +465,21 @@ export function computeMotionTransitionEvents(
 // ほぼ区間先頭に一致するので同じロジックで両パターンをカバーできる。
 
 export interface WallOffEdgeOptions {
-  motionState: number;
+  // e.g. [6, 13] to overlay the straight (WALL_OFF) and diagonal
+  // (WALL_OFF_DIA) wall-off segments in the same pass.
+  motionStates: number[];
   baselineN?: number; // baseline = median of the N samples starting at the anchor (trough)
   armDelta?: number; // [mm] "noticed" once the sensor rises this far above baseline
-  fitLo?: number; // [mm] fit window lower bound, relative to baseline
-  fitHi?: number; // [mm] fit window upper bound, relative to baseline
+  fitLo?: number; // [mm] fit window lower bound, relative to baseline - state 6 (straight)
+  fitHi?: number; // [mm] fit window upper bound, relative to baseline - state 6 (straight)
+  // WALL_OFF_DIA (state 13) runs at ~5x the speed over a much longer segment
+  // (diagonal-cell pitch, not a single cell), so the same rise covers a much
+  // wider mm-of-value band - fitLo/fitHi above are tuned from state-6 data
+  // and are almost always too narrow for it (real deltas at trigger observed
+  // 6.8-29.3mm across 6 real DIA logs, vs ~1-6mm for state 6). Defaults to a
+  // separate, wider window unless overridden.
+  fitLoDia?: number;
+  fitHiDia?: number;
   minFitN?: number;
   medianWindow?: number; // smoothing window used only to locate the anchor (trough)
   existTh?: number; // [mm] a side's baseline must be below this to count as "a wall was seen"
@@ -482,6 +492,8 @@ const WALL_OFF_DEFAULTS = {
   armDelta: 1.0,
   fitLo: 1.0,
   fitHi: 5.0,
+  fitLoDia: 2.0,
+  fitHiDia: 20.0,
   minFitN: 3,
   medianWindow: 3,
   existTh: 70.0,
@@ -617,8 +629,9 @@ function interpolateAt(
   };
 }
 
-// Port of wall_off_edge_check.py: main. Per WALL_OFF (or WALL_OFF_DIA, via
-// `motionState`) segment, emits up to four markers per side:
+// Port of wall_off_edge_check.py: main. Per WALL_OFF/WALL_OFF_DIA segment
+// (whichever `motionStates` includes, e.g. [6, 13] for both at once), emits
+// up to four markers per side:
 //   - wall-off-anchor:  where the sensor got closest to the wall (the
 //                       "found it" moment - only interesting when it's not
 //                       right at the segment start, i.e. the not-yet-visible
@@ -633,8 +646,10 @@ function interpolateAt(
 export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: WallOffEdgeOptions): AnalysisEvent[] {
   const baselineN = opts.baselineN ?? WALL_OFF_DEFAULTS.baselineN;
   const armDelta = opts.armDelta ?? WALL_OFF_DEFAULTS.armDelta;
-  const fitLo = opts.fitLo ?? WALL_OFF_DEFAULTS.fitLo;
-  const fitHi = opts.fitHi ?? WALL_OFF_DEFAULTS.fitHi;
+  const fitLoStraight = opts.fitLo ?? WALL_OFF_DEFAULTS.fitLo;
+  const fitHiStraight = opts.fitHi ?? WALL_OFF_DEFAULTS.fitHi;
+  const fitLoDia = opts.fitLoDia ?? WALL_OFF_DEFAULTS.fitLoDia;
+  const fitHiDia = opts.fitHiDia ?? WALL_OFF_DEFAULTS.fitHiDia;
   const minFitN = opts.minFitN ?? WALL_OFF_DEFAULTS.minFitN;
   const medianWindow = opts.medianWindow ?? WALL_OFF_DEFAULTS.medianWindow;
   const existTh = opts.existTh ?? WALL_OFF_DEFAULTS.existTh;
@@ -642,7 +657,13 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
   const pointByRow = opts.pointByRow;
 
   const events: AnalysisEvent[] = [];
-  for (const [bStart, bEnd] of findBlocks(rows, opts.motionState)) {
+  const blocks = opts.motionStates.flatMap((state) =>
+    findBlocks(rows, state).map(([bStart, bEnd]) => ({ bStart, bEnd, state }))
+  );
+  for (const { bStart, bEnd, state } of blocks) {
+    const isDia = state === 13;
+    const fitLo = isDia ? fitLoDia : fitLoStraight;
+    const fitHi = isDia ? fitHiDia : fitHiStraight;
     const segRows = rows.slice(bStart, bEnd + 1);
     if (!("dist" in segRows[0]) || !("left45_d" in segRows[0]) || !("right45_d" in segRows[0])) continue;
 

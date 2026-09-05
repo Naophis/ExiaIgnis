@@ -121,7 +121,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
 
   // wall_off_edge_check.py 相当のオーバーレイ設定
   const [wallOffEnabled, setWallOffEnabled] = useState(false);
-  const [wallOffMotionState, setWallOffMotionState] = useState(6);
+  const [wallOffMotionStates, setWallOffMotionStates] = useState("6,13");
   const [wallOffBaselineN, setWallOffBaselineN] = useState(5);
   const [wallOffArmDelta, setWallOffArmDelta] = useState(1.0);
   const [wallOffFitLo, setWallOffFitLo] = useState(1.0);
@@ -227,8 +227,13 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
 
   const wallOffEvents = useMemo<AnalysisEvent[]>(() => {
     if (!wallOffEnabled || rawRows.length === 0) return [];
+    const motionStates = wallOffMotionStates
+      .split(",")
+      .map((s) => parseFloat(s.trim()))
+      .filter((n) => !Number.isNaN(n));
+    if (motionStates.length === 0) return [];
     return computeWallOffEdgeEvents(rawRows, {
-      motionState: wallOffMotionState,
+      motionStates,
       baselineN: wallOffBaselineN,
       armDelta: wallOffArmDelta,
       fitLo: wallOffFitLo,
@@ -238,7 +243,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   }, [
     rawRows,
     wallOffEnabled,
-    wallOffMotionState,
+    wallOffMotionStates,
     wallOffBaselineN,
     wallOffArmDelta,
     wallOffFitLo,
@@ -560,12 +565,12 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
           {wallOffEnabled && (
             <>
               <label className="flex items-center gap-1">
-                motion_state
+                motion_states
                 <input
-                  type="number"
-                  className="w-14 rounded border border-border bg-background px-1"
-                  value={wallOffMotionState}
-                  onChange={(e) => setWallOffMotionState(parseFloat(e.target.value))}
+                  type="text"
+                  className="w-16 rounded border border-border bg-background px-1"
+                  value={wallOffMotionStates}
+                  onChange={(e) => setWallOffMotionStates(e.target.value)}
                 />
               </label>
               <label className="flex items-center gap-1">
