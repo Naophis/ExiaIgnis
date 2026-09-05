@@ -196,6 +196,14 @@ typedef struct {
   volatile float left45_2_dist_diff = 0;
   volatile float left45_3_dist_diff = 0;
   volatile float right45_dist_diff = 0;
+  // 2026-09-05: 上の *_dist_diff は「1tickあたりの生の差分」なので、同じ壁
+  // エッジでも速度が半分になれば差分も半分になる。切れ目(kireme)判定は
+  // 走行距離あたりの変化率で見るべきなので、input_param_t::kireme_diff_v_ref
+  // を基準速度として正規化した値を別フィールドで持つ(生の差分は
+  // WallOffController が別途チューニングしたしきい値で使っているため変更
+  // しない)。kireme_diff_v_ref==0 のときは生の差分と同値。
+  volatile float left45_dist_diff_norm  = 0;
+  volatile float right45_dist_diff_norm = 0;
   volatile float right45_2_dist_diff = 0;
   volatile float right45_3_dist_diff = 0;
   volatile float left90_dist_diff = 0;
@@ -900,6 +908,19 @@ typedef struct {
   float sensor_range_mid_max = 150;
   float sensor_range_far_max = 150;
   float dist_mod_num = 90;
+  // 壁の切れ目(kireme)判定に使う *_dist_diff の速度正規化の基準速度[mm/s]。
+  // *_dist_diff は1tickあたりの生の差分なので、同じ壁エッジでも低速では
+  // 小さく出る(v=400mm/sなら1tickで0.4mmしか進まない)。kireme_*_fast /
+  // kireme_*_wall_off* は最短走行の速度域で合わせてあるため、低速直進では
+  // 実質無効になっていた(20260905_144848.csv: 切れ目で実測0.18mm/tick
+  // (最大0.42)に対し kireme_r_fast=1.25 が一度も発火せず、後退中の右壁が
+  // 有効なまま左右差が-5.5mmまで育ち duty_sen が±5°のレールに34tick
+  // 張り付いて発振した)。この速度で走っていたら差分がいくつになるかへ
+  // 換算する = 走行距離あたりの変化率で判定するのと等価。
+  // 探索走行は速度がほぼ一定でこの問題が起きないうえ kireme_r/l が
+  // 探索速度で調整済みのため、正規化は非探索(fast/wall_off)側にのみ効かせる。
+  // 0 なら無効(従来通り生の差分)。
+  float kireme_diff_v_ref = 0;
   float sen_ctrl_front_th = 45;
   float sen_ctrl_front_diff_th = 40;
   float th_offset_dist = 58;

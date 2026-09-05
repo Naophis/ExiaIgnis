@@ -139,6 +139,24 @@ void SensorProcessor::calc_dist() {
   se->ego.left90_dist_diff = se->ego.left90_dist - se->ego.left90_dist_old;
   se->ego.right90_dist_diff = se->ego.right90_dist - se->ego.right90_dist_old;
 
+  // 切れ目(kireme)判定用の速度正規化差分 (2026-09-05、structs.hpp
+  // input_param_t::kireme_diff_v_ref のコメント参照)。生の *_dist_diff は
+  // WallOffController が別しきい値で使っているので触らず、別フィールドに出す。
+  {
+    float gain = 1.0f;
+    const float v = std::fabs(tgt_val->ego_in.v);
+    // 停止付近は 1tick の移動量がゼロに近く、正規化すると差分が発散する。
+    // 走り出してから(v > kKiremeNormMinV)だけ有効にする。
+    constexpr float kKiremeNormMinV = 50.0f;   // mm/s
+    constexpr float kKiremeNormMaxGain = 10.0f;
+    if (param->kireme_diff_v_ref > 0 && v > kKiremeNormMinV) {
+      gain = std::clamp(param->kireme_diff_v_ref / v, 1.0f / kKiremeNormMaxGain,
+                        kKiremeNormMaxGain);
+    }
+    se->ego.left45_dist_diff_norm = se->ego.left45_dist_diff * gain;
+    se->ego.right45_dist_diff_norm = se->ego.right45_dist_diff * gain;
+  }
+
   calc_dist_diff();
 }
 

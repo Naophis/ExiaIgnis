@@ -765,6 +765,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "sensor_range_mid_max", dst.sensor_range_mid_max);
     from_json_field(src, "sensor_range_far_max", dst.sensor_range_far_max);
     from_json_field(src, "dist_mod_num", dst.dist_mod_num);
+    from_json_field(src, "kireme_diff_v_ref", dst.kireme_diff_v_ref);
     from_json_field(src, "sen_ctrl_front_th", dst.sen_ctrl_front_th);
     from_json_field(src, "sen_ctrl_front_diff_th", dst.sen_ctrl_front_diff_th);
     from_json_field(src, "th_offset_dist", dst.th_offset_dist);

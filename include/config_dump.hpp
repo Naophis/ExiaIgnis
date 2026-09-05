@@ -475,6 +475,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["sensor_range_mid_max"]     = src.sensor_range_mid_max;
     dst["sensor_range_far_max"]     = src.sensor_range_far_max;
     dst["dist_mod_num"]             = src.dist_mod_num;
+    dst["kireme_diff_v_ref"] = src.kireme_diff_v_ref;
     dst["sen_ctrl_front_th"]        = src.sen_ctrl_front_th;
     dst["sen_ctrl_front_diff_th"]   = src.sen_ctrl_front_diff_th;
     dst["th_offset_dist"]           = src.th_offset_dist;

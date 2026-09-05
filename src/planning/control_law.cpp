@@ -246,9 +246,17 @@ ControlLaw::calc_sensor_pid() {
   // ループの「逆符号のときだけ減衰」方式は同方向の持続的な誤差に対して
   // 無力(2026-08-22, str_ang_pidへの初回I項導入で発散・リバート済み)
   // だったため、より単純で安全なこの方式を採用する。
+  //
+  // 2026-09-05: これに加えて「前tickで壁を見ていなかった(type == None)」場合も
+  // 積算を止める。従来は壁の有無に関係なく毎tick積算しており、壁なし区間で
+  // check_sen_error()が返す0や、壁あり/なし判定の境界で出るノイズ性の微小
+  // バイアスまで貯め込んでいた(20260905_050639.csv: 45°距離が44.0〜45.5mmの
+  // 狭い帯=exist閾値44.75/ref45と同じ帯に張り付き、s_pid_pの平均はわずか
+  // -0.11mmなのにsen.error_iはwindup_i_max(-0.09)へ張り付いたまま)。
   const bool freeze_sen_i =
-      !search_mode_ && param_->str_ang_pid_fast.antiwindup &&
-      ABS(ee->sen.error_p) > param_->str_ang_pid_fast.windup_dead_bind;
+      (!search_mode_ && param_->str_ang_pid_fast.antiwindup &&
+       ABS(ee->sen.error_p) > param_->str_ang_pid_fast.windup_dead_bind) ||
+      (!search_mode_ && !sen_ctrl_active_prev_);
   if (!freeze_sen_i) {
     // 2026-08-30: dtスケーリングなしで生の誤差(mm)をそのまま積算していた
     // ため、1kHzでは実質1000倍の強さで積分され、わずかな定常偏差でも
@@ -363,8 +371,18 @@ ControlLaw::calc_sensor_pid() {
     }
   }
 
+  sen_ctrl_active_prev_ = (type != SensingControlType::None);
+
   float limit = 0;
   if (type == SensingControlType::None) {
+    // 2026-09-05: ここの早期リターンはduty(str_ang_pid_fastの直接duty注入)しか
+    // 止めておらず、その手前で計算済みのsen_kanayama_dwはそのまま
+    // calc_pid_val_ang_vel()のoffsetへ乗り続けていた。壁を見失っている間も、
+    // 直前にクランプまで貯まったI項(ki*error_i)が一定のヨー指令を出し続ける
+    // ことになる(20260905_050639.csv: 壁なし区間を含む720mm直進で
+    // ki*error_i = -0.231 rad/s が出っぱなし、姿勢P(+0.076)を打ち消して
+    // heading が -1.2°に張り付き、y が -16.8mm ずれた)。Δw側も止める。
+    sen_kanayama_dw = 0;
     return 0;
   } else if (type == SensingControlType::Wall) {
     limit = sensor_->interp1d(param_->sensor_deg_limitter_v,
@@ -519,23 +537,30 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
       ABS(se->ego.left45_dist_diff) < prm->sen_ref_p.normal.ref.kireme_l;
 
   if (!search_mode_) {
+    // 2026-09-05: 非探索側は速度が大きく変わるため、生の1tick差分ではなく
+    // kireme_diff_v_ref で速度正規化した差分で判定する
+    // (structs.hpp input_param_t::kireme_diff_v_ref のコメント参照)。
+    // kireme_diff_v_ref==0 なら _norm は生の差分と同値なので従来と同じ挙動。
+    // 探索側(上の kireme_r/l)は速度がほぼ一定で問題が起きず、しきい値も
+    // 探索速度で調整済みのため生の差分のままにする。
+    const float r45_diff = se->ego.right45_dist_diff_norm;
+    const float l45_diff = se->ego.left45_dist_diff_norm;
     if (tgt_val_->motion_type == MotionType::WALL_OFF ||
         tgt_val_->motion_type == MotionType::SLA_FRONT_STR) {
-      check_diff_right = (se->ego.right45_dist_diff < 0)
-                             ? ABS(se->ego.right45_dist_diff) <
+      check_diff_right = (r45_diff < 0)
+                             ? ABS(r45_diff) <
                                    prm->sen_ref_p.normal.ref.kireme_r_wall_off2
-                             : ABS(se->ego.right45_dist_diff) <
+                             : ABS(r45_diff) <
                                    prm->sen_ref_p.normal.ref.kireme_r_wall_off;
-      check_diff_left = (se->ego.left45_dist_diff < 0)
-                            ? ABS(se->ego.left45_dist_diff) <
+      check_diff_left = (l45_diff < 0)
+                            ? ABS(l45_diff) <
                                   prm->sen_ref_p.normal.ref.kireme_l_wall_off2
-                            : ABS(se->ego.left45_dist_diff) <
+                            : ABS(l45_diff) <
                                   prm->sen_ref_p.normal.ref.kireme_l_wall_off;
     } else {
-      check_diff_right = ABS(se->ego.right45_dist_diff) <
-                         prm->sen_ref_p.normal.ref.kireme_r_fast;
-      check_diff_left = ABS(se->ego.left45_dist_diff) <
-                        prm->sen_ref_p.normal.ref.kireme_l_fast;
+      check_diff_right =
+          ABS(r45_diff) < prm->sen_ref_p.normal.ref.kireme_r_fast;
+      check_diff_left = ABS(l45_diff) < prm->sen_ref_p.normal.ref.kireme_l_fast;
     }
   }
 
@@ -1715,6 +1740,7 @@ void ControlLaw::clear_ctrl_val() {
   turn_angle_fb_integral_ = 0;
   turn_angle_fb_i_bias_prev_ = 0;
   wall_found_prev_ = false;
+  sen_ctrl_active_prev_ = false;
   ee->v.error_i = ee->v.error_d = ee->v.error_dd = 0;
   ee->dist.error_i = ee->dist.error_d = ee->dist.error_dd = 0;
   ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;

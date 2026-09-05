@@ -149,6 +149,10 @@ private:
   // 検出した瞬間(calc_sensor_pid()参照)にゼロクリアして、信頼できる基準
   // (壁と正対=0)へスナップし直すための直前tickの壁検出状態。
   bool  wall_found_prev_           = false;
+  // 前tickでセンサー制御が成立していたか(type != None)。calc_sensor_pid()は
+  // 今tickのerror_pを求める前に前tickのerror_pを積分するため、その誤差が
+  // 壁を見えている状態のものだったかを判定するのに使う。
+  bool  sen_ctrl_active_prev_      = false;
   // 2026-08-30: mpc_tgt_calc.cpp(Simulink自動生成)のsign()実装が、入力が
   // ちょうど0.0fを跨ぐ瞬間だけ0を返す仕様のため、ff_front_torque/
   // ff_friction_torque_r/lが走行中(速度が明確に非ゼロ)でも数tickおきに
