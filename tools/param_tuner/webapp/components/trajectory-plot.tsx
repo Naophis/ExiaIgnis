@@ -12,11 +12,15 @@ interface Props {
   onPointClick: (point: TrajectoryPoint | null) => void;
 }
 
-const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | "diamond" | "circle" }> = {
+const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | "diamond" | "circle" | "square" }> = {
   drop: { color: "#ff5555", shape: "x" },
   rise: { color: "#3ddc84", shape: "x" },
   "state-start": { color: "#f5a623", shape: "diamond" },
   "state-end": { color: "#5aa9ff", shape: "diamond" },
+  // Same hue as the robot marker they belong to, different shape: the pair is
+  // read as "robot here, the 45deg wall it was looking at there".
+  "state-start-sensor": { color: "#f5a623", shape: "square" },
+  "state-end-sensor": { color: "#5aa9ff", shape: "square" },
   trough: { color: "#c678f5", shape: "circle" },
   "trough-rise": { color: "#4ad4d4", shape: "circle" },
 };
@@ -142,15 +146,24 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
     const iz = 1 / zoom;
 
-    ctx.strokeStyle = "rgba(255,60,60,0.25)";
-    ctx.lineWidth = 1.5 * iz;
+    // 90mm cell boundaries solid red, 45mm half-cell guides dotted light gray.
     for (const line of data.gridLines) {
       const [x1, y1] = toCanvas(line.x1, line.y1);
       const [x2, y2] = toCanvas(line.x2, line.y2);
+      ctx.save();
+      if (line.minor) {
+        ctx.strokeStyle = "rgba(200,200,200,0.28)";
+        ctx.lineWidth = 1 * iz;
+        ctx.setLineDash([2 * iz, 4 * iz]);
+      } else {
+        ctx.strokeStyle = "rgba(255,60,60,0.25)";
+        ctx.lineWidth = 1.5 * iz;
+      }
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.stroke();
+      ctx.restore();
     }
 
     for (const group of data.groups) {
@@ -193,6 +206,22 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
         ctx.strokeStyle = style.color;
         ctx.fillStyle = style.color;
         ctx.lineWidth = 2 * iz;
+
+        // Leader line back to the robot position this reading was taken from
+        // (linkX/linkY are raw logged coords, so they need POS_OFFSET_X).
+        if (m.linkX !== undefined && m.linkY !== undefined) {
+          const [lx, ly] = toCanvas(m.linkX + TRAJECTORY_POS_OFFSET_X, m.linkY);
+          ctx.save();
+          ctx.setLineDash([4 * iz, 3 * iz]);
+          ctx.lineWidth = 1 * iz;
+          ctx.globalAlpha = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(lx, ly);
+          ctx.lineTo(cx, cy);
+          ctx.stroke();
+          ctx.restore();
+        }
+
         ctx.beginPath();
         if (style.shape === "x") {
           ctx.moveTo(cx - r, cy - r);
@@ -206,6 +235,9 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
           ctx.lineTo(cx, cy + r);
           ctx.lineTo(cx - r, cy);
           ctx.closePath();
+          ctx.stroke();
+        } else if (style.shape === "square") {
+          ctx.rect(cx - r * 0.75, cy - r * 0.75, r * 1.5, r * 1.5);
           ctx.stroke();
         } else {
           ctx.arc(cx, cy, r * 0.75, 0, Math.PI * 2);

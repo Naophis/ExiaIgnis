@@ -16,8 +16,25 @@ export interface AnalysisEvent {
   // "robot": (x,y) is the raw logged position, needs the same offset the
   // trajectory plot applies to robot-position points at draw time.
   anchored: "robot" | "sensor";
-  kind: "drop" | "rise" | "state-start" | "state-end" | "trough" | "trough-rise";
+  kind:
+    | "drop"
+    | "rise"
+    | "state-start"
+    | "state-end"
+    // The 45deg reading the state-start/state-end row was referencing,
+    // projected onto its wall-contact point (so the plot shows *where* the
+    // robot thought the wall was at the moment the state changed, not just
+    // where the robot itself was).
+    | "state-start-sensor"
+    | "state-end-sensor"
+    | "trough"
+    | "trough-rise";
   label: string;
+  // Companion anchor for a leader line: raw logged robot (x, y) of the same
+  // row, so a sensor-anchored marker can be drawn tied to the robot marker it
+  // belongs to. Needs the same POS_OFFSET_X a "robot"-anchored point gets.
+  linkX?: number;
+  linkY?: number;
   // Set only for column-specific events (drop/rise/trough/trough-rise), so a
   // value-vs-index time-series chart can place the same marker on its own
   // axes instead of the spatial (x, y) ones above.
@@ -331,7 +348,15 @@ function findBlocks(rows: Record<string, number>[], state: number): Array<[numbe
 export interface MotionTransitionOptions {
   states: number[];
   columns: string[];
+  // Needed to project the row's 45deg readings onto their wall-contact
+  // points; without it only the robot-position markers are emitted.
+  pointByRow?: RowPointMap;
 }
+
+// The transition columns that projectSensorPoint() knows the geometry for.
+// left45_2_d / left45_3_d etc. are alternate LED patterns of the same
+// physical sensor and have no separate projection, so they stay text-only.
+const PROJECTABLE_45 = ["left45_d", "right45_d"] as const;
 
 // Port of analyze_motion_state_transitions.py: main.
 export function computeMotionTransitionEvents(
@@ -339,34 +364,62 @@ export function computeMotionTransitionEvents(
   opts: MotionTransitionOptions
 ): AnalysisEvent[] {
   const events: AnalysisEvent[] = [];
+
+  const projectable = (row: Record<string, number>, col: string) =>
+    opts.pointByRow ? resolvePos(row, col, opts.pointByRow).anchored === "sensor" : false;
+
   const describe = (row: Record<string, number>) =>
     opts.columns
       .filter((c) => asNum(row, c) !== undefined)
-      .map((c) => `${c}=${fmt(row, c)}`)
+      // Flag the readings that are outside projectSensorPoint()'s valid band
+      // so a missing wall marker reads as "out of range", not "lost".
+      .map((c) => {
+        const outOfBand =
+          (PROJECTABLE_45 as readonly string[]).includes(c) && !projectable(row, c) ? "(投影外)" : "";
+        return `${c}=${fmt(row, c)}${outOfBand}`;
+      })
       .join(", ");
+
+  // Emits the robot-position marker plus, for each projectable 45deg column,
+  // a wall-contact marker tied back to it by a leader line.
+  const pushEvent = (row: Record<string, number>, kind: "state-start" | "state-end", label: string) => {
+    events.push({ x: row.x, y: row.y, anchored: "robot", kind, label });
+    if (!opts.pointByRow) return;
+    for (const col of PROJECTABLE_45) {
+      if (!opts.columns.includes(col)) continue;
+      const pos = resolvePos(row, col, opts.pointByRow);
+      if (pos.anchored !== "sensor") continue;
+      events.push({
+        ...pos,
+        kind: kind === "state-start" ? "state-start-sensor" : "state-end-sensor",
+        label: `${label.split(" | ")[0]} ${col}=${fmt(row, col)} → 壁(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`,
+        linkX: row.x,
+        linkY: row.y,
+        column: col,
+        seriesIndex: asNum(row, "index"),
+        seriesValue: asNum(row, col),
+      });
+    }
+  };
 
   for (const state of opts.states) {
     for (const [bStart, bEnd, nextMs] of findBlocks(rows, state)) {
       const startRow = rows[bStart];
       if (hasXY(startRow)) {
-        events.push({
-          x: startRow.x,
-          y: startRow.y,
-          anchored: "robot",
-          kind: "state-start",
-          label: `state=${state} 開始 idx=${fmt(startRow, "index")} | ${describe(startRow)}`,
-        });
+        pushEvent(
+          startRow,
+          "state-start",
+          `state=${state} 開始 idx=${fmt(startRow, "index")} | ${describe(startRow)}`
+        );
       }
       if (nextMs !== null && bEnd + 1 < rows.length) {
         const endRow = rows[bEnd + 1];
         if (hasXY(endRow)) {
-          events.push({
-            x: endRow.x,
-            y: endRow.y,
-            anchored: "robot",
-            kind: "state-end",
-            label: `state=${state} 終了(->${nextMs}) idx=${fmt(endRow, "index")} | ${describe(endRow)}`,
-          });
+          pushEvent(
+            endRow,
+            "state-end",
+            `state=${state} 終了(->${nextMs}) idx=${fmt(endRow, "index")} | ${describe(endRow)}`
+          );
         }
       }
     }

@@ -40,6 +40,8 @@ const EVENT_COLOR: Record<AnalysisEvent["kind"], string> = {
   rise: "text-emerald-400",
   "state-start": "text-amber-400",
   "state-end": "text-sky-400",
+  "state-start-sensor": "text-amber-300",
+  "state-end-sensor": "text-sky-300",
   trough: "text-purple-400",
   "trough-rise": "text-cyan-400",
 };
@@ -176,8 +178,8 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
       .map((s) => parseFloat(s.trim()))
       .filter((n) => !Number.isNaN(n));
     if (states.length === 0) return [];
-    return computeMotionTransitionEvents(rawRows, { states, columns: TRANSITION_COLUMNS });
-  }, [rawRows, transitionEnabled, transitionStates]);
+    return computeMotionTransitionEvents(rawRows, { states, columns: TRANSITION_COLUMNS, pointByRow });
+  }, [rawRows, transitionEnabled, transitionStates, pointByRow]);
 
   const troughEvents = useMemo<AnalysisEvent[]>(() => {
     if (!troughEnabled || rawRows.length === 0) return [];

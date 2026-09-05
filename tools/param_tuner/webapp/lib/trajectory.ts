@@ -36,6 +36,9 @@ export interface GridLine {
   y1: number;
   x2: number;
   y2: number;
+  // Half-cell (45mm) auxiliary line rather than a real 90mm cell boundary.
+  // Drawn dotted so it reads as a guide, not a wall.
+  minor?: boolean;
 }
 
 export interface TrajectoryData {
@@ -163,6 +166,7 @@ function projectWallSensor(
 }
 
 const CELL_SIZE = 90; // mm, one maze cell
+const HALF_CELL = CELL_SIZE / 2; // 45mm auxiliary pitch (cell center lines)
 const CELL_Y_OFFSET = 45; // matches the historical plot_gui.py row-boundary offset
 
 // Draws maze-cell (90mm) outlines only for cells the trajectory actually
@@ -183,11 +187,11 @@ function buildGridLines(points: { x: number; y: number }[]): GridLine[] {
 
   const lines: GridLine[] = [];
   const seen = new Set<string>();
-  const addLine = (x1: number, y1: number, x2: number, y2: number) => {
+  const addLine = (x1: number, y1: number, x2: number, y2: number, minor = false) => {
     const key = `${x1},${y1},${x2},${y2}`;
     if (seen.has(key)) return;
     seen.add(key);
-    lines.push({ x1, y1, x2, y2 });
+    lines.push(minor ? { x1, y1, x2, y2, minor } : { x1, y1, x2, y2 });
   };
 
   for (const key of cells) {
@@ -200,6 +204,10 @@ function buildGridLines(points: { x: number; y: number }[]): GridLine[] {
     addLine(x1, y0, x1, y1);
     addLine(x0, y0, x1, y0);
     addLine(x0, y1, x1, y1);
+    // 45mm auxiliary lines through the cell center (the half-cell landmarks
+    // the search/slalom offsets are all specified against).
+    addLine(x0 + HALF_CELL, y0, x0 + HALF_CELL, y1, true);
+    addLine(x0, y0 + HALF_CELL, x1, y0 + HALF_CELL, true);
   }
   return lines;
 }
