@@ -557,22 +557,20 @@ class SerialManager extends EventEmitter {
       // header was missing entirely (e.g. start___ arrived without a
       // ready___ first) or doesn't sum to the byteSize the device declared
       // in ready___ (a line got dropped or an extra one slipped in), there's
-      // no trustworthy layout to split the bytes by - can't build the
-      // normal table, but the bytes themselves are still real data, so
-      // write them out raw (one column) instead of losing the capture or
-      // silently misaligning every field after the gap. Log the full
-      // context so the actual cause is traceable from this line alone.
+      // no trustworthy layout to split the bytes by. A dropped header line
+      // can land anywhere in the ~120-line burst (not just at the end), so
+      // the fields we did collect can't be assumed to be a clean prefix -
+      // reconstructing partial columns from them would silently misalign
+      // whichever fields came after the gap (the exact failure headerMismatch
+      // exists to catch). There's nothing salvageable to write as a table, so
+      // drop this capture instead of writing a useless raw byte-per-line CSV
+      // that only pollutes logs/ - just report the failure and let the next
+      // dump attempt (which isn't hitting the same transient serial hiccup)
+      // produce a clean one.
       if (fieldCount === 0 || recordByteSize <= 0 || headerMismatch) {
-        // Also written as the file's first line (not just emitted live) so
-        // the cause is still inspectable after the fact - the live console
-        // log isn't persisted anywhere, so a fallback file with only
-        // "raw_byte" as context previously left no trace of why it happened
-        // once the SSE line scrolled out of view.
-        const diagnostic = `# dump header missing/corrupt: fields=${fieldCount} recordByteSize=${recordByteSize} expectedRecordByteSize=${expected} totalBytes=${totalBytes} dataStruct=${JSON.stringify(dump.dataStruct)}`;
-        this.emit("log", `[LoggingTask] ${diagnostic.slice(2)}; writing raw bytes instead`);
-        const content = `${diagnostic}\nraw_byte\n${Array.from(binaryData).join("\n")}\n`;
-        this.writeLogFile(dump.fileName, content);
-        this.emit("saved", { type: "csv", file: dump.fileName });
+        const diagnostic = `dump header missing/corrupt: fields=${fieldCount} recordByteSize=${recordByteSize} expectedRecordByteSize=${expected} totalBytes=${totalBytes} dataStruct=${JSON.stringify(dump.dataStruct)}`;
+        this.emit("log", `[LoggingTask] ${diagnostic}; discarding this capture, retry the dump`);
+        this.emit("dumpFailed", { reason: diagnostic });
       } else {
         const rows = new Array<string>(recordNum + 1);
         rows[0] = header;

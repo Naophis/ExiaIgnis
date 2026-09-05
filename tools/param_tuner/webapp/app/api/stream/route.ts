@@ -22,11 +22,13 @@ export async function GET(request: Request) {
       const onLog = (line: string) => send("log", { line });
       const onStatus = (status: unknown) => send("status", status);
       const onSaved = (info: unknown) => send("saved", info);
+      const onDumpFailed = (info: unknown) => send("dumpFailed", info);
       const onClear = () => send("clear", {});
 
       serialManager.on("log", onLog);
       serialManager.on("status", onStatus);
       serialManager.on("saved", onSaved);
+      serialManager.on("dumpFailed", onDumpFailed);
       serialManager.on("clear", onClear);
 
       const keepAlive = setInterval(() => {
@@ -38,6 +40,7 @@ export async function GET(request: Request) {
         serialManager.off("log", onLog);
         serialManager.off("status", onStatus);
         serialManager.off("saved", onSaved);
+        serialManager.off("dumpFailed", onDumpFailed);
         serialManager.off("clear", onClear);
         try {
           controller.close();

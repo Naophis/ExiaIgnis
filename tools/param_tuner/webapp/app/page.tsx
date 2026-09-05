@@ -138,6 +138,11 @@ export default function Home() {
       }
     });
 
+    es.addEventListener("dumpFailed", (e) => {
+      const { reason } = JSON.parse((e as MessageEvent).data) as { reason: string };
+      toast.error(`ダンプ受信が壊れました。もう一度お試しください (${reason})`);
+    });
+
     // Device sent a clear-screen escape (e.g. dump1()'s live redraw loop):
     // reset the scrollback so it renders as a refreshing dashboard.
     es.addEventListener("clear", () => {
