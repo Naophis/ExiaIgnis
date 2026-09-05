@@ -53,6 +53,10 @@ void MainTask::load_circuit_path() {
   param_->wall_off_dist.noexist_th_r =
       param_->wall_off_dist.noexist_th_r2 =
           doc["wall_off_hold_noexist_th_r"] | param_->wall_off_dist.noexist_th_r;
+  // detect_wall_off (exist=true側) は2026-09-05よりnoexist_th_rでなく
+  // exist_delta_rを見るため、サーキットモードでの上書きもこちらに追加。
+  param_->wall_off_dist.exist_delta_r =
+      doc["wall_off_hold_exist_delta_r"] | param_->wall_off_dist.exist_delta_r;
 }
 
 void MainTask::exec_param_prof() {

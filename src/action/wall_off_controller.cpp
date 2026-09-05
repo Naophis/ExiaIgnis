@@ -669,10 +669,16 @@ WallSensorStrategy &WallOffController::get_right_strategy() {
                se->ego.right45_dist < 100;
       },
       // detect_wall_off
+      // 2026-09-05: 絶対しきい値(noexist_th_r)からsen.r45.sensor_dist(壁に
+      // 最も寄った時の最小値保持)基準の相対偏差に変更。絶対値判定だと壁まで
+      // の距離(=姿勢/寄り)でベースラインが変わるぶんだけ検出が遅れる/ばらつく
+      // ことが実測(wall_off_edge_check.py, n=4)で確認された。下の
+      // detect_wall_missing_by_deviation(exist=false側)と同じ考え方。
       [this](float exist) -> bool {
         const auto p_wall_off = get_wall_off_param();
         const auto se = get_sensing_entity();
-        return (se->ego.right45_dist > p_wall_off.noexist_th_r &&
+        return (se->ego.right45_dist >
+                    se->sen.r45.sensor_dist + p_wall_off.exist_delta_r &&
                 se->ego.right45_dist_diff > 0) &&
                (se->ego.right45_dist_diff > p_wall_off.div_th_r3 &&
                 se->ego.right45_2_dist_diff > 0 &&
@@ -759,10 +765,13 @@ WallSensorStrategy &WallOffController::get_left_strategy() {
                se->ego.left45_dist < 100;
       },
       // detect_wall_off
+      // 2026-09-05: 右側と同様、絶対しきい値からsen.l45.sensor_dist基準の
+      // 相対偏差に変更(理由はget_right_strategy()のdetect_wall_off参照)。
       [this](float exist) -> bool {
         const auto p_wall_off = get_wall_off_param();
         const auto se = get_sensing_entity();
-        return (se->ego.left45_dist > p_wall_off.noexist_th_l &&
+        return (se->ego.left45_dist >
+                    se->sen.l45.sensor_dist + p_wall_off.exist_delta_l &&
                 se->ego.left45_dist_diff > 0) &&
                (se->ego.left45_dist_diff > p_wall_off.div_th_l3 &&
                 se->ego.left45_2_dist_diff > 0 &&

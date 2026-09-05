@@ -58,6 +58,8 @@ FIT_HI = 5.0         # [mm] フィット窓の上端
 MIN_FIT_N = 3        # フィットに必要な最小サンプル数
 MEDIAN_WINDOW = 3    # アンカー(最小点)探索用の平滑化窓
 VISIBLE_TH = 2.0     # [mm] アンカーの走行距離がこれ以下なら「開始時点で可視」
+EXIST_TH = 70.0      # [mm] baselineがこれ以上なら「壁を見ていない」として側から除外
+MIN_DELTA = ARM_DELTA  # [mm] 立ち上がりがこれ未満ならノイズとみなし側から除外
 
 
 def reg(x, y):
@@ -73,6 +75,10 @@ def reg(x, y):
 
 
 def median_filter(values, window):
+    """analyze_sensor_trough.py::median_filter と同じ規約(sorted(seg)[len//2]、
+    偶数長では2つの中央値の"上側"を採る)。np.median(平均化)ではないので注意 -
+    ここを変えるとTypeScript移植版(webapp/lib/log-analysis.ts)の medianFilter
+    と結果がずれる。"""
     if window <= 1:
         return values.copy()
     half = window // 2
@@ -81,7 +87,8 @@ def median_filter(values, window):
     for i in range(n):
         lo = max(0, i - half)
         hi = min(n, i + half + 1)
-        out[i] = np.median(values[lo:hi])
+        seg = sorted(values[lo:hi])
+        out[i] = seg[len(seg) // 2]
     return out
 
 
@@ -130,7 +137,11 @@ def analyze_segment(seg_df, side):
     n = len(x)
     anchor_i, baseline = info['anchor_i'], info['baseline']
 
-    if n - anchor_i < BASELINE_N + MIN_FIT_N:
+    # パターンB(不可視から接近)は検出が速く、アンカーからセグメント終端まで
+    # 数サンプルしかないことがある。Layer2用の余裕(BASELINE_N+MIN_FIT_N)が
+    # なくても、アンカーと現行発火位置の比較自体は意味があるので、
+    # 「アンカーの次のサンプルがある」以上は要求しない。
+    if n - anchor_i < 2:
         return None
 
     pattern = 'A(開始時可視)' if x[anchor_i] <= VISIBLE_TH else 'B(接近して不可視から検出)'
@@ -142,6 +153,11 @@ def analyze_segment(seg_df, side):
     over = np.where(y[anchor_i:] - baseline > ARM_DELTA)[0]
     x_arm = float(x[anchor_i + over[0]]) if len(over) else None
 
+    # アンカー(=壁に最も近づいた点)から現行発火までの遅れ。パターンBは
+    # アンカー直後に少し離れただけで発火することが多く、この値がそのまま
+    # 「現行検出の速さ」を表す(パターンAではx_actual自体とほぼ同じ意味)。
+    lag_anchor = x_actual - x_anchor
+
     # Layer2: アンカー以降、baseline+[FIT_LO, FIT_HI] の窓だけで直線フィットし外挿
     tail_y = y[anchor_i:]
     tail_x = x[anchor_i:]
@@ -149,12 +165,14 @@ def analyze_segment(seg_df, side):
     if mask.sum() < MIN_FIT_N:
         return dict(pattern=pattern, baseline=baseline, x_anchor=x_anchor,
                     x_actual=x_actual, y_actual=y_actual, x_arm=x_arm,
+                    lag_anchor=lag_anchor,
                     x_edge=None, slope=None, r2=None, n_fit=int(mask.sum()))
 
     a, c, r2 = reg(tail_x[mask], tail_y[mask])
     x_edge = (baseline - c) / a if a != 0 else None
     return dict(pattern=pattern, baseline=baseline, x_anchor=x_anchor,
                 x_actual=x_actual, y_actual=y_actual, x_arm=x_arm,
+                lag_anchor=lag_anchor,
                 x_edge=x_edge, slope=a, r2=r2, n_fit=int(mask.sum()))
 
 
@@ -163,10 +181,26 @@ def pick_side(seg_df):
 
     左右それぞれ自分のアンカー(最小点)基準でdeltaを取るので、パターンA/B
     どちらでも(=開始時点で近い/遠いのどちらでも)同じロジックで判定できる。
+
+    どちらの側も壁を見ていない(baseline >= EXIST_TH、区間内ずっと遠い)、
+    または立ち上がりが小さすぎる(delta <= MIN_DELTA、ノイズと区別できない)
+    場合は None を返す。以前はここで無条件にどちらかを選んでいたため、
+    本当は壁が最初から無い(=このWALL_OFF区間に本物の壁切れイベントが
+    存在しない)区間でもノイズの大小だけで側を決め、根拠のないマーカーを
+    出してしまっていた(2026-09-05 GUIで発覚)。
     """
     left = analyze_side(seg_df, 'left45_d')
     right = analyze_side(seg_df, 'right45_d')
-    return 'right' if right['delta'] > left['delta'] else 'left'
+
+    def valid(info):
+        return info['baseline'] < EXIST_TH and info['delta'] > MIN_DELTA
+
+    left_ok, right_ok = valid(left), valid(right)
+    if not left_ok and not right_ok:
+        return None
+    if left_ok and right_ok:
+        return 'right' if right['delta'] > left['delta'] else 'left'
+    return 'right' if right_ok else 'left'
 
 
 def analyze(path, state):
@@ -187,6 +221,10 @@ def analyze(path, state):
         if len(seg) < BASELINE_N + MIN_FIT_N:
             continue
         side = pick_side(seg)
+        if side is None:
+            print(f"\n### {name}  idx={int(seg['index'].iloc[0])}  壁を検出できず(baseline>={EXIST_TH}mm"
+                  f" または立ち上がり<={MIN_DELTA}mm) → スキップ")
+            continue
         r = analyze_segment(seg, side)
         if r is None:
             continue
@@ -200,7 +238,8 @@ def analyze(path, state):
         print(f"  アンカー(最小点)   x_anchor = {r['x_anchor']:6.2f} mm   "
               f"baseline = {r['baseline']:6.2f} mm")
         print(f"  現行方式の発火位置  x_actual = {r['x_actual']:6.2f} mm"
-              f"  (センサ値 baseline+{r['y_actual'] - r['baseline']:.2f}mm で発火)")
+              f"  (センサ値 baseline+{r['y_actual'] - r['baseline']:.2f}mm で発火、"
+              f"アンカーから{r['lag_anchor']:+.2f}mm)")
         if r['x_arm'] is not None:
             print(f"  Layer1 気づいた位置 x_arm    = {r['x_arm']:6.2f} mm"
                   f"  (baseline+{ARM_DELTA}mm 到達)")
@@ -229,9 +268,12 @@ def summarize(all_results):
             act = np.array([r['x_actual'] for r in rs])
             arm = np.array([r['x_arm'] for r in rs if r['x_arm'] is not None])
             edge = np.array([r['x_edge'] for r in rs if r['x_edge'] is not None])
+            lag = np.array([r['lag_anchor'] for r in rs])
             print(f"\n  [{side}] {pattern_label}  n={len(rs)}")
             print(f"    現行方式  x_actual : mean={act.mean():6.2f}  "
                   f"std={act.std():5.2f}  range=[{act.min():.2f}, {act.max():.2f}]")
+            print(f"    アンカー→発火 lag : mean={lag.mean():6.2f}  "
+                  f"std={lag.std():5.2f}  range=[{lag.min():.2f}, {lag.max():.2f}]")
             if len(arm) >= 2:
                 print(f"    Layer1    x_arm    : mean={arm.mean():6.2f}  "
                       f"std={arm.std():5.2f}  range=[{arm.min():.2f}, {arm.max():.2f}]"
