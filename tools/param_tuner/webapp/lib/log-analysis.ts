@@ -77,12 +77,13 @@ function sensorSideSign(column: string): 1 | -1 | null {
 function resolvePos(
   row: Record<string, number>,
   column: string,
-  pointByRow?: RowPointMap
+  pointByRow: RowPointMap | undefined,
+  xOffset: number
 ): { x: number; y: number; anchored: "robot" | "sensor" } {
   const sideSign = sensorSideSign(column);
   const tp = pointByRow?.get(row);
   if (sideSign !== null && tp) {
-    const wp = projectSensorPoint(tp, column as "left45_d" | "right45_d", sideSign);
+    const wp = projectSensorPoint(tp, column as "left45_d" | "right45_d", sideSign, xOffset);
     if (wp) return { x: wp.x, y: wp.y, anchored: "sensor" };
   }
   return { x: row.x, y: row.y, anchored: "robot" };
@@ -119,6 +120,7 @@ export interface SensorDropOptions {
   high: number;
   columns: string[];
   pointByRow?: RowPointMap;
+  xOffset: number;
 }
 
 // Port of analyze_sensor_drop.py: main.
@@ -141,7 +143,7 @@ export function computeSensorDropEvents(rows: Record<string, number>[], opts: Se
       if (dropI === null) continue;
       const dropRow = rows[dropI];
       if (hasXY(dropRow)) {
-        const pos = resolvePos(dropRow, col, opts.pointByRow);
+        const pos = resolvePos(dropRow, col, opts.pointByRow, opts.xOffset);
         events.push({
           ...pos,
           kind: "drop",
@@ -166,7 +168,7 @@ export function computeSensorDropEvents(rows: Record<string, number>[], opts: Se
         const diff = asNum(riseRow, "index") !== undefined && asNum(dropRow, "index") !== undefined
           ? (riseRow.index - dropRow.index).toFixed(0)
           : "?";
-        const pos = resolvePos(riseRow, col, opts.pointByRow);
+        const pos = resolvePos(riseRow, col, opts.pointByRow, opts.xOffset);
         events.push({
           ...pos,
           kind: "rise",
@@ -296,6 +298,7 @@ export interface SensorTroughOptions {
   medianWindow?: number;
   columns: string[];
   pointByRow?: RowPointMap;
+  xOffset: number;
 }
 
 export function computeSensorTroughEvents(
@@ -313,7 +316,7 @@ export function computeSensorTroughEvents(
       troughs.forEach((t, n) => {
         const troughRow = rows[t.troughRow];
         if (hasXY(troughRow)) {
-          const pos = resolvePos(troughRow, col, opts.pointByRow);
+          const pos = resolvePos(troughRow, col, opts.pointByRow, opts.xOffset);
           events.push({
             ...pos,
             kind: "trough",
@@ -330,7 +333,7 @@ export function computeSensorTroughEvents(
             asNum(riseRow, "index") !== undefined && asNum(troughRow, "index") !== undefined
               ? (riseRow.index - troughRow.index).toFixed(0)
               : "?";
-          const pos = resolvePos(riseRow, col, opts.pointByRow);
+          const pos = resolvePos(riseRow, col, opts.pointByRow, opts.xOffset);
           events.push({
             ...pos,
             kind: "trough-rise",
@@ -368,6 +371,7 @@ export interface MotionTransitionOptions {
   // Needed to project the row's 45deg readings onto their wall-contact
   // points; without it only the robot-position markers are emitted.
   pointByRow?: RowPointMap;
+  xOffset: number;
 }
 
 // The transition columns that projectSensorPoint() knows the geometry for.
@@ -383,7 +387,7 @@ export function computeMotionTransitionEvents(
   const events: AnalysisEvent[] = [];
 
   const projectable = (row: Record<string, number>, col: string) =>
-    opts.pointByRow ? resolvePos(row, col, opts.pointByRow).anchored === "sensor" : false;
+    opts.pointByRow ? resolvePos(row, col, opts.pointByRow, opts.xOffset).anchored === "sensor" : false;
 
   const describe = (row: Record<string, number>) =>
     opts.columns
@@ -404,7 +408,7 @@ export function computeMotionTransitionEvents(
     if (!opts.pointByRow) return;
     for (const col of PROJECTABLE_45) {
       if (!opts.columns.includes(col)) continue;
-      const pos = resolvePos(row, col, opts.pointByRow);
+      const pos = resolvePos(row, col, opts.pointByRow, opts.xOffset);
       if (pos.anchored !== "sensor") continue;
       events.push({
         ...pos,
@@ -485,6 +489,7 @@ export interface WallOffEdgeOptions {
   existTh?: number; // [mm] a side's baseline must be below this to count as "a wall was seen"
   minDelta?: number; // [mm] a side's rise must exceed this to count as a real event, not noise
   pointByRow?: RowPointMap;
+  xOffset: number;
 }
 
 const WALL_OFF_DEFAULTS = {
@@ -655,6 +660,7 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
   const existTh = opts.existTh ?? WALL_OFF_DEFAULTS.existTh;
   const minDelta = opts.minDelta ?? WALL_OFF_DEFAULTS.minDelta;
   const pointByRow = opts.pointByRow;
+  const xOffset = opts.xOffset;
 
   const events: AnalysisEvent[] = [];
   const blocks = opts.motionStates.flatMap((state) =>
@@ -698,7 +704,7 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
         seriesIndex: asNum(anchorRow, "index"),
         seriesValue: ys[anchorI],
       });
-      const anchorSensorPos = resolvePos(anchorRow, col, pointByRow);
+      const anchorSensorPos = resolvePos(anchorRow, col, pointByRow, xOffset);
       if (anchorSensorPos.anchored === "sensor") {
         events.push({
           ...anchorSensorPos,
@@ -726,7 +732,7 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
         seriesIndex: asNum(actualRow, "index"),
         seriesValue: ys[lastI],
       });
-      const sensorPos = resolvePos(actualRow, col, pointByRow);
+      const sensorPos = resolvePos(actualRow, col, pointByRow, xOffset);
       if (sensorPos.anchored === "sensor") {
         events.push({
           ...sensorPos,
@@ -789,7 +795,8 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
     const wp = projectSensorPoint(
       { x: interp.x, y: interp.y, angleCorrected: interp.angleCorrected, raw: { [col]: baseline } },
       col as "left45_d" | "right45_d",
-      sideSign
+      sideSign,
+      xOffset
     );
     if (wp) {
       events.push({

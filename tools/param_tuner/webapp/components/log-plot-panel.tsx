@@ -17,7 +17,7 @@ import {
   computeWallOffEdgeEvents,
   type AnalysisEvent,
 } from "@/lib/log-analysis";
-import { buildTrajectoryData, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
+import { buildTrajectoryData, DEFAULT_X_OFFSET, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
 
 const TRANSITION_COLUMNS = ["left45_d", "left45_2_d", "left45_3_d", "right45_d", "right45_2_d", "right45_3_d"];
 const TROUGH_COLUMNS = ["left45_d", "right45_d", "left90_d", "right90_d"] as const;
@@ -86,6 +86,10 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   const [csvText, setCsvText] = useState<string | null>(null);
   const [showLeft45, setShowLeft45] = useState(true);
   const [showRight45, setShowRight45] = useState(true);
+  // trajectory.ts's world-space x origin - depends on where this robot's
+  // sensor/frame zero sits relative to the maze grid, so it's a user field
+  // rather than a fixed constant.
+  const [xOffset, setXOffset] = useState(DEFAULT_X_OFFSET);
   const [clickInfo, setClickInfo] = useState<string | null>(null);
   const [pjBusy, setPjBusy] = useState(false);
 
@@ -163,7 +167,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   // trajectory.ts のタイムスタンプソート済み行とは別に生の行を保持する。
   const rawRows = useMemo(() => (csvText ? parseCsv(csvText) : []), [csvText]);
 
-  const trajectoryData = useMemo(() => buildTrajectoryData(rawRows), [rawRows]);
+  const trajectoryData = useMemo(() => buildTrajectoryData(rawRows, xOffset), [rawRows, xOffset]);
 
   // buildTrajectoryData() reuses row objects verbatim as TrajectoryPoint.raw,
   // so this identity-keyed map lets drop/rise markers re-anchor to the
@@ -184,8 +188,9 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
       high: dropHigh,
       columns,
       pointByRow,
+      xOffset,
     });
-  }, [rawRows, dropEnabled, dropMotionState, dropLow, dropHigh, dropColLeft, dropColRight, pointByRow]);
+  }, [rawRows, dropEnabled, dropMotionState, dropLow, dropHigh, dropColLeft, dropColRight, pointByRow, xOffset]);
 
   const transitionEvents = useMemo<AnalysisEvent[]>(() => {
     if (!transitionEnabled || rawRows.length === 0) return [];
@@ -194,8 +199,8 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
       .map((s) => parseFloat(s.trim()))
       .filter((n) => !Number.isNaN(n));
     if (states.length === 0) return [];
-    return computeMotionTransitionEvents(rawRows, { states, columns: TRANSITION_COLUMNS, pointByRow });
-  }, [rawRows, transitionEnabled, transitionStates, pointByRow]);
+    return computeMotionTransitionEvents(rawRows, { states, columns: TRANSITION_COLUMNS, pointByRow, xOffset });
+  }, [rawRows, transitionEnabled, transitionStates, pointByRow, xOffset]);
 
   const troughEvents = useMemo<AnalysisEvent[]>(() => {
     if (!troughEnabled || rawRows.length === 0) return [];
@@ -213,6 +218,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
       medianWindow: troughMedianWindow,
       columns,
       pointByRow,
+      xOffset,
     });
   }, [
     rawRows,
@@ -223,6 +229,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     troughMedianWindow,
     troughColumns,
     pointByRow,
+    xOffset,
   ]);
 
   const wallOffEvents = useMemo<AnalysisEvent[]>(() => {
@@ -239,6 +246,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
       fitLo: wallOffFitLo,
       fitHi: wallOffFitHi,
       pointByRow,
+      xOffset,
     });
   }, [
     rawRows,
@@ -249,6 +257,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     wallOffFitLo,
     wallOffFitHi,
     pointByRow,
+    xOffset,
   ]);
 
   const analysisEvents = useMemo(
@@ -423,6 +432,16 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
           <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={showRight45} onChange={(e) => setShowRight45(e.target.checked)} />
             Right45
+          </label>
+          <label className="flex items-center gap-1 text-xs" title="プロットの原点Xオフセット(mm)。ロボットのセンサー/座標系の原点とグリッドのズレを補正する">
+            原点Xオフセット
+            <input
+              type="number"
+              step={0.1}
+              className="w-16 rounded border border-border bg-background px-1"
+              value={xOffset}
+              onChange={(e) => setXOffset(parseFloat(e.target.value))}
+            />
           </label>
           <div className="flex-1" />
           <Button size="sm" variant="outline" disabled={!selected || pjBusy} onClick={() => void openPlotJuggler()}>

@@ -9,8 +9,11 @@ const SENSOR_X_OFFSET = 25.0; // mm forward from robot center
 const SENSOR_ANGLE_RAD = (58 * Math.PI) / 180; // sensor mounting angle
 const DEVIATION_DEG_TH = 25; // deg
 // Applied to trajectory points, wall-sensor projections, and the maze-cell
-// grid lines below so all three line up in the same world-space.
-const POS_OFFSET_X = 45 - 9;
+// grid lines below so all three line up in the same world-space. Depends on
+// where each robot's sensor/frame zero sits relative to the maze grid, so
+// it's exposed as a user-adjustable field (log-plot-panel.tsx) rather than
+// hardcoded.
+export const DEFAULT_X_OFFSET = 13;
 
 export interface TrajectoryPoint {
   x: number;
@@ -48,6 +51,10 @@ export interface TrajectoryData {
   gridLines: GridLine[];
   allPoints: TrajectoryPoint[];
   worldBounds: { xMin: number; xMax: number; yMin: number; yMax: number };
+  // The xOffset buildTrajectoryData() was called with - callers that re-add
+  // it to a raw point (trajectory-plot.tsx) read it from here instead of a
+  // module constant, so it always matches what this data was built with.
+  xOffset: number;
 }
 
 export function parseCsv(text: string): Record<string, number>[] {
@@ -137,7 +144,8 @@ function sequentialColor(t: number): string {
 export function projectSensorPoint(
   p: Pick<TrajectoryPoint, "x" | "y" | "angleCorrected" | "raw">,
   column: "left45_d" | "right45_d",
-  sideSign: 1 | -1
+  sideSign: 1 | -1,
+  xOffset: number
 ): WallPoint | null {
   const sensorD = p.raw[column];
   if (sensorD === undefined || Number.isNaN(sensorD)) return null;
@@ -148,7 +156,7 @@ export function projectSensorPoint(
   const mountX = p.x + SENSOR_X_OFFSET * Math.cos(angle);
   const mountY = p.y + SENSOR_X_OFFSET * Math.sin(angle);
   return {
-    x: mountX + sensorX * Math.cos(angle) - sideSign * sensorY * Math.sin(angle) + POS_OFFSET_X,
+    x: mountX + sensorX * Math.cos(angle) - sideSign * sensorY * Math.sin(angle) + xOffset,
     y: mountY + sensorX * Math.sin(angle) + sideSign * sensorY * Math.cos(angle),
   };
 }
@@ -157,10 +165,11 @@ function projectWallSensor(
   points: TrajectoryPoint[],
   column: "left45_d" | "right45_d",
   sideSign: 1 | -1,
-  out: WallPoint[]
+  out: WallPoint[],
+  xOffset: number
 ) {
   for (const p of points) {
-    const wp = projectSensorPoint(p, column, sideSign);
+    const wp = projectSensorPoint(p, column, sideSign, xOffset);
     if (wp) out.push(wp);
   }
 }
@@ -221,7 +230,7 @@ function buildGridLines(points: { x: number; y: number }[]): GridLine[] {
   return lines;
 }
 
-export function buildTrajectoryData(rawRows: Record<string, number>[]): TrajectoryData | null {
+export function buildTrajectoryData(rawRows: Record<string, number>[], xOffset: number = DEFAULT_X_OFFSET): TrajectoryData | null {
   if (rawRows.length === 0 || !("x" in rawRows[0]) || !("y" in rawRows[0])) return null;
 
   const sorted = stableSortByTimestamp(rawRows);
@@ -263,8 +272,8 @@ export function buildTrajectoryData(rawRows: Record<string, number>[]): Trajecto
   const leftWallPoints: WallPoint[] = [];
   const rightWallPoints: WallPoint[] = [];
   const allPoints: TrajectoryPoint[] = [];
-  let worldXMin = xMin + POS_OFFSET_X;
-  let worldXMax = xMax + POS_OFFSET_X;
+  let worldXMin = xMin + xOffset;
+  let worldXMax = xMax + xOffset;
   let worldYMin = yMin;
   let worldYMax = yMax;
   const grow = (x: number, y: number) => {
@@ -275,8 +284,8 @@ export function buildTrajectoryData(rawRows: Record<string, number>[]): Trajecto
   };
 
   for (const group of groups) {
-    projectWallSensor(group.points, "left45_d", 1, leftWallPoints);
-    projectWallSensor(group.points, "right45_d", -1, rightWallPoints);
+    projectWallSensor(group.points, "left45_d", 1, leftWallPoints, xOffset);
+    projectWallSensor(group.points, "right45_d", -1, rightWallPoints, xOffset);
     for (const p of group.points) allPoints.push(p);
   }
   for (const w of leftWallPoints) grow(w.x, w.y);
@@ -284,7 +293,7 @@ export function buildTrajectoryData(rawRows: Record<string, number>[]): Trajecto
   worldXMin = Math.min(worldXMin, xMin);
   worldXMax = Math.max(worldXMax, xMax);
 
-  const gridLines = buildGridLines(allPoints.map((p) => ({ x: p.x + POS_OFFSET_X, y: p.y })));
+  const gridLines = buildGridLines(allPoints.map((p) => ({ x: p.x + xOffset, y: p.y })));
   for (const l of gridLines) {
     grow(l.x1, l.y1);
     grow(l.x2, l.y2);
@@ -297,7 +306,6 @@ export function buildTrajectoryData(rawRows: Record<string, number>[]): Trajecto
     gridLines,
     allPoints,
     worldBounds: { xMin: worldXMin, xMax: worldXMax, yMin: worldYMin, yMax: worldYMax },
+    xOffset,
   };
 }
-
-export const TRAJECTORY_POS_OFFSET_X = POS_OFFSET_X;

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AnalysisEvent } from "@/lib/log-analysis";
-import { TRAJECTORY_POS_OFFSET_X, type TrajectoryData, type TrajectoryPoint } from "@/lib/trajectory";
+import type { TrajectoryData, TrajectoryPoint } from "@/lib/trajectory";
 
 interface Props {
   data: TrajectoryData | null;
@@ -53,14 +53,33 @@ function clampZoom(z: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 }
 
-function makeTransform(bounds: TrajectoryData["worldBounds"], w: number, h: number) {
-  const worldW = Math.max(bounds.xMax - bounds.xMin, 1e-6);
-  const worldH = Math.max(bounds.yMax - bounds.yMin, 1e-6);
+// World frame (ego_estimator.cpp): pos_x += d*cos(ang), pos_y += d*sin(ang),
+// so at ang=0 the robot drives toward +x and a left turn (+ang) heads +y.
+// Unrotated: +x right / +y up, i.e. the robot drives left-to-right.
+// Rotated (90deg CCW): +x up / +y left, i.e. the robot drives bottom-to-top
+// with its left wall on the screen's left - the usual top-down maze view.
+function makeTransform(bounds: TrajectoryData["worldBounds"], w: number, h: number, rotated: boolean) {
+  const worldX = Math.max(bounds.xMax - bounds.xMin, 1e-6);
+  const worldY = Math.max(bounds.yMax - bounds.yMin, 1e-6);
+  const spanW = rotated ? worldY : worldX;
+  const spanH = rotated ? worldX : worldY;
   const availW = Math.max(w - PADDING * 2, 1);
   const availH = Math.max(h - PADDING * 2, 1);
-  const scale = Math.min(availW / worldW, availH / worldH);
-  const offsetX = PADDING + (availW - worldW * scale) / 2;
-  const offsetY = PADDING + (availH - worldH * scale) / 2;
+  const scale = Math.min(availW / spanW, availH / spanH);
+  const offsetX = PADDING + (availW - spanW * scale) / 2;
+  const offsetY = PADDING + (availH - spanH * scale) / 2;
+
+  if (rotated) {
+    const toCanvas = (wx: number, wy: number): [number, number] => [
+      offsetX + (bounds.yMax - wy) * scale,
+      h - offsetY - (wx - bounds.xMin) * scale,
+    ];
+    const toWorld = (cx: number, cy: number): [number, number] => [
+      bounds.xMin + (h - offsetY - cy) / scale,
+      bounds.yMax - (cx - offsetX) / scale,
+    ];
+    return { toCanvas, toWorld, scale };
+  }
 
   const toCanvas = (wx: number, wy: number): [number, number] => [
     offsetX + (wx - bounds.xMin) * scale,
@@ -78,6 +97,9 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<View>(DEFAULT_VIEW);
+  // Default to the rotated (forward = up) orientation; the toggle in the
+  // corner overlay flips back to forward = right.
+  const [rotated, setRotated] = useState(true);
   const viewRef = useRef(view);
   useEffect(() => {
     viewRef.current = view;
@@ -147,7 +169,7 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
     ctx.fillRect(0, 0, size.width, size.height);
 
     if (!data) return;
-    const { toCanvas } = makeTransform(data.worldBounds, size.width, size.height);
+    const { toCanvas } = makeTransform(data.worldBounds, size.width, size.height, rotated);
 
     // Pan/zoom applies on top of the fit-to-canvas base transform above, in
     // CSS-pixel space (kept separate from the dpr scaling just set). Stroke
@@ -180,7 +202,7 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
     for (const group of data.groups) {
       ctx.fillStyle = group.color;
       for (const p of group.points) {
-        const [cx, cy] = toCanvas(p.x + TRAJECTORY_POS_OFFSET_X, p.y);
+        const [cx, cy] = toCanvas(p.x + data.xOffset, p.y);
         ctx.beginPath();
         ctx.arc(cx, cy, 1.8 * iz, 0, Math.PI * 2);
         ctx.fill();
@@ -213,15 +235,15 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
         // "sensor"-anchored markers are already projected wall-contact
         // points (POS_OFFSET_X baked in by projectSensorPoint), same as
         // leftWallPoints/rightWallPoints above - don't offset them again.
-        const [cx, cy] = m.anchored === "sensor" ? toCanvas(m.x, m.y) : toCanvas(m.x + TRAJECTORY_POS_OFFSET_X, m.y);
+        const [cx, cy] = m.anchored === "sensor" ? toCanvas(m.x, m.y) : toCanvas(m.x + data.xOffset, m.y);
         ctx.strokeStyle = style.color;
         ctx.fillStyle = style.color;
         ctx.lineWidth = 2 * iz;
 
         // Leader line back to the robot position this reading was taken from
-        // (linkX/linkY are raw logged coords, so they need POS_OFFSET_X).
+        // (linkX/linkY are raw logged coords, so they need the same xOffset).
         if (m.linkX !== undefined && m.linkY !== undefined) {
-          const [lx, ly] = toCanvas(m.linkX + TRAJECTORY_POS_OFFSET_X, m.linkY);
+          const [lx, ly] = toCanvas(m.linkX + data.xOffset, m.linkY);
           ctx.save();
           ctx.setLineDash([4 * iz, 3 * iz]);
           ctx.lineWidth = 1 * iz;
@@ -256,7 +278,7 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
         }
       }
     }
-  }, [data, size, showLeft45, showRight45, markers, view]);
+  }, [data, size, showLeft45, showRight45, markers, view, rotated]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current?.moved) return; // drag-to-pan, not a point pick
@@ -270,13 +292,13 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
     const { zoom, panX, panY } = viewRef.current;
-    const { toWorld } = makeTransform(data.worldBounds, size.width, size.height);
+    const { toWorld } = makeTransform(data.worldBounds, size.width, size.height, rotated);
     const [wx, wy] = toWorld((cx - panX) / zoom, (cy - panY) / zoom);
 
     let nearest: TrajectoryPoint | null = null;
     let bestDist = Infinity;
     for (const p of data.allPoints) {
-      const dx = p.x + TRAJECTORY_POS_OFFSET_X - wx;
+      const dx = p.x + data.xOffset - wx;
       const dy = p.y - wy;
       const d = dx * dx + dy * dy;
       if (d < bestDist) {
@@ -307,6 +329,10 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
   };
 
   const resetView = () => setView(DEFAULT_VIEW);
+  const toggleRotated = () => {
+    setRotated((r) => !r);
+    setView(DEFAULT_VIEW);
+  };
 
   return (
     <div ref={containerRef} className="relative h-full w-full">
@@ -320,6 +346,14 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
         className={view.zoom > 1 || view.panX !== 0 || view.panY !== 0 ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}
       />
       <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex items-center gap-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white/80">
+        <button
+          type="button"
+          className="pointer-events-auto underline hover:text-white"
+          title="90°回転の切り替え(進行方向↑ / 進行方向→)"
+          onClick={toggleRotated}
+        >
+          {rotated ? "進行方向↑" : "進行方向→"}
+        </button>
         <span>{Math.round(view.zoom * 100)}%</span>
         {(view.zoom !== 1 || view.panX !== 0 || view.panY !== 0) && (
           <button type="button" className="pointer-events-auto underline hover:text-white" onClick={resetView}>
