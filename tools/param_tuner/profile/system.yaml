@@ -62,8 +62,8 @@ debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
 # mode: 0 # メイン
-# mode: 1 # 最短スローム
-mode: 2 # 直進
+mode: 1 # 最短スローム
+# mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
@@ -89,8 +89,8 @@ test: # テスト走行時に使用するパラメータ群
   # 2026-08-30: sysid(duty5/10)実測の定常速度と同じ目標速度で定速直進させ、
   # そのときのFF出力duty%が実測のduty5/10と一致するかを検証する用
   # (v_inf@duty5=414mm/s, v_inf@duty10=997mm/s)。まずv_max=414から。
-  v_max: 7500
-  accl: 42500
+  v_max: 400
+  accl: 2500
   # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
   # 減速(decel)には効かない。
   accl_v_x: [0,      2500, 5000, 7500, 8000]
@@ -105,11 +105,11 @@ test: # テスト走行時に使用するパラメータ群
   decel_v_max_x: [0, 3000, 4500, 6000, 7000]
   decel_v_max_y: [47500, 42500, 46000, 45000, 42500]
 
-  decel: -47500
-  dia_accl: 45000
-  dia_decel: -47500
-  dist: 720 #直進
-  suction_active: 2
+  decel: -2500
+  dia_accl: 2500
+  dia_decel: -2500
+  dist: 120 #直進
+  suction_active: 0
 
   end_v: 10
   dia: 0
@@ -202,12 +202,12 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 16
+  file_idx: 1
   sla_dist: 90
   # sla_type: 3
-  sla_type: 3
-  sla_type2: 6 # 復路ターン種類
-  sla_return: 0 # 往復フラグ
+  sla_type: 4
+  sla_type2: 8 # 復路ターン種類
+  sla_return: 1 # 往復フラグ
   # sla_type: 1 normal
   # sla_type: 2 #orval
   # sla_type: 3 #large

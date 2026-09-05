@@ -3,8 +3,8 @@ dt: 0.001
 # tire_tread: 38.0
 # tire_tread: 37.72230756
 tire_tread: 38.72230756
-tire: 13.9750 #30deg 
-tire2: 13.9750 #30deg
+tire: 13.9650 #30deg 
+tire2: 13.9650 #30deg
 
 battery_gain: 4.057349148300616
 # battery_gain: 4.253592106693843
@@ -607,11 +607,18 @@ str_ang_pid:
 # 2026-08-23: kanayama_straight(ky/ki/k_theta)を並行実行する「いいとこ取り」
 # 構成に変更。速い成分はこちらのP+Dが担当、定常偏差の解消はkanayama_straight
 # のkiに一本化するため、二重積分を避けてi=0にした(旧値0.00375はコメントで保持)。
+# 2026-09-05: kanayama_straight.ki側は安定条件(ki<angle_pid.p/S)に縛られ
+# 時定数が1〜2秒と遅く、実用的な短距離(直進90mm=約0.2秒)では定常偏差を
+# 解消しきれないことが実測で判明(lat_check.py)。i=0にした本来の理由
+# (windup_i_maxがdtスケーリングされておらず即クランプ/チャタリングしていた
+# バグ)は2026-08-30に別修正済みなので、無効化していた理由は解消されている。
+# 一本化をやめ、速い成分側にも積分を持たせて短距離での定常偏差解消を狙う。
+# 要実機再検証: s_pid_i_v(旧i=0では常時0だった)が滑らかに立ち上がるか、
+# duty_sen/w_lpに高周波の暴れ(チャタリング)が出ないかを確認すること。
 str_ang_pid_fast:
   mode: 2
   p: 0.0375
-  # i: 0.00375 # kanayama_straight.kiと二重積分になるため0に変更(2026-08-23)
-  i: 0
+  i: 0.00375  # 2026-09-05: 0から復元(理由は上記コメント参照)
   d: 0.0325
   c: 0
 
@@ -778,6 +785,21 @@ pos_kalman_config:
 led_blight: [0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d]
 
 left_keep_dist_th: 8
+# 壁の切れ目(kireme)判定に使う *_dist_diff の速度正規化の基準速度[mm/s]。0で無効。
+# *_dist_diff は1tickあたりの生の差分なので、同じ壁エッジでも低速では小さく出る
+# (v=400mm/sなら1tickで0.4mmしか進まない)。sensor.yaml の kireme_*_fast /
+# kireme_*_wall_off* は最短走行の速度域で合わせてあるため、低速直進では実質
+# 無効になっていた(20260905_144848.csv: 切れ目で実測0.18mm/tick(最大0.42)に対し
+# kireme_r_fast=1.25 が一度も発火せず、後退中の右壁が有効なまま左右差が-5.5mmまで
+# 育ち、duty_sen が ±5°(sensor_deg_limitter_str)のレールに34tick張り付いて
+# w_lp が ±2.6rad/s で発振した)。
+# この速度で走っていたら差分がいくつになるかへ換算する = 走行距離あたりの
+# 変化率で判定するのと等価。2200 は最短走行の直進速度域で、そこでは従来と同じ挙動。
+# 探索走行は速度がほぼ一定でこの問題が起きず kireme_r/l も探索速度で調整済みの
+# ため、正規化は非探索(fast/wall_off)側にのみ効かせている(control_law.cpp
+# check_sen_error() 参照)。生の *_dist_diff は WallOffController が別しきい値で
+# 使っているので変更していない。
+kireme_diff_v_ref: 2200
 right_keep_dist_th: 8
 
 normal_sla_l_wall_off_th_in: 70 #[mm]
