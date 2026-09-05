@@ -126,6 +126,17 @@ slip_param_k2: 150
 
 sakiyomi_time: 4
 
+# 2026-09-05: MotionPlanning::hold()(吸引ランプ中の静止保持)専用の姿勢復元
+# ゲイン。通常のgyro_pid.c(0.0075)はduty換算0.57%/度と弱すぎて、吸引ファンの
+# 反動トルクで一瞬回転した分(実測0.3〜0.76°、20260905_2208xx.csv)を
+# hold中に戻せていなかった。hold()実行中だけこの値でgyro_pid.cを一時的に
+# 置き換える。初期値は暫定(0.0075の8倍)、要実機チューニング。
+hold_ang_gain: 0.06
+# 2026-09-05: hold_ang_gain(P)だけでは定常偏差が残ると判明
+# (20260905_222607.csv: 吸引duty完全プラトー後もkim_thetaが-0.2〜-0.25°で
+# 頭打ち)。hold中限定の角度積分I項のゲイン。初期値は暫定、要実機チューニング。
+hold_ang_i_gain: 0.04
+
 #ログON_OFF
 logging_time: 1.0
 search_log_enable: 1
@@ -142,8 +153,8 @@ ff_front_dury: 0.95
 # fail_safe
 fail_duty_cnt: 150
 fail_v_cnt: 12500
-fail_w_cnt: 2500
-fail_ang_cnt: 120
+fail_w_cnt: 25000
+fail_ang_cnt: 240
 fail_wall_off_cnt: 500
 fail_check_ang_th: 45 #deg
 
@@ -807,8 +818,8 @@ normal_sla_r_wall_off_th_in: 70 #[mm]
 normal_sla_l_wall_off_th_out: 80 #[mm]
 normal_sla_r_wall_off_th_out: 80 #[mm]
 
-normal_sla_l_wall_off_ref_cnt: 134 #413 -274 = 139 #125~144 
-normal_sla_r_wall_off_ref_cnt: 132 #404-274 = 130 #125~144
+normal_sla_l_wall_off_ref_cnt: 138 #413 -274 = 139 #125~144 
+normal_sla_r_wall_off_ref_cnt: 135 #404-274 = 130 #125~144
 
 normal_sla_l_wall_off_dist: 6
 normal_sla_r_wall_off_dist: 6

@@ -1655,7 +1655,7 @@ ControlLaw::summation_duty() {
     if (param_->FF_keV == 0) {
       ff_front2 = ff_roll2 = ff_duty_r2 = ff_duty_l2 = ff_friction_r =
           ff_friction_l = 0;
-    } else if (ABS(tgt_val_->ego_in.v) > 1.0f) {
+    } else {
       // mpc_tgt_calc.cpp(Simulink自動生成)のsign()実装が、入力がちょうど
       // 0.0fを跨ぐ瞬間だけ0を返す仕様のため、走行中でも数tickおきに
       // ff_friction_torque_r/lが瞬間的に0へ落ちるチャタリングを確認
@@ -1673,6 +1673,16 @@ ControlLaw::summation_duty() {
       // だったため。この誤保持で v=400mm/s 定速中に ff_front_torque=0.000527
       // (=+0.27V, duty約2%)が1627tick張り付き、I項が-0.34Vでそれを打ち消して
       // いた(20260905_045305.csv)。
+      //
+      // 2026-09-06: 上のガード全体が「並進速度ego_in.vが1.0を超える間だけ」
+      // 有効という外側条件を持っていたが、SLALOM/PIVOTの旋回中は並進速度が
+      // 一時的に1.0以下へ落ち込む一方、左右輪の個別速度(ideal_v_r/l)は
+      // 依然として1.0を超えて回っている区間がある。この外側条件のせいで
+      // 旋回のたびに保護が丸ごと無効化され、「周期的に(=旋回のたびに)
+      // ff_torque/friction_torqueが0に落ちる」症状として現れていた
+      // (t_1900.yamlでのfast-run計測で確認)。各項目は元々それぞれの
+      // 入力(accl / ideal_v_r / ideal_v_l)自身の大きさで判定しているため、
+      // 外側のvゲートを撤廃し各項目のガードだけで十分。
       if (ABS(tgt_val_->ego_in.accl) > 1.0f && ff_front2 == 0.0f &&
           ff_front_torque_prev_ != 0.0f) {
         ff_front2 = ff_front_torque_prev_;
@@ -1685,10 +1695,25 @@ ControlLaw::summation_duty() {
           ff_friction_torque_l_prev_ != 0.0f) {
         ff_friction_l = ff_friction_torque_l_prev_;
       }
+      // ff_roll_torque(=ff_roll2)はalpha2(mpc_tgt_calc.cpp内のMerge1[0]、
+      // exp/pow系のプロファイル式)に比例する。2026-09-06、実機ログ
+      // (t_1900.yaml実測、latest.csv)でSLALOM中にalphaが-2716〜-754等
+      // 明確に非ゼロの区間でもff_roll_torqueが数tickおきに0へ落ちるのを
+      // 確認。当初alpha2自身をゲート判定に使っていたが、alpha2は
+      // ff_roll_torqueの入力そのものなので0に落ちた瞬間はゲートも同時に
+      // 0になり判定が機能しない(自己参照)。front(accl)/friction(ideal_v)
+      // と同様に「別系統の関連量」でゲートする必要があるため、同じ
+      // sla_param由来だが別配列(Merge、time_step基準)で計算されalphaでは
+      // このチャタリングが再現しないegoin.alphaをゲートに使う。
+      if (ABS(tgt_val_->ego_in.alpha) > 1.0f && ff_roll2 == 0.0f &&
+          ff_roll_torque_prev_ != 0.0f) {
+        ff_roll2 = ff_roll_torque_prev_;
+      }
     }
     ff_front_torque_prev_ = ff_front2;
     ff_friction_torque_r_prev_ = ff_friction_r;
     ff_friction_torque_l_prev_ = ff_friction_l;
+    ff_roll_torque_prev_ = ff_roll2;
     se->ego.duty.ff_front_torque = ff_front2;
     se->ego.duty.ff_roll_torque = ff_roll2;
     se->ego.duty.ff_friction_torque_r = ff_friction_r;

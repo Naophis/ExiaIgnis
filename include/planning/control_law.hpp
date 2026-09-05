@@ -165,6 +165,11 @@ private:
   float ff_front_torque_prev_      = 0.0f;
   float ff_friction_torque_r_prev_ = 0.0f;
   float ff_friction_torque_l_prev_ = 0.0f;
+  // 2026-09-06: ff_roll_torqueはalpha2(角加速度)に比例するだけでsign()を
+  // 経由しないため単独ではチャタリングしないはずだが、上流のalpha2生成側
+  // (Merge/Switchブロック)でも同種の瞬間ゼロ落ちが起こり得るため、
+  // front/frictionと同じ保持ガードを揃える。
+  float ff_roll_torque_prev_       = 0.0f;
   // 2026-09-04: turn_duty_floor(下限クランプ)だけでは「落ちきってから
   // 頭打ち」にしかならず、落ちる速度自体が速いと間に合わずスリップする
   // (apply_duty_limitter()参照)。SLALOM/SLA_BACK_STR中のduty変化速度自体を

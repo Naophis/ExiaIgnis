@@ -40,7 +40,19 @@ normal:
 # duty・横G・タイヤ荷重すべてが実績値以下に収まる。代償はfootprint +11.9mm
 # と旋回時間 +8.1ms。
 #
-# front/back: X が 75.86 -> 87.78 と +11.92mm 伸びる分を吸収する必要がある。
+# [frontの下限] wall_off_controller.cpp で ps_front.dist に
+# wall_off_hold_dist_str_l(-2.5) / _r(-5.0) が直接加算されるため、
+# front + それ が正でないと SLA_FRONT_STR ごとスキップされ壁切れ補正が
+# 効かなくなる(motion_planning.cpp の `if (ps_front.dist > 0)`)。
+# front.left >= 2.5+margin / front.right >= 5.0+margin が必須で、これが
+# X の上限 = rad の上限を決める。90degターン(n=4, X=1.254*rad)で
+# 予算 X+front = 90.5(L)/90.0(R) とすると front.R>=7.0 から rad <= 66.2。
+# よって rad=70 は不可、rad=66 が上限。
+#   n=4 rad=66 v=2400: alpha=4887 FF=63.7% a_lat=8.90G front=7.74/7.24
+# FF 63.7%は予算(58%)を6pt超、a_lat 8.90Gは実証済み上限(8.99G)ギリギリで、
+# duty・グリップとも余裕がない。2400/largeはこの機体の限界付近にある。
+#
+# front/back: X が 75.86 -> 82.76 と +6.90mm 伸びる分を吸収する必要がある。
 # backは従来のback+Yを保つよう -11.92mm。frontは元値4.80/7.80から引くと
 # 負になってしまうため、実績のあるt_2200の幾何予算(front+X = 90.5/90.0mm)を
 # そのまま適用した値を置いている。t_2400は元々 front+X = 80.7mm と
@@ -52,11 +64,13 @@ large:
   ang: 90.0
   pow_n: 4
   # rad: 60.5
-  rad: 70
+  # rad: 70   # front.right が 2.22 となり wall_off_hold_dist_str_r(-5.0) を
+  #           # 足すと負になるため不可(下の[frontの下限]参照)
+  rad: 66
   # front: { left: 4.802694878657064, right: 7.802694878657064 }
   # back: { left: 65.59381550343086, right: 70.59381550343086 }
-  front: { left: 2.72, right: 2.22 }
-  back: { left: 53.67381550343086, right: 58.67381550343086 }
+  front: { left: 7.74, right: 7.24 }
+  back: { left: 58.70, right: 63.70 }
 dia45:
   v: 2400
   ang: 45.0

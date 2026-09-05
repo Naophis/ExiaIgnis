@@ -99,11 +99,11 @@ void MainTask::test_sla() {
   }
   if (sys_.test.suction_active != 0) {
     mp->unhold();
+  } else {
+    reset_tgt_data();
+    reset_ego_data();
+    planning_->motor_enable();
   }
-
-  // reset_tgt_data();
-  // reset_ego_data();
-  // planning_->motor_enable();
 
   // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
   // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。

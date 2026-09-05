@@ -70,18 +70,18 @@ dia: #midを参照
     # right45: 30.625
     # left45: -33.5 #斜め45度センサー制御条件 1 < val < this_parm
     # right45: -30.75 #斜め45度センサー制御条件  1 < val < this_parm
-    left45: 34.5 #斜め45度センサー制御条件 1 < val < this_parm
+    left45: 32.0 #斜め45度センサー制御条件 1 < val < this_parm
     right45: 32.5 #斜め45度センサー制御条件  1 < val < this_parm
-    left90: 156 # mid
-    right90: 111    # mid
+    left90: 130 # mid
+    right90: 112    # mid
 
     kireme_l: 165 # dia front over th (not use)
     kireme_r: 160 # dia front over th (not use)
   exist:
-    left45: 33.0 #斜め制御横センサー制御条件
+    left45: 30.5 #斜め制御横センサー制御条件
     right45: 31.0 #斜め制御横センサー制御条件
-    left90: 151 # dia.ref.left90 -5
-    right90: 106 # dia.ref.right90 -5
+    left90: 125 # dia.ref.left90 -5
+    right90: 107 # dia.ref.right90 -5
     # left45: 3.5 #斜め制御横センサー制御条件
     # right45: 3.5 #斜め制御横センサー制御条件
     # left90: 36.0 # dia.ref.left90 -5
@@ -114,9 +114,9 @@ search:
     # 前壁補正
     front_ctrl_th: 56 #ref
     # front_ctrl: 46.0 #前壁補正：距離
-    front_ctrl: 48.250 #前壁補正：距離
+    front_ctrl: 46.750 #前壁補正：距離
     # kireme_r: -0.6  #前壁補正：角度 +が右、-が左
-    kireme_r: -0.50  #前壁補正：角度 +が右、-が左
+    kireme_r: 0.750  #前壁補正：角度 +が右、-が左
 gain:
   # F: [70, 1] # 探索時の壁制御上限
   # F: [0.00045, 1] # 探索時の壁制御上限
