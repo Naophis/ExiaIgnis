@@ -8,6 +8,13 @@
 
 import { projectSensorPoint, type TrajectoryPoint } from "@/lib/trajectory";
 
+// Client-side port of tools/param_tuner/wall_off_edge_check.py, extended to
+// place markers on the spatial trajectory plot and value-vs-index chart
+// (the .py only prints numbers). See that script's docstring for the
+// rationale (WallOffController's current detection is a level threshold on
+// an absolute sensor value, which lags by however far the baseline sits
+// below the threshold - worse the closer the robot is hugging the wall).
+
 export interface AnalysisEvent {
   x: number;
   y: number;
@@ -28,7 +35,15 @@ export interface AnalysisEvent {
     | "state-start-sensor"
     | "state-end-sensor"
     | "trough"
-    | "trough-rise";
+    | "trough-rise"
+    // wall_off_edge_check.py 相当: WallOffController の壁切れ判定を
+    // レベル判定(現行)/気づいた点(Layer1)/逆算エッジ(Layer2)の3段で可視化する。
+    // 現行方式がどれだけ遅れて発火しているかを、走行位置として直接比較できる。
+    | "wall-off-actual"
+    | "wall-off-actual-sensor"
+    | "wall-off-arm"
+    | "wall-off-edge"
+    | "wall-off-edge-sensor";
   label: string;
   // Companion anchor for a leader line: raw logged robot (x, y) of the same
   // row, so a sensor-anchored marker can be drawn tied to the robot marker it
@@ -422,6 +437,216 @@ export function computeMotionTransitionEvents(
           );
         }
       }
+    }
+  }
+  return events;
+}
+
+// --- wall_off_edge_check.py port -------------------------------------------
+
+export interface WallOffEdgeOptions {
+  motionState: number;
+  baselineN?: number; // baseline = median of the first N samples in the segment
+  armDelta?: number; // [mm] "noticed" once the sensor rises this far above baseline
+  fitLo?: number; // [mm] fit window lower bound, relative to baseline
+  fitHi?: number; // [mm] fit window upper bound, relative to baseline
+  minFitN?: number;
+  pointByRow?: RowPointMap;
+}
+
+const WALL_OFF_DEFAULTS = { baselineN: 5, armDelta: 1.0, fitLo: 1.0, fitHi: 5.0, minFitN: 3 };
+
+function median(values: number[]): number {
+  const s = values.slice().sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Same slope/intercept/r2 as wall_off_edge_check.py's reg().
+function linreg(x: number[], y: number[]): { slope: number; intercept: number; r2: number } {
+  const n = x.length;
+  const mx = x.reduce((a, b) => a + b, 0) / n;
+  const my = y.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = x[i] - mx;
+    const dy = y[i] - my;
+    sxy += dx * dy;
+    sxx += dx * dx;
+    syy += dy * dy;
+  }
+  const slope = sxx !== 0 ? sxy / sxx : 0;
+  const intercept = my - slope * mx;
+  const r2 = sxx > 0 && syy > 0 ? (sxy * sxy) / (sxx * syy) : NaN;
+  return { slope, intercept, r2 };
+}
+
+// The side that rose further over the segment is the one whose wall the
+// robot is pulling away from (matches wall_off_edge_check.py::pick_side).
+function pickWallOffSide(segRows: Record<string, number>[], baselineN: number): "left" | "right" {
+  const n = segRows.length;
+  const bl = median(segRows.slice(0, baselineN).map((r) => r.left45_d));
+  const br = median(segRows.slice(0, baselineN).map((r) => r.right45_d));
+  const dl = segRows[n - 1].left45_d - bl;
+  const dr = segRows[n - 1].right45_d - br;
+  return dr > dl ? "right" : "left";
+}
+
+// Interpolates a synthetic TrajectoryPoint at `target` (in the segment's
+// "dist" units) from the two bracketing rows' already-computed trajectory
+// points, so the model's back-projected edge - which generally falls between
+// logged samples, not on one - can still be drawn at a specific (x, y).
+function interpolateAt(
+  segRows: Record<string, number>[],
+  xs: number[],
+  target: number,
+  pointByRow: RowPointMap
+): { x: number; y: number; angleCorrected: number; index?: number; extrapolated: boolean } | null {
+  const n = xs.length;
+  if (n < 2) return null;
+  let i = 0;
+  while (i < n - 2 && xs[i + 1] < target) i++;
+  const p0 = pointByRow.get(segRows[i]);
+  const p1 = pointByRow.get(segRows[i + 1]);
+  if (!p0 || !p1) return null;
+  const span = xs[i + 1] - xs[i];
+  const t = span !== 0 ? (target - xs[i]) / span : 0;
+  const lerp = (a: number, b: number) => a + (b - a) * t;
+  const idx0 = asNum(segRows[i], "index");
+  const idx1 = asNum(segRows[i + 1], "index");
+  return {
+    x: lerp(p0.x, p1.x),
+    y: lerp(p0.y, p1.y),
+    angleCorrected: lerp(p0.angleCorrected, p1.angleCorrected),
+    index: idx0 !== undefined && idx1 !== undefined ? lerp(idx0, idx1) : undefined,
+    extrapolated: t < 0 || t > 1,
+  };
+}
+
+// Port of wall_off_edge_check.py: main. Per WALL_OFF (or WALL_OFF_DIA, via
+// `motionState`) segment, emits up to three markers per side:
+//   - wall-off-actual: where the current level-threshold code actually fired
+//   - wall-off-arm:     where a naive "> baseline + armDelta" check would
+//                        first notice the rise (Layer1, for reference only)
+//   - wall-off-edge:    the true transition, back-projected from a straight
+//                        line fit through the rise (Layer2) - independent of
+//                        detection speed, so it's what a corrected controller
+//                        should aim to react to instead of x-actual.
+// `x-actual` running well past `x-edge` on the plot *is* the detection lag;
+// no separate number is needed to see it.
+export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: WallOffEdgeOptions): AnalysisEvent[] {
+  const baselineN = opts.baselineN ?? WALL_OFF_DEFAULTS.baselineN;
+  const armDelta = opts.armDelta ?? WALL_OFF_DEFAULTS.armDelta;
+  const fitLo = opts.fitLo ?? WALL_OFF_DEFAULTS.fitLo;
+  const fitHi = opts.fitHi ?? WALL_OFF_DEFAULTS.fitHi;
+  const minFitN = opts.minFitN ?? WALL_OFF_DEFAULTS.minFitN;
+  const pointByRow = opts.pointByRow;
+
+  const events: AnalysisEvent[] = [];
+  for (const [bStart, bEnd] of findBlocks(rows, opts.motionState)) {
+    const segRows = rows.slice(bStart, bEnd + 1);
+    if (segRows.length < baselineN + minFitN) continue;
+    if (!("dist" in segRows[0]) || !("left45_d" in segRows[0]) || !("right45_d" in segRows[0])) continue;
+
+    const side = pickWallOffSide(segRows, baselineN);
+    const col = side === "left" ? "left45_d" : "right45_d";
+    const sideSign: 1 | -1 = side === "left" ? 1 : -1;
+    const xs = segRows.map((r) => r.dist);
+    const ys = segRows.map((r) => r[col]);
+    const baseline = median(ys.slice(0, baselineN));
+
+    const lastI = segRows.length - 1;
+    const actualRow = segRows[lastI];
+    if (hasXY(actualRow)) {
+      events.push({
+        x: actualRow.x,
+        y: actualRow.y,
+        anchored: "robot",
+        kind: "wall-off-actual",
+        label:
+          `壁切れ[${side}] 現行検出 idx=${fmt(actualRow, "index")} 走行=${xs[lastI].toFixed(1)}mm ` +
+          `(baseline=${baseline.toFixed(2)}mm +${(ys[lastI] - baseline).toFixed(2)}mm)`,
+        column: col,
+        seriesIndex: asNum(actualRow, "index"),
+        seriesValue: ys[lastI],
+      });
+      const sensorPos = resolvePos(actualRow, col, pointByRow);
+      if (sensorPos.anchored === "sensor") {
+        events.push({
+          ...sensorPos,
+          kind: "wall-off-actual-sensor",
+          label: `壁切れ[${side}] 現行検出時点の壁位置`,
+          linkX: actualRow.x,
+          linkY: actualRow.y,
+        });
+      }
+    }
+
+    let armI = -1;
+    for (let i = 0; i < ys.length; i++) {
+      if (ys[i] - baseline > armDelta) {
+        armI = i;
+        break;
+      }
+    }
+    if (armI >= 0 && hasXY(segRows[armI])) {
+      const armRow = segRows[armI];
+      events.push({
+        x: armRow.x,
+        y: armRow.y,
+        anchored: "robot",
+        kind: "wall-off-arm",
+        label: `壁切れ[${side}] 気づいた点(baseline+${armDelta}mm) idx=${fmt(armRow, "index")} 走行=${xs[armI].toFixed(1)}mm`,
+        column: col,
+        seriesIndex: asNum(armRow, "index"),
+        seriesValue: ys[armI],
+      });
+    }
+
+    const fitIdx = ys.reduce<number[]>((acc, y, i) => {
+      if (y - baseline > fitLo && y - baseline < fitHi) acc.push(i);
+      return acc;
+    }, []);
+    if (fitIdx.length < minFitN || !pointByRow) continue;
+    const { slope, intercept, r2 } = linreg(
+      fitIdx.map((i) => xs[i]),
+      fitIdx.map((i) => ys[i])
+    );
+    if (slope === 0) continue;
+    const xEdge = (baseline - intercept) / slope;
+    const interp = interpolateAt(segRows, xs, xEdge, pointByRow);
+    if (!interp) continue;
+
+    events.push({
+      x: interp.x,
+      y: interp.y,
+      anchored: "robot",
+      kind: "wall-off-edge",
+      label:
+        `壁切れ[${side}] 逆算エッジ 走行=${xEdge.toFixed(1)}mm slope=${slope.toFixed(3)}mm/mm r2=${r2.toFixed(3)} ` +
+        `検出遅れ=${(xs[lastI] - xEdge).toFixed(1)}mm` +
+        (interp.extrapolated ? " (区間外挿・要注意)" : ""),
+      column: col,
+      seriesIndex: interp.index,
+      seriesValue: baseline,
+    });
+    const wp = projectSensorPoint(
+      { x: interp.x, y: interp.y, angleCorrected: interp.angleCorrected, raw: { [col]: baseline } },
+      col as "left45_d" | "right45_d",
+      sideSign
+    );
+    if (wp) {
+      events.push({
+        x: wp.x,
+        y: wp.y,
+        anchored: "sensor",
+        kind: "wall-off-edge-sensor",
+        label: `壁切れ[${side}] 逆算エッジの壁位置`,
+        linkX: interp.x,
+        linkY: interp.y,
+      });
     }
   }
   return events;

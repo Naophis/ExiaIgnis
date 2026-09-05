@@ -14,6 +14,7 @@ import {
   computeMotionTransitionEvents,
   computeSensorDropEvents,
   computeSensorTroughEvents,
+  computeWallOffEdgeEvents,
   type AnalysisEvent,
 } from "@/lib/log-analysis";
 import { buildTrajectoryData, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
@@ -44,6 +45,11 @@ const EVENT_COLOR: Record<AnalysisEvent["kind"], string> = {
   "state-end-sensor": "text-sky-300",
   trough: "text-purple-400",
   "trough-rise": "text-cyan-400",
+  "wall-off-actual": "text-orange-400",
+  "wall-off-actual-sensor": "text-orange-300",
+  "wall-off-arm": "text-yellow-400",
+  "wall-off-edge": "text-green-400",
+  "wall-off-edge-sensor": "text-green-300",
 };
 
 interface LogFileInfo {
@@ -110,6 +116,14 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   // troughColumns で選んだ列を表示し、センサートラフ解析が有効なら
   // trough/rise マーカーも重畳する。
   const [chartEnabled, setChartEnabled] = useState(false);
+
+  // wall_off_edge_check.py 相当のオーバーレイ設定
+  const [wallOffEnabled, setWallOffEnabled] = useState(false);
+  const [wallOffMotionState, setWallOffMotionState] = useState(6);
+  const [wallOffBaselineN, setWallOffBaselineN] = useState(5);
+  const [wallOffArmDelta, setWallOffArmDelta] = useState(1.0);
+  const [wallOffFitLo, setWallOffFitLo] = useState(1.0);
+  const [wallOffFitHi, setWallOffFitHi] = useState(5.0);
 
   const refreshFiles = useCallback(async () => {
     const res = await fetch("/api/logs");
@@ -209,9 +223,30 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     pointByRow,
   ]);
 
+  const wallOffEvents = useMemo<AnalysisEvent[]>(() => {
+    if (!wallOffEnabled || rawRows.length === 0) return [];
+    return computeWallOffEdgeEvents(rawRows, {
+      motionState: wallOffMotionState,
+      baselineN: wallOffBaselineN,
+      armDelta: wallOffArmDelta,
+      fitLo: wallOffFitLo,
+      fitHi: wallOffFitHi,
+      pointByRow,
+    });
+  }, [
+    rawRows,
+    wallOffEnabled,
+    wallOffMotionState,
+    wallOffBaselineN,
+    wallOffArmDelta,
+    wallOffFitLo,
+    wallOffFitHi,
+    pointByRow,
+  ]);
+
   const analysisEvents = useMemo(
-    () => [...dropEvents, ...transitionEvents, ...troughEvents],
-    [dropEvents, transitionEvents, troughEvents]
+    () => [...dropEvents, ...transitionEvents, ...troughEvents, ...wallOffEvents],
+    [dropEvents, transitionEvents, troughEvents, wallOffEvents]
   );
 
   const chartSeries = useMemo<TimeSeries[]>(() => {
@@ -235,8 +270,11 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   }, [chartEnabled, rawRows, troughColumns]);
 
   const chartMarkers = useMemo(
-    () => (troughEnabled ? troughEvents.filter((e) => e.seriesIndex !== undefined) : []),
-    [troughEnabled, troughEvents]
+    () =>
+      [...(troughEnabled ? troughEvents : []), ...(wallOffEnabled ? wallOffEvents : [])].filter(
+        (e) => e.seriesIndex !== undefined
+      ),
+    [troughEnabled, troughEvents, wallOffEnabled, wallOffEvents]
   );
 
   const openPlotJuggler = useCallback(async (name?: string) => {
@@ -509,12 +547,73 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
                   {col}
                 </label>
               ))}
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={wallOffEnabled} onChange={(e) => setWallOffEnabled(e.target.checked)} />
+            壁切れエッジ解析(wall_off_edge_check.py)
+          </label>
+          {wallOffEnabled && (
+            <>
               <label className="flex items-center gap-1">
-                <input type="checkbox" checked={chartEnabled} onChange={(e) => setChartEnabled(e.target.checked)} />
-                時系列グラフ表示(上のチェック列)
+                motion_state
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={wallOffMotionState}
+                  onChange={(e) => setWallOffMotionState(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                baseline N
+                <input
+                  type="number"
+                  min={1}
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={wallOffBaselineN}
+                  onChange={(e) => setWallOffBaselineN(parseInt(e.target.value, 10))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                arm delta
+                <input
+                  type="number"
+                  step={0.1}
+                  className="w-16 rounded border border-border bg-background px-1"
+                  value={wallOffArmDelta}
+                  onChange={(e) => setWallOffArmDelta(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                fit lo
+                <input
+                  type="number"
+                  step={0.1}
+                  className="w-16 rounded border border-border bg-background px-1"
+                  value={wallOffFitLo}
+                  onChange={(e) => setWallOffFitLo(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                fit hi
+                <input
+                  type="number"
+                  step={0.1}
+                  className="w-16 rounded border border-border bg-background px-1"
+                  value={wallOffFitHi}
+                  onChange={(e) => setWallOffFitHi(parseFloat(e.target.value))}
+                />
               </label>
             </>
           )}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={chartEnabled} onChange={(e) => setChartEnabled(e.target.checked)} />
+            時系列グラフ表示(センサートラフ解析のチェック列を表示。壁切れエッジのマーカーも重畳)
+          </label>
         </div>
         <Separator />
         <div className="min-h-0 flex-1">
