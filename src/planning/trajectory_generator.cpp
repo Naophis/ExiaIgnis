@@ -20,14 +20,18 @@ void TrajectoryGenerator::setup() {
 
 __attribute__((noinline, section(".time_critical.trajectory")))
 void TrajectoryGenerator::generate(float last_tgt_angle) {
-  auto tmp = tgt_val->ego_in.img_ang;
+  // mpcへ渡す間だけego_in.img_angを前セグメント基準(+last_tgt_angle)へ
+  // 回し、抜けるときにtmpへ戻す(下のコメント参照)。
+  const auto tmp = tgt_val->ego_in.img_ang;
   tgt_val->ego_in.img_ang += last_tgt_angle;
 
   if (param->trj_length <= 0) {
+    tgt_val->ego_in.img_ang = tmp;
     return;
   }
 
   if ((int)trajectory_points.size() < param->trj_length) {
+    tgt_val->ego_in.img_ang = tmp;
     return;
   }
 
@@ -48,7 +52,16 @@ void TrajectoryGenerator::generate(float last_tgt_angle) {
     }
   }
   mpc_next_ego.img_ang -= last_tgt_angle;
-  (void)tmp;
+  // 2026-09-06: mpcへ渡すために足したlast_tgt_angleを元に戻す。従来はtmpを
+  // 取っておきながら戻しておらず((void)tmp)、copy_tgt()でmpc_next_ego.img_ang
+  // が代入されるまでの間ego_in.img_angが前セグメント基準のまま残っていた。
+  // Core1側はその間img_angを読まないが、Core0の1kHzログタイマは位相次第で
+  // この窓を踏むため、SLALOM直後のSTRAIGHT/SLA_BACK_STR(last_tgt_angle=
+  // ±45/90/135°)でideal_angが45°等のまま記録され、ang/kim_theta(セグメント
+  // ローカル)と乖離して見えていた(20260906_025821.csv idx1124-1288:
+  // ideal_ang=45.0に対しang≈0)。copy_tgt()のimg_ang_z(=前tickのimg_ang)
+  // 経由でimg_ang_sumにも毎tick -last_tgt_angle が混入していた。
+  tgt_val->ego_in.img_ang = tmp;
 }
 
 __attribute__((noinline, section(".time_critical.trajectory")))
@@ -65,47 +78,52 @@ void TrajectoryGenerator::calc_kanayama(
 
   const int idx = std::min(param->trj_length - 1, idx_val);
 
-  ego.odm.x     = trajectory_points[idx].ideal_px;
-  ego.odm.y     = trajectory_points[idx].ideal_py;
-  ego.odm.theta = trajectory_points[idx].img_ang;
-
-  float vd = ego.odm.v = trajectory_points[idx].v;
-  float wd = ego.odm.w = trajectory_points[idx].w;
-
-  // 2026-09-05: kim.x/yもlast_tgt_angle分だけodm座標系へ回してから差を取る。
-  // odm(trajectory_points由来)はgenerate()が`ego_in.img_ang += last_tgt_angle`
-  // を掛けてmpcへ渡すため前セグメント基準のグローバル座標系で積分される一方、
-  // kimはcp_request()で`kim.theta -= last_tgt_angle`とリベースされた
-  // セグメントローカル座標系にある。下のkim_theta_gでthetaだけは揃えていたが
-  // x/yを回していなかったため、last_tgt_angle!=0になる唯一のケースである
-  // SLA_BACK_STR(直前が必ずSLALOMなのでlast_tgt_angle=±90°)で、odmは+y方向・
-  // kimは+x方向へ進み、dx/dyが毎tick v*dt(=2.2mm@2200)ずつ乖離していた。
-  // Kanayamaがこれを横偏差と誤認してknym_wを-6→+39rad/sまで直線ランプさせ、
-  // 両輪duty飽和・旋回後の角度が一度収束してから8〜10°まで戻る症状になっていた
-  // (20260905_042530.csv: dy +3.9→+42.0mm。この回転を入れるとey は-0.95→
-  // -5.10mmに収まる)。last_tgt_angle==0の他モーションでは恒等変換。
+  // 参照(odm)と実測(kim)はセグメントローカル座標系で比較する(2026-09-06)。
+  // trajectory_pointsはgenerate()が`ego_in.img_ang += last_tgt_angle`を掛けて
+  // mpcへ渡すため前セグメント基準(旋回前)のグローバル座標系で積分される
+  // 一方、kimはcp_request()で`kim.theta -= last_tgt_angle`とリベースされた
+  // セグメントローカル座標系にある(last_tgt_angle!=0になるのはSLA_BACK_STRと
+  // SLALOM直後のSTRAIGHT)。
+  //  - 2026-09-05まで: kim側をグローバルへ回して(kim_x_g/kim_y_g/kim_theta_g)
+  //    差を取っていた(x/yを回していなかった頃はSLA_BACK_STRでdx/dyが毎tick
+  //    v*dtずつ開きknym_wが-6→+39rad/sまでランプする事故があった、
+  //    20260905_042530.csv)。計算は正しかったがログにはodm(グローバル)と
+  //    kim(ローカル)を別々の座標系のまま出していたため、SLALOM直後の
+  //    STRAIGHT/SLA_BACK_STRで odm_theta=45°/-135° に対し kim_theta≈0、
+  //    odm_x==odm_y(45°方向へ積分)のように見え、Kanayamaの姿勢誤差が45°
+  //    あるかのように読めていた(20260906_025821.csv idx1124-1288 / 795-831。
+  //    実際は同csvのSLA_BACK_STR中 knym_w=0.001〜0.012rad/s で実害なし)。
+  //  - 2026-09-06: odm側をR(-last_tgt_angle)でローカルへ回す方式に変更。
+  //    回転は一次変換なので ex/ey/e_theta は従来と同一
+  //    (R(-θl)(odm_l-kim_l) = R(-θl-lta)·R(lta)(odm_l-kim_l))。ログの
+  //    odm_x/odm_y/odm_theta はkim_x/kim_y/kim_thetaと同じ座標系になり、
+  //    差がそのままdx/dy/d_thetaとして読める。last_tgt_angle==0なら恒等変換。
+  const auto &tp = trajectory_points[idx];
   const float cos_lta = std::cos(last_tgt_angle);
   const float sin_lta = std::sin(last_tgt_angle);
-  const float kim_x_g = cos_lta * ego.kim.x - sin_lta * ego.kim.y;
-  const float kim_y_g = sin_lta * ego.kim.x + cos_lta * ego.kim.y;
+  ego.odm.x     =  cos_lta * tp.ideal_px + sin_lta * tp.ideal_py;
+  ego.odm.y     = -sin_lta * tp.ideal_px + cos_lta * tp.ideal_py;
+  ego.odm.theta = tp.img_ang - last_tgt_angle;
 
-  float dx = ego.odm.x - kim_x_g;
-  float dy = ego.odm.y - kim_y_g;
+  float vd = ego.odm.v = tp.v;
+  float wd = ego.odm.w = tp.w;
+
+  float dx = ego.odm.x - ego.kim.x;
+  float dy = ego.odm.y - ego.kim.y;
   if (tgt_val->ego_in.v < 10) {
     dx = dy = 0;
   }
 
-  // ang_kfはenable_kalman_gyro=0時ego_in.ang(目標値)のコピーに過ぎず
-  // e_thetaが常に0になる退化バグがあったため、kanayama_straight
-  // (control_law.cpp)と同様に実測kim.thetaを使う。last_tgt_angleは
-  // odm側(trajectory_points)の基準に合わせるためのオフセット
-  // (cp_request()でkim.thetaにも同じオフセットが適用される)。
-  const float kim_theta_g = ego.kim.theta + last_tgt_angle;
+  // 実測姿勢にはang_kfではなくkim.thetaを使う(kanayama_straight/
+  // control_law.cppと同様)。enable_kalman_gyro=0のときang_kfはego_in.angの
+  // コピーだが、kim.thetaはw_kf積分でcp_request()のリベースも受けており
+  // odm側(上でローカルへ回した)と同じセグメントローカル座標系にある。
+  const float kim_theta = ego.kim.theta;
 
-  float d_theta = ego.odm.theta - kim_theta_g;
+  float d_theta = ego.odm.theta - kim_theta;
   float e_theta = d_theta;
-  const float cos_theta = std::cos(kim_theta_g);
-  const float sin_theta = std::sin(kim_theta_g);
+  const float cos_theta = std::cos(kim_theta);
+  const float sin_theta = std::sin(kim_theta);
   if (tgt_val->ego_in.v < 10) {
     e_theta = 0;
   }

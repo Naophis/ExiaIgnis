@@ -811,6 +811,19 @@ left_keep_dist_th: 8
 # check_sen_error() 参照)。生の *_dist_diff は WallOffController が別しきい値で
 # 使っているので変更していない。
 kireme_diff_v_ref: 2200
+# kireme_diff_v_ref 正規化の下限[mm/tick](生の差分)。0で無効。
+# 正規化は「同じ壁エッジなら差分は速度に比例する」前提だが、センサーの量子化
+# (1LSB≈0.04mm)/LPノイズや通常の操舵によるみかけの距離変化は速度に比例せず、
+# 低速でも±0.1〜0.25mm/tick程度出る(20260906_025821.csv、v=400の安定壁で
+# |diff| p95=0.19〜0.25)。v=400では kireme_*_wall_off=0.25 が生の0.045mm/tick
+# 相当まで締まり、ノイズだけで check_diff が落ちて唯一の壁の誤差が1tickだけ0に
+# なる→duty_sen(-5°)とkanayama Δwが1tick抜けて角速度目標が約+1rad/s跳ぶ、が
+# 数tickおきに起きていた(同csv idx432-550 SLA_FRONT_STR: 166tickのゼロ落ち、
+# w_lp ±0.5rad/s振動)。|生差分| < min(しきい値, この値) なら壁ありとみなす。
+# min()で挟むので v>=2200 の挙動は変わらない。同csvでの再計算では
+# WALL_OFF/SLA_FRONT_STR区間のcheck_diff落ちが 189/488tick → 23/488tick
+# (残りはほぼ本物の壁端 0.8〜2mm/tick)。control_law.cpp check_sen_error() 参照。
+kireme_diff_noise_th: 0.3
 right_keep_dist_th: 8
 
 normal_sla_l_wall_off_th_in: 70 #[mm]

@@ -545,22 +545,37 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
     // 探索速度で調整済みのため生の差分のままにする。
     const float r45_diff = se->ego.right45_dist_diff_norm;
     const float l45_diff = se->ego.left45_dist_diff_norm;
+    // 2026-09-06: 正規化しきい値にノイズ下限(kireme_diff_noise_th)を設ける。
+    // 低速では正規化ゲイン(kireme_diff_v_ref/v、v=400で5.5倍)がセンサー
+    // ノイズや通常操舵によるみかけの距離変化まで増幅し、kireme_*_wall_off
+    // =0.25 が生の0.045mm/tick(量子化1LSB相当)まで締まっていた。その結果
+    // 唯一の壁で check_diff が落ちると check_*_sensor_error() は check++ だけ
+    // して誤差を足さないため error_p=0 → duty_sen/Δw が1tick抜け、角度目標が
+    // 5°分跳んで角速度目標に約1rad/sのスパイクが数tickおきに入っていた
+    // (20260906_025821.csv idx432-550)。|生差分| < min(しきい値, noise_th)
+    // なら速度によらず壁ありとみなす。min()で挟むため v>=kireme_diff_v_ref
+    // では従来と同一(structs.hpp kireme_diff_noise_th のコメント参照)。
+    const float noise_th = prm->kireme_diff_noise_th;
+    const float r45_raw = se->ego.right45_dist_diff;
+    const float l45_raw = se->ego.left45_dist_diff;
+    const auto kireme_ok = [noise_th](float raw, float norm, float th) {
+      return ABS(raw) < std::min(th, noise_th) || ABS(norm) < th;
+    };
     if (tgt_val_->motion_type == MotionType::WALL_OFF ||
         tgt_val_->motion_type == MotionType::SLA_FRONT_STR) {
-      check_diff_right = (r45_diff < 0)
-                             ? ABS(r45_diff) <
-                                   prm->sen_ref_p.normal.ref.kireme_r_wall_off2
-                             : ABS(r45_diff) <
-                                   prm->sen_ref_p.normal.ref.kireme_r_wall_off;
-      check_diff_left = (l45_diff < 0)
-                            ? ABS(l45_diff) <
-                                  prm->sen_ref_p.normal.ref.kireme_l_wall_off2
-                            : ABS(l45_diff) <
-                                  prm->sen_ref_p.normal.ref.kireme_l_wall_off;
+      check_diff_right = kireme_ok(
+          r45_raw, r45_diff,
+          (r45_diff < 0) ? prm->sen_ref_p.normal.ref.kireme_r_wall_off2
+                         : prm->sen_ref_p.normal.ref.kireme_r_wall_off);
+      check_diff_left = kireme_ok(
+          l45_raw, l45_diff,
+          (l45_diff < 0) ? prm->sen_ref_p.normal.ref.kireme_l_wall_off2
+                         : prm->sen_ref_p.normal.ref.kireme_l_wall_off);
     } else {
-      check_diff_right =
-          ABS(r45_diff) < prm->sen_ref_p.normal.ref.kireme_r_fast;
-      check_diff_left = ABS(l45_diff) < prm->sen_ref_p.normal.ref.kireme_l_fast;
+      check_diff_right = kireme_ok(r45_raw, r45_diff,
+                                   prm->sen_ref_p.normal.ref.kireme_r_fast);
+      check_diff_left = kireme_ok(l45_raw, l45_diff,
+                                  prm->sen_ref_p.normal.ref.kireme_l_fast);
     }
   }
 

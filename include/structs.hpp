@@ -953,6 +953,20 @@ typedef struct {
   // 探索速度で調整済みのため、正規化は非探索(fast/wall_off)側にのみ効かせる。
   // 0 なら無効(従来通り生の差分)。
   float kireme_diff_v_ref = 0;
+  // 2026-09-06: kireme_diff_v_ref 正規化の下限(生の差分[mm/tick])。
+  // 正規化は「同じ壁エッジなら差分は速度に比例する」前提だが、センサーの
+  // 量子化(1LSB≈0.04mm)/LPノイズや通常の操舵によるみかけの距離変化は速度に
+  // 比例しない(低速でも±0.1〜0.25mm/tick程度出る)。v=400mm/sでは
+  // kireme_*_wall_off=0.25 が生の0.045mm/tick相当まで締まり、ノイズだけで
+  // check_diff が落ちて唯一の壁の誤差が1tickだけ0になる→duty_sen(-5°)と
+  // kanayama Δwが1tick抜けて角速度目標が約1rad/s跳ぶ、が数tickおきに
+  // 起きていた(20260906_025821.csv idx432-550 SLA_FRONT_STR v=400:
+  // 166tickのゼロ落ち、w_lpが±0.5rad/sで振動)。
+  // |生差分| < min(しきい値, この値) なら速度によらず切れ目扱いしない
+  // (= 正規化後の実効しきい値の下限)。min()で挟むため v>=kireme_diff_v_ref
+  // の挙動は一切変わらない。0 で無効(従来通り)。control_law.cpp
+  // check_sen_error() 参照。
+  float kireme_diff_noise_th = 0;
   float sen_ctrl_front_th = 45;
   float sen_ctrl_front_diff_th = 40;
   float th_offset_dist = 58;
