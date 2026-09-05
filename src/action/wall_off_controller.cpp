@@ -669,17 +669,25 @@ WallSensorStrategy &WallOffController::get_right_strategy() {
                se->ego.right45_dist < 100;
       },
       // detect_wall_off
-      // 2026-09-05: 絶対しきい値(noexist_th_r)からsen.r45.sensor_dist(壁に
-      // 最も寄った時の最小値保持)基準の相対偏差に変更。絶対値判定だと壁まで
-      // の距離(=姿勢/寄り)でベースラインが変わるぶんだけ検出が遅れる/ばらつく
-      // ことが実測(wall_off_edge_check.py, n=4)で確認された。下の
-      // detect_wall_missing_by_deviation(exist=false側)と同じ考え方。
+      // 2026-09-05: 絶対しきい値(noexist_th_r)だけだと壁までの距離(=姿勢/
+      // 寄り)でベースラインが変わるぶんだけ検出が遅れる/ばらつくことが実測
+      // (wall_off_edge_check.py, n=4)で確認されたため、sen.r45.sensor_dist
+      // (壁に最も寄った時の最小値保持)基準の相対偏差を追加した。
+      // ただし相対判定だけに置き換えるとsensor_dist側の別バグ(下記)で
+      // 完全に検出を取りこぼすことが実機(20260905_174921.csv)で判明した:
+      // wall_off自体が(傾き緩和バグ等で)wall_off_hold_dist(88mm)以上長引くと
+      // calc_dist_diff()の「88mm経過で追従許可」条件によりsensor_distが
+      // 最小値保持でなくright45_distに追従し始め、相対差が一生exist_delta_r
+      // を超えなくなる。exist=false側のdetect_wall_missing_by_deviation
+      // (下)が元から絶対値との OR にしていたのと同じ形に揃え、
+      // 絶対しきい値をフォールバックとして残す。
       [this](float exist) -> bool {
         const auto p_wall_off = get_wall_off_param();
         const auto se = get_sensing_entity();
-        return (se->ego.right45_dist >
-                    se->sen.r45.sensor_dist + p_wall_off.exist_delta_r &&
-                se->ego.right45_dist_diff > 0) &&
+        return ((se->ego.right45_dist > p_wall_off.noexist_th_r) ||
+                (se->ego.right45_dist >
+                 se->sen.r45.sensor_dist + p_wall_off.exist_delta_r)) &&
+               se->ego.right45_dist_diff > 0 &&
                (se->ego.right45_dist_diff > p_wall_off.div_th_r3 &&
                 se->ego.right45_2_dist_diff > 0 &&
                 se->ego.right45_dist < 100);
@@ -765,14 +773,16 @@ WallSensorStrategy &WallOffController::get_left_strategy() {
                se->ego.left45_dist < 100;
       },
       // detect_wall_off
-      // 2026-09-05: 右側と同様、絶対しきい値からsen.l45.sensor_dist基準の
-      // 相対偏差に変更(理由はget_right_strategy()のdetect_wall_off参照)。
+      // 2026-09-05: 右側と同様、絶対しきい値(noexist_th_l)に加えて
+      // sen.l45.sensor_dist基準の相対偏差をORで追加(理由・フォールバックが
+      // 必要な理由はget_right_strategy()のdetect_wall_off参照)。
       [this](float exist) -> bool {
         const auto p_wall_off = get_wall_off_param();
         const auto se = get_sensing_entity();
-        return (se->ego.left45_dist >
-                    se->sen.l45.sensor_dist + p_wall_off.exist_delta_l &&
-                se->ego.left45_dist_diff > 0) &&
+        return ((se->ego.left45_dist > p_wall_off.noexist_th_l) ||
+                (se->ego.left45_dist >
+                 se->sen.l45.sensor_dist + p_wall_off.exist_delta_l)) &&
+               se->ego.left45_dist_diff > 0 &&
                (se->ego.left45_dist_diff > p_wall_off.div_th_l3 &&
                 se->ego.left45_2_dist_diff > 0 &&
                 se->ego.left45_dist < 100);

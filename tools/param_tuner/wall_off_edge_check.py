@@ -41,8 +41,9 @@ std(x_edge) vs std(x_actual) vs std(x_arm) を確認すること。単発のr2�
 部分がずれて傾きがぶれるため。
 
 使い方:
-    python3 tools/param_tuner/wall_off_edge_check.py logs/2026*.csv
-    python3 tools/param_tuner/wall_off_edge_check.py --state 13 logs/2026*.csv   # 斜め壁切れ
+    python3 tools/param_tuner/wall_off_edge_check.py logs/2026*.csv   # 既定でWALL_OFF(6)+WALL_OFF_DIA(13)両方
+    python3 tools/param_tuner/wall_off_edge_check.py --state 13 logs/2026*.csv        # 斜め壁切れのみ
+    python3 tools/param_tuner/wall_off_edge_check.py --state 6,13 logs/2026*.csv      # 両方明示指定
 """
 import sys
 
@@ -53,8 +54,14 @@ REQ = ['motion_state', 'dist', 'left45_d', 'right45_d', 'v_c']
 
 BASELINE_N = 5      # ベースライン推定に使う、アンカー(最小点)からのサンプル数
 ARM_DELTA = 1.0      # [mm] ベースラインからこれだけ離れたら「気づいた」候補
-FIT_LO = 1.0         # [mm] フィット窓の下端 (ベースライン+この値から)
-FIT_HI = 5.0         # [mm] フィット窓の上端
+FIT_LO = 1.0         # [mm] フィット窓の下端 (ベースライン+この値から) - motion_state=6(直進)
+FIT_HI = 5.0         # [mm] フィット窓の上端 - motion_state=6(直進)
+# WALL_OFF_DIA(motion_state=13)は直進の約5倍速で、区間もセル単位でなく
+# 斜め区画単位なので同じ立ち上がりがずっと広いmm幅で起きる。実測(2026-09-05,
+# n=6)では発火時deltaが6.8〜29.3mmとFIT_HI=5では収まらずLayer2が毎回
+# サンプル不足になったため、斜め用に別の窓を用意する。
+FIT_LO_DIA = 2.0
+FIT_HI_DIA = 20.0
 MIN_FIT_N = 3        # フィットに必要な最小サンプル数
 MEDIAN_WINDOW = 3    # アンカー(最小点)探索用の平滑化窓
 VISIBLE_TH = 2.0     # [mm] アンカーの走行距離がこれ以下なら「開始時点で可視」
@@ -130,7 +137,8 @@ def analyze_side(seg_df, col):
     return dict(anchor_i=anchor_i, baseline=baseline, delta=delta, x=x, y=y)
 
 
-def analyze_segment(seg_df, side):
+def analyze_segment(seg_df, side, state):
+    fit_lo, fit_hi = (FIT_LO_DIA, FIT_HI_DIA) if state == 13 else (FIT_LO, FIT_HI)
     col = f'{side}45_d'
     info = analyze_side(seg_df, col)
     x, y = info['x'], info['y']
@@ -158,10 +166,10 @@ def analyze_segment(seg_df, side):
     # 「現行検出の速さ」を表す(パターンAではx_actual自体とほぼ同じ意味)。
     lag_anchor = x_actual - x_anchor
 
-    # Layer2: アンカー以降、baseline+[FIT_LO, FIT_HI] の窓だけで直線フィットし外挿
+    # Layer2: アンカー以降、baseline+[fit_lo, fit_hi] の窓だけで直線フィットし外挿
     tail_y = y[anchor_i:]
     tail_x = x[anchor_i:]
-    mask = (tail_y - baseline > FIT_LO) & (tail_y - baseline < FIT_HI)
+    mask = (tail_y - baseline > fit_lo) & (tail_y - baseline < fit_hi)
     if mask.sum() < MIN_FIT_N:
         return dict(pattern=pattern, baseline=baseline, x_anchor=x_anchor,
                     x_actual=x_actual, y_actual=y_actual, x_arm=x_arm,
@@ -203,37 +211,40 @@ def pick_side(seg_df):
     return 'right' if right_ok else 'left'
 
 
-def analyze(path, state):
+def analyze(path, states):
     d = pd.read_csv(path, low_memory=False)
     if not set(REQ) <= set(d.columns):
         print(f"{path}: 必要な列が足りません (古いログ?)")
         return []
 
-    segs = find_segments(d['motion_state'].values, state)
+    segs = sorted(
+        (s0, s1, state) for state in states for s0, s1 in find_segments(d['motion_state'].values, state)
+    )
     if not segs:
-        print(f"{path}: motion_state=={state} の区間が見つかりません")
+        print(f"{path}: motion_state in {states} の区間が見つかりません")
         return []
 
     name = path.split('/')[-1]
     results = []
-    for s0, s1 in segs:
+    for s0, s1, state in segs:
         seg = d.iloc[s0:s1 + 1]
         if len(seg) < BASELINE_N + MIN_FIT_N:
             continue
         side = pick_side(seg)
         if side is None:
-            print(f"\n### {name}  idx={int(seg['index'].iloc[0])}  壁を検出できず(baseline>={EXIST_TH}mm"
+            print(f"\n### {name}  idx={int(seg['index'].iloc[0])}  state={state}  壁を検出できず(baseline>={EXIST_TH}mm"
                   f" または立ち上がり<={MIN_DELTA}mm) → スキップ")
             continue
-        r = analyze_segment(seg, side)
+        r = analyze_segment(seg, side, state)
         if r is None:
             continue
         r['file'] = name
         r['side'] = side
+        r['state'] = state
         r['v'] = float(seg['v_c'].iloc[:BASELINE_N].mean())
         results.append(r)
 
-        print(f"\n### {name}  [{side}]  {r['pattern']}  v≈{r['v']:.0f}mm/s  "
+        print(f"\n### {name}  [{side}]  state={state}  {r['pattern']}  v≈{r['v']:.0f}mm/s  "
               f"n_seg={len(seg)}")
         print(f"  アンカー(最小点)   x_anchor = {r['x_anchor']:6.2f} mm   "
               f"baseline = {r['baseline']:6.2f} mm")
@@ -260,48 +271,51 @@ def summarize(all_results):
     if len(all_results) < 2:
         return
     print(f"\n{'='*78}\n### 複数試行の比較 (n={len(all_results)})")
-    for side in ('left', 'right'):
-        for pattern_key, pattern_label in (('A', 'A(開始時可視)'), ('B', 'B(接近して不可視から検出)')):
-            rs = [r for r in all_results if r['side'] == side and r['pattern'] == pattern_label]
-            if len(rs) < 2:
-                continue
-            act = np.array([r['x_actual'] for r in rs])
-            arm = np.array([r['x_arm'] for r in rs if r['x_arm'] is not None])
-            edge = np.array([r['x_edge'] for r in rs if r['x_edge'] is not None])
-            lag = np.array([r['lag_anchor'] for r in rs])
-            print(f"\n  [{side}] {pattern_label}  n={len(rs)}")
-            print(f"    現行方式  x_actual : mean={act.mean():6.2f}  "
-                  f"std={act.std():5.2f}  range=[{act.min():.2f}, {act.max():.2f}]")
-            print(f"    アンカー→発火 lag : mean={lag.mean():6.2f}  "
-                  f"std={lag.std():5.2f}  range=[{lag.min():.2f}, {lag.max():.2f}]")
-            if len(arm) >= 2:
-                print(f"    Layer1    x_arm    : mean={arm.mean():6.2f}  "
-                      f"std={arm.std():5.2f}  range=[{arm.min():.2f}, {arm.max():.2f}]"
-                      f"   std比={arm.std()/act.std():.2f}" if act.std() > 0 else "")
-            if len(edge) >= 2:
-                print(f"    Layer2    x_edge   : mean={edge.mean():6.2f}  "
-                      f"std={edge.std():5.2f}  range=[{edge.min():.2f}, {edge.max():.2f}]")
-                if act.std() > 0:
-                    print(f"    ばらつき比 std(x_edge)/std(x_actual) = "
-                          f"{edge.std()/act.std():.2f}"
-                          f"  ({'改善' if edge.std() < act.std() else '悪化/要確認'})")
-            # 速度依存性: slopeが速度で変わっていないか(=Layer2が本当に速度不変か)
-            speeds = np.array([r['v'] for r in rs])
-            slopes = np.array([r['slope'] for r in rs if r['slope'] is not None])
-            if len(slopes) == len(speeds) and speeds.std() > 20:
-                a, _, r2 = reg(speeds, slopes)
-                print(f"    slope vs v: {a:+.5f} mm/mm per mm/s   r2={r2:.3f}  "
-                      f"(0に近いほど速度不変)")
+    states_seen = sorted({r['state'] for r in all_results})
+    for state in states_seen:
+        for side in ('left', 'right'):
+            for pattern_key, pattern_label in (('A', 'A(開始時可視)'), ('B', 'B(接近して不可視から検出)')):
+                rs = [r for r in all_results
+                      if r['side'] == side and r['pattern'] == pattern_label and r['state'] == state]
+                if len(rs) < 2:
+                    continue
+                act = np.array([r['x_actual'] for r in rs])
+                arm = np.array([r['x_arm'] for r in rs if r['x_arm'] is not None])
+                edge = np.array([r['x_edge'] for r in rs if r['x_edge'] is not None])
+                lag = np.array([r['lag_anchor'] for r in rs])
+                print(f"\n  state={state} [{side}] {pattern_label}  n={len(rs)}")
+                print(f"    現行方式  x_actual : mean={act.mean():6.2f}  "
+                      f"std={act.std():5.2f}  range=[{act.min():.2f}, {act.max():.2f}]")
+                print(f"    アンカー→発火 lag : mean={lag.mean():6.2f}  "
+                      f"std={lag.std():5.2f}  range=[{lag.min():.2f}, {lag.max():.2f}]")
+                if len(arm) >= 2:
+                    print(f"    Layer1    x_arm    : mean={arm.mean():6.2f}  "
+                          f"std={arm.std():5.2f}  range=[{arm.min():.2f}, {arm.max():.2f}]"
+                          f"   std比={arm.std()/act.std():.2f}" if act.std() > 0 else "")
+                if len(edge) >= 2:
+                    print(f"    Layer2    x_edge   : mean={edge.mean():6.2f}  "
+                          f"std={edge.std():5.2f}  range=[{edge.min():.2f}, {edge.max():.2f}]")
+                    if act.std() > 0:
+                        print(f"    ばらつき比 std(x_edge)/std(x_actual) = "
+                              f"{edge.std()/act.std():.2f}"
+                              f"  ({'改善' if edge.std() < act.std() else '悪化/要確認'})")
+                # 速度依存性: slopeが速度で変わっていないか(=Layer2が本当に速度不変か)
+                speeds = np.array([r['v'] for r in rs])
+                slopes = np.array([r['slope'] for r in rs if r['slope'] is not None])
+                if len(slopes) == len(speeds) and speeds.std() > 20:
+                    a, _, r2 = reg(speeds, slopes)
+                    print(f"    slope vs v: {a:+.5f} mm/mm per mm/s   r2={r2:.3f}  "
+                          f"(0に近いほど速度不変)")
 
 
 def main():
     args = sys.argv[1:]
-    state = 6
+    states = [6, 13]  # WALL_OFF + WALL_OFF_DIA を両方まとめて見る
     files = []
     i = 0
     while i < len(args):
         if args[i] == '--state':
-            state = int(args[i + 1])
+            states = [int(s) for s in args[i + 1].split(',')]
             i += 2
         elif not args[i].startswith('-'):
             files.append(args[i])
@@ -314,7 +328,7 @@ def main():
 
     all_results = []
     for f in files:
-        all_results.extend(analyze(f, state))
+        all_results.extend(analyze(f, states))
     summarize(all_results)
     return 0
 
