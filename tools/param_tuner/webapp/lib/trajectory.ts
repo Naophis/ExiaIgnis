@@ -204,10 +204,19 @@ function buildGridLines(points: { x: number; y: number }[]): GridLine[] {
     addLine(x1, y0, x1, y1);
     addLine(x0, y0, x1, y0);
     addLine(x0, y1, x1, y1);
-    // 45mm auxiliary lines through the cell center (the half-cell landmarks
-    // the search/slalom offsets are all specified against).
-    addLine(x0 + HALF_CELL, y0, x0 + HALF_CELL, y1, true);
-    addLine(x0, y0 + HALF_CELL, x1, y0 + HALF_CELL, true);
+    // 45mm auxiliary guides through the cell's edge midpoints (the half-cell
+    // landmarks the search/slalom offsets are all specified against):
+    //   - the upright cross, i.e. the cell center lines
+    //   - the inscribed diamond, i.e. the 45deg diagonal lattice a diagonal
+    //     run actually travels along
+    const mx = x0 + HALF_CELL;
+    const my = y0 + HALF_CELL;
+    addLine(mx, y0, mx, y1, true);
+    addLine(x0, my, x1, my, true);
+    addLine(mx, y0, x1, my, true);
+    addLine(x1, my, mx, y1, true);
+    addLine(mx, y1, x0, my, true);
+    addLine(x0, my, mx, y0, true);
   }
   return lines;
 }
