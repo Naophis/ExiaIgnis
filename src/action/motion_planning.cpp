@@ -360,6 +360,52 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p) {
 }
 
 __attribute__((noinline, section(".time_critical.motion_planning")))
+void MotionPlanning::hold() {
+  // v=0/w=0のSTRAIGHT指令を一度送るだけの保持専用モーション(2026-09-05追加、
+  // 詳細はmotion_planning.hppのコメント参照)。distはkeep_pivot()
+  // (main_task_test_pivot.cpp)で実績のある値と揃え、MPC側の距離ゼロ退化
+  // ケースを避けるため十分大きく取る。
+  //
+  // [2026-09-05 追記] 上記のv=0/w=0保持だけでは不十分と実機で判明
+  // (20260905_2208xx.csv、hold中でもkim_thetaが0.3〜0.76°残ったまま
+  // 走行開始まで持ち越されていた)。calc_angle_velocity_ctrl()の
+  // kc_gain=gyro_pid.c*ang.i_bias(=img_ang-kim.theta)は角度そのものを
+  // 戻す項として既に存在し、STRAIGHT(=angle_i_bias_active())でも有効
+  // だが、gyro_pid.c=0.0075はduty換算0.57%/度しかなく、吸引ファンの
+  // 反動トルクのような短時間インパルス外乱(角速度ループが反応するまでの
+  // 数msで角度がわずかに積み残る)を数百ms以内に戻すには弱すぎた。
+  // gyro_pid.cは長い直進での緩やかな姿勢保持用にチューニングされた値の
+  // ため全体を強くはせず、hold()実行中だけparam->hold_ang_gainへ一時的に
+  // 差し替える(停止中なので駆動系への副作用は無い)。unhold()で元に戻す。
+  hold_gyro_pid_c_prev_ = param->gyro_pid.c;
+  param->gyro_pid.c = param->hold_ang_gain;
+  tgt_val->hold_active = true;
+
+  tgt_val->nmr.v_max = 0;
+  tgt_val->nmr.v_end = 0;
+  tgt_val->nmr.accl = 1000;
+  tgt_val->nmr.decel = -1000;
+  tgt_val->nmr.dist = 1000;
+  tgt_val->nmr.w_max = 0;
+  tgt_val->nmr.w_end = 0;
+  tgt_val->nmr.alpha = 0;
+  tgt_val->nmr.ang = 0;
+  tgt_val->nmr.motion_mode = RUN_MODE2::ST_RUN;
+  tgt_val->nmr.motion_type = MotionType::STRAIGHT;
+  tgt_val->nmr.motion_dir = MotionDirection::RIGHT;
+  tgt_val->nmr.sct = SensorCtrlType::NONE;
+  tgt_val->nmr.dia_mode = false;
+  tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
+  pt->send_command(*tgt_val);
+}
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
+void MotionPlanning::unhold() {
+  tgt_val->hold_active = false;
+  param->gyro_pid.c = hold_gyro_pid_c_prev_;
+}
+
+__attribute__((noinline, section(".time_critical.motion_planning")))
 MotionResult MotionPlanning::pivot_turn(param_roll_t &p) {
   // 一度初期化
   pt->motor_enable();
@@ -1379,11 +1425,22 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
   reset_ego_data();
   pt->motor_enable();
   if (p_set.suction) {
+    // 2026-09-05: 吸引ファンの反動トルクで機体が回転してしまう問題への対策
+    // (吸引動作中に機体が左を向いて見える不具合をユーザーが実機で確認)。
+    // kim(自己位置)を後からゼロへ戻すだけでは機体は物理的に回転したまま
+    // 走行を開始することになり、Kanayamaが実機とのズレを後追いで補正する
+    // 羽目になる(=症状を隠すだけで実害は残る)。回転そのものを起こさせない
+    // ため、吸引のランプ〜セトリングの間だけhold()(v=0/w=0保持専用モーション)
+    // を挟む。hold()はコマンドを一度送るだけで、下のreset_tgt_data()で次の
+    // 実コマンドを出すまでCore1側で保持状態が持続する。
+    hold();
+
     pt->suction_enable(p_set.suction_duty, p_set.suction_duty_low);
     while (pt->is_suction_ramping()) {
       sleep_ms(10);
     }
     sleep_ms(2500);
+    unhold();
   }
   if (param->fast_log_enable > 0) {
     tgt_val->global_pos.ang = 0;

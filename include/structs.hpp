@@ -794,6 +794,25 @@ typedef struct {
   sen_ref_param_t sen_ref_p;
   sensor_gain_t sensor_gain;
   float sakiyomi_time = 1;
+  // 2026-09-05: MotionPlanning::hold()(吸引ランプ中の静止保持)専用の姿勢
+  // 復元ゲイン。通常のgyro_pid.c(=0.0075、img_ang-kim.thetaに掛かる)は
+  // 長い直進での緩やかな姿勢保持を想定した弱いゲインで、duty換算
+  // 0.57%/度しか出ない。吸引ファンの反動トルクのような短時間のインパルス
+  // 外乱(角速度ループが反応するまでの数ms間に角度がわずかに積み残る)を
+  // 数百ms以内に戻すには弱すぎる(実測: hold中でも0.3〜0.76°の残留角度が
+  // 走行開始まで持ち越されていた、20260905_2208xx.csvで確認)。hold()実行中
+  // だけこの値でgyro_pid.cを一時的に置き換え、hold終了後(unhold())に元へ
+  // 戻す。走行中は静止しているため大きめのゲインでも駆動系への副作用は無い。
+  // 初期値は暫定(0.0075の8倍、duty換算約4.5%/度)、要実機チューニング。
+  float hold_ang_gain = 0.06;
+  // 2026-09-05: hold_ang_gain(P)だけでは実機で不十分と判明
+  // (20260905_222607.csv): 吸引duty(duty_suction)が完全にプラトーした後も
+  // kim_thetaが-0.2〜-0.25°で頭打ちのまま収束しなかった。P制御は定常外乱を
+  // 完全には打ち消せない(定常偏差が残る)ため、hold中(hold_active==true)
+  // 限定で角度誤差(ang.i_bias)を積分するI項を別途追加する
+  // (control_law.cpp calc_angle_velocity_ctrl()参照)。時間さえかければ
+  // 定常偏差をゼロへ追い込める。初期値は暫定、要実機チューニング。
+  float hold_ang_i_gain = 0.02;
   float search_sen_ctrl_limitter = 1;
   // v > accl_param.limit(5500固定, motion_planning.cpp/planning_task.cpp)
   // 域での加減速ソフトスタート用パラメータ。mpc_tgt_calc.cppのdecel/accl
@@ -1221,6 +1240,13 @@ typedef struct {
   // WallOffController::continuous_turn_flag のミラー。ログ観点のみで使用
   // (実際の閾値切替はwall_off_controller.cpp側の同名フラグで行われる)
   bool continuous_turn = false;
+  // 2026-09-05: MotionPlanning::hold()実行中はtrue、unhold()でfalseへ戻す。
+  // hold中はmotion_type=STRAIGHT(実走行のSTRAIGHTと同じ値)を使い回すため、
+  // control_law.cpp側でこのフラグを見て専用の角度積分項を有効化する
+  // (通常のSTRAIGHTはdiff_ang=0で積分無効のまま、hold中の吸引ファン反動
+  // トルクのような持続的な外乱をP制御だけでは消しきれなかったため追加、
+  // [[project_dia45_lr_asymmetry_2026-09-05]]参照)。
+  volatile bool hold_active = false;
 } motion_tgt_val_t;
 
 typedef struct {

@@ -60,23 +60,17 @@ void MainTask::keep_pivot() {
   reset_tgt_data();
   reset_ego_data();
   req_error_reset();
+
   planning_->motor_enable();
   req_error_reset();
-  ps.v_max = 0.000000001;
-  ps.v_end = 0.000000001;
-  ps.dist = 1000;
-  ps.accl = 0.1;
-  ps.decel = -1;
-  ps.sct = SensorCtrlType::NONE;
-  ps.motion_type = MotionType::STRAIGHT;
-  ps.dia_mode = false;
-  mp->go_straight(ps);
-  while (1) {
-    sleep_ms(1);
-    if (ui_->button_state_hold()) {
+  mp->hold();
+  while(1){
+    if (ui_->button_state_hold())
       break;
-    }
+    sleep_ms(10);
   }
+  mp->unhold();
+
   planning_->motor_disable();
 }
 

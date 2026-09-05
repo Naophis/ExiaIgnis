@@ -144,6 +144,9 @@ private:
   // turn_end_brake用duty_rollスルーレート制限の前回値(2026-08-23夜)。
   // control_law.cpp calc_angle_velocity_ctrl()参照。
   float turn_end_brake_duty_prev_  = 0.0f;
+  // hold_active(MotionPlanning::hold())専用の角度積分I項(2026-09-05)。
+  // hold_active開始でゼロクリア、control_law.cpp calc_angle_velocity_ctrl()参照。
+  float hold_ang_integral_ = 0.0f;
   // ego_in.ang(=生ジャイロ積分ヘディング、sensing_task.cpp calc_vel()
   // 参照)は壁を検出していない間は無補正でドリフトし続ける。壁を新規に
   // 検出した瞬間(calc_sensor_pid()参照)にゼロクリアして、信頼できる基準

@@ -33,6 +33,21 @@ public:
   MotionResult go_straight(param_straight_t &p);
   MotionResult go_straight(param_straight_t &p, std::shared_ptr<Adachi> &adachi,
                            bool search_mode);
+  // 現在の速度・角速度をゼロに能動的に保持する専用モーション(2026-09-05追加)。
+  // 吸引ファンのランプアップ中のような「本走行はまだ始めたくないが、外乱
+  // (ファン反動トルク等)で機体が動いてしまうのは防ぎたい」場面向け。
+  // motion_type=NONEはduty出力を強制的に0にする(control_law.cpp参照)ため
+  // 保持にならず、go_straight()を極小速度・長距離のダミー引数で騙して使うのも
+  // 目的外利用で紛らわしいため、一度だけ v=0/w=0 のSTRAIGHT指令を送る専用
+  // 関数として分離する。呼び出し側が次の本コマンドをpt->send_command()経由で
+  // 送るまで、この保持状態はCore1側で持続する(ブロックしない、呼び出し側で
+  // 好きな時間sleepしてから次のコマンドに進めばよい)。
+  // hold()はgyro_pid.cを一時的にparam->hold_ang_gainへ差し替える(通常の
+  // gyro_pid.cは長い直進向けの弱いゲインで、吸引ランプ中の短時間インパルス
+  // 外乱を戻すには弱すぎるため)。呼び出し側はhold()と対でunhold()を呼び、
+  // 実走行前に元のゲインへ戻す責任を持つこと。
+  void hold();
+  void unhold();
   MotionResult pivot_turn(param_roll_t &p);
   void normal_slalom(param_normal_slalom_t &p, param_straight_t &p_str);
 
@@ -80,6 +95,8 @@ public:
   float g_sen_ang    = 0;
 
 private:
+  float hold_gyro_pid_c_prev_ = 0.0f;
+
   float calc_orval_offset(TurnDirection dir);
   void  calc_large_offset(param_straight_t &front, param_straight_t &back,
                           TurnDirection dir, bool exec_wall_off);

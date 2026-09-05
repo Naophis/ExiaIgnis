@@ -659,6 +659,8 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "sensor_gain", dst.sensor_gain);
     from_json_nested(src, "gain", dst.sensor_gain);
     from_json_field(src, "sakiyomi_time", dst.sakiyomi_time);
+    from_json_field(src, "hold_ang_gain", dst.hold_ang_gain);
+    from_json_field(src, "hold_ang_i_gain", dst.hold_ang_i_gain);
     from_json_field(src, "search_sen_ctrl_limitter", dst.search_sen_ctrl_limitter);
     from_json_field(src, "decel_delay_cnt", dst.decel_delay_cnt);
     from_json_field(src, "decel_delay_n", dst.decel_delay_n);

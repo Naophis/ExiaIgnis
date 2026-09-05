@@ -877,7 +877,22 @@ ControlLaw::calc_pid_val() {
   ee->v.error_dd = ee->v.error_d - ee->v.error_dd;
   ee->dist.error_dd = ee->dist.error_d - ee->dist.error_dd;
 
-  ee->v.error_i += ee->v.error_p;
+  // 2026-09-05: hold_active(MotionPlanning::hold())中はv.error_iを積まない。
+  // motor_pid2.iは高速走行の速度追従用にチューニングされたゲインで、hold中
+  // (v_cmd=0で静止保持するだけ)には本来不要。この積分はdtスケーリング無しで
+  // 毎tick無条件加算され、motion_type==NONE/FRONT_CTRL以外ではreset_pid_val()
+  // でも一切リセットされないため、STRAIGHT→WALL_OFF→SLA_FRONT_STR→SLALOM→
+  // SLA_BACK_STRと一連の走行内では区間をまたいでずっと生き続ける
+  // (実測: hold中だけで-92まで、旋回中は-1527まで到達、20260905_225826.csv)。
+  // motor_pid2.antiwindupのヒステリシス条件(符号反転+しきい値超え)は、hold中
+  // のように小さい誤差が同符号で単調に積み続けるケースを検知できず無力
+  // だった。hold_active中はここで積算自体を止め、hold終了時にv.error_iが
+  // ほぼゼロの状態で実走行へ引き継がれるようにする。
+  if (tgt_val_->hold_active) {
+    ee->v.error_i = 0;
+  } else {
+    ee->v.error_i += ee->v.error_p;
+  }
   if (tgt_val_->motion_type != MotionType::FRONT_CTRL) {
     ee->dist.error_i += ee->dist.error_p;
   }
@@ -905,11 +920,11 @@ ControlLaw::calc_pid_val_ang() {
   ee->ang.error_dd = ee->ang.error_d - ee->ang.error_dd;
   ee->ang.error_i += ee->ang.error_p;
 
-  if (!(tgt->motion_type == MotionType::STRAIGHT) ||
+  if (!(tgt->motion_type == MotionType::STRAIGHT ||
       tgt->motion_type == MotionType::SLA_FRONT_STR ||
       tgt->motion_type == MotionType::SLA_BACK_STR ||
       tgt->motion_type == MotionType::WALL_OFF ||
-      tgt->motion_type == MotionType::WALL_OFF_DIA) {
+      tgt->motion_type == MotionType::WALL_OFF_DIA)) {
     ee->ang.error_d = ee->ang.error_dd = ee->ang.error_i = 0;
   }
 
@@ -947,8 +962,16 @@ ControlLaw::calc_pid_val_ang_vel() {
   float offset = 0;
   ee->aw_log.dbg_off_ang = 0;
   if (param_->torque_mode == 2) {
+    // 2026-09-05: hold_active(MotionPlanning::hold())中はangle_pid由来の
+    // duty_roll_angをw_cmdへ足さない。calc_pid_val_ang()のang.error_iリセット
+    // 条件を括弧修正した結果、STRAIGHT中(=hold含む)はang.error_iがリセット
+    // されず持続するようになったため、holdの約2.45秒間ずっと積分され続けて
+    // しまう。holdには専用のkc_gain(hold_ang_gain)+hold_kc_i_gain
+    // (hold_ang_i_gain)という別経路の角度補正が既にあり、angle_pid由来の
+    // オフセットが同時に効くと二重に競合する(実機で悪化を確認)。
     if (!(tgt->motion_type == MotionType::PIVOT ||
-          tgt->motion_type == MotionType::FRONT_CTRL)) {
+          tgt->motion_type == MotionType::FRONT_CTRL) &&
+        !tgt_val_->hold_active) {
       offset += duty_roll_ang;
       ee->aw_log.dbg_off_ang = duty_roll_ang; // デバッグ用一時フィールド
     }
@@ -1404,6 +1427,34 @@ ControlLaw::calc_angle_velocity_ctrl() {
     auto kb_gain = param_->gyro_pid.b * w_error_i;
     // auto kb_gain = param_->gyro_pid.b * ee->w.error_i;
     auto kc_gain = param_->gyro_pid.c * ee->ang.i_bias;
+
+    // 2026-09-05: hold_active(MotionPlanning::hold()実行中)限定の角度積分I項。
+    // 通常のkc_gain(P)は吸引ファンの反動トルクのような定常外乱を完全には
+    // 打ち消せず、kim_thetaが±0.2〜0.6°程度の定常偏差で頭打ちになることを
+    // 実機で確認した(20260905_222607.csv: 吸引duty(duty_suction)が完全に
+    // プラトーした後もkim_thetaが収束しなかった)。hold_active中だけ積分し、
+    // それ以外(実走行中の通常STRAIGHT等)では毎tickゼロクリアして持ち越さない
+    // (STRAIGHT区間はduty_roll側の他ループとの相互作用を避けるため対象外の
+    // まま)。
+    if (tgt_val_->hold_active) {
+      hold_ang_integral_ += ee->ang.i_bias * dt_;
+    } else {
+      hold_ang_integral_ = 0.0f;
+    }
+    const float hold_kc_i_gain = param_->hold_ang_i_gain * hold_ang_integral_;
+    kc_gain += hold_kc_i_gain;
+
+    // 2026-09-05: hold中はkc_gain(P、hold_ang_gain使用)とhold_kc_i_gain(I)が
+    // duty_rollの主成分になるが、これまでどちらもログに出ておらず
+    // (g_pid_*_vは速度ループ4項kp/ki/kb/kdのみを記録)、hold中にduty_l/rが
+    // 大きく振れているのにg_pid_*_vが常にほぼ0に見える(ユーザー指摘)原因に
+    // なっていた。ang_pid_p_v/i_vはSTRAIGHT区間ではturn_angle_fb系が使わず
+    // 死んでいるため、ここへhold専用に配線して可視化する。
+    if (tgt_val_->hold_active) {
+      set_ctrl_val(ee->ang_val, ee->ang.i_bias, hold_ang_integral_, 0, 0,
+                   kc_gain - hold_kc_i_gain, hold_kc_i_gain, 0, 0, 0, 0);
+    }
+
     auto kd_gain = (turn_end_brake_active ? param_->turn_end_brake.d
                                            : param_->gyro_pid.d) *
                    w_error_d;

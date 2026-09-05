@@ -43,10 +43,21 @@ void MainTask::test_sla() {
 
   backup_r = param_->sen_ref_p.normal.exist.right45;
   backup_l = param_->sen_ref_p.normal.exist.left45;
+  // 2026-09-05: テスト開始直後の直進助走で位置・角度を素早く補正するため、
+  // 旋回方向側の壁までexist閾値を緩めていたが、反対側の壁も検出範囲内なら
+  // check_sen_error()は両方使ってしまう。反対側の応答が旋回方向によって
+  // 非対称(duty_l>duty_rという同じハード起因の偏りに対しても、旋回方向に
+  // よってこの助走中のang変化が符号反転する: 左ターンで-1.13/-0.15°、
+  // 右ターンで+2.36/+1.40°、20260905_2316xx.csv)だったため、意図した側
+  // だけで補正がかかるよう反対側の壁判定をここで実質無効化する
+  // (exist閾値を0にすると check_sen_error() の `1 < dist && dist <
+  // exist_right45` が常に偽になり、範囲チェックそのものが成立しない)。
   if (rorl == TurnDirection::Right) {
     param_->sen_ref_p.normal.exist.left45 += 10;
+    param_->sen_ref_p.normal.exist.right45 = 0;
   } else {
     param_->sen_ref_p.normal.exist.right45 += 10;
+    param_->sen_ref_p.normal.exist.left45 = 0;
   }
 
   // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
@@ -54,6 +65,22 @@ void MainTask::test_sla() {
     planning_->suction_power_on();
   }
   mp->reset_gyro_ref_with_check();
+
+  // 2026-09-05: 吸引ファンの反動トルクで機体が回転してしまう問題への対策
+  // (吸引動作中に機体が左を向いて見える不具合をユーザーが実機で確認)。
+  // reset_pos()等でkim(自己位置)だけ後からゼロに戻しても機体は物理的に
+  // 回転したまま走行を開始することになり、Kanayamaが「ソフトはゼロだと
+  // 思っているが実機はズレている」状態を後追いで補正する羽目になる
+  // (=症状を隠すだけで実害は残る、[[project_dia45_lr_asymmetry_2026-09-05]]
+  // 参照)。回転そのものを起こさせないため、吸引のランプ〜セトリングの間だけ
+  // hold()(v=0/w=0保持専用モーション)を挟む。
+
+  if (sys_.test.suction_active != 0) {
+    reset_tgt_data();
+    reset_ego_data();
+    planning_->motor_enable();
+    mp->hold();
+  }
 
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
@@ -70,10 +97,13 @@ void MainTask::test_sla() {
     }
     sleep_ms(2450);
   }
+  if (sys_.test.suction_active != 0) {
+    mp->unhold();
+  }
 
-  reset_tgt_data();
-  reset_ego_data();
-  planning_->motor_enable();
+  // reset_tgt_data();
+  // reset_ego_data();
+  // planning_->motor_enable();
 
   // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
   // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。
