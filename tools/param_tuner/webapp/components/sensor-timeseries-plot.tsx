@@ -20,6 +20,7 @@ const MARKER_COLOR: Partial<Record<AnalysisEvent["kind"], string>> = {
   rise: "#3ddc84",
   trough: "#c678f5",
   "trough-rise": "#4ad4d4",
+  "wall-off-anchor": "#38bdf8",
   "wall-off-actual": "#ff8c42",
   "wall-off-arm": "#eab308",
   "wall-off-edge": "#22c55e",

@@ -45,6 +45,8 @@ const EVENT_COLOR: Record<AnalysisEvent["kind"], string> = {
   "state-end-sensor": "text-sky-300",
   trough: "text-purple-400",
   "trough-rise": "text-cyan-400",
+  "wall-off-anchor": "text-sky-400",
+  "wall-off-anchor-sensor": "text-sky-300",
   "wall-off-actual": "text-orange-400",
   "wall-off-actual-sensor": "text-orange-300",
   "wall-off-arm": "text-yellow-400",

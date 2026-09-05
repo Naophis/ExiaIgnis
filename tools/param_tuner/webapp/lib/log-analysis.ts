@@ -39,6 +39,8 @@ export interface AnalysisEvent {
     // wall_off_edge_check.py 相当: WallOffController の壁切れ判定を
     // レベル判定(現行)/気づいた点(Layer1)/逆算エッジ(Layer2)の3段で可視化する。
     // 現行方式がどれだけ遅れて発火しているかを、走行位置として直接比較できる。
+    | "wall-off-anchor"
+    | "wall-off-anchor-sensor"
     | "wall-off-actual"
     | "wall-off-actual-sensor"
     | "wall-off-arm"
@@ -443,18 +445,48 @@ export function computeMotionTransitionEvents(
 }
 
 // --- wall_off_edge_check.py port -------------------------------------------
+//
+// 2026-09-05 の実測(n=4反復x2側)で判明した重要な注意: Layer1(arm)/Layer2
+// (edge、直線外挿)は個々のログではr2=0.93〜0.99と当てはまり良く見えても、
+// 複数試行間のばらつきは現行方式(actual)よりむしろ大きい(std比1.6〜3.7倍)。
+// x_edge=(baseline-切片)/傾き の計算が傾きの推定誤差で割るため、傾きが
+// センサー読みの立ち上がり形状(姿勢/進入角で変わる)の試行間ばらつきをその
+// まま位置誤差に増幅してしまうのが原因と見られる。つまりこの2つは「現行
+// より真の切れ目に近い推定値」ではなく、あくまで参考情報 - ラベルはそう
+// 読めるようにしてある。詳しい実測結果は wall_off_edge_check.py の docstring
+// 参照。
+
+// もう一つのパターン: WALL_OFF開始時点でまだ壁が見えていない(遠い距離から
+// 始まる)区間もある。この場合センサ値は遠→接近→最も近づく(トラフ)→
+// また離れる、という形になり、区間先頭をベースラインにすると意味を成さない。
+// findBaselineAnchor()でセグメント内の(平滑化後の)最小点を探し、そこを
+// 「壁に最も寄った瞬間」の基準点として全ての計算(baseline/arm/fitの探索
+// 開始点)をそこからにする。開始時点で既に可視なパターンでは、この最小点は
+// ほぼ区間先頭に一致するので同じロジックで両パターンをカバーできる。
 
 export interface WallOffEdgeOptions {
   motionState: number;
-  baselineN?: number; // baseline = median of the first N samples in the segment
+  baselineN?: number; // baseline = median of the N samples starting at the anchor (trough)
   armDelta?: number; // [mm] "noticed" once the sensor rises this far above baseline
   fitLo?: number; // [mm] fit window lower bound, relative to baseline
   fitHi?: number; // [mm] fit window upper bound, relative to baseline
   minFitN?: number;
+  medianWindow?: number; // smoothing window used only to locate the anchor (trough)
+  existTh?: number; // [mm] a side's baseline must be below this to count as "a wall was seen"
+  minDelta?: number; // [mm] a side's rise must exceed this to count as a real event, not noise
   pointByRow?: RowPointMap;
 }
 
-const WALL_OFF_DEFAULTS = { baselineN: 5, armDelta: 1.0, fitLo: 1.0, fitHi: 5.0, minFitN: 3 };
+const WALL_OFF_DEFAULTS = {
+  baselineN: 5,
+  armDelta: 1.0,
+  fitLo: 1.0,
+  fitHi: 5.0,
+  minFitN: 3,
+  medianWindow: 3,
+  existTh: 70.0,
+  minDelta: 1.0,
+};
 
 function median(values: number[]): number {
   const s = values.slice().sort((a, b) => a - b);
@@ -483,15 +515,75 @@ function linreg(x: number[], y: number[]): { slope: number; intercept: number; r
   return { slope, intercept, r2 };
 }
 
-// The side that rose further over the segment is the one whose wall the
-// robot is pulling away from (matches wall_off_edge_check.py::pick_side).
-function pickWallOffSide(segRows: Record<string, number>[], baselineN: number): "left" | "right" {
-  const n = segRows.length;
-  const bl = median(segRows.slice(0, baselineN).map((r) => r.left45_d));
-  const br = median(segRows.slice(0, baselineN).map((r) => r.right45_d));
-  const dl = segRows[n - 1].left45_d - bl;
-  const dr = segRows[n - 1].right45_d - br;
-  return dr > dl ? "right" : "left";
+// Earliest index of the (smoothed) minimum - "the moment the robot got
+// closest to the wall". In a segment that's visible from the start, this is
+// ~index 0 (the value only ever rises); in one that isn't, the value falls
+// from a large "far" reading to a trough before rising, and this finds that
+// trough. Matches wall_off_edge_check.py's find_anchor().
+function findBaselineAnchor(ys: number[], medianWindow: number): number {
+  const smoothed = medianFilter(ys, medianWindow);
+  let idx = 0;
+  let minV = smoothed[0];
+  for (let i = 1; i < smoothed.length; i++) {
+    if (smoothed[i] < minV) {
+      minV = smoothed[i];
+      idx = i;
+    }
+  }
+  return idx;
+}
+
+interface SideBaseline {
+  anchorI: number;
+  baseline: number;
+  delta: number; // last sample minus baseline - the size of the recede signal
+}
+
+function analyzeSideBaseline(ys: number[], baselineN: number, medianWindow: number): SideBaseline {
+  const anchorI = findBaselineAnchor(ys, medianWindow);
+  const windowEnd = Math.min(anchorI + baselineN, ys.length);
+  const baseline = median(ys.slice(anchorI, windowEnd));
+  return { anchorI, baseline, delta: ys[ys.length - 1] - baseline };
+}
+
+// The side with the larger recede signal (each measured from its own
+// anchor/baseline, so this works the same whether the wall was visible from
+// the start or approached from far away). Matches wall_off_edge_check.py's
+// pick_side().
+//
+// Returns side: null when NEITHER side ever actually saw a wall (baseline
+// stayed at/near sensor_range_max, i.e. "far" the whole segment) or the
+// rise is too small to be anything but noise. Earlier this function always
+// picked a side regardless, so a WALL_OFF segment with no real wall event at
+// all (motion_state exits via some unrelated path - front correction, a
+// distance timeout, ...) still got confident-looking anchor/actual/edge
+// markers built from pure noise. Reported from the Param Console GUI
+// 2026-09-05.
+function pickWallOffSide(
+  segRows: Record<string, number>[],
+  baselineN: number,
+  medianWindow: number,
+  existTh: number,
+  minDelta: number
+): { side: "left" | "right" | null; left: SideBaseline; right: SideBaseline } {
+  const left = analyzeSideBaseline(
+    segRows.map((r) => r.left45_d),
+    baselineN,
+    medianWindow
+  );
+  const right = analyzeSideBaseline(
+    segRows.map((r) => r.right45_d),
+    baselineN,
+    medianWindow
+  );
+  const valid = (s: SideBaseline) => s.baseline < existTh && s.delta > minDelta;
+  const leftOk = valid(left);
+  const rightOk = valid(right);
+  let side: "left" | "right" | null;
+  if (!leftOk && !rightOk) side = null;
+  else if (leftOk && rightOk) side = right.delta > left.delta ? "right" : "left";
+  else side = rightOk ? "right" : "left";
+  return { side, left, right };
 }
 
 // Interpolates a synthetic TrajectoryPoint at `target` (in the segment's
@@ -526,36 +618,76 @@ function interpolateAt(
 }
 
 // Port of wall_off_edge_check.py: main. Per WALL_OFF (or WALL_OFF_DIA, via
-// `motionState`) segment, emits up to three markers per side:
-//   - wall-off-actual: where the current level-threshold code actually fired
+// `motionState`) segment, emits up to four markers per side:
+//   - wall-off-anchor:  where the sensor got closest to the wall (the
+//                       "found it" moment - only interesting when it's not
+//                       right at the segment start, i.e. the not-yet-visible
+//                       pattern).
+//   - wall-off-actual:  where the current code actually fired.
 //   - wall-off-arm:     where a naive "> baseline + armDelta" check would
-//                        first notice the rise (Layer1, for reference only)
-//   - wall-off-edge:    the true transition, back-projected from a straight
-//                        line fit through the rise (Layer2) - independent of
-//                        detection speed, so it's what a corrected controller
-//                        should aim to react to instead of x-actual.
-// `x-actual` running well past `x-edge` on the plot *is* the detection lag;
-// no separate number is needed to see it.
+//                       first notice the rise (Layer1, reference only - see
+//                       the file-level comment on why this isn't necessarily
+//                       better than wall-off-actual).
+//   - wall-off-edge:    back-projected from a straight line fit through the
+//                       rise (Layer2, reference only, same caveat).
 export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: WallOffEdgeOptions): AnalysisEvent[] {
   const baselineN = opts.baselineN ?? WALL_OFF_DEFAULTS.baselineN;
   const armDelta = opts.armDelta ?? WALL_OFF_DEFAULTS.armDelta;
   const fitLo = opts.fitLo ?? WALL_OFF_DEFAULTS.fitLo;
   const fitHi = opts.fitHi ?? WALL_OFF_DEFAULTS.fitHi;
   const minFitN = opts.minFitN ?? WALL_OFF_DEFAULTS.minFitN;
+  const medianWindow = opts.medianWindow ?? WALL_OFF_DEFAULTS.medianWindow;
+  const existTh = opts.existTh ?? WALL_OFF_DEFAULTS.existTh;
+  const minDelta = opts.minDelta ?? WALL_OFF_DEFAULTS.minDelta;
   const pointByRow = opts.pointByRow;
 
   const events: AnalysisEvent[] = [];
   for (const [bStart, bEnd] of findBlocks(rows, opts.motionState)) {
     const segRows = rows.slice(bStart, bEnd + 1);
-    if (segRows.length < baselineN + minFitN) continue;
     if (!("dist" in segRows[0]) || !("left45_d" in segRows[0]) || !("right45_d" in segRows[0])) continue;
 
-    const side = pickWallOffSide(segRows, baselineN);
+    const picked = pickWallOffSide(segRows, baselineN, medianWindow, existTh, minDelta);
+    const side = picked.side;
+    // Neither side saw a real wall event in this segment (e.g. the robot
+    // exited WALL_OFF via front correction or a distance timeout, not a
+    // 45deg kireme) - nothing meaningful to draw.
+    if (side === null) continue;
+    const info = side === "left" ? picked.left : picked.right;
+    const { anchorI, baseline } = info;
+    // The not-yet-visible pattern often fires within a handful of samples of
+    // the trough - only require enough room for an "actual" marker, not a
+    // full baseline+fit window (that just means Layer1/Layer2 won't compute,
+    // handled below).
+    if (segRows.length - anchorI < 2) continue;
+
     const col = side === "left" ? "left45_d" : "right45_d";
     const sideSign: 1 | -1 = side === "left" ? 1 : -1;
     const xs = segRows.map((r) => r.dist);
     const ys = segRows.map((r) => r[col]);
-    const baseline = median(ys.slice(0, baselineN));
+
+    if (anchorI > 0 && hasXY(segRows[anchorI])) {
+      const anchorRow = segRows[anchorI];
+      events.push({
+        x: anchorRow.x,
+        y: anchorRow.y,
+        anchored: "robot",
+        kind: "wall-off-anchor",
+        label: `壁切れ[${side}] 壁に最接近(見えていないパターンの基準点) idx=${fmt(anchorRow, "index")} 走行=${xs[anchorI].toFixed(1)}mm baseline=${baseline.toFixed(2)}mm`,
+        column: col,
+        seriesIndex: asNum(anchorRow, "index"),
+        seriesValue: ys[anchorI],
+      });
+      const anchorSensorPos = resolvePos(anchorRow, col, pointByRow);
+      if (anchorSensorPos.anchored === "sensor") {
+        events.push({
+          ...anchorSensorPos,
+          kind: "wall-off-anchor-sensor",
+          label: `壁切れ[${side}] 最接近時点の壁位置`,
+          linkX: anchorRow.x,
+          linkY: anchorRow.y,
+        });
+      }
+    }
 
     const lastI = segRows.length - 1;
     const actualRow = segRows[lastI];
@@ -567,7 +699,8 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
         kind: "wall-off-actual",
         label:
           `壁切れ[${side}] 現行検出 idx=${fmt(actualRow, "index")} 走行=${xs[lastI].toFixed(1)}mm ` +
-          `(baseline=${baseline.toFixed(2)}mm +${(ys[lastI] - baseline).toFixed(2)}mm)`,
+          `(baseline=${baseline.toFixed(2)}mm +${(ys[lastI] - baseline).toFixed(2)}mm、` +
+          `アンカーから${(xs[lastI] - xs[anchorI]).toFixed(2)}mm)`,
         column: col,
         seriesIndex: asNum(actualRow, "index"),
         seriesValue: ys[lastI],
@@ -585,7 +718,7 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
     }
 
     let armI = -1;
-    for (let i = 0; i < ys.length; i++) {
+    for (let i = anchorI; i < ys.length; i++) {
       if (ys[i] - baseline > armDelta) {
         armI = i;
         break;
@@ -598,17 +731,17 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
         y: armRow.y,
         anchored: "robot",
         kind: "wall-off-arm",
-        label: `壁切れ[${side}] 気づいた点(baseline+${armDelta}mm) idx=${fmt(armRow, "index")} 走行=${xs[armI].toFixed(1)}mm`,
+        label: `壁切れ[${side}] 気づいた点(baseline+${armDelta}mm、参考値・実測ではactualよりばらつきが大きいことがある) idx=${fmt(armRow, "index")} 走行=${xs[armI].toFixed(1)}mm`,
         column: col,
         seriesIndex: asNum(armRow, "index"),
         seriesValue: ys[armI],
       });
     }
 
-    const fitIdx = ys.reduce<number[]>((acc, y, i) => {
-      if (y - baseline > fitLo && y - baseline < fitHi) acc.push(i);
-      return acc;
-    }, []);
+    const fitIdx: number[] = [];
+    for (let i = anchorI; i < ys.length; i++) {
+      if (ys[i] - baseline > fitLo && ys[i] - baseline < fitHi) fitIdx.push(i);
+    }
     if (fitIdx.length < minFitN || !pointByRow) continue;
     const { slope, intercept, r2 } = linreg(
       fitIdx.map((i) => xs[i]),
@@ -625,8 +758,8 @@ export function computeWallOffEdgeEvents(rows: Record<string, number>[], opts: W
       anchored: "robot",
       kind: "wall-off-edge",
       label:
-        `壁切れ[${side}] 逆算エッジ 走行=${xEdge.toFixed(1)}mm slope=${slope.toFixed(3)}mm/mm r2=${r2.toFixed(3)} ` +
-        `検出遅れ=${(xs[lastI] - xEdge).toFixed(1)}mm` +
+        `壁切れ[${side}] 逆算エッジ(参考値・実測ではactualよりばらつきが大きいことがある) 走行=${xEdge.toFixed(1)}mm slope=${slope.toFixed(3)}mm/mm r2=${r2.toFixed(3)} ` +
+        `見かけの検出遅れ=${(xs[lastI] - xEdge).toFixed(1)}mm` +
         (interp.extrapolated ? " (区間外挿・要注意)" : ""),
       column: col,
       seriesIndex: interp.index,

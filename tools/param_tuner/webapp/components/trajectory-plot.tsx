@@ -23,9 +23,12 @@ const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | 
   "state-end-sensor": { color: "#5aa9ff", shape: "square" },
   trough: { color: "#c678f5", shape: "circle" },
   "trough-rise": { color: "#4ad4d4", shape: "circle" },
-  // wall_off_edge_check.py 相当: 現行検出(遅い)/気づいた点/逆算エッジ(真の
-  // 切れ目)を並べて描くので3色で区別する。actualとedgeの距離がそのまま
-  // 検出遅れの視覚化になる。
+  // wall_off_edge_check.py 相当。anchorは「壁に最も近づいた点」(見えていない
+  // パターンでの接近の底)、actualは現行検出、arm/edgeは参考値(実測では
+  // actualよりばらつきが大きいことがあるので鵜呑みにしない - lib/log-analysis.ts
+  // のコメント参照)。
+  "wall-off-anchor": { color: "#38bdf8", shape: "circle" },
+  "wall-off-anchor-sensor": { color: "#38bdf8", shape: "square" },
   "wall-off-actual": { color: "#ff8c42", shape: "diamond" },
   "wall-off-actual-sensor": { color: "#ff8c42", shape: "square" },
   "wall-off-arm": { color: "#eab308", shape: "circle" },
