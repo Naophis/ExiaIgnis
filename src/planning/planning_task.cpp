@@ -365,6 +365,8 @@ void PlanningTask::cp_request() {
   tgt_val->tgt_in.alpha = receive_req->nmr.alpha;
 
   tgt_val->tgt_in.tgt_dist = receive_req->nmr.dist;
+  // 直前セグメントで使っていたlast_tgt_angle(下のideal_px/py座標系合わせで使う)
+  const float prev_last_tgt_angle = last_tgt_angle;
   last_tgt_angle = tgt_val->tgt_in.tgt_angle;
   tgt_val->tgt_in.tgt_angle = receive_req->nmr.ang;
 
@@ -508,8 +510,31 @@ void PlanningTask::cp_request() {
     ego.kim.x = ego.kim.y = 0;
     tgt_val->ego_in.ideal_px = tgt_val->ego_in.ideal_py =
         tgt_val->ego_in.img_ang = 0;
-  } else if (receive_req->nmr.motion_type == MotionType::WALL_OFF ||
-             receive_req->nmr.motion_type == MotionType::WALL_OFF_DIA) {
+  } else {
+    // 2026-09-06: kim.x/y・ideal_px/pyをリセットしないモーション(WALL_OFF/
+    // WALL_OFF_DIA等)では、ideal_px/pyをlast_tgt_angleの変化分だけ回して
+    // 座標系を揃える。trajectory_points(odm)はgenerate()が
+    // `ego_in.img_ang += last_tgt_angle`を掛けてmpcへ渡すため「セグメント
+    // ローカル座標系をlast_tgt_angleだけ回した座標系」で積分されており、
+    // SLALOM直後のSTRAIGHT(last_tgt_angle=旋回角)ではideal_px/pyが旋回角の
+    // 方向へ伸びる。そのSTRAIGHTからWALL_OFFへ移るとlast_tgt_angleは
+    // STRAIGHTのtgt_angle(=0)へ戻るが、ideal_px/pyは旋回角の座標系の値の
+    // まま引き継がれるため、calc_kanayama()のodm.x/yがWALL_OFF区間で
+    // 矩形状に飛ぶ(20260906_052149.csv idx506: STRAIGHT終端odm(193,0)→
+    // WALL_OFF開始odm(139,135)。(193,0)を45°回した(136.6,136.6)そのもの)。
+    // 位置の連続性: p_new = R(lta_new - lta_old)·p_old。両者が等しい
+    // 遷移(SLA_FRONT_STR→SLALOM等)では恒等変換。2D Kanayamaが有効な
+    // SLALOM/SLA_BACK_STRの入口はどちらもリセット済みか恒等なので制御への
+    // 影響は無く、ログのodm_x/odm_yがkim_x/kim_yと同じ座標系で連続になる。
+    const float d_lta = last_tgt_angle - prev_last_tgt_angle;
+    if (d_lta != 0.0f) {
+      const float c = cosf(d_lta);
+      const float s = sinf(d_lta);
+      const float px = tgt_val->ego_in.ideal_px;
+      const float py = tgt_val->ego_in.ideal_py;
+      tgt_val->ego_in.ideal_px = c * px - s * py;
+      tgt_val->ego_in.ideal_py = s * px + c * py;
+    }
   }
   if (tgt_val->motion_type == MotionType::WALL_OFF ||
       tgt_val->motion_type == MotionType::WALL_OFF_DIA) {

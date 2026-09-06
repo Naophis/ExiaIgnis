@@ -82,9 +82,9 @@ void MainTask::test_sla() {
     mp->hold();
   }
 
-  if (param_->test_log_enable > 0) {
-    lt_->start_slalom_log();
-  }
+  // if (param_->test_log_enable > 0) {
+  //   lt_->start_slalom_log();
+  // }
 
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
@@ -121,9 +121,9 @@ void MainTask::test_sla() {
 
   req_error_reset();
 
-  // if (param_->test_log_enable > 0) {
-  //   lt_->start_slalom_log();
-  // }
+  if (param_->test_log_enable > 0) {
+    lt_->start_slalom_log();
+  }
 
   ps.v_max = sla_p.v;
   ps.v_end = sla_p.v;
