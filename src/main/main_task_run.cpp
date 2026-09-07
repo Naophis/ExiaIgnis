@@ -76,6 +76,7 @@ void MainTask::run_main_mode() {
       } else {
         idx = 1;
       }
+      idx = 0;
       load_slalom_param(idx, idx, idx);
       // 探索用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を想定し、
       // LUTを使わず固定accl(str_map[Search].accl)にフォールバックする。
@@ -105,6 +106,7 @@ void MainTask::run_main_mode() {
       } else {
         idx = 1;
       }
+      idx = 0;
       sr = SearchResult::SUCCESS;
       load_slalom_param(idx, idx, idx);
       // 探索用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を想定し、

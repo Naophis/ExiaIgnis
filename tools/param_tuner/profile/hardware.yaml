@@ -925,7 +925,7 @@ normal_sla_r_wall_off_th_in: 70 #[mm]
 normal_sla_l_wall_off_th_out: 80 #[mm]
 normal_sla_r_wall_off_th_out: 80 #[mm]
 
-normal_sla_l_wall_off_ref_cnt: 138 #413 -274 = 139 #125~144 
+normal_sla_l_wall_off_ref_cnt: 136 #413 -274 = 139 #125~144 
 normal_sla_r_wall_off_ref_cnt: 135 #404-274 = 130 #125~144
 
 normal_sla_l_wall_off_dist: 6

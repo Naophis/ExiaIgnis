@@ -126,7 +126,7 @@ void MainTask::test_pivot_n2() {
   // search_ctrl->set_lgc(lgc);
   // search_ctrl->set_motion_plannning(mp);
   // pc->set_logic(lgc);
-  // pc->set_userinterface(ui);
+  // pc->set_userinterface(ui_);
   // load_slalom_param(0, 0, 0);
   // // sr = search_ctrl->exec(param_set, SearchMode::ALL);
 
