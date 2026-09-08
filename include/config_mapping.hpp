@@ -526,6 +526,24 @@ inline void convertFromJson(JsonVariantConst src, start_align_t& dst) {
     from_json_field(src, "repeat_dist", dst.repeat_dist);
 }
 
+inline void convertFromJson(JsonVariantConst src, motor_torque_asym_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "eps", dst.eps);
+}
+
+inline void convertFromJson(JsonVariantConst src, brake_yaw_ff_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "accl_th", dst.accl_th);
+    from_json_field(src, "diff_per_g", dst.diff_per_g);
+}
+
+inline void convertFromJson(JsonVariantConst src, brake_yaw_gain_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "accl_th", dst.accl_th);
+    from_json_field(src, "p_scale", dst.p_scale);
+    from_json_field(src, "d_scale", dst.d_scale);
+}
+
 inline void convertFromJson(JsonVariantConst src, wall_fit_t& dst) {
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "meas_sigma", dst.meas_sigma);
@@ -704,6 +722,9 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "hold_settle", dst.hold_settle);
     from_json_nested(src, "start_align", dst.start_align);
     from_json_nested(src, "wall_fit", dst.wall_fit);
+    from_json_nested(src, "brake_yaw_gain", dst.brake_yaw_gain);
+    from_json_nested(src, "brake_yaw_ff", dst.brake_yaw_ff);
+    from_json_nested(src, "motor_torque_asym", dst.motor_torque_asym);
     from_json_field(src, "ang_snap_enable", dst.ang_snap_enable);
     from_json_field(src, "search_sen_ctrl_limitter", dst.search_sen_ctrl_limitter);
     from_json_field(src, "decel_delay_cnt", dst.decel_delay_cnt);

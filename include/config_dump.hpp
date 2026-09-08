@@ -279,6 +279,24 @@ inline void convertToJson(const start_align_t& src, JsonVariant dst) {
     dst["repeat_dist"] = src.repeat_dist;
 }
 
+inline void convertToJson(const motor_torque_asym_t& src, JsonVariant dst) {
+    dst["enable"] = src.enable;
+    dst["eps"] = src.eps;
+}
+
+inline void convertToJson(const brake_yaw_ff_t& src, JsonVariant dst) {
+    dst["enable"] = src.enable;
+    dst["accl_th"] = src.accl_th;
+    dst["diff_per_g"] = src.diff_per_g;
+}
+
+inline void convertToJson(const brake_yaw_gain_t& src, JsonVariant dst) {
+    dst["enable"] = src.enable;
+    dst["accl_th"] = src.accl_th;
+    dst["p_scale"] = src.p_scale;
+    dst["d_scale"] = src.d_scale;
+}
+
 inline void convertToJson(const wall_fit_t& src, JsonVariant dst) {
     dst["enable"] = src.enable;
     dst["meas_sigma"] = src.meas_sigma;
@@ -409,6 +427,9 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["hold_settle"]              = src.hold_settle;
     dst["start_align"]              = src.start_align;
     dst["wall_fit"]                 = src.wall_fit;
+    dst["brake_yaw_gain"]           = src.brake_yaw_gain;
+    dst["brake_yaw_ff"]             = src.brake_yaw_ff;
+    dst["motor_torque_asym"]        = src.motor_torque_asym;
     dst["ang_snap_enable"]          = src.ang_snap_enable;
     dst["search_sen_ctrl_limitter"] = src.search_sen_ctrl_limitter;
     dst["decel_delay_cnt"]          = src.decel_delay_cnt;

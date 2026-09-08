@@ -693,6 +693,50 @@ typedef struct {
   float crab = 0.0f;         // [deg] 進行方向−機体向き(c)。機体傾き = ang + β − c
 } wall_fit_t;
 
+// 減速中のヨーレートループ強化(2026-09-09、control_law.cpp
+// calc_angle_velocity_ctrl())。1.8m/sからの停止(4.5g)で毎回−1.4°右へヨーし
+// (5本で±0.03°)、25m/s²に落としても−1.0°残った(20260909_040510/041343/041426)。
+// 左右の制動トルク差(左が強い)に対し、直進用の弱いgyro_pid.p(FF主体)では
+// 差動dutyが1gあたり0.8%しか返せず(必要は約1.2%/g)抑え切れない。4.4m/sの
+// 最短走行では旋回前の5g減速のたびに向きが1〜4°振れ(005345)、旋回入口の
+// 傾きの散りの主因。減速中(ego_in.accl < −accl_th)だけgyro_pid.p/dを倍率で
+// 強める。旋回(SLALOM/SLA_BACK_STR、turn_end_brakeと競合)とhold中は対象外。
+typedef struct {
+  int enable = 0;
+  float accl_th = 3000.0f; // [mm/s^2] 指令減速度がこれを超えたら有効
+  float p_scale = 3.0f;    // gyro_pid.p の倍率
+  float d_scale = 1.0f;    // gyro_pid.d の倍率(雑音増幅を避けるなら1)
+} brake_yaw_gain_t;
+
+// 減速中の左右制動トルク差の前置き補償(2026-09-09、control_law.cpp
+// summation_duty())。brake_yaw_gain(ヨーループ倍率)は×3で停止時ヨー
+// −1.0→−0.6〜−0.85°(25m/s²)にとどまり、×4.5では減速中にループが発振
+// (角速度±200〜320°/s、duty差±50〜66%、約8ms周期; 20260909_044836.csv)。
+// 外乱は減速度に比例して毎回同じ向き(右へ)の系統量なので、減速度[g]に比例した
+// 差動dutyを前置きしてループには残りだけ任せる。diff_per_g[%/g]は正で
+// 「右輪の制動を弱め左輪を強める」(右ヨーを打ち消す向き)。初期値の根拠:
+// 4.5gでループが返した差動3.7%でも−1.4°残った→必要量は約1.2〜1.5%/g。
+typedef struct {
+  int enable = 0;
+  float accl_th = 3000.0f; // [mm/s^2] 指令減速度がこれを超えたら有効
+  float diff_per_g = 1.2f; // [%/g] duty_r += d/2, duty_l -= d/2 (d = diff_per_g*g)
+} brake_yaw_ff_t;
+
+// 左右モーターのトルクゲイン非対称の補正(2026-09-09、control_law.cpp
+// summation_duty() torque_mode==2)。減速中の右ヨーは減速度比例の前置き
+// (brake_yaw_ff)だと減速の前半で過剰・後半で不足になった(20260909_045334.csv:
+// +0.2°→−0.4°)。同じ減速度でも低速ほど逆起電力が減って制動dutyが増えるので、
+// 外乱は「トルク指令(電流)」に比例する。左が電流あたりのトルクで約9%低いと
+// すると、減速時の必要差動(4.7gで約5.4%、トルク分duty約60%)、1.8m/s巡航の
+// 差動+0.9%(トルク分約8%)、走り出しの左ヨー(加速トルク大)が一つのεで揃う。
+// トルク指令に torque_l *= (1+ε/2), torque_r *= (1−ε/2) を掛ける(合計は不変)。
+// 逆起電力分(ff_duty_rpm)には掛けないので巡航では小さく、加減速で大きく効く。
+// 全モーション種別に適用(旋回のff_roll2も同じモーター非対称を受けるため)。
+typedef struct {
+  int enable = 0;
+  float eps = 0.09f; // 左/右のトルクゲイン差(左が低い側を正)。0.09≒9%
+} motor_torque_asym_t;
+
 // hold()の吸引プラトー後の待ち時間を「向きが収束するまで(上限付き)」に
 // する(2026-09-06)。従来はsleep_ms(2450/2500)固定で、プラトー中にファンの
 // 突発トルクで動いた場合(20260906_045232.csv: idx2160前後で+0.4°動き、残り
@@ -965,6 +1009,9 @@ typedef struct {
   hold_settle_t hold_settle;
   start_align_t start_align;
   wall_fit_t wall_fit;
+  brake_yaw_gain_t brake_yaw_gain;
+  brake_yaw_ff_t brake_yaw_ff;
+  motor_torque_asym_t motor_torque_asym;
   // 壁の新規検出でego_in.ang/global_pos.angを0へスナップする従来動作の有効化
   // (control_law.cpp calc_sensor_pid())。1: 従来通り。0: 止める(wall_fitで
   // 格子基準を持つ場合、スナップは基準を捨ててしまうため)。

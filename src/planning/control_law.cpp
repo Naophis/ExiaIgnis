@@ -1713,8 +1713,18 @@ ControlLaw::calc_angle_velocity_ctrl() {
     // 参照)。SLA_BACK_STRは短い過渡区間でerr_thが想定していた定常チャタ
     // リング対策は不要なため、motion_type+w_thのみでゲートする。
 
+    // 減速中のヨーレートループ強化(structs.hpp brake_yaw_gain_t参照)。
+    // 旋回(turn_end_brakeと競合)・hold中は対象外。
+    const auto &byg = param_->brake_yaw_gain;
+    const bool braking_gain_active =
+        byg.enable > 0 && !turn_end_brake_active && !tgt_val_->hold_active &&
+        tgt_val_->motion_type != MotionType::SLALOM &&
+        tgt_val_->motion_type != MotionType::SLA_BACK_STR &&
+        tgt_val_->ego_in.accl < -byg.accl_th;
+    const float brake_p_scale = braking_gain_active ? byg.p_scale : 1.0f;
+    const float brake_d_scale = braking_gain_active ? byg.d_scale : 1.0f;
     auto kp_gain = (turn_end_brake_active ? param_->turn_end_brake.p
-                                           : param_->gyro_pid.p) *
+                                           : param_->gyro_pid.p * brake_p_scale) *
                    ee->w.error_p;
     auto ki_gain = param_->gyro_pid.i * diff_ang;
     auto kb_gain = param_->gyro_pid.b * w_error_i;
@@ -1791,7 +1801,7 @@ ControlLaw::calc_angle_velocity_ctrl() {
     }
 
     auto kd_gain = (turn_end_brake_active ? param_->turn_end_brake.d
-                                           : param_->gyro_pid.d) *
+                                           : param_->gyro_pid.d * brake_d_scale) *
                    w_error_d;
     limitter(kp_gain, ki_gain, kb_gain, kd_gain,
              param_->gyro_pid_gain_limitter);
@@ -2056,6 +2066,13 @@ ControlLaw::summation_duty() {
 
     float torque_r = ff_front2 + ff_roll2 + duty_c + duty_roll + ff_friction_r;
     float torque_l = ff_front2 - ff_roll2 + duty_c - duty_roll + ff_friction_l;
+    // 左右モーターのトルクゲイン非対称の補正(structs.hpp motor_torque_asym_t)。
+    // 逆起電力分(ff_duty_r2/l2)には掛けない。
+    if (param_->motor_torque_asym.enable > 0) {
+      const float e2 = 0.5f * param_->motor_torque_asym.eps;
+      torque_l *= (1.0f + e2);
+      torque_r *= (1.0f - e2);
+    }
 
     const float km_gear = param_->Km * (param_->gear_a / param_->gear_b);
     float req_v_r = torque_r * param_->Resist / km_gear + ff_duty_r2;
@@ -2063,6 +2080,21 @@ ControlLaw::summation_duty() {
 
     tgt_duty.duty_r = req_v_r / se->ego.battery_lp * 100;
     tgt_duty.duty_l = req_v_l / se->ego.battery_lp * 100;
+  }
+
+  // 減速中の左右制動トルク差の前置き補償(structs.hpp brake_yaw_ff_t参照)。
+  // 旋回(SLALOM/SLA_BACK_STR)・hold中は対象外。duty%で直接与える。
+  {
+    const auto &bf = param_->brake_yaw_ff;
+    if (bf.enable > 0 && !tgt_val_->hold_active &&
+        tgt_val_->motion_type != MotionType::SLALOM &&
+        tgt_val_->motion_type != MotionType::SLA_BACK_STR &&
+        tgt_val_->ego_in.accl < -bf.accl_th) {
+      const float g = -tgt_val_->ego_in.accl / 9810.0f;
+      const float d = bf.diff_per_g * g; // [%]
+      tgt_duty.duty_r += 0.5f * d;
+      tgt_duty.duty_l -= 0.5f * d;
+    }
   }
 }
 
