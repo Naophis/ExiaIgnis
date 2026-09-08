@@ -205,7 +205,12 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.img_dist = floatToHalf(tv->ego_in.img_dist);
   ld.dist = floatToHalf(tv->ego_in.dist);
 
-  ld.img_ang = floatToHalf(tv->ego_in.img_ang * 180.0f / m_PI);
+  // 2026-09-09: ego_in.img_angはTrajectoryGenerator::generate()の間だけ
+  // 前セグメント基準(+last_tgt_angle)へ回されており、Core0の1kHzログタイマは
+  // 位相が固定なので一度その窓を踏むと走行中ずっと前区画の値(旋回後の直線で
+  // ideal_ang=-90等)を記録していた(20260909_004342.csv)。copy_tgt()が
+  // 代入前に退避する前tickの値(img_ang_z)は常にセグメント基準で安定。
+  ld.img_ang = floatToHalf(sr->img_ang_z * 180.0f / m_PI);
   ld.ang = floatToHalf(tv->ego_in.ang * 180.0f / m_PI);
   ld.ang_kf = floatToHalf(sr->ego.ang_kf * 180.0f / m_PI);
 
