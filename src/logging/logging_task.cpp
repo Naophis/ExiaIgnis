@@ -329,6 +329,8 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.dbg_off_ang = floatToHalf(ee->aw_log.dbg_off_ang);
     ld.dbg_off_wgain = floatToHalf(ee->aw_log.dbg_off_wgain);
     ld.dbg_off_kny = floatToHalf(ee->aw_log.dbg_off_kny);
+    ld.wfit_beta = floatToHalf(ee->aw_log.wfit_beta);
+    ld.wfit_sig = floatToHalf(ee->aw_log.wfit_sig);
   }
 
   ld.accel_x = floatToHalf(sr->accel_x.data);
@@ -538,6 +540,8 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dbg_off_ang:float:%d\n", (int)sizeof(ls11.dbg_off_ang));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dbg_off_wgain:float:%d\n", (int)sizeof(ls11.dbg_off_wgain));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dbg_off_kny:float:%d\n", (int)sizeof(ls11.dbg_off_kny));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wfit_beta:float:%d\n", (int)sizeof(ls11.wfit_beta));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wfit_sig:float:%d\n", (int)sizeof(ls11.wfit_sig));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -794,6 +798,8 @@ void LoggingTask::dump_csv() const {
     ls11.dbg_off_ang = halfToFloat(e.dbg_off_ang);
     ls11.dbg_off_wgain = halfToFloat(e.dbg_off_wgain);
     ls11.dbg_off_kny = halfToFloat(e.dbg_off_kny);
+    ls11.wfit_beta = halfToFloat(e.wfit_beta);
+    ls11.wfit_sig = halfToFloat(e.wfit_sig);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

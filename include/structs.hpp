@@ -658,6 +658,27 @@ typedef struct {
   float repeat_dist = 0.0f;
 } start_align_t;
 
+// 走行中の壁基準平行推定(2026-09-08、control_law.cpp update_wall_fit())。
+// 未知数は「ジャイロ座標系(ego_in.ang)と迷路格子のずれ」β[rad]。走行方向は
+// dy/dx = ang + β (y: 壁基準の横位置[mm、左が正], x: 走行距離)で、βは置き方の
+// ずれとクラブ(進行方向−機体向き)を含む。βは旋回をまたいでも不変(格子は
+// 90°刻み、旋回の実角度はジャイロが測り、cp_requestは公称角しか引かない)
+// なので、走行全体の壁観測で漸化的に精密化する(2状態カルマン: y, β)。
+// 観測は z = lat − k·ang (latは両壁なら−(l45−r45)/2、片壁なら−err/2。
+// kは回転による見かけの横移動[mm/rad]で距離に比例: k_ref·d/45)。
+// 区画境界(motion_type変化)と両壁/片壁モード変化でyの不確かさをリセット。
+// ang_snapやstart_alignがangを書き換えたときはβを同量逆に動かして整合を保つ。
+typedef struct {
+  int enable = 0;
+  float meas_sigma = 0.25f;  // [mm] 横位置観測の雑音(パネル段差0.2〜0.3mm込み)
+  float beta_sigma0 = 1.5f;  // [deg] 走行開始時のβの不確かさ
+  float beta_q = 0.1f;       // [deg/√m] βのゆっくりした変動の許容(1m走ってσ+0.1°)
+  float y_q = 0.05f;         // [mm/√mm] 向きで説明できない横移動の許容
+  float v_min = 50.0f;       // [mm/s] これ未満では予測・更新しない
+  float k_ref = 0.9f;        // [mm/deg] 45mmでの回転感度(走り出し回転で実測0.78〜0.96)
+  float crab = 0.0f;         // [deg] 進行方向−機体向き(c)。機体傾き = ang + β − c
+} wall_fit_t;
+
 // hold()の吸引プラトー後の待ち時間を「向きが収束するまで(上限付き)」に
 // する(2026-09-06)。従来はsleep_ms(2450/2500)固定で、プラトー中にファンの
 // 突発トルクで動いた場合(20260906_045232.csv: idx2160前後で+0.4°動き、残り
@@ -929,6 +950,11 @@ typedef struct {
   float hold_ang_i_max_duty = 0;
   hold_settle_t hold_settle;
   start_align_t start_align;
+  wall_fit_t wall_fit;
+  // 壁の新規検出でego_in.ang/global_pos.angを0へスナップする従来動作の有効化
+  // (control_law.cpp calc_sensor_pid())。1: 従来通り。0: 止める(wall_fitで
+  // 格子基準を持つ場合、スナップは基準を捨ててしまうため)。
+  int ang_snap_enable = 1;
   float search_sen_ctrl_limitter = 1;
   // v > accl_param.limit(5500固定, motion_planning.cpp/planning_task.cpp)
   // 域での加減速ソフトスタート用パラメータ。mpc_tgt_calc.cppのdecel/accl
@@ -1226,6 +1252,8 @@ typedef struct {
   float dbg_off_ang;
   float dbg_off_wgain;
   float dbg_off_kny;
+  float wfit_beta; // wall_fit β推定[deg](structs.hpp wall_fit_t参照)
+  float wfit_sig;  // wall_fit βの1σ[deg]
 } aw_log_t;
 
 typedef struct {
@@ -1816,6 +1844,8 @@ typedef struct {
   real16_T dbg_off_ang;   // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
   real16_T dbg_off_wgain; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
   real16_T dbg_off_kny;   // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
+  real16_T wfit_beta;     // wall_fit β推定[deg]
+  real16_T wfit_sig;      // wall_fit β 1σ[deg]
 
   real16_T accel_x; // ASM330LHH加速度計X軸[mm/s^2], gain補正前
   real16_T accel_y; // ASM330LHH加速度計Y軸[mm/s^2], gain補正前
@@ -2072,6 +2102,8 @@ typedef struct {
   float dbg_off_ang   = 143; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
   float dbg_off_wgain = 144; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
   float dbg_off_kny   = 145; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
+  float wfit_beta     = 146; // wall_fit β推定[deg](structs.hpp wall_fit_t参照)
+  float wfit_sig      = 147; // wall_fit β 1σ[deg]
 } LogStruct11;
 
 #endif

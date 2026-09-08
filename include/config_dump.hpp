@@ -276,6 +276,17 @@ inline void convertToJson(const start_align_t& src, JsonVariant dst) {
     dst["repeat_dist"] = src.repeat_dist;
 }
 
+inline void convertToJson(const wall_fit_t& src, JsonVariant dst) {
+    dst["enable"] = src.enable;
+    dst["meas_sigma"] = src.meas_sigma;
+    dst["beta_sigma0"] = src.beta_sigma0;
+    dst["beta_q"] = src.beta_q;
+    dst["y_q"] = src.y_q;
+    dst["v_min"] = src.v_min;
+    dst["k_ref"] = src.k_ref;
+    dst["crab"] = src.crab;
+}
+
 inline void convertToJson(const turn_angle_fb_t& src, JsonVariant dst) {
     dst["enable"] = src.enable;
     dst["gain"]   = src.gain;
@@ -394,6 +405,8 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["hold_ang_i_max_duty"]      = src.hold_ang_i_max_duty;
     dst["hold_settle"]              = src.hold_settle;
     dst["start_align"]              = src.start_align;
+    dst["wall_fit"]                 = src.wall_fit;
+    dst["ang_snap_enable"]          = src.ang_snap_enable;
     dst["search_sen_ctrl_limitter"] = src.search_sen_ctrl_limitter;
     dst["decel_delay_cnt"]          = src.decel_delay_cnt;
     dst["decel_delay_n"]            = src.decel_delay_n;

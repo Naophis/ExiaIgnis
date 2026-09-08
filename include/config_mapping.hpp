@@ -523,6 +523,17 @@ inline void convertFromJson(JsonVariantConst src, start_align_t& dst) {
     from_json_field(src, "repeat_dist", dst.repeat_dist);
 }
 
+inline void convertFromJson(JsonVariantConst src, wall_fit_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "meas_sigma", dst.meas_sigma);
+    from_json_field(src, "beta_sigma0", dst.beta_sigma0);
+    from_json_field(src, "beta_q", dst.beta_q);
+    from_json_field(src, "y_q", dst.y_q);
+    from_json_field(src, "v_min", dst.v_min);
+    from_json_field(src, "k_ref", dst.k_ref);
+    from_json_field(src, "crab", dst.crab);
+}
+
 inline void convertFromJson(JsonVariantConst src, turn_angle_fb_t& dst) {
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "gain", dst.gain);
@@ -689,6 +700,8 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "hold_ang_i_max_duty", dst.hold_ang_i_max_duty);
     from_json_nested(src, "hold_settle", dst.hold_settle);
     from_json_nested(src, "start_align", dst.start_align);
+    from_json_nested(src, "wall_fit", dst.wall_fit);
+    from_json_field(src, "ang_snap_enable", dst.ang_snap_enable);
     from_json_field(src, "search_sen_ctrl_limitter", dst.search_sen_ctrl_limitter);
     from_json_field(src, "decel_delay_cnt", dst.decel_delay_cnt);
     from_json_field(src, "decel_delay_n", dst.decel_delay_n);

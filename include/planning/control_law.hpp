@@ -168,6 +168,17 @@ private:
   // 横位置の壁基準補正用アンカー(update_start_align()参照)。武装後に最初に
   // 壁を見たtick、および各発火時点の「壁から見た横位置」「pos_y」「kim.x/y」。
   bool  start_align_anchor_valid_ = false;
+  // アンカーの通路(motion_typeが変わるたびに+1するセグメント番号)と、通路の
+  // 横方向単位ベクトル(世界座標)、アンカー時点の横位置(世界座標での射影)。
+  // 横位置の合わせ込みは同じ通路内でのみ行い、補正は通路の横方向へ入れる
+  // (2026-09-09: 旋回後も世界yへ入れていてpos_yが150〜300mm跳んだ、
+  // 20260909_004035.csv idx790/1538/4622/5294)。
+  int   start_align_anchor_seg_  = -1;
+  float start_align_anchor_nx_   = 0.0f;
+  float start_align_anchor_ny_   = 1.0f;
+  float start_align_anchor_latw_ = 0.0f;
+  int   motion_seg_id_ = 0;
+  MotionType motion_type_prev_ = MotionType::NONE;
   bool  start_align_anchor_two_   = false; // アンカーが両壁基準か
   float start_align_anchor_lat_   = 0.0f; // 壁基準の横位置[mm、左が正]
   float start_align_anchor_pos_y_ = 0.0f;
@@ -183,6 +194,15 @@ private:
   float start_align_fit_syy_ = 0.0f;
   float start_align_fit_sa_  = 0.0f; // Σ(ang−ang0)[rad]、ジャイロ融合用
   bool  start_align_fit_two_ = false; // 窓開始時の両壁/片壁モード
+  // 走行中の壁基準平行推定(wall_fit、structs.hpp wall_fit_t参照)。
+  // 状態 y[mm](壁基準横位置)、β[rad](ジャイロ座標系と格子のずれ)、共分散P。
+  float wall_fit_y_    = 0.0f;
+  float wall_fit_beta_ = 0.0f;
+  float wall_fit_P00_  = 1.0e4f;
+  float wall_fit_P01_  = 0.0f;
+  float wall_fit_P11_  = 0.0f;
+  int   wall_fit_mode_prev_ = 0; // 0:なし 1:左壁 2:右壁 3:両壁
+  MotionType wall_fit_mt_prev_ = MotionType::NONE;
   float start_align_err0_    = 0.0f; // 判定窓開始時のsen.error_p
   // ego_in.ang(=生ジャイロ積分ヘディング、sensing_task.cpp calc_vel()
   // 参照)は壁を検出していない間は無補正でドリフトし続ける。壁を新規に
@@ -247,6 +267,8 @@ private:
   float calc_sensor_pid();
   float calc_sensor_pid_dia();
   void  update_start_align(SensingControlType type);
+  void  update_wall_fit(SensingControlType type);
+  void  reset_wall_fit();
   float check_sen_error(SensingControlType &type);
   float check_sen_error_dia(SensingControlType &type);
   void  check_left_sensor_error(float &error, int &check,

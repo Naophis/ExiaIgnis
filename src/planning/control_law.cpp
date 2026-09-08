@@ -40,6 +40,7 @@ ControlLaw::calc(bool motor_en, bool suction_en, bool search_mode,
     start_align_cnt_ = 0;
     start_align_fire_dist_ = -1.0e9f;
     start_align_anchor_valid_ = false;
+    reset_wall_fit();
   } else if (!motor_en_) {
     start_align_pending_ = false;
     start_align_cnt_ = 0;
@@ -52,6 +53,10 @@ ControlLaw::calc(bool motor_en, bool suction_en, bool search_mode,
     start_align_cnt_ = 0;
   }
   motor_en_prev_ = motor_en_;
+  if (tgt_val_->motion_type != motion_type_prev_) {
+    motion_seg_id_++;
+    motion_type_prev_ = tgt_val_->motion_type;
+  }
 
   const bool ctl_log = (g_ctl_debug_ticks > 0);
   if (ctl_log)
@@ -314,12 +319,17 @@ ControlLaw::calc_sensor_pid() {
       param_->start_align.enable > 0 && start_align_pending_ &&
       !search_mode_ &&
       tgt_val_->global_pos.dist < param_->start_align.snap_skip_dist;
-  if (wall_found_now && !wall_found_prev_ && !skip_snap) {
+  if (wall_found_now && !wall_found_prev_ && !skip_snap &&
+      param_->ang_snap_enable > 0) {
+    // wall_fit: angを0へ切る=ジャイロ座標系をang分回すので、格子ずれβは
+    // 同量逆に動かして推定を保つ(structs.hpp wall_fit_t参照)。
+    wall_fit_beta_ += tgt_val_->ego_in.ang;
     tgt_val_->ego_in.ang = 0;
     tgt_val_->global_pos.ang = 0;
   }
   wall_found_prev_ = wall_found_now;
   update_start_align(type);
+  update_wall_fit(type);
 
   if (search_mode_) {
     if (ee->sen.error_p > param_->search_sen_ctrl_limitter) {
@@ -488,7 +498,15 @@ void ControlLaw::update_start_align(SensingControlType type) {
     start_align_anchor_valid_ = true;
     start_align_anchor_two_ = two_wall;
     start_align_anchor_lat_ = lat_now;
-    start_align_anchor_pos_y_ = ego_->pos.get_state()[1];
+    const auto st0 = ego_->pos.get_state();
+    // 通路の世界座標での向き = pos.theta − kim.theta(通路ローカル向き)
+    const float thc = st0[2] - ego_->kim.theta;
+    start_align_anchor_nx_ = -sinf(thc);
+    start_align_anchor_ny_ = cosf(thc);
+    start_align_anchor_latw_ =
+        start_align_anchor_nx_ * st0[0] + start_align_anchor_ny_ * st0[1];
+    start_align_anchor_pos_y_ = st0[1];
+    start_align_anchor_seg_ = motion_seg_id_;
     start_align_anchor_kim_x_ = ego_->kim.x;
     start_align_anchor_kim_y_ = ego_->kim.y;
   }
@@ -585,6 +603,7 @@ void ControlLaw::update_start_align(SensingControlType type) {
     sensing_result_->ego.ang_kf = h;
     sensing_result_->ego.ang_kf2 = h;
     ego_->kf_ang.offset(h - ang_before);
+    wall_fit_beta_ -= (h - ang_before); // wall_fitの格子ずれβを整合(上記snap参照)
   }
   // 2026-09-08: 世界座標(pos)とkim.yの横位置を壁基準で合わせ直す。
   // 従来はang/kim.thetaだけ0に戻していたため、置いた向きのズレ(0.2〜0.7°)
@@ -601,24 +620,37 @@ void ControlLaw::update_start_align(SensingControlType type) {
   // いないので走りは変わらない。
   const float d = apply_heading ? (h - ego_->kim.theta) : 0.0f;
   {
-    const bool same_mode = (two_wall == start_align_anchor_two_);
+    // 横位置の合わせ込みは「同じ通路・同じ壁モード」のアンカーに対してのみ。
+    // 補正ベクトルは通路の横方向(世界座標)に入れる(旋回後は世界yではない)。
+    const bool same_mode = (two_wall == start_align_anchor_two_) &&
+                           (start_align_anchor_seg_ == motion_seg_id_);
     const auto st0 = ego_->pos.get_state();
     float dy_pos = 0.0f;
     if (same_mode) {
       const float dy_wall = lat_now - start_align_anchor_lat_;
-      dy_pos = (start_align_anchor_pos_y_ + dy_wall) - st0[1];
-      // kim.yはセグメント開始でリセットされる。アンカー以降にリセットが
-      // 入っていなければ(kim.xが減っていなければ)同じ壁基準で合わせる。
+      const float latw_now =
+          start_align_anchor_nx_ * st0[0] + start_align_anchor_ny_ * st0[1];
+      dy_pos = (start_align_anchor_latw_ + dy_wall) - latw_now;
+      // kim.yはセグメント開始でリセットされる。同じ通路なら同じ壁基準で合わせる。
       if (ego_->kim.x >= start_align_anchor_kim_x_) {
         ego_->kim.y = start_align_anchor_kim_y_ + dy_wall;
       }
     }
-    ego_->pos.shift(0.0f, dy_pos, d);
-    tgt_val_->ego_in.pos_y += dy_pos;
+    const float dxw = start_align_anchor_nx_ * dy_pos;
+    const float dyw = start_align_anchor_ny_ * dy_pos;
+    ego_->pos.shift(dxw, dyw, d);
+    tgt_val_->ego_in.pos_x += dxw;
+    tgt_val_->ego_in.pos_y += dyw;
     const auto st = ego_->pos.get_state();
     sensing_result_->ego.pos_x = st[0];
     sensing_result_->ego.pos_y = st[1];
     sensing_result_->ego.pos_ang = st[2];
+    // アンカーを現在の通路で取り直す(向きはhへ置いた後の値で)
+    const float thc = st[2] - (apply_heading ? h : ego_->kim.theta);
+    start_align_anchor_nx_ = -sinf(thc);
+    start_align_anchor_ny_ = cosf(thc);
+    start_align_anchor_latw_ = start_align_anchor_nx_ * st[0] + start_align_anchor_ny_ * st[1];
+    start_align_anchor_seg_ = motion_seg_id_;
     start_align_anchor_two_ = two_wall;
     start_align_anchor_lat_ = lat_now;
     start_align_anchor_pos_y_ = st[1];
@@ -2101,6 +2133,104 @@ void ControlLaw::apply_duty_limitter() {
   } else {
     ee->aw_log.sat_roll_dir = 0.0f;
   }
+}
+
+// 走行中の壁基準平行推定(2026-09-08、structs.hpp wall_fit_t のコメント参照)。
+// 状態 x=[y, β]、予測 y += (ang+β)·dx、観測 z = lat − k·ang = y + 雑音。
+// 毎tick ee->aw_log.wfit_beta/wfit_sig[deg] に出す(ログ列)。
+void ControlLaw::reset_wall_fit() {
+  const float s0 = param_->wall_fit.beta_sigma0 / 180.0f * M_PI;
+  wall_fit_y_ = 0.0f;
+  wall_fit_beta_ = 0.0f;
+  wall_fit_P00_ = 1.0e4f;
+  wall_fit_P01_ = 0.0f;
+  wall_fit_P11_ = s0 * s0;
+  wall_fit_mode_prev_ = 0;
+  wall_fit_mt_prev_ = MotionType::NONE;
+}
+
+void ControlLaw::update_wall_fit(SensingControlType type) {
+  const auto &wf = param_->wall_fit;
+  ee->aw_log.wfit_beta = wall_fit_beta_ * 180.0f / M_PI;
+  ee->aw_log.wfit_sig =
+      sqrtf(std::max(wall_fit_P11_, 0.0f)) * 180.0f / M_PI;
+  if (wf.enable <= 0) {
+    return;
+  }
+  const MotionType mt = tgt_val_->motion_type;
+  if (mt != wall_fit_mt_prev_) {
+    // 区画境界: 横位置は新しい通路基準で未知
+    wall_fit_P00_ = 1.0e4f;
+    wall_fit_P01_ = 0.0f;
+    wall_fit_mt_prev_ = mt;
+  }
+  const bool straight_like =
+      (mt == MotionType::STRAIGHT || mt == MotionType::SLA_FRONT_STR ||
+       mt == MotionType::SLA_BACK_STR || mt == MotionType::WALL_OFF);
+  const float v = ABS(tgt_val_->ego_in.v);
+  if (!straight_like || tgt_val_->hold_active || v < wf.v_min) {
+    return;
+  }
+  const float dx = v * dt_;
+  const float ang = tgt_val_->ego_in.ang;
+  // ---- 予測 ----
+  wall_fit_y_ += (ang + wall_fit_beta_) * dx;
+  {
+    const float P00 = wall_fit_P00_, P01 = wall_fit_P01_, P11 = wall_fit_P11_;
+    const float qy = wf.y_q * wf.y_q * dx;
+    const float bq = wf.beta_q / 180.0f * M_PI; // [rad/√m]
+    const float qb = bq * bq * dx * 1.0e-3f;     // 1mあたり→1mmあたり
+    wall_fit_P00_ = P00 + 2.0f * dx * P01 + dx * dx * P11 + qy;
+    wall_fit_P01_ = P01 + dx * P11;
+    wall_fit_P11_ = P11 + qb;
+  }
+  // ---- 観測 ----
+  // 両壁が見えていれば壁PDの判定(type)に依らず観測する(壁制御OFFの試験
+  // 走行でも推定できるように、20260909_002429.csvではβが0のままだった)。
+  // 片壁はcheck_sen_error()の誤差を使うので type==Wall のときだけ。
+  const auto se = sensing_result_;
+  const float l = se->ego.left45_dist, r = se->ego.right45_dist;
+  const bool lok = (30.0f < l && l < 60.0f), rok = (30.0f < r && r < 60.0f);
+  float lat = 0.0f, k_deg = 0.0f;
+  int mode = 0;
+  if (lok && rok) {
+    lat = -0.5f * (l - r);
+    k_deg = wf.k_ref * (0.5f * (l + r)) / 45.0f;
+    mode = 3;
+  } else if ((lok || rok) && type == SensingControlType::Wall) {
+    // 片壁: check_sen_error()の誤差(error*2済み)の-1/2。回転感度は片側分。
+    lat = -0.5f * ee->sen.error_p;
+    k_deg = wf.k_ref * (lok ? l : r) / 45.0f * 0.5f;
+    mode = lok ? 1 : 2;
+  } else {
+    return;
+  }
+  if (mode != wall_fit_mode_prev_) {
+    // 基準(両壁の中心/片壁のref)が変わるので横位置を取り直す
+    wall_fit_P00_ = 1.0e4f;
+    wall_fit_P01_ = 0.0f;
+    wall_fit_mode_prev_ = mode;
+  }
+  const float k = k_deg * 180.0f / M_PI; // [mm/rad]
+  const float z = lat - k * ang;
+  const float R = wf.meas_sigma * wf.meas_sigma;
+  const float S = wall_fit_P00_ + R;
+  const float innov = z - wall_fit_y_;
+  if (S <= 0.0f || innov * innov > 25.0f * S) {
+    // 5σ超は外れ値(柱の縁・段差)として捨てる
+    return;
+  }
+  const float K0 = wall_fit_P00_ / S;
+  const float K1 = wall_fit_P01_ / S;
+  wall_fit_y_ += K0 * innov;
+  wall_fit_beta_ += K1 * innov;
+  const float P01 = wall_fit_P01_;
+  wall_fit_P00_ *= (1.0f - K0);
+  wall_fit_P01_ = (1.0f - K0) * P01;
+  wall_fit_P11_ -= K1 * P01;
+  ee->aw_log.wfit_beta = wall_fit_beta_ * 180.0f / M_PI;
+  ee->aw_log.wfit_sig =
+      sqrtf(std::max(wall_fit_P11_, 0.0f)) * 180.0f / M_PI;
 }
 
 // 走行開始時に keep_dist ヒステリシスを一度だけ外す(2026-09-08、structs.hpp
