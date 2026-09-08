@@ -35,6 +35,7 @@ void MainTask::test_run() {
   }
   if (param_->test_log_enable > 0) {
     lt_->start();
+    // sleep_ms(5000);
   }
   reset_tgt_data();
   reset_ego_data();

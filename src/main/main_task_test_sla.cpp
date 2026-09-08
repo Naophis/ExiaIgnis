@@ -534,11 +534,17 @@ void MainTask::test_sla_walloff() {
       param_->left_keep_dist_th = -1;
     }
   }
-  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
   if (sys_.test.suction_active != 0) {
     planning_->suction_power_on();
   }
   mp->reset_gyro_ref_with_check();
+  // ESC起動レイテンシをreset_gyro_ref_with_check()の待ち時間と重ねて隠す。
+  if (sys_.test.suction_active != 0) {
+    reset_tgt_data();
+    reset_ego_data();
+    planning_->motor_enable();
+    mp->hold();
+  }
 
   if (sys_.test.suction_active == 1) {
     planning_->suction_enable(sys_.test.suction_duty,
@@ -546,19 +552,23 @@ void MainTask::test_sla_walloff() {
     while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
-    sleep_ms(800);
+    mp->hold_settle_wait();
   } else if (sys_.test.suction_active == 2) {
     planning_->suction_enable(sys_.test.suction_duty_burst,
                               sys_.test.suction_duty_burst_low);
     while (planning_->is_suction_ramping()) {
       sleep_ms(10);
     }
-    sleep_ms(800);
+    mp->hold_settle_wait();
   }
 
-  reset_tgt_data();
-  reset_ego_data();
-  planning_->motor_enable();
+  if (sys_.test.suction_active != 0) {
+    mp->unhold();
+  } else {
+    reset_tgt_data();
+    reset_ego_data();
+    planning_->motor_enable();
+  }
 
   // testモード用の速度→加速度LUTに切り替える。非吸引時はグリップ不足を
   // 想定し、LUTを使わず固定accl(sys_.test.accl)にフォールバックする。

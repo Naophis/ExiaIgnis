@@ -370,6 +370,8 @@ void PlanningTask::cp_request() {
   last_tgt_angle = tgt_val->tgt_in.tgt_angle;
   tgt_val->tgt_in.tgt_angle = receive_req->nmr.ang;
 
+  // 直前のmotion_type(下の走行開始判定で使う)
+  const MotionType prev_motion_type = tgt_val->motion_type;
   tgt_val->motion_mode = (int)(receive_req->nmr.motion_mode);
   tgt_val->motion_type = receive_req->nmr.motion_type;
 
@@ -435,6 +437,18 @@ void PlanningTask::cp_request() {
 
   // right_keep.star_dist = tgt_val->global_pos.dist;
   // left_keep.star_dist = tgt_val->global_pos.dist;
+
+  // 2026-09-08: 走行開始(停止状態NONE→v_max>0のSTRAIGHT)の一回だけ
+  // keep_dist ヒステリシスを外す(structs.hpp keep_dist_th_start_skip参照)。
+  // hold()(MotionPlanning::hold、v_max=0のSTRAIGHTでhold_active=true)は
+  // 走行開始ではないので除外。reset_ego_data()がNONEを送ってから走行の
+  // STRAIGHTが来るので、prev_motion_type==NONE が停止状態からの走り出し。
+  if (param->keep_dist_th_start_skip > 0 &&
+      prev_motion_type == MotionType::NONE &&
+      tgt_val->motion_type == MotionType::STRAIGHT && !tgt_val->hold_active &&
+      receive_req->nmr.v_max > 0) {
+    ctl_.skip_keep_dist_once();
+  }
 
   if (tgt_val->tgt_in.tgt_angle != 0) {
     const auto tmp_ang = tgt_val->ego_in.ang;

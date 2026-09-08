@@ -14,6 +14,10 @@
 // calc() を 1kHz tick の都度呼ぶ。
 class ControlLaw {
 public:
+  // 走行開始時の keep_dist ヒステリシス一回限り無効化(structs.hpp
+  // input_param_t::keep_dist_th_start_skip参照)。PlanningTask::cp_request()
+  // から走行開始のSTRAIGHT指令受理時に呼ぶ。
+  void skip_keep_dist_once();
   // ---- ライフサイクル ----
   void init(MotorActuator *motor, SuctionEscActuator *esc,
             SensorProcessor *sensor, TrajectoryGenerator *trj,
@@ -160,7 +164,25 @@ private:
   bool  start_align_pending_ = false;
   int   start_align_cnt_     = 0;
   float start_align_dist_    = 0.0f; // 判定窓内の走行距離[mm]
+  float start_align_fire_dist_ = -1.0e9f; // 直近の発火時のglobal_pos.dist[mm]
+  // 横位置の壁基準補正用アンカー(update_start_align()参照)。武装後に最初に
+  // 壁を見たtick、および各発火時点の「壁から見た横位置」「pos_y」「kim.x/y」。
+  bool  start_align_anchor_valid_ = false;
+  bool  start_align_anchor_two_   = false; // アンカーが両壁基準か
+  float start_align_anchor_lat_   = 0.0f; // 壁基準の横位置[mm、左が正]
+  float start_align_anchor_pos_y_ = 0.0f;
+  float start_align_anchor_kim_x_ = 0.0f;
+  float start_align_anchor_kim_y_ = 0.0f;
   float start_align_ang0_    = 0.0f; // 判定窓開始時のego_in.ang
+  // 壁基準ヘディング回帰用の累積和(structs.hpp start_align_t::slope_th参照)。
+  // x=窓内走行距離[mm]、y=壁横位置−lat_k·Δang[mm]。窓開始でクリア。
+  float start_align_fit_sx_  = 0.0f;
+  float start_align_fit_sy_  = 0.0f;
+  float start_align_fit_sxx_ = 0.0f;
+  float start_align_fit_sxy_ = 0.0f;
+  float start_align_fit_syy_ = 0.0f;
+  float start_align_fit_sa_  = 0.0f; // Σ(ang−ang0)[rad]、ジャイロ融合用
+  bool  start_align_fit_two_ = false; // 窓開始時の両壁/片壁モード
   float start_align_err0_    = 0.0f; // 判定窓開始時のsen.error_p
   // ego_in.ang(=生ジャイロ積分ヘディング、sensing_task.cpp calc_vel()
   // 参照)は壁を検出していない間は無補正でドリフトし続ける。壁を新規に

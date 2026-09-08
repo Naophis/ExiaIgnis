@@ -514,7 +514,13 @@ inline void convertFromJson(JsonVariantConst src, start_align_t& dst) {
     from_json_field(src, "dist_mm", dst.dist_mm);
     from_json_field(src, "ang_th", dst.ang_th);
     from_json_field(src, "err_th", dst.err_th);
+    from_json_field(src, "err_abs_th", dst.err_abs_th);
+    from_json_field(src, "slope_th", dst.slope_th);
+    from_json_field(src, "resid_th", dst.resid_th);
+    from_json_field(src, "lat_k", dst.lat_k);
+    from_json_field(src, "apply_th", dst.apply_th);
     from_json_field(src, "snap_skip_dist", dst.snap_skip_dist);
+    from_json_field(src, "repeat_dist", dst.repeat_dist);
 }
 
 inline void convertFromJson(JsonVariantConst src, turn_angle_fb_t& dst) {
@@ -813,6 +819,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "tire_tread", dst.tire_tread);
     from_json_field(src, "right_keep_dist_th", dst.right_keep_dist_th);
     from_json_field(src, "left_keep_dist_th", dst.left_keep_dist_th);
+    from_json_field(src, "keep_dist_th_start_skip", dst.keep_dist_th_start_skip);
     from_json_field(src, "normal_sla_l_wall_off_th_in", dst.normal_sla_l_wall_off_th_in);
     from_json_field(src, "normal_sla_r_wall_off_th_in", dst.normal_sla_r_wall_off_th_in);
     from_json_field(src, "normal_sla_l_wall_off_th_out", dst.normal_sla_l_wall_off_th_out);

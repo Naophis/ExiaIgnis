@@ -267,7 +267,13 @@ inline void convertToJson(const start_align_t& src, JsonVariant dst) {
     dst["dist_mm"] = src.dist_mm;
     dst["ang_th"] = src.ang_th;
     dst["err_th"] = src.err_th;
+    dst["err_abs_th"] = src.err_abs_th;
+    dst["slope_th"] = src.slope_th;
+    dst["resid_th"] = src.resid_th;
+    dst["lat_k"] = src.lat_k;
+    dst["apply_th"] = src.apply_th;
     dst["snap_skip_dist"] = src.snap_skip_dist;
+    dst["repeat_dist"] = src.repeat_dist;
 }
 
 inline void convertToJson(const turn_angle_fb_t& src, JsonVariant dst) {
@@ -519,6 +525,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["tire_tread"]               = src.tire_tread;
     dst["right_keep_dist_th"]       = src.right_keep_dist_th;
     dst["left_keep_dist_th"]        = src.left_keep_dist_th;
+    dst["keep_dist_th_start_skip"]  = src.keep_dist_th_start_skip;
     dst["normal_sla_l_wall_off_th_in"]  = src.normal_sla_l_wall_off_th_in;
     dst["normal_sla_r_wall_off_th_in"]  = src.normal_sla_r_wall_off_th_in;
     dst["normal_sla_l_wall_off_th_out"] = src.normal_sla_l_wall_off_th_out;

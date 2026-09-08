@@ -211,7 +211,8 @@ void SensingTask::timer_b_irq_handler() {
   self->seq_extended_ = (tv->motion_type == MotionType::WALL_OFF ||
                         tv->motion_type == MotionType::WALL_OFF_DIA ||
                         tv->motion_type == MotionType::SENSING_DUMP ||
-                        tv->motion_type == MotionType::SLA_BACK_STR);
+                        tv->motion_type == MotionType::SLA_BACK_STR ||
+                        tv->motion_type == MotionType::STRAIGHT);
 
   if (!led_on) {
     self->finalize_sensing(false);

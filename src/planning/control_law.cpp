@@ -38,8 +38,17 @@ ControlLaw::calc(bool motor_en, bool suction_en, bool search_mode,
   if (motor_en_ && !motor_en_prev_) {
     start_align_pending_ = true;
     start_align_cnt_ = 0;
+    start_align_fire_dist_ = -1.0e9f;
+    start_align_anchor_valid_ = false;
   } else if (!motor_en_) {
     start_align_pending_ = false;
+    start_align_cnt_ = 0;
+  } else if (!start_align_pending_ && param_->start_align.repeat_dist > 0 &&
+             tgt_val_->global_pos.dist - start_align_fire_dist_ >=
+                 param_->start_align.repeat_dist) {
+    // 前回の発火からrepeat_dist走ったら再武装(structs.hpp start_align_t::
+    // repeat_dist参照)。発火自体は次に壁追従が収束した時点。
+    start_align_pending_ = true;
     start_align_cnt_ = 0;
   }
   motor_en_prev_ = motor_en_;
@@ -462,18 +471,65 @@ void ControlLaw::update_start_align(SensingControlType type) {
   }
   const float ang = tgt_val_->ego_in.ang;
   const float err = ee->sen.error_p;
+  // 壁から見た横位置[mm、左が正]。両方の45°が有効範囲なら(l45-r45)/2の
+  // 符号反転(両壁の平均で共通モードの較正差・姿勢の影響を打ち消せる)、
+  // 片壁ならsen.error_p(=2*(ref-d)、右寄りで正)の-1/2。片壁式はref(45)を
+  // 中心とみなすため実際の中心((l+r)/2≒43.9)と1mm前後ずれるので、
+  // アンカーと発火で方式が違うときは横位置の補正を行わない(向きだけ)。
+  // 武装後に最初に壁を見たtickでアンカーを取り、発火時に「アンカーからの
+  // 壁基準の横移動」でpos_y/kim.yを合わせる。
+  const auto se = sensing_result_;
+  const bool two_wall = (30.0f < se->ego.left45_dist && se->ego.left45_dist < 60.0f &&
+                         30.0f < se->ego.right45_dist && se->ego.right45_dist < 60.0f);
+  const float lat_now =
+      two_wall ? -0.5f * (se->ego.left45_dist - se->ego.right45_dist)
+               : -0.5f * err;
+  if (!start_align_anchor_valid_) {
+    start_align_anchor_valid_ = true;
+    start_align_anchor_two_ = two_wall;
+    start_align_anchor_lat_ = lat_now;
+    start_align_anchor_pos_y_ = ego_->pos.get_state()[1];
+    start_align_anchor_kim_x_ = ego_->kim.x;
+    start_align_anchor_kim_y_ = ego_->kim.y;
+  }
+  const bool use_fit = param_->start_align.slope_th > 0;
   if (start_align_cnt_ == 0) {
     start_align_ang0_ = ang;
     start_align_err0_ = err;
     start_align_dist_ = 0;
+    start_align_fit_sx_ = start_align_fit_sy_ = start_align_fit_sxx_ =
+        start_align_fit_sxy_ = start_align_fit_syy_ = start_align_fit_sa_ = 0;
+    start_align_fit_two_ = two_wall;
   }
   const float ang_th = param_->start_align.ang_th / 180.0f * M_PI;
-  if (ABS(ang - start_align_ang0_) > ang_th ||
-      ABS(err - start_align_err0_) > param_->start_align.err_th) {
+  // err_abs_th: 壁PDがまだ大きく操舵している間(|err|大)は窓を進めない
+  // (structs.hpp start_align_t::err_abs_thのコメント参照。20260908_031634.csv
+  // idx177の極値発火対策)。
+  const bool err_large = param_->start_align.err_abs_th > 0 &&
+                         ABS(err) > param_->start_align.err_abs_th;
+  // 回帰方式では壁誤差の「変化」(err_th)は勾配で評価するので見ない。代わりに
+  // 窓内で両壁/片壁モードが変わったらやり直す(latの定義が変わるため)。
+  const bool restart =
+      err_large || ABS(ang - start_align_ang0_) > ang_th ||
+      (use_fit ? (two_wall != start_align_fit_two_)
+               : (ABS(err - start_align_err0_) > param_->start_align.err_th));
+  if (restart) {
     // 窓をやり直す(次tickで現在値を窓の基準に取り直す)
     start_align_cnt_ = 0;
     start_align_dist_ = 0;
     return;
+  }
+  if (use_fit) {
+    // x: 窓内走行距離、y: 回転による見かけの横移動(lat_k·Δang)を除いた壁横位置
+    const float k = param_->start_align.lat_k * 180.0f / M_PI; // mm/rad
+    const float x = start_align_dist_;
+    const float y = lat_now - k * (ang - start_align_ang0_);
+    start_align_fit_sx_ += x;
+    start_align_fit_sy_ += y;
+    start_align_fit_sxx_ += x * x;
+    start_align_fit_sxy_ += x * y;
+    start_align_fit_syy_ += y * y;
+    start_align_fit_sa_ += (ang - start_align_ang0_);
   }
   start_align_cnt_++;
   start_align_dist_ += ABS(tgt_val_->ego_in.v) * dt_;
@@ -482,21 +538,104 @@ void ControlLaw::update_start_align(SensingControlType type) {
     return;
   }
 
-  // 再アンカー: 現在の向きを迷路座標の0とする
+  // 発火時に置くヘディング[rad]。従来方式は0(壁と平行とみなす)、回帰方式は
+  // 窓の勾配から求めた壁基準の実ヘディング。
+  float h = 0.0f;
+  if (use_fit) {
+    const float n = (float)start_align_cnt_;
+    const float sxx = start_align_fit_sxx_ - start_align_fit_sx_ * start_align_fit_sx_ / n;
+    const float sxy = start_align_fit_sxy_ - start_align_fit_sx_ * start_align_fit_sy_ / n;
+    const float syy = start_align_fit_syy_ - start_align_fit_sy_ * start_align_fit_sy_ / n;
+    bool ok = false;
+    if (sxx > 1.0f) {
+      const float m = sxy / sxx;
+      const float sse = syy - m * sxy;
+      const float resid = sqrtf(std::max(sse, 0.0f) / n);
+      const float slope = atanf(m); // 窓内の平均ヘディング(並進のみ)[rad]
+      ok = ABS(slope) < param_->start_align.slope_th / 180.0f * M_PI &&
+           resid < param_->start_align.resid_th;
+      // ジャイロ融合: 現在の向き = 壁基準の窓平均 + ジャイロの窓平均からの
+      // 偏差。壁PDのリミットサイクル(±0.5°、周期120mm前後@400mm/s)の途中で
+      // 発火しても、その瞬間の向きを窓平均で置き換えてしまわない
+      // (20260908_035048.csv idx233: 窓平均−0.48°に対し実際は+0.3°付近)。
+      h = slope + (ang - start_align_ang0_) - start_align_fit_sa_ / n;
+    }
+    if (!ok) {
+      // まだ横に動いている/直線に乗っていない。窓を伸ばして毎tick再評価し、
+      // 2*dist_mmを超えたら取り直す(古い過渡を引きずらないため)。
+      if (start_align_dist_ > 2.0f * param_->start_align.dist_mm) {
+        start_align_cnt_ = 0;
+        start_align_dist_ = 0;
+      }
+      return;
+    }
+  }
+
+  // 再アンカー: 現在の向きを迷路座標のh(従来方式では0)とする。
+  // 不感帯(structs.hpp start_align_t::apply_th): ジャイロとの差が小さければ
+  // 向きはジャイロのまま(壁推定の雑音を持ち込まない)。横位置の合わせ込み・
+  // アンカー更新・再武装は常に行う。
   const float ang_before = tgt_val_->ego_in.ang;
-  tgt_val_->ego_in.ang = 0;
-  tgt_val_->global_pos.ang = 0;
-  sensing_result_->ego.ang_kf = 0;
-  sensing_result_->ego.ang_kf2 = 0;
-  ego_->kf_ang.offset(-ang_before);
-  ego_->kim.theta = 0;
-  ee->ang.error_i = ee->ang.error_d = ee->ang.error_dd = 0;
-  ee->ang.i_slow = ee->ang.i_bias = 0;
-  ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;
-  ee->w_kf.error_i = ee->w_kf.error_d = ee->w_kf.error_dd = 0;
-  ee->sen.error_i = 0;
+  const bool apply_heading =
+      !(param_->start_align.apply_th > 0 &&
+        ABS(h - ang_before) < param_->start_align.apply_th / 180.0f * M_PI);
+  if (apply_heading) {
+    tgt_val_->ego_in.ang = h;
+    tgt_val_->global_pos.ang = h;
+    sensing_result_->ego.ang_kf = h;
+    sensing_result_->ego.ang_kf2 = h;
+    ego_->kf_ang.offset(h - ang_before);
+  }
+  // 2026-09-08: 世界座標(pos)とkim.yの横位置を壁基準で合わせ直す。
+  // 従来はang/kim.thetaだけ0に戻していたため、置いた向きのズレ(0.2〜0.7°)
+  // がposのx軸の向きとして最後まで残り、壁PDで実機がまっすぐ走っていても
+  // pos_yが右へ流れ続けていた(20260908_024346.csv: 707mmで実機の横移動
+  // +1.5mmに対しpos_y -4.1mm、023014.csvは-14.7mm)。
+  // 当初は誤差角で軌跡ごと原点まわりに回したが、誤差角はアンカーから徐々に
+  // 育つ(ドリフト)ため「一定オフセット」を仮定する回転では過補正になり、
+  // 再アンカーのたびにpos_yが+5mm等飛んだ(20260908_030521.csv idx1335)。
+  // 横位置は壁センサーで直接測れるので、アンカー(前回発火/最初に壁を見た
+  // tick)からの壁基準の横移動量にpos_y/kim.yを合わせ、向きは誤差角
+  // (kim.theta: スナップされず旋回リベースも公称角なのでposと同じジャイロ
+  // 誤差を持つ)だけ捨てる。x(進行方向)は触らない。制御にはposを使って
+  // いないので走りは変わらない。
+  const float d = apply_heading ? (h - ego_->kim.theta) : 0.0f;
+  {
+    const bool same_mode = (two_wall == start_align_anchor_two_);
+    const auto st0 = ego_->pos.get_state();
+    float dy_pos = 0.0f;
+    if (same_mode) {
+      const float dy_wall = lat_now - start_align_anchor_lat_;
+      dy_pos = (start_align_anchor_pos_y_ + dy_wall) - st0[1];
+      // kim.yはセグメント開始でリセットされる。アンカー以降にリセットが
+      // 入っていなければ(kim.xが減っていなければ)同じ壁基準で合わせる。
+      if (ego_->kim.x >= start_align_anchor_kim_x_) {
+        ego_->kim.y = start_align_anchor_kim_y_ + dy_wall;
+      }
+    }
+    ego_->pos.shift(0.0f, dy_pos, d);
+    tgt_val_->ego_in.pos_y += dy_pos;
+    const auto st = ego_->pos.get_state();
+    sensing_result_->ego.pos_x = st[0];
+    sensing_result_->ego.pos_y = st[1];
+    sensing_result_->ego.pos_ang = st[2];
+    start_align_anchor_two_ = two_wall;
+    start_align_anchor_lat_ = lat_now;
+    start_align_anchor_pos_y_ = st[1];
+    start_align_anchor_kim_x_ = ego_->kim.x;
+    start_align_anchor_kim_y_ = ego_->kim.y;
+  }
+  if (apply_heading) {
+    ego_->kim.theta = h;
+    ee->ang.error_i = ee->ang.error_d = ee->ang.error_dd = 0;
+    ee->ang.i_slow = ee->ang.i_bias = 0;
+    ee->w.error_i = ee->w.error_d = ee->w.error_dd = 0;
+    ee->w_kf.error_i = ee->w_kf.error_d = ee->w_kf.error_dd = 0;
+    ee->sen.error_i = 0;
+  }
   tgt_val_->start_align_count = tgt_val_->start_align_count + 1;
   tgt_val_->start_align_ang = ang_before;
+  start_align_fire_dist_ = tgt_val_->global_pos.dist;
 
   start_align_pending_ = false;
   start_align_cnt_ = 0;
@@ -1962,6 +2101,19 @@ void ControlLaw::apply_duty_limitter() {
   } else {
     ee->aw_log.sat_roll_dir = 0.0f;
   }
+}
+
+// 走行開始時に keep_dist ヒステリシスを一度だけ外す(2026-09-08、structs.hpp
+// input_param_t::keep_dist_th_start_skip のコメント参照)。check_sen_error()の
+// dist_check_* は |global_pos.dist - star_dist| > *_keep_dist_th で判定するので、
+// star_dist をしきい値+1mm だけ手前へ置けば1tick目から真になる。壁が範囲外に
+// なった時点で check_*_sensor_error() が star_dist を現在距離へ更新するため、
+// 以降は従来のヒステリシスに戻る(=効果は一回限り)。
+void ControlLaw::skip_keep_dist_once() {
+  const float th =
+      std::max(param_->left_keep_dist_th, param_->right_keep_dist_th);
+  left_keep.star_dist = right_keep.star_dist =
+      tgt_val_->global_pos.dist - th - 1.0f;
 }
 
 void ControlLaw::clear_ctrl_val() {

@@ -19,6 +19,17 @@ public:
 
   void reset_cov(float init_cov, float p_noise, float m_noise);
 
+  // 状態を平行移動・回転オフセットする(x,y に dx,dy、θ と積分用 ang に
+  // dtheta を加える)。start_align(control_law.cpp update_start_align())で、
+  // 壁と平行になった時点にヘディングの誤差角を捨て、横位置を壁センサー
+  // 基準に合わせ直すために使う。共分散は触らない。
+  void shift(float dx, float dy, float dtheta) {
+    x[0] += dx;
+    x[1] += dy;
+    x[2] += dtheta;
+    ang += dtheta;
+  }
+
   float ang = 0;
 
 private:

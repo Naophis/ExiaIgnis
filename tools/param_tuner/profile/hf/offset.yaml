@@ -104,7 +104,7 @@ wall_off_hold_exist_delta_r: 2.5
 
 # 壁切れ オフセット距離(最初からあるとき)
 wall_off_hold_dist_str_l_exist: -0.0  #p_wall_off.left_str_exist
-wall_off_hold_dist_str_r_exist: -0.00 #p_wall_off.right_str_exist
+wall_off_hold_dist_str_r_exist: -1.00 #p_wall_off.right_str_exist
 
 # 壁切れ In2(最初からないとき)
 wall_off_hold_exist_dist_l2: 62 #p_wall_off.exist_dist_l2
