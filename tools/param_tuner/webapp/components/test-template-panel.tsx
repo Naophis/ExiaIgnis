@@ -17,10 +17,13 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
+  TEST_TEMPLATE_ARRAY_KEYS,
   TEST_TEMPLATE_KEY_OPTIONS,
   TEST_TEMPLATE_KEYS,
   type NamedOption,
   type TestTemplate,
+  type TestTemplateArrayKey,
+  type TestTemplateArrayValues,
   type TestTemplateKey,
   type TestTemplateValues,
 } from "@/lib/test-template-shared";
@@ -30,19 +33,39 @@ import {
 // away. Meant for sweeps like trying sla_type/sla_type2 through several
 // turn types at a fixed file_idx, where saving/deleting a named template
 // per value would just be clutter.
-const QUICK_APPLY_KEYS: TestTemplateKey[] = ["mode", "file_idx", "sla_type", "sla_type2", "sla_return"];
+const QUICK_APPLY_KEYS: TestTemplateKey[] = [
+  "mode",
+  "file_idx",
+  "sla_type",
+  "sla_type2",
+  "sla_return",
+  "front_auto_tune",
+  "dist",
+  "accl",
+];
+
+// accl_v_x/accl_v_y (speed->accel LUT arrays) aren't in the quick-apply strip:
+// unlike a single number, a handful of curve "shapes" is what's actually
+// worth switching between, so they're edited as named templates instead -
+// save a few variants (e.g. different accl_v_y curves) and pick one with 適用.
 
 interface Props {
   templates: TestTemplate[];
   applying: string | null;
   saving: boolean;
   onApply: (id: string) => void;
-  onSave: (id: string | undefined, name: string, values: TestTemplateValues) => void;
+  onSave: (
+    id: string | undefined,
+    name: string,
+    values: TestTemplateValues,
+    arrayValues: TestTemplateArrayValues
+  ) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
 
 type FormState = Record<TestTemplateKey, string>;
+type ArrayFormState = Record<TestTemplateArrayKey, string>;
 
 const emptyForm = (): FormState =>
   Object.fromEntries(TEST_TEMPLATE_KEYS.map((k) => [k, ""])) as FormState;
@@ -51,6 +74,17 @@ const formFromValues = (values: TestTemplateValues): FormState => {
   const form = emptyForm();
   for (const key of TEST_TEMPLATE_KEYS) {
     if (values[key] !== undefined) form[key] = String(values[key]);
+  }
+  return form;
+};
+
+const emptyArrayForm = (): ArrayFormState =>
+  Object.fromEntries(TEST_TEMPLATE_ARRAY_KEYS.map((k) => [k, ""])) as ArrayFormState;
+
+const arrayFormFromValues = (values: TestTemplateArrayValues): ArrayFormState => {
+  const form = emptyArrayForm();
+  for (const key of TEST_TEMPLATE_ARRAY_KEYS) {
+    if (values[key] !== undefined) form[key] = values[key]!;
   }
   return form;
 };
@@ -67,6 +101,7 @@ export function TestTemplatePanel({
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [name, setName] = useState("");
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [arrayForm, setArrayForm] = useState<ArrayFormState>(emptyArrayForm());
 
   const [quickValues, setQuickValues] = useState<TestTemplateValues>({});
   const [quickApplying, setQuickApplying] = useState<TestTemplateKey | null>(null);
@@ -112,12 +147,14 @@ export function TestTemplatePanel({
     setEditingId("new");
     setName("");
     setForm(emptyForm());
+    setArrayForm(emptyArrayForm());
   };
 
   const startEdit = (t: TestTemplate) => {
     setEditingId(t.id);
     setName(t.name);
     setForm(formFromValues(t.values));
+    setArrayForm(arrayFormFromValues(t.arrayValues ?? {}));
   };
 
   const submit = () => {
@@ -126,7 +163,12 @@ export function TestTemplatePanel({
       const raw = form[key].trim();
       if (raw !== "") values[key] = Number(raw);
     }
-    onSave(editingId === "new" ? undefined : (editingId ?? undefined), name, values);
+    const arrayValues: TestTemplateArrayValues = {};
+    for (const key of TEST_TEMPLATE_ARRAY_KEYS) {
+      const raw = arrayForm[key].trim();
+      if (raw !== "") arrayValues[key] = raw;
+    }
+    onSave(editingId === "new" ? undefined : (editingId ?? undefined), name, values, arrayValues);
     setEditingId(null);
   };
 
@@ -220,6 +262,18 @@ export function TestTemplatePanel({
                 );
               })}
             </div>
+            <div className="flex flex-col gap-2">
+              {TEST_TEMPLATE_ARRAY_KEYS.map((key) => (
+                <label key={key} className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  {key}
+                  <Input
+                    placeholder="(未指定) 例: 0, 2500, 5000, 7500, 8000"
+                    value={arrayForm[key]}
+                    onChange={(e) => setArrayForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </label>
+              ))}
+            </div>
             <div className="flex justify-end gap-2">
               <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
                 キャンセル
@@ -278,9 +332,14 @@ export function TestTemplatePanel({
                   </div>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {TEST_TEMPLATE_KEYS.filter((k) => t.values[k] !== undefined)
-                    .map((k) => `${k}: ${t.values[k]}`)
-                    .join(", ") || "(値なし)"}
+                  {[
+                    ...TEST_TEMPLATE_KEYS.filter((k) => t.values[k] !== undefined).map(
+                      (k) => `${k}: ${t.values[k]}`
+                    ),
+                    ...TEST_TEMPLATE_ARRAY_KEYS.filter((k) => t.arrayValues?.[k] !== undefined).map(
+                      (k) => `${k}: [${t.arrayValues![k]}]`
+                    ),
+                  ].join(", ") || "(値なし)"}
                 </span>
               </div>
             ))}

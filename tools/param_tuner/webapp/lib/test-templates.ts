@@ -3,14 +3,25 @@ import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 import {
+  TEST_TEMPLATE_ARRAY_KEYS,
   TEST_TEMPLATE_KEYS,
   type NamedOption,
   type TestTemplate,
+  type TestTemplateArrayKey,
+  type TestTemplateArrayValues,
   type TestTemplateKey,
   type TestTemplateValues,
 } from "./test-template-shared";
 
-export { TEST_TEMPLATE_KEYS, type TestTemplate, type TestTemplateKey, type TestTemplateValues };
+export {
+  TEST_TEMPLATE_ARRAY_KEYS,
+  TEST_TEMPLATE_KEYS,
+  type TestTemplate,
+  type TestTemplateArrayKey,
+  type TestTemplateArrayValues,
+  type TestTemplateKey,
+  type TestTemplateValues,
+};
 
 // webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
 const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
@@ -52,10 +63,16 @@ function writeTemplates(templates: TestTemplate[]): void {
   fs.writeFileSync(TEMPLATES_PATH, JSON.stringify(templates, null, 2), "utf-8");
 }
 
-export function saveTestTemplate(name: string, values: TestTemplateValues, id?: string): TestTemplate {
+export function saveTestTemplate(
+  name: string,
+  values: TestTemplateValues,
+  arrayValues?: TestTemplateArrayValues,
+  id?: string
+): TestTemplate {
   if (!name.trim()) throw new Error("テンプレート名を入力してください");
   const templates = listTestTemplates();
   const template: TestTemplate = { id: id ?? randomUUID(), name: name.trim(), values };
+  if (arrayValues && Object.keys(arrayValues).length > 0) template.arrayValues = arrayValues;
   const idx = templates.findIndex((t) => t.id === template.id);
   if (idx >= 0) templates[idx] = template;
   else templates.push(template);
@@ -85,6 +102,79 @@ export function readFileIdxOptions(mode = "hf"): NamedOption[] {
 
 function keyLineRegex(key: string): RegExp {
   return new RegExp(`^(\\s*)(${key})(\\s*:\\s*)(-?\\d+(?:\\.\\d+)?)(\\s*)(#.*)?$`);
+}
+
+function arrayKeyLineRegex(key: string): RegExp {
+  return new RegExp(`^(\\s*)(${key})(\\s*:\\s*)\\[[^\\]]*\\](\\s*)(#.*)?$`);
+}
+
+// Reads the current *active* accl_v_x/accl_v_y LUT lines as raw "n1, n2, ..."
+// text (comma-joined, whitespace-normalized) for prefilling the template
+// editor's array fields.
+export function readActiveArrayValues(keys: readonly TestTemplateArrayKey[]): TestTemplateArrayValues {
+  const lines = fs.readFileSync(SYSTEM_YAML_PATH, "utf-8").split("\n");
+  const remaining = new Set(keys);
+  const values: TestTemplateArrayValues = {};
+
+  for (const line of lines) {
+    if (remaining.size === 0) break;
+    if (line.trimStart().startsWith("#")) continue;
+
+    for (const key of remaining) {
+      const m = line.match(new RegExp(`^\\s*${key}\\s*:\\s*\\[([^\\]]*)\\]`));
+      if (!m) continue;
+      values[key] = m[1]
+        .split(",")
+        .map((n) => n.trim())
+        .filter((n) => n !== "")
+        .join(", ");
+      remaining.delete(key);
+      break;
+    }
+  }
+
+  return values;
+}
+
+// Same surgical-overwrite approach as applyTestTemplateToSystemYaml, for the
+// accl_v_x/accl_v_y LUT arrays: each value is raw "n1, n2, n3" text, parsed
+// to numbers and re-wrapped in brackets, replacing only the array literal
+// on the key's first uncommented line.
+export function applyArrayValuesToSystemYaml(values: TestTemplateArrayValues): void {
+  const content = fs.readFileSync(SYSTEM_YAML_PATH, "utf-8");
+  const lines = content.split("\n");
+
+  const remaining = new Set(Object.keys(values) as TestTemplateArrayKey[]);
+
+  for (let i = 0; i < lines.length && remaining.size > 0; i++) {
+    const line = lines[i];
+    if (line.trimStart().startsWith("#")) continue;
+
+    for (const key of remaining) {
+      const m = line.match(arrayKeyLineRegex(key));
+      if (!m) continue;
+      const raw = values[key] ?? "";
+      const nums = raw
+        .split(",")
+        .map((n) => n.trim())
+        .filter((n) => n !== "");
+      if (nums.length === 0 || nums.some((n) => Number.isNaN(Number(n)))) {
+        throw new Error(`${key} の値が不正です: ${raw}`);
+      }
+      const [, indent, k, colonSpacing, trailingSpace, comment] = m;
+      lines[i] = `${indent}${k}${colonSpacing}[${nums.join(", ")}]${trailingSpace}${comment ?? ""}`;
+      remaining.delete(key);
+      break;
+    }
+  }
+
+  if (remaining.size > 0) {
+    throw new Error(
+      `system.yaml に有効な行が見つかりませんでした: ${Array.from(remaining).join(", ")}`
+    );
+  }
+
+  fs.writeFileSync(SYSTEM_YAML_PATH, lines.join("\n"), "utf-8");
 }
 
 // Most target keys (v_max, dist, sla_type, ...) live inside the test: block,

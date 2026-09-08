@@ -15,7 +15,7 @@ import { TestTemplatePanel } from "@/components/test-template-panel";
 import { YamlEditor } from "@/components/yaml-editor";
 import { AM32_FILE, type Am32Action } from "@/lib/am32-shared";
 import type { ConnectionStatus, PortInfo, ProfileList, SendScope } from "@/lib/serial-manager";
-import type { TestTemplate, TestTemplateValues } from "@/lib/test-template-shared";
+import type { TestTemplate, TestTemplateArrayValues, TestTemplateValues } from "@/lib/test-template-shared";
 
 const MAX_LOG_LINES = 2000;
 const MODE = "hf";
@@ -327,13 +327,18 @@ export default function Home() {
     }
   };
 
-  const saveTemplate = async (id: string | undefined, name: string, values: TestTemplateValues) => {
+  const saveTemplate = async (
+    id: string | undefined,
+    name: string,
+    values: TestTemplateValues,
+    arrayValues: TestTemplateArrayValues
+  ) => {
     setSavingTemplate(true);
     try {
       const res = await fetch("/api/test-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, name, values }),
+        body: JSON.stringify({ id, name, values, arrayValues }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "保存に失敗しました");

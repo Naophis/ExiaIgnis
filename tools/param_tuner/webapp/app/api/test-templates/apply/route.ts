@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { applyTestTemplateToSystemYaml, getTestTemplate } from "@/lib/test-templates";
+import { applyArrayValuesToSystemYaml, applyTestTemplateToSystemYaml, getTestTemplate } from "@/lib/test-templates";
 
 export const runtime = "nodejs";
 
@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const template = getTestTemplate(id);
     applyTestTemplateToSystemYaml(template.values);
+    if (template.arrayValues) applyArrayValuesToSystemYaml(template.arrayValues);
     return NextResponse.json({ ok: true, name: template.name });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });

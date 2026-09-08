@@ -3,6 +3,7 @@ import {
   deleteTestTemplate,
   listTestTemplates,
   saveTestTemplate,
+  type TestTemplateArrayValues,
   type TestTemplateValues,
 } from "@/lib/test-templates";
 
@@ -16,12 +17,13 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const name = body?.name as string | undefined;
   const values = body?.values as TestTemplateValues | undefined;
+  const arrayValues = body?.arrayValues as TestTemplateArrayValues | undefined;
   const id = body?.id as string | undefined;
   if (!name || !values) {
     return NextResponse.json({ error: "name, values is required" }, { status: 400 });
   }
   try {
-    const template = saveTestTemplate(name, values, id);
+    const template = saveTestTemplate(name, values, arrayValues, id);
     return NextResponse.json({ template });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });

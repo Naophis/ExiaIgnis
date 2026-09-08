@@ -21,15 +21,26 @@ export const TEST_TEMPLATE_KEYS = [
   "sla_return",
   "ignore_opp_sen",
   "search_mode",
+  "front_auto_tune",
 ] as const;
 
+// speed->accel LUT arrays inside system.yaml's test: block (see the
+// "要素数2未満なら無効" comment above accl_v_x/accl_v_y there). Edited as
+// raw "n1, n2, n3" text rather than a single number, so they get their own
+// key list/value type instead of folding into TestTemplateValues below
+// (which is number-only).
+export const TEST_TEMPLATE_ARRAY_KEYS = ["accl_v_x", "accl_v_y"] as const;
+
 export type TestTemplateKey = (typeof TEST_TEMPLATE_KEYS)[number];
+export type TestTemplateArrayKey = (typeof TEST_TEMPLATE_ARRAY_KEYS)[number];
 export type TestTemplateValues = Partial<Record<TestTemplateKey, number>>;
+export type TestTemplateArrayValues = Partial<Record<TestTemplateArrayKey, string>>;
 
 export interface TestTemplate {
   id: string;
   name: string;
   values: TestTemplateValues;
+  arrayValues?: TestTemplateArrayValues;
 }
 
 export interface NamedOption {
@@ -63,8 +74,15 @@ export const SLA_RETURN_OPTIONS: NamedOption[] = [
   { label: "する", value: 1 },
 ];
 
+// test_slaのfront offset自動調整(left45/right45基準フィードバック) on/off。
+export const FRONT_AUTO_TUNE_OPTIONS: NamedOption[] = [
+  { label: "無効", value: 0 },
+  { label: "有効", value: 1 },
+];
+
 export const TEST_TEMPLATE_KEY_OPTIONS: Partial<Record<TestTemplateKey, NamedOption[]>> = {
   sla_type: SLA_TYPE_OPTIONS,
   sla_type2: SLA_TYPE2_OPTIONS,
   sla_return: SLA_RETURN_OPTIONS,
+  front_auto_tune: FRONT_AUTO_TUNE_OPTIONS,
 };
