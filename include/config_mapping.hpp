@@ -519,6 +519,9 @@ inline void convertFromJson(JsonVariantConst src, start_align_t& dst) {
     from_json_field(src, "resid_th", dst.resid_th);
     from_json_field(src, "lat_k", dst.lat_k);
     from_json_field(src, "apply_th", dst.apply_th);
+    from_json_field(src, "zero_heading", dst.zero_heading);
+    from_json_field(src, "duty_th", dst.duty_th);
+    from_json_field(src, "force_dist", dst.force_dist);
     from_json_field(src, "snap_skip_dist", dst.snap_skip_dist);
     from_json_field(src, "repeat_dist", dst.repeat_dist);
 }

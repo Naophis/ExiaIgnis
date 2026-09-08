@@ -527,10 +527,17 @@ void ControlLaw::update_start_align(SensingControlType type) {
                          ABS(err) > param_->start_align.err_abs_th;
   // 回帰方式では壁誤差の「変化」(err_th)は勾配で評価するので見ない。代わりに
   // 窓内で両壁/片壁モードが変わったらやり直す(latの定義が変わるため)。
+  // duty_th: 壁PDが操舵中(前tickのduty_sen)は「並行」とみなさない
+  const bool steering = param_->start_align.duty_th > 0 &&
+                        ABS(duty_sen) > param_->start_align.duty_th / 180.0f * M_PI;
+  // force_dist: 判定を待たず強制発火(structs.hpp start_align_t::force_dist)
+  const bool force = param_->start_align.force_dist > 0 &&
+                     tgt_val_->global_pos.dist >= param_->start_align.force_dist;
   const bool restart =
-      err_large || ABS(ang - start_align_ang0_) > ang_th ||
-      (use_fit ? (two_wall != start_align_fit_two_)
-               : (ABS(err - start_align_err0_) > param_->start_align.err_th));
+      !force &&
+      (err_large || steering || ABS(ang - start_align_ang0_) > ang_th ||
+       (use_fit ? (two_wall != start_align_fit_two_)
+                : (ABS(err - start_align_err0_) > param_->start_align.err_th)));
   if (restart) {
     // 窓をやり直す(次tickで現在値を窓の基準に取り直す)
     start_align_cnt_ = 0;
@@ -551,15 +558,15 @@ void ControlLaw::update_start_align(SensingControlType type) {
   }
   start_align_cnt_++;
   start_align_dist_ += ABS(tgt_val_->ego_in.v) * dt_;
-  if (start_align_cnt_ < param_->start_align.ticks ||
-      start_align_dist_ < param_->start_align.dist_mm) {
+  if (!force && (start_align_cnt_ < param_->start_align.ticks ||
+                 start_align_dist_ < param_->start_align.dist_mm)) {
     return;
   }
 
   // 発火時に置くヘディング[rad]。従来方式は0(壁と平行とみなす)、回帰方式は
-  // 窓の勾配から求めた壁基準の実ヘディング。
+  // 窓の勾配から求めた壁基準の実ヘディング。強制発火では0。
   float h = 0.0f;
-  if (use_fit) {
+  if (use_fit && !force) {
     const float n = (float)start_align_cnt_;
     const float sxx = start_align_fit_sxx_ - start_align_fit_sx_ * start_align_fit_sx_ / n;
     const float sxy = start_align_fit_sxy_ - start_align_fit_sx_ * start_align_fit_sy_ / n;
@@ -589,6 +596,9 @@ void ControlLaw::update_start_align(SensingControlType type) {
     }
   }
 
+  if (param_->start_align.zero_heading > 0) {
+    h = 0.0f; // 向きを0へリセット(structs.hpp start_align_t::zero_heading)
+  }
   // 再アンカー: 現在の向きを迷路座標のh(従来方式では0)とする。
   // 不感帯(structs.hpp start_align_t::apply_th): ジャイロとの差が小さければ
   // 向きはジャイロのまま(壁推定の雑音を持ち込まない)。横位置の合わせ込み・

@@ -272,6 +272,9 @@ inline void convertToJson(const start_align_t& src, JsonVariant dst) {
     dst["resid_th"] = src.resid_th;
     dst["lat_k"] = src.lat_k;
     dst["apply_th"] = src.apply_th;
+    dst["zero_heading"] = src.zero_heading;
+    dst["duty_th"] = src.duty_th;
+    dst["force_dist"] = src.force_dist;
     dst["snap_skip_dist"] = src.snap_skip_dist;
     dst["repeat_dist"] = src.repeat_dist;
 }
