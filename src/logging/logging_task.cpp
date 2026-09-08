@@ -160,6 +160,23 @@ void LoggingTask::stop() {
          log_vec_.size(), dropped_ticks_);
 }
 
+bool LoggingTask::tail_average_sen45(float &out_l45, float &out_r45,
+                                     int n_samples) const {
+  const size_t n = log_vec_.size();
+  if (n == 0 || n_samples <= 0)
+    return false;
+
+  const size_t take = std::min(static_cast<size_t>(n_samples), n);
+  float sum_l = 0, sum_r = 0;
+  for (size_t i = n - take; i < n; i++) {
+    sum_l += halfToFloat(log_vec_[i].sen_log_l45);
+    sum_r += halfToFloat(log_vec_[i].sen_log_r45);
+  }
+  out_l45 = sum_l / take;
+  out_r45 = sum_r / take;
+  return true;
+}
+
 // ============================================================
 // Core0 タイマー IRQ (1kHz) — active_ が true の間だけ PSRAM へ書き込む。
 // sensing_result / tgt_val_ は shared_ptr 経由で参照するためスレッド安全。

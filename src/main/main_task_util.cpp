@@ -241,6 +241,101 @@ void MainTask::load_slas(
   }
 }
 
+// ─── スラロームオフセット書き戻し
+// ─────────────────────────────────────────────── tpp.file_list[idx] の
+// JSONファイルを読み込み、対象TurnTypeのfront.left/rightだけを書き換えて
+// 同じファイルへ書き戻す(他のTurnTypeのエントリはそのまま保持)。
+bool MainTask::save_slalom_front_offset(int idx, TurnType type,
+                                        const slalom_offset_t &front) {
+  if (idx < 0 || idx >= (int)tpp.file_list.size()) {
+    printf("[main] save_slalom_front_offset: idx=%d out of range (size=%d)\n",
+           idx, (int)tpp.file_list.size());
+    return false;
+  }
+
+  std::string type_name;
+  for (const auto &p : turn_name_list) {
+    if (p.first == type) {
+      type_name = p.second;
+      break;
+    }
+  }
+  if (type_name.empty()) {
+    printf("[main] save_slalom_front_offset: unknown TurnType\n");
+    return false;
+  }
+
+  const auto &file_name = tpp.file_list[idx];
+  const auto path = std::string("/") + file_name;
+
+  JsonDocument doc;
+  if (!ConfigLoader::load_file(path.c_str(), doc)) {
+    printf("[main] save_slalom_front_offset: %s not found\n", path.c_str());
+    return false;
+  }
+
+  JsonVariant entry = doc[type_name.c_str()];
+  if (entry.isNull()) {
+    printf("[main] save_slalom_front_offset: %s not in %s\n",
+           type_name.c_str(), path.c_str());
+    return false;
+  }
+  entry["front"]["left"] = front.left;
+  entry["front"]["right"] = front.right;
+
+  size_t need = measureJson(doc) + 1;
+  char *buf = static_cast<char *>(malloc(need));
+  if (!buf) {
+    printf("[main] save_slalom_front_offset: no memory\n");
+    return false;
+  }
+  serializeJson(doc, buf, need);
+
+  // flash_range_erase/prog は割り込みを ~100ms 禁止し USB CDC を切断する。
+  // 直前のprintfがUSBへ届く猶予を空けてから書き込む(main_task_usb.cppと同じ作法)。
+  fflush(stdout);
+  sleep_ms(80);
+  bool ok = ConfigLoader::write_file(path.c_str(), reinterpret_cast<uint8_t *>(buf),
+                                     need - 1);
+  free(buf);
+  return ok;
+}
+
+// ─── スラロームオフセット書き戻し確認用読み直し
+// ─────────────────────────────── save_slalom_front_offset()で書いた直後、
+// 実際にLittleFS上のファイルへ反映されているかをその場で確認するために
+// 同じファイルを読み直してfront.left/rightだけ取り出す(検証専用、
+// param_set等の実行時状態には触れない)。
+bool MainTask::read_slalom_front_offset(int idx, TurnType type,
+                                        slalom_offset_t &out) {
+  if (idx < 0 || idx >= (int)tpp.file_list.size())
+    return false;
+
+  std::string type_name;
+  for (const auto &p : turn_name_list) {
+    if (p.first == type) {
+      type_name = p.second;
+      break;
+    }
+  }
+  if (type_name.empty())
+    return false;
+
+  const auto &file_name = tpp.file_list[idx];
+  const auto path = std::string("/") + file_name;
+
+  JsonDocument doc;
+  if (!ConfigLoader::load_file(path.c_str(), doc))
+    return false;
+
+  JsonVariantConst entry = doc[type_name.c_str()];
+  if (entry.isNull())
+    return false;
+
+  convertFromJson(entry["front"], out);
+  return true;
+}
+
 // ─── 直線パラメータロード
 // ───────────────────────────────────────────────────── /vel_prof.hf または
 // /vel_prof.cl の v_prof[idx] から StraightType ごとの straight_param_t

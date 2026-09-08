@@ -1547,6 +1547,9 @@ typedef struct {
   float sysid_time = 0;
   int start_turn = 0;
   int search_mode = 0;
+  // test_sla()のfront offset自動調整(left45_dist/right45_dist基準の
+  // フィードバック+LittleFS書き戻し)を有効にするか。0=無効(既定)、1=有効。
+  int front_auto_tune = 0;
 } test_mode_t;
 
 typedef struct {

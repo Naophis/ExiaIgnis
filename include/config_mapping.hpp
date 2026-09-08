@@ -922,6 +922,7 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "sysid_time", dst.sysid_time);
     from_json_field(src, "start_turn", dst.start_turn);
     from_json_field(src, "search_mode", dst.search_mode);
+    from_json_field(src, "front_auto_tune", dst.front_auto_tune);
 }
 /**
  * system.txt

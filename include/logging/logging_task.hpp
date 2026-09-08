@@ -70,6 +70,12 @@ public:
     void dump_csv_text() const;  // USB CDC にテキスト CSV 出力 (rx_term.js テキストプロトコル)
     void dump_binary()   const;  // UART にバイナリ出力
 
+    // stop() 後、末尾n_samples件のsen_log_l45/r45(sen.l45/r45.sensor_dist の
+    // ログ値)を平均して返す。走行中(=USB非接続で実際に壁があった時点)の
+    // 値を使うためのアクセサ。データが無ければfalse。
+    bool tail_average_sen45(float &out_l45, float &out_r45,
+                            int n_samples) const;
+
     // Astraea MotionPlanning 互換インターフェース
     void start_slalom_log()              { start(); }
     void stop_slalom_log()               { stop();  }

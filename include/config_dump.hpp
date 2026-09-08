@@ -701,6 +701,7 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["sysid_time"]          = src.sysid_time;
     dst["start_turn"]          = src.start_turn;
     dst["search_mode"]         = src.search_mode;
+    dst["front_auto_tune"]     = src.front_auto_tune;
 }
 
 inline void convertToJson(const system_t& src, JsonVariant dst) {

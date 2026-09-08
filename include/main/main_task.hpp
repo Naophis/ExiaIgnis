@@ -73,6 +73,13 @@ private:
                  std::unordered_map<TurnType, slalom_param2_t> &sla_map);
   void load_straight(int idx,
                      std::unordered_map<StraightType, straight_param_t> &str_map);
+  // test_slaの自動オフセット調整用: tpp.file_list[file_idx]のJSON中、
+  // 該当TurnTypeのfront.left/rightだけを書き換えてLittleFSへ保存する。
+  bool save_slalom_front_offset(int idx, TurnType type,
+                                const slalom_offset_t &front);
+  // save_slalom_front_offset()の書き込み結果を検証するための読み直し。
+  bool read_slalom_front_offset(int idx, TurnType type,
+                                slalom_offset_t &out);
   // v_max→decel絶対値のLUT(param_->decel_v_max_x/y)を引いてdecelを求める。
   // LUT未設定(size<2)ならbase_decelをそのまま返す(従来通り無効)。
   // 減速中に値を変える必要はなく、区間開始前に1回だけ選ぶ(2026-08-23追加、
