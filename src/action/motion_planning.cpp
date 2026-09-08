@@ -972,7 +972,8 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
   ) {
     if (td == TurnDirection::Right) {
       if (ABS(count_save - param->normal_sla_l_wall_off_ref_cnt) >
-          param->normal_sla_l_wall_off_margin) {
+              param->normal_sla_l_wall_off_margin &&
+          ABS(count_save - param->normal_sla_l_wall_off_ref_cnt) < 20) {
         if ((count_save > param->normal_sla_l_wall_off_ref_cnt)) {
           ps_back.dist += param->normal_sla_l_wall_off_dist;
         } else {
@@ -984,7 +985,8 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
       }
     } else {
       if (ABS(count_save - param->normal_sla_r_wall_off_ref_cnt) >
-          param->normal_sla_r_wall_off_margin) {
+              param->normal_sla_r_wall_off_margin &&
+          ABS(count_save - param->normal_sla_r_wall_off_ref_cnt) < 20) {
         if ((count_save > param->normal_sla_r_wall_off_ref_cnt)) {
           ps_back.dist += param->normal_sla_r_wall_off_dist;
         } else {
