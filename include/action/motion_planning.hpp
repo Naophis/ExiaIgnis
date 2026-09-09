@@ -107,6 +107,11 @@ private:
                            TurnDirection dir, bool exec_wall_off);
   void  calc_dia45_offset(param_straight_t &front, param_straight_t &back,
                           TurnDirection dir, bool exec_wall_off);
+  // 2026-09-09: wall_off()確定→SLA_FRONT_STR走行完了時点で、実際に
+  // wall_off_recheck_dist_l/rまで遠のいたかを確認する(slalom()参照)。
+  // wall_off_controller.cpp側の検出タイミング自体には影響しない後付けの
+  // 再確認のみ。
+  bool wall_off_recheck_ok(TurnDirection td);
 
   std::shared_ptr<UserInterface> ui;
   std::shared_ptr<sensing_result_entity_t> sensing_result;

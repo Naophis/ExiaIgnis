@@ -217,6 +217,8 @@ inline void convertToJson(const wall_off_hold_dist_t& src, JsonVariant dst) {
     dst["diff_dist_th_r"]              = src.diff_dist_th_r;
     dst["diff_check_dist_dia"]         = src.diff_check_dist_dia;
     dst["diff_check_dist_dia_2"]       = src.diff_check_dist_dia_2;
+    dst["wall_off_recheck_dist_l"]     = src.wall_off_recheck_dist_l;
+    dst["wall_off_recheck_dist_r"]     = src.wall_off_recheck_dist_r;
 }
 
 inline void convertToJson(const fail_check_cnt_t& src, JsonVariant dst) {

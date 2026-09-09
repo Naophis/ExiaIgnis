@@ -452,6 +452,8 @@ inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
     from_json_field(src, "diff_check_dist_dia",               dst.diff_check_dist_dia);
     from_json_field(src, "wall_off_diff_check_dist_dia",      dst.diff_check_dist_dia);
     from_json_field(src, "diff_check_dist_dia_2",             dst.diff_check_dist_dia_2);
+    from_json_field(src, "wall_off_recheck_dist_l",           dst.wall_off_recheck_dist_l);
+    from_json_field(src, "wall_off_recheck_dist_r",           dst.wall_off_recheck_dist_r);
 }
 
 /**

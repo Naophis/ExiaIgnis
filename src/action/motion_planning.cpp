@@ -678,18 +678,36 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
     }
     ps_back.dist -= (td == TurnDirection::Right) ? param->offset_after_turn_r2
                                                  : param->offset_after_turn_l2;
-    if (b && !next_motion.skip_wall_off) {
-      if (!wall_off(td, ps_front)) {
-        return MotionResult::ERROR;
+    {
+      const float ps_front_dist_pre_wall_off = ps_front.dist;
+      if (b && !next_motion.skip_wall_off) {
+        if (!wall_off(td, ps_front)) {
+          return MotionResult::ERROR;
+        }
       }
-    }
-    if (!next_motion.skip_wall_off) {
-      calc_large_offset(ps_front, ps_back, td, !b);
-    }
-    if (ps_front.dist > 0 && !next_motion.skip_wall_off) {
-      res_f = go_straight(ps_front);
-      if (res_f != MotionResult::NONE) {
-        return MotionResult::ERROR;
+      if (!next_motion.skip_wall_off) {
+        calc_large_offset(ps_front, ps_back, td, !b);
+      }
+      if (ps_front.dist > 0 && !next_motion.skip_wall_off) {
+        res_f = go_straight(ps_front);
+        if (res_f != MotionResult::NONE) {
+          return MotionResult::ERROR;
+        }
+        // 2026-09-09: wall_off_recheck_dist_l/rまで遠のいていなければ誤検知
+        // とみなし、wall_off()をやり直す(1回のみ、ユーザー指示)。
+        if (b && !wall_off_recheck_ok(td)) {
+          ps_front.dist = ps_front_dist_pre_wall_off;
+          if (!wall_off(td, ps_front)) {
+            return MotionResult::ERROR;
+          }
+          calc_large_offset(ps_front, ps_back, td, !b);
+          if (ps_front.dist > 0) {
+            res_f = go_straight(ps_front);
+            if (res_f != MotionResult::NONE) {
+              return MotionResult::ERROR;
+            }
+          }
+        }
       }
     }
   } else if (sp.type == TurnType::Orval) {
@@ -718,17 +736,35 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
     }
     ps_back.dist -= (td == TurnDirection::Right) ? param->offset_after_turn_r2
                                                  : param->offset_after_turn_l2;
-    if (b) {
-      if (!wall_off(td, ps_front)) {
-        return MotionResult::ERROR;
+    {
+      const float ps_front_dist_pre_wall_off = ps_front.dist;
+      if (b) {
+        if (!wall_off(td, ps_front)) {
+          return MotionResult::ERROR;
+        }
+        orval_offset = calc_orval_offset(td);
       }
-      orval_offset = calc_orval_offset(td);
-    }
-    if (ps_front.dist > (0)) {
-      ps_front.sct = SensorCtrlType::NONE;
-      res_f = go_straight(ps_front);
-      if (res_f != MotionResult::NONE) {
-        return MotionResult::ERROR;
+      if (ps_front.dist > (0)) {
+        ps_front.sct = SensorCtrlType::NONE;
+        res_f = go_straight(ps_front);
+        if (res_f != MotionResult::NONE) {
+          return MotionResult::ERROR;
+        }
+        // 2026-09-09: wall_off_recheck_dist_l/rまで遠のいていなければ誤検知
+        // とみなし、wall_off()をやり直す(1回のみ、ユーザー指示)。
+        if (b && !wall_off_recheck_ok(td)) {
+          ps_front.dist = ps_front_dist_pre_wall_off;
+          if (!wall_off(td, ps_front)) {
+            return MotionResult::ERROR;
+          }
+          orval_offset = calc_orval_offset(td);
+          if (ps_front.dist > 0) {
+            res_f = go_straight(ps_front);
+            if (res_f != MotionResult::NONE) {
+              return MotionResult::ERROR;
+            }
+          }
+        }
       }
     }
     // if (ps_back.dist < 0) {
@@ -743,6 +779,7 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
     //       (param->front_dist_offset2 - sensing_result->ego.front_dist);
     //   b = false;
     // }
+    const float ps_front_dist_pre_wall_off = ps_front.dist;
     if (b && !next_motion.skip_wall_off) {
       if (!wall_off(td, ps_front)) {
         return MotionResult::ERROR;
@@ -761,6 +798,25 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
       res_f = go_straight(ps_front);
       if (res_f != MotionResult::NONE) {
         return MotionResult::ERROR;
+      }
+      // 2026-09-09: wall_off_recheck_dist_l/rまで遠のいていなければ誤検知
+      // とみなし、wall_off()をやり直す(1回のみ、ユーザー指示)。
+      if (b && !wall_off_recheck_ok(td)) {
+        ps_front.dist = ps_front_dist_pre_wall_off;
+        if (!wall_off(td, ps_front)) {
+          return MotionResult::ERROR;
+        }
+        if (sp.type == TurnType::Dia135) {
+          calc_dia135_offset(ps_front, ps_back, td, !b);
+        } else {
+          calc_dia45_offset(ps_front, ps_back, td, !b);
+        }
+        if (ps_front.dist > 0) {
+          res_f = go_straight(ps_front);
+          if (res_f != MotionResult::NONE) {
+            return MotionResult::ERROR;
+          }
+        }
       }
     }
     ps_back.dist -= (td == TurnDirection::Right) ? param->offset_after_turn_r
@@ -1705,6 +1761,17 @@ bool MotionPlanning::wall_off_dia(TurnDirection td, param_straight_t &ps_front,
                                   bool &use_oppo_wall, bool &exist_wall) {
   return wall_off_controller->execute_wall_off_dia(td, ps_front, use_oppo_wall,
                                                    exist_wall);
+}
+
+// 2026-09-09: wall_off()確定後、SLA_FRONT_STR走行完了時点でこの関数がfalseを
+// 返した場合、slalom()側でwall_off()をやり直す(検出タイミング自体は変えず、
+// 後付けの再確認のみ)。
+__attribute__((noinline, section(".time_critical.motion_planning")))
+bool MotionPlanning::wall_off_recheck_ok(TurnDirection td) {
+  const auto se = get_sensing_entity();
+  return (td == TurnDirection::Right)
+             ? se->ego.right45_dist >= param->wall_off_dist.wall_off_recheck_dist_r
+             : se->ego.left45_dist >= param->wall_off_dist.wall_off_recheck_dist_l;
 }
 
 __attribute__((noinline, section(".time_critical.motion_planning")))

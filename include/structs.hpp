@@ -537,6 +537,16 @@ typedef struct {
   float diff_check_dist_dia = 15;
   float diff_check_dist_dia_2 = 5;
 
+  // 2026-09-09: wall_off()確定後、SLA_FRONT_STR走行完了時点でここまで
+  // 遠のいていなければ誤検知(見きれず)とみなしwall_off()をやり直す
+  // (ユーザー指示)。壁の有無はだいたい60mm以内で決着する
+  // (noexist_th_l2/exist_dist_l2も約60mm前後)ため、その実測値を初期値と
+  // する。MotionPlanning::slalom()側の後付けチェックのみで使い、
+  // wall_off_controller.cpp側の検出タイミング(noexist_th_l/r・
+  // exist_delta_l/r)自体には一切手を加えない。
+  float wall_off_recheck_dist_l = 60.0f;
+  float wall_off_recheck_dist_r = 60.0f;
+
 } wall_off_hold_dist_t;
 
 typedef struct {
