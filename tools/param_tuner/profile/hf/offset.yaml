@@ -131,6 +131,16 @@ wall_off_hold_div_th_r2: 0.5 #p_wall_off.div_th_r2
 wall_off_hold_div_th_l3: 0.25 #p_wall_off.div_th_l3
 wall_off_hold_div_th_r3: 0.25 #p_wall_off.div_th_r3
 
+# wall_off()確定→SLA_FRONT_STR走行完了時点でここまで遠のいていなければ
+# 誤検知(見きれず)とみなしwall_off()をやり直す。壁の有無はだいたい60mm
+# 以内で決着する(noexist_th_l2/exist_dist_l2も約60mm前後)ため60を初期値と
+# する(MotionPlanning::slalom()側の後付けチェック、検出タイミング自体は
+# 変更しない)。20260909_231228.csv idx1290-1318(本物の壁切れ、dist=9.57mm
+# で60mm超え)とidx1418-1427相当の誤検知(50mm止まり)を両方正しく判別できる
+# ことを実測ログで確認済み。
+wall_off_recheck_dist_l: 60.0
+wall_off_recheck_dist_r: 60.0
+
 wall_off_noexist_diff_l: 0.5
 wall_off_noexist_diff_r: 0.5
 
