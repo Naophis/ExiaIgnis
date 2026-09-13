@@ -13,13 +13,14 @@ union {
   float f;
   uint32_t i;
 } conv;
-
+__attribute__((noinline, section(".time_critical.mpc_tgt_calc")))
 real32_T t_sqrtF(const real32_T &x) {
   conv.f = x;
   conv.i = 0x5f3759df - (conv.i >> 1);
   conv.f = conv.f * (1.5f - 0.5f * x * conv.f * conv.f);
   return 1.0f / conv.f;
 }
+__attribute__((noinline, section(".time_critical.mpc_tgt_calc")))
 real32_T fast_pow(real32_T x, int n) {
   if (n == 0) {
     return 1.0;
@@ -48,6 +49,7 @@ To bit_cast(const From &from) noexcept {
 }
 
 namespace {
+__attribute__((noinline, section(".time_critical.mpc_tgt_calc")))
     double expm1_taylor3(double t1) noexcept {
         constexpr double C2 = 1.0 / 2.0;
         constexpr double C3 = 1.0 / 6.0;
@@ -55,7 +57,7 @@ namespace {
         const double t2 = t1 * t1;
         return std::fma(s1, t2, t1);
     }
-
+__attribute__((noinline, section(".time_critical.mpc_tgt_calc")))
     double exp_table(uint64_t s) noexcept {
         constexpr double b1table[32]{
                 0x1.0000000000000p+0,
@@ -133,7 +135,7 @@ namespace {
         return bit_cast<double>(bit_cast<uint64_t>(b1 * b2) + exponent);
     }
 }
-
+__attribute__((noinline, section(".time_critical.mpc_tgt_calc")))
 float exact_expf(float x) noexcept {
     if (x < -104.0f) { return 0.0f; }
     if (x > 0x1.62e42ep+6f) { return HUGE_VALF; }
@@ -151,6 +153,7 @@ float exact_expf(float x) noexcept {
     const double exp_x = std::fma(exp_s, expm1_t, exp_s);
     return static_cast<float>( exp_x );
 }
+__attribute__((noinline, section(".time_critical.mpc_tgt_calc")))
 real32_T rt_powf_snf(real32_T u0, real32_T u1)
 {
   real32_T y;

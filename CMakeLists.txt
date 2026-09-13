@@ -97,6 +97,7 @@ add_executable(ExiaIgnis
     src/sensing_task.cpp
     src/planning/planning_task.cpp
     src/planning/motor_actuator.cpp
+    src/driver/dither_pwm.cpp
     src/planning/bldc_actuator.cpp
     src/planning/suction_esc_actuator.cpp
     src/planning/suction_esc_dshot_actuator.cpp
@@ -229,3 +230,22 @@ target_compile_definitions(ExiaIgnis PRIVATE
 
 pico_add_extra_outputs(ExiaIgnis)
 
+# ------------------------------------------------------------------
+# DitherPwm 単体検証サンプル(本体ビルドには含めない: EXCLUDE_FROM_ALL)
+#   cmake --build build --target dither_pwm_example
+#   → build/dither_pwm_example.uf2 / .bin  (docs/dither_pwm.md 参照)
+add_executable(dither_pwm_example EXCLUDE_FROM_ALL
+    examples/dither_pwm_example.cpp
+    src/driver/dither_pwm.cpp
+)
+target_include_directories(dither_pwm_example PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
+target_link_libraries(dither_pwm_example
+        pico_stdlib
+        hardware_pwm
+        hardware_dma
+        hardware_clocks
+        hardware_timer
+)
+pico_enable_stdio_uart(dither_pwm_example 0)
+pico_enable_stdio_usb(dither_pwm_example 1)
+pico_add_extra_outputs(dither_pwm_example)

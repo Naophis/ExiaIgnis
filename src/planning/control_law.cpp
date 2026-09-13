@@ -466,6 +466,7 @@ ControlLaw::calc_sensor_pid() {
 //   育っていた分をclear_dist再アンカー(check_sen_error())と同様に捨てる。
 // 発火は走行あたり一度(motor_enの立ち上がりで再武装)。hold中はsct=NONEで
 // ここへ来ないため対象外。探索走行は既存のclear_dist再アンカーに任せる。
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::update_start_align(SensingControlType type) {
   if (!start_align_pending_ || search_mode_ ||
       param_->start_align.enable <= 0) {
@@ -772,7 +773,7 @@ ControlLaw::calc_sensor_pid_dia() {
   duty = std::clamp(duty, -limit, limit);
   return duty;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 float ControlLaw::check_sen_error(SensingControlType &type) {
   const auto se = sensing_result_;
   const auto prm = param_;
@@ -1026,7 +1027,7 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
   ee->sen_log.gain_z = 0;
   return 0;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 float ControlLaw::check_sen_error_dia(SensingControlType &type) {
   float error = 0;
   int check = 0;
@@ -1108,7 +1109,7 @@ float ControlLaw::check_sen_error_dia(SensingControlType &type) {
     return error * 2;
   return 0;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::check_fail_safe() {
   if (!motor_en_) {
     tgt_val_->fss.error = 0;
@@ -1309,7 +1310,7 @@ ControlLaw::calc_pid_val_ang_vel() {
 
   tgt_val_->w_error = ee->w.error_i;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_pid_val_front_ctrl() {
   const auto se = sensing_result_;
   if (tgt_val_->motion_type == MotionType::FRONT_CTRL) {
@@ -1330,7 +1331,7 @@ void ControlLaw::calc_pid_val_front_ctrl() {
     }
   }
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::reset_pid_val() {
   if (tgt_val_->motion_type == MotionType::FRONT_CTRL || !motor_en_ ||
       tgt_val_->motion_type == MotionType::NONE) {
@@ -1361,6 +1362,7 @@ void ControlLaw::reset_pid_val() {
 // ee->ang.i_bias(=img_ang-kim.theta、実測基準の姿勢誤差)を計算する対象
 // motion_typeか。PIVOT系/BACK_STRAIGHT/READY/FRONT_CTRLは基準となる
 // img_ang自体の意味が異なる(またはこの区間で姿勢保持が不要)ため除外。
+__attribute__((noinline, section(".time_critical.control_law")))
 bool ControlLaw::angle_i_bias_active(MotionType mt) const {
   if (search_mode_) return false;
   return !(mt == MotionType::NONE || mt == MotionType::PIVOT ||
@@ -1369,7 +1371,7 @@ bool ControlLaw::angle_i_bias_active(MotionType mt) const {
            mt == MotionType::BACK_STRAIGHT || mt == MotionType::READY ||
            mt == MotionType::FRONT_CTRL);
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_angle_i_bias() {
   if (angle_i_bias_active(tgt_val_->motion_type)) {
     ee->ang.i_bias = tgt_val_->ego_in.img_ang - ego_->kim.theta;
@@ -1377,7 +1379,7 @@ void ControlLaw::calc_angle_i_bias() {
     ee->ang.i_bias = 0;
   }
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::check_left_sensor_error(float &error, int &check,
                                          bool range_check_left,
                                          bool dist_check_left,
@@ -1412,6 +1414,7 @@ void ControlLaw::check_left_sensor_error(float &error, int &check,
   }
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::check_right_sensor_error(
     float &error, int &check, bool range_check_right, bool dist_check_right,
     bool check_diff_right, bool expand_right, bool range_check_right_expand) {
@@ -1444,7 +1447,7 @@ void ControlLaw::check_right_sensor_error(
     enable_expand_right = false;
   }
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::set_ctrl_val(pid_error2_t &val, float error_p, float error_i,
                               float error_i2, float error_d, float val_p,
                               float val_i, float val_i2, float val_d, float zz,
@@ -1460,7 +1463,7 @@ void ControlLaw::set_ctrl_val(pid_error2_t &val, float error_p, float error_i,
   val.zz = zz;
   val.z = z;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_front_ctrl_duty() {
   const unsigned char reset = 0;
   param_->motor_pid.i = param_->motor_pid.d = 0;
@@ -2097,7 +2100,7 @@ ControlLaw::summation_duty() {
     }
   }
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::apply_duty_limitter() {
   if (tgt_val_->motion_type == MotionType::STRAIGHT ||
       tgt_val_->motion_type == MotionType::SLALOM ||
@@ -2180,6 +2183,7 @@ void ControlLaw::apply_duty_limitter() {
 // 走行中の壁基準平行推定(2026-09-08、structs.hpp wall_fit_t のコメント参照)。
 // 状態 x=[y, β]、予測 y += (ang+β)·dx、観測 z = lat − k·ang = y + 雑音。
 // 毎tick ee->aw_log.wfit_beta/wfit_sig[deg] に出す(ログ列)。
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::reset_wall_fit() {
   const float s0 = param_->wall_fit.beta_sigma0 / 180.0f * M_PI;
   wall_fit_y_ = 0.0f;
@@ -2190,7 +2194,7 @@ void ControlLaw::reset_wall_fit() {
   wall_fit_mode_prev_ = 0;
   wall_fit_mt_prev_ = MotionType::NONE;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::update_wall_fit(SensingControlType type) {
   const auto &wf = param_->wall_fit;
   ee->aw_log.wfit_beta = wall_fit_beta_ * 180.0f / M_PI;
@@ -2281,6 +2285,7 @@ void ControlLaw::update_wall_fit(SensingControlType type) {
 // star_dist をしきい値+1mm だけ手前へ置けば1tick目から真になる。壁が範囲外に
 // なった時点で check_*_sensor_error() が star_dist を現在距離へ更新するため、
 // 以降は従来のヒステリシスに戻る(=効果は一回限り)。
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::skip_keep_dist_once() {
   const float th =
       std::max(param_->left_keep_dist_th, param_->right_keep_dist_th);
@@ -2288,6 +2293,7 @@ void ControlLaw::skip_keep_dist_once() {
       tgt_val_->global_pos.dist - th - 1.0f;
 }
 
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::clear_ctrl_val() {
   duty_c = duty_roll = duty_front_ctrl_roll_keep = duty_roll_ang = 0;
   sen_kanayama_dw = 0;
@@ -2316,7 +2322,7 @@ void ControlLaw::clear_ctrl_val() {
   tgt_val_->global_pos.img_dist = 0;
   ee->v_val.p_val = 0;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::limitter(float &kp, float &ki, float &kb, float &kd,
                           pid_param_t &lim) {
   if (lim.mode == 0)
@@ -2338,7 +2344,7 @@ void ControlLaw::limitter(float &kp, float &ki, float &kb, float &kd,
   else if (kd < -lim.d)
     kd = -lim.d;
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
   float duty_suction_in = 0.0f;
 
@@ -2429,7 +2435,7 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
   motor_->apply(duty_l, duty_r);
   esc_->apply_us(duty_suction_in);
 }
-
+__attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::pl_req_activate(const planning_req_t &pl_req) {
   if (pl_req.error_gyro_reset == 1) {
     ee->v.error_i = 0;
