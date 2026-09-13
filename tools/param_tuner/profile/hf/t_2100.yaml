@@ -2,8 +2,8 @@ orval:
   v: 2100
   ang: 180.0
   pow_n: 4
-  rad: 51.0
-  rad2: 51.0
+  rad: 46.5
+  rad2: 42.5
   front: { left: 4, right: 4 }
   back: { left: 40, right: 40 }
 normal:
