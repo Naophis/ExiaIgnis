@@ -879,7 +879,7 @@ typedef struct {
   // coulomb_friction/viscous_frictionと同じ(未チューニング、要実機調整)。
   float coulomb_friction_suction = 0;
   float viscous_friction_suction = 0;
-  int MotorHz = 37500; // 駆動モーターPWM周波数(MotorActuator::init())
+  int MotorHz = 100000; // 駆動モーターPWM周波数(MotorActuator::init())
 
   float battery_init_cov = 0.95;
   float battery_p_noise = 0.05;
@@ -1312,6 +1312,12 @@ typedef struct {
   float duty_roll;
   float duty_roll_before;
   float mpc_d_estimated; // calc_angle_velocity_ctrl() の外乱オブザーバ推定値(現状は未結線、ログ確認用)
+  // DitherPwm 診断(2026-09-14、MotorActuator::dither_stats(0) を apply() 直後にコピー)
+  float dither_consumed; // この tick で DMA が消費した PWM 周期数(期待 100 @100kHz/1kHz)
+  float dither_lead;     // commit 開始 − DMA read 位置 [周期](期待 4〜5)
+  float dither_late;     // late_samples 累積(増えていれば CPU 遅延で guard を食っている)
+  float dither_cc;       // apply() 時点で PWM が出力中の CC(B ch, count)。duty_l(k-1) に対応するはず
+  float dither_backlog;  // DBG_CTDREQ(DMA が遅れていれば >0)
   // apply_duty_limitter() が前tickで判定したduty飽和方向。
   // +1: duty_roll を+方向にこれ以上振っても効かない(duty_r+側 or duty_l-側で頭打ち)
   // -1: duty_roll を-方向にこれ以上振っても効かない(duty_r-側 or duty_l+側で頭打ち)
@@ -1940,6 +1946,11 @@ typedef struct {
   // (ego_estimator.cpp参照)で、フィルタなしの実電圧変動を直接確認する
   // ためのデバッグ用フィールド(2026-08-23追加)。
   real16_T battery_raw;
+  int16_t dither_consumed; // DitherPwm 診断(2026-09-14)
+  int16_t dither_lead;
+  int16_t dither_late;
+  int16_t dither_cc;
+  int16_t dither_backlog;
 } log_data_t2;
 
 typedef struct {
@@ -2178,6 +2189,11 @@ typedef struct {
   float dbg_off_kny   = 145; // デバッグ用一時フィールド(structs.hpp aw_log_t参照)
   float wfit_beta     = 146; // wall_fit β推定[deg](structs.hpp wall_fit_t参照)
   float wfit_sig      = 147; // wall_fit β 1σ[deg]
+  int dither_consumed = 148; // DitherPwm 診断(2026-09-14)
+  int dither_lead     = 149;
+  int dither_late     = 150;
+  int dither_cc       = 151;
+  int dither_backlog  = 152;
 } LogStruct11;
 
 #endif

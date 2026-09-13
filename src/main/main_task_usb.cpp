@@ -13,6 +13,8 @@ namespace {
 // (consume_am32_write_request()/consume_am32_read_request()参照)。
 bool g_am32_write_requested = false;
 bool g_am32_read_requested = false;
+bool g_dprobe_requested = false;   // "DPROBE": DitherPwm レイテンシプローブ(2026-09-14 診断)
+int  g_dither_request = -1;        // "DITHER:0/1": -1 = 要求なし
 }  // namespace
 
 // MainTask::run()のボタン待ちループから呼ぶ。trueを返したら1回分の
@@ -20,6 +22,20 @@ bool g_am32_read_requested = false;
 bool consume_am32_write_request() {
   const bool v = g_am32_write_requested;
   g_am32_write_requested = false;
+  return v;
+}
+
+// 同上、"DITHER:0/1"用。-1 なら要求なし。
+int consume_dither_request() {
+  const int v = g_dither_request;
+  g_dither_request = -1;
+  return v;
+}
+
+// 同上、"DPROBE"用。
+bool consume_dprobe_request() {
+  const bool v = g_dprobe_requested;
+  g_dprobe_requested = false;
   return v;
 }
 
@@ -100,6 +116,22 @@ bool rx_usb_cmd(char *buf, int len) {
     ConfigLoader::write_file(path, reinterpret_cast<const uint8_t *>(content),
                              strlen(content));
     return true;
+  }
+
+  // ── DPROBE ────────────────────────────────────────────────────────────
+  // DitherPwm のリング書き込み→CC→GPIO 出力レイテンシを実測(2026-09-14 診断)。
+  if (strncmp(buf, "DITHER:", 7) == 0) {
+    g_dither_request = (buf[7] == '1') ? 1 : 0;
+    printf("OK\n");
+    fflush(stdout);
+    return false;
+  }
+
+  if (strcmp(buf, "DPROBE") == 0) {
+    g_dprobe_requested = true;
+    printf("OK\n");
+    fflush(stdout);
+    return false;
   }
 
   // ── LIST ──────────────────────────────────────────────────────────────

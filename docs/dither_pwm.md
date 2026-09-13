@@ -179,21 +179,33 @@ cmake --build build --target dither_pwm_example
 6. **[M] slice 間同期**: GPIO4 と GPIO6 を 2 ch で見て立上りが一致し、
    `skew_max=0` であること。
 
-## 8. ExiaIgnis 本体への組み込み方針(未実施)
+## 8. ExiaIgnis 本体への組み込み(2026-09-14 実施)
 
-`MotorActuator` を DitherPwm ベースに置き換える。
+`MotorActuator`(include/planning/motor_actuator.hpp, src/planning/motor_actuator.cpp)の
+出力段を DitherPwm に置き換えた。公開 API(init / apply / motor_enable / motor_disable)は不変。
 
-- `init()`: `DitherPwm::init()`(slice_L, slice_R、top=clk/MotorHz−1、
-  samples_per_tick = ceil(MotorHz / 制御周波数)、lead 4、guard = M)→ `start()`。
-  現行の `pwm_set_wrap` / `pwm_set_enabled` 直叩きは廃止。
-- `apply(duty_l, duty_r)`: `level_q16 = |duty|/100 × (top+1) × 65536` を
-  符号に応じて A/B に振り分けて `set_levels_q16()`、最後に `update()` を 1 回。
-  現行の `pwm_set_chan_level()` は削除(DMA に上書きされるため残すと無意味)。
-- `motor_disable()`: `stop(true)`。`motor_enable()`: `start()`。
-- `motor_debug_mode` / `sys_id` の最終段オーバーライドは `set_levels_q16` の
-  手前で値を差し替えるだけ(`set_next_duty()` の構造は変えない)。
-- 制御周期を 4 kHz に上げる場合は PlanningTask の TIMER1 周期と
-  `samples_per_tick` を合わせるだけ。
-- 注意: MPQ6612A の最小オン時間 200 ns(100 kHz で duty 2 %)より下は
-  ディザしても意味が無い。`max_level` ではなく下限側のクランプは
-  ControlLaw 側の責務のまま。
+- `init(motor_hz, control_hz=1000)`: top = clk_sys/MotorHz − 1、samples_per_tick =
+  ceil(MotorHz/control_hz)(100 kHz/1 kHz = 100)、lead 4、guard = M。init 直後に start()
+  して従来同様 duty 0 で PWM を回す。
+- `apply(duty_l, duty_r)`: |duty|/100 × (top+1) × 65536 を Q16.16 count にし、符号で
+  A/B を振り分け(duty ≥ 0: A=0, B=level / duty < 0: A=level, B=0。従来と同一)、
+  左右を set_levels_q16 してから update() を 1 回。pwm_set_chan_level は削除。
+- `motor_enable()` = start()(動作中は no-op)、`motor_disable()` = stop(true)。
+- 呼び出しは全て Core1 の tick() 内(enable → apply → disable の順)。init のみ Core0、
+  core1 起動前。
+- **フォールバック**: DitherPwm::init() が false を返す構成(lead+M+guard ≥ 256、例えば
+  MotorHz/control_hz > 125)では従来の CC 直書き(`legacy_`)に自動で戻る。
+  `dither_active()` で確認できる。
+- motor_debug_mode / sys_id の最終段オーバーライドは control_law.cpp 側で duty 値を
+  差し替えるだけなので変更不要。
+- 診断: `dither_stats(idx)` で DitherStats を参照できる(LoggingTask への追加は未実施)。
+- 実機の単体サンプル確認(2026-09-14): consumed 100,000/s、late max 1、underrun 0、
+  stall 0、DREQ 残 0、slice 間ずれ 0、リング内容 60.25 → 4 周期に 1 回 61。
+
+### 組み込み後の回帰確認(未実施)
+1. 静止状態で motor_debug_mode の duty 固定を左右で試し、回転方向と duty の対応が
+   従来と同じこと。
+2. 400 mm/s 巡航 n=4: 60–200 Hz RMS ≈ 0.25、必要電圧 ≈ 0.52 V から動かないこと。
+3. 5.2 m/s 直進 n=2 と t_2200 スラローム n=2 が 2026-09-13 の 6.0/2.7 の値と同等なこと。
+4. 注意: MPQ6612A の最小オン時間 200 ns(100 kHz で duty 2 %)より下はディザしても
+   意味が無い。下限側のクランプは ControlLaw 側の責務のまま。

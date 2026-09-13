@@ -49,7 +49,7 @@
 #define SUCTION_POWER_EN  10
 #define SUCTION_PWM3  11  // PWM5 B  (BldcActuator W相 / SuctionEscActuator兼用)
 
-#define MOTOR_PWM_FREQ_HZ  37500u
+#define MOTOR_PWM_FREQ_HZ  100000u
 
 // ============================================================
 // PWM / Suction ESC (AM32, RCサーボ標準PWM 1000〜2000us)

@@ -2433,6 +2433,15 @@ void ControlLaw::set_next_duty(float duty_l, float duty_r, float duty_suction) {
 
   tgt_val_->duty_suction = duty_suction_in;
   motor_->apply(duty_l, duty_r);
+  {
+    // DitherPwm 診断(2026-09-14): 左 slice の直近 update() の状態をログへ
+    const dpwm::DitherStats &ds = motor_->dither_stats(0);
+    ee->aw_log.dither_consumed = (float)ds.last_consumed;
+    ee->aw_log.dither_lead     = (float)ds.last_lead;
+    ee->aw_log.dither_late     = (float)ds.late_samples;
+    ee->aw_log.dither_cc       = (float)((ds.last_cc >> 16) & 0xFFFFu);  // B ch = 正 duty 側
+    ee->aw_log.dither_backlog  = (float)ds.last_backlog;
+  }
   esc_->apply_us(duty_suction_in);
 }
 __attribute__((noinline, section(".time_critical.control_law")))

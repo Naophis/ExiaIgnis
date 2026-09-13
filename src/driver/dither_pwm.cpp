@@ -125,6 +125,15 @@ void DitherPwm::start() {
 
   uint32_t dma_mask = 0, pwm_mask = 0;
   for (uint i = 0; i < n_; ++i) {
+    // stop() の後も Core1 の update() がリングに書き続けている可能性がある
+    // (running_=false で早期 return するが stop() と同時刻の tick は書き切る)。
+    // 起動時のリングは必ず静的 0 にし、直前に set_levels_q16() された指令は
+    // 保持して最初の update() で反映させる。
+    {
+      const Cmd keep = cmd_[i];
+      fill_static_(i, 0, 0);
+      cmd_[i] = keep;
+    }
     // 全 slice を位相 0 から。停止中の CC 書き込みは即時 latch されるので、
     // 最初の周期はリング先頭の値で出る(DMA はその後 wrap ごとに続きを流す)。
     pwm_set_counter(slice_[i], 0);
@@ -249,12 +258,15 @@ DPWM_RT void DitherPwm::update_slice_(uint idx, uint32_t consumed) {
   DitherStats& st = st_[idx];
   st.ticks++;
   st.consumed_total += consumed;
+  st.last_cc = pwm_hw->slice[slice_[idx]].cc;
 
   // DMA の DREQ 残クレジット(0 が正常。>=1 は「wrap が来たのにまだ転送できていない」)
   {
     const uint32_t bl = dma_debug_hw->ch[ch_[idx]].dbg_ctdreq & 0x3Fu;
     if (bl > st.dreq_backlog_max) st.dreq_backlog_max = bl;
+    st.last_backlog = bl;
   }
+  st.last_consumed = consumed;
 
   const uint32_t lead      = cfg_.lead_samples;
   const uint32_t M         = cfg_.samples_per_tick;
@@ -298,6 +310,7 @@ DPWM_RT void DitherPwm::update_slice_(uint idx, uint32_t consumed) {
 
   uint32_t end = read_count_ + lead + M;
   if (end < start) end = start;
+  st.last_lead = start - read_count_;
 
   uint32_t* ring = ring_[idx];
   const uint32_t ca = cmd_[idx].a, cb = cmd_[idx].b;
@@ -323,6 +336,14 @@ uint32_t DitherPwm::dma_read_index(uint idx) const {
   const uint32_t ra = dma_hw->ch[ch_[idx]].read_addr;
   return ((ra - (uint32_t)(uintptr_t)ring_[idx]) >> 2) & kRingMask;
 }
+
+uint32_t DitherPwm::probe_write(uint idx, uint32_t offset, uint32_t word) {
+  const uint32_t r = dma_read_index(idx);
+  ring_[idx][(r + offset) & kRingMask] = word;
+  return r + offset;
+}
+uint32_t DitherPwm::cc_reg(uint idx) const { return pwm_hw->slice[slice_[idx]].cc; }
+uint32_t DitherPwm::ctr_reg(uint idx) const { return pwm_hw->slice[slice_[idx]].ctr; }
 
 uint32_t DitherPwm::ring_word(uint idx, uint32_t sample_no) const {
   return ring_[idx][sample_no & kRingMask];

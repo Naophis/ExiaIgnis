@@ -88,6 +88,11 @@ struct DitherStats {
   uint32_t stall_ticks      = 0;  // DMA read index が動いていなかった tick(PWM 停止 / DMA 停止)
   uint32_t dreq_backlog_max = 0;  // DMA の DREQ クレジット残(DBG_CTDREQ)最大値。>1 なら DMA が周期内に間に合っていない
   uint32_t skew_max         = 0;  // slice 間の DMA read index ずれ最大値(0 なら全 slice 同一 wrap で反映)
+  // 直近 update() の瞬時値(ログ用)
+  uint32_t last_consumed    = 0;  // この tick で DMA が消費したサンプル数(期待: samples_per_tick)
+  uint32_t last_lead        = 0;  // commit 開始 − DMA read 位置 [サンプル](期待: lead_samples 〜 +1)
+  uint32_t last_backlog     = 0;  // DBG_CTDREQ の現在値(期待: 0)
+  uint32_t last_cc          = 0;  // update() 開始時点の CC レジスタ生値(DMA が最後に書いた = いま出力中の値)
 };
 
 class DitherPwm {
@@ -139,6 +144,11 @@ public:
   uint32_t commit_end(uint idx) const { return commit_end_[idx]; }  // 単調増加のサンプル番号
   uint32_t ring_word(uint idx, uint32_t sample_no) const;   // sample_no(単調番号)に対応するリング語
   uint     dma_channel(uint idx) const { return ch_[idx]; }
+  // 診断プローブ: DMA read 位置 + offset のリング語を直接書き、書いた単調番号を返す。
+  // (次の update() で上書きされ得る。レイテンシ計測用)
+  uint32_t probe_write(uint idx, uint32_t offset, uint32_t word);
+  uint32_t cc_reg(uint idx) const;     // slice の CC レジスタ生値(DMA が書いた最新値)
+  uint32_t ctr_reg(uint idx) const;    // slice のカウンタ現在値
   uint     slice(uint idx) const { return slice_[idx]; }
   bool     running() const { return running_; }
   uint32_t max_level() const { return max_level_; }

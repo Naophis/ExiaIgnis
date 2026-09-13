@@ -347,6 +347,11 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.duty_roll = floatToHalf(ee->aw_log.duty_roll);
     ld.duty_roll_before = floatToHalf(ee->aw_log.duty_roll_before);
     ld.mpc_d_estimated = floatToHalf(ee->aw_log.mpc_d_estimated);
+    ld.dither_consumed = (int16_t)ee->aw_log.dither_consumed; // DitherPwm 診断(2026-09-14)
+    ld.dither_lead     = (int16_t)ee->aw_log.dither_lead;
+    ld.dither_late     = (int16_t)ee->aw_log.dither_late;
+    ld.dither_cc       = (int16_t)ee->aw_log.dither_cc;
+    ld.dither_backlog  = (int16_t)ee->aw_log.dither_backlog;
     ld.sat_roll_dir = floatToHalf(ee->aw_log.sat_roll_dir);
     ld.dbg_off_ang = floatToHalf(ee->aw_log.dbg_off_ang);
     ld.dbg_off_wgain = floatToHalf(ee->aw_log.dbg_off_wgain);
@@ -564,6 +569,11 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dbg_off_kny:float:%d\n", (int)sizeof(ls11.dbg_off_kny));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wfit_beta:float:%d\n", (int)sizeof(ls11.wfit_beta));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wfit_sig:float:%d\n", (int)sizeof(ls11.wfit_sig));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_consumed:int:%d\n", (int)sizeof(ls11.dither_consumed));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_lead:int:%d\n", (int)sizeof(ls11.dither_lead));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_late:int:%d\n", (int)sizeof(ls11.dither_late));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_cc:int:%d\n", (int)sizeof(ls11.dither_cc));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_backlog:int:%d\n", (int)sizeof(ls11.dither_backlog));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -822,6 +832,11 @@ void LoggingTask::dump_csv() const {
     ls11.dbg_off_kny = halfToFloat(e.dbg_off_kny);
     ls11.wfit_beta = halfToFloat(e.wfit_beta);
     ls11.wfit_sig = halfToFloat(e.wfit_sig);
+    ls11.dither_consumed = e.dither_consumed;
+    ls11.dither_lead = e.dither_lead;
+    ls11.dither_late = e.dither_late;
+    ls11.dither_cc = e.dither_cc;
+    ls11.dither_backlog = e.dither_backlog;
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

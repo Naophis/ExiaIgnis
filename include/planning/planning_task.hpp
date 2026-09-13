@@ -58,6 +58,10 @@ public:
   // ---- モーター・吸引制御 ----
   void motor_enable();
   void motor_disable();
+  // DitherPwm レイテンシプローブ(Core0、motor_enable() 後に呼ぶ)。USB "DPROBE" から。
+  void dither_probe() { motor_.probe_latency(); }
+  bool set_dither(bool v) { return motor_.set_dither(v); }
+  bool dither_active() const { return motor_.dither_active(); }
   void suction_enable(float duty, float duty_low);
   void suction_disable();
   // ESC電源(GPIO10)だけを先行してONにする。起動レイテンシを他の初期化

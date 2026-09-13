@@ -42,6 +42,8 @@ int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms);
 bool rx_usb_cmd(char *buf, int len);
 bool consume_am32_write_request();
 bool consume_am32_read_request();
+bool consume_dprobe_request();
+int consume_dither_request();
 
 void MainTask::load_param_after() {
   // AM32 ESC移行により、BldcActuator向けのV/Hzランプパラメータ(旧
@@ -161,6 +163,21 @@ void MainTask::run() {
         }
         if (consume_am32_read_request()) {
           read_am32_param();
+        }
+        {
+          const int dr = consume_dither_request();
+          if (dr >= 0) {
+            const bool ok = planning_->set_dither(dr != 0);
+            printf("[dither] request=%d -> active=%d (%s)\n", dr, (int)planning_->dither_active(), ok ? "ok" : "unavailable");
+          }
+        }
+        if (consume_dprobe_request()) {
+          // DitherPwm レイテンシプローブ(2026-09-14 診断): motor_enable で DMA を回し、
+          // リング書き込み→CC→GPIO 出力の時間を実測して printf する。
+          planning_->motor_enable();
+          sleep_ms(20);
+          planning_->dither_probe();
+          planning_->motor_disable();
         }
         // 2秒ごとにハートビートを出力してシリアル接続を確認できるようにする
         // send_file.py の "[" スキップフィルタで無視されるので通信に影響なし
