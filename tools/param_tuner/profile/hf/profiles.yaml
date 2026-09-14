@@ -113,41 +113,41 @@ profile_idx:
     normal: 1
     large: 10
     orval: 10
-    dia45: 7
-    dia45_2: 7
-    dia135: 7
-    dia135_2: 7
-    dia90: 7
+    dia45: 8
+    dia45_2: 8
+    dia135: 8
+    dia135_2: 8
+    dia90: 6
   - run_param: 10
     suction: 2
     normal: 1
     large: 10
     orval: 10
-    dia45: 7
-    dia45_2: 7
-    dia135: 7
-    dia135_2: 7
-    dia90: 7
+    dia45: 8
+    dia45_2: 8
+    dia135: 8
+    dia135_2: 8
+    dia90: 6
   - run_param: 11
     suction: 2
     normal: 1
     large: 10
     orval: 10
-    dia45: 7
-    dia45_2: 7
-    dia135: 7
-    dia135_2: 7
-    dia90: 7
+    dia45: 8
+    dia45_2: 8
+    dia135: 8
+    dia135_2: 8
+    dia90: 6
   - run_param: 12
     suction: 2
     normal: 1
     large: 10
     orval: 10
-    dia45: 7
-    dia45_2: 7
-    dia135: 7
-    dia135_2: 7
-    dia90: 7
+    dia45: 8
+    dia45_2: 8
+    dia135: 8
+    dia135_2: 8
+    dia90: 6
   - run_param: 13
     suction: 2
     normal: 1
@@ -157,7 +157,7 @@ profile_idx:
     dia45_2: 8
     dia135: 8
     dia135_2: 8
-    dia90: 8
+    dia90: 6
   - run_param: 14
     suction: 2
     normal: 1
@@ -167,7 +167,7 @@ profile_idx:
     dia45_2: 8
     dia135: 8
     dia135_2: 8
-    dia90: 8
+    dia90: 6
   - run_param: 15
     suction: 2
     normal: 1
@@ -177,7 +177,7 @@ profile_idx:
     dia45_2: 8
     dia135: 8
     dia135_2: 8
-    dia90: 8
+    dia90: 6
   - run_param: 16
     suction: 2
     normal: 1
@@ -187,4 +187,4 @@ profile_idx:
     dia45_2: 8
     dia135: 8
     dia135_2: 8
-    dia90: 8
+    dia90: 6

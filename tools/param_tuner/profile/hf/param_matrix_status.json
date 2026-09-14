@@ -56,10 +56,10 @@
       "large90": "o",
       "orval180": "o",
       "dia45": "o",
-      "dia45_2": null,
+      "dia45_2": "o",
       "dia135": "o",
-      "dia135_2": null,
-      "dia90": null
+      "dia135_2": "o",
+      "dia90": "o"
     },
     "profileIdxNote": "",
     "led": ""
@@ -81,11 +81,11 @@
     "status": {
       "large90": null,
       "orval180": null,
-      "dia45": null,
-      "dia45_2": null,
-      "dia135": null,
-      "dia135_2": null,
-      "dia90": null
+      "dia45": "o",
+      "dia45_2": "o",
+      "dia135": "o",
+      "dia135_2": "o",
+      "dia90": "o"
     },
     "profileIdxNote": "",
     "led": ""
@@ -107,10 +107,10 @@
     "status": {
       "large90": "o",
       "orval180": "o",
-      "dia45": null,
-      "dia45_2": null,
-      "dia135": null,
-      "dia135_2": null,
+      "dia45": "o",
+      "dia45_2": "o",
+      "dia135": "o",
+      "dia135_2": "o",
       "dia90": null
     },
     "profileIdxNote": "",
