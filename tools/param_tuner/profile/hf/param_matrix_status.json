@@ -106,7 +106,7 @@
   "2000": {
     "status": {
       "large90": "o",
-      "orval180": null,
+      "orval180": "o",
       "dia45": null,
       "dia45_2": null,
       "dia135": null,
@@ -132,7 +132,7 @@
   "2100": {
     "status": {
       "large90": "o",
-      "orval180": null,
+      "orval180": "o",
       "dia45": null,
       "dia45_2": null,
       "dia135": null,
@@ -158,7 +158,7 @@
   "2200": {
     "status": {
       "large90": "o",
-      "orval180": null,
+      "orval180": "o",
       "dia45": null,
       "dia45_2": null,
       "dia135": null,

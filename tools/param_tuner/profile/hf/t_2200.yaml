@@ -2,8 +2,8 @@ orval:
   v: 2200
   ang: 180.5
   pow_n: 4
-  rad: 56.0
-  rad2: 56.0
+  rad: 50.0
+  rad2: 46.5
   time2: 0.052390624999995965
   front: { left: 4, right: 4 }
   back: { left: 25, right: 25 }
@@ -30,8 +30,8 @@ large:
   ang: 90.0
   pow_n: 4
   rad: 60
-  front: { left: 11.5052694878657064, right: 11.5052694878657064 }
-  back: { left: 55.59381550343086, right: 55.59381550343086 }
+  front: { left: 11.0052694878657064, right: 8.0052694878657064 }
+  back: { left: 30.59381550343086, right: 30.59381550343086 }
 dia45:
   v: 2200
   ang: 45.0
