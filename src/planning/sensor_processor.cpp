@@ -257,7 +257,16 @@ void SensorProcessor::calc_dist_diff() {
 }
 
 float SensorProcessor::calc_sensor_val(float data, float a, float b) {
-  int idx = (int)data;
+  // 2026-09-15: 切り捨て(int)から四捨五入へ。dataはego_estimator.cppの
+  // LP値(led_param.lp_delay=0.995)で、生値が上昇中/上昇後は常に生値より
+  // わずかに小さく、切り捨てると生値-1カウントのテーブルを引いていた。
+  // ログ(logging_task.cpp calc_sensor)は整数生値で復元するため、firmwareの
+  // ego.*_distとログの*_d列が1カウント分ずれ、遠距離側(前壁130〜150mm、
+  // 生値20〜60)では約1〜1.6mmの差になる。この差でright90 nearが
+  // sensor_range_far_max(150)を跨ぎ、wall_off_controller.cppの前壁補正が
+  // 180フォールバック値で発火した(20260915_013256.csv idx1371、
+  // log 149.87 vs firmware 150.80)。四捨五入なら実質的に生値と一致する。
+  int idx = (int)(data + 0.5f);
   if (idx <= param->sensor_range_min || idx >= (int)log_table.size()) {
     return param->sensor_range_max;
   }

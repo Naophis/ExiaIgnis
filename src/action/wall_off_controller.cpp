@@ -249,9 +249,21 @@ bool WallOffController::apply_front_sensor_correction(
     diff_decrease = false;
   }
 
+  // 2026-09-15: ゲートはfarゲイン距離(front_dist_offset3/4=135)だが、加算量は
+  // nearゲインのfront_distを使う。同じ生値でnearはfarより約20mm遠く出るため、
+  // farが初めて135を切るtickではnearがsensor_range_far_max(150)以上のことが
+  // あり、sensor_processor.cppのfront_dist合成がelseに落ちてsensor_range_max
+  // (180)を返す。その値で -(140-180)=+40mm が加算され、SLA_FRONT_STRが
+  // 62.5mmに伸びてDia45進入が約40mm遅れ、前壁に衝突した
+  // (20260915_013256.csv idx1360-1424、[[wall-off-front-correction-180-fallback]])。
+  // front_distが有効なnear読み値(far_max未満)のときだけ補正する。無効なら
+  // returnせずループを続け、次tick以降の有効値で発火させる。
+  const bool front_dist_valid =
+      se->ego.front_dist < param->sensor_range_far_max;
+
   if (std::abs(tmp_dist_after - tmp_dist_before) >=
       std::abs(param->wall_off_front_move_dist_th)) {
-    if (valid_diff && !diff_decrease &&
+    if (valid_diff && !diff_decrease && front_dist_valid &&
         param->wall_off_front_ctrl_min < se->ego.left90_far_dist &&
         se->ego.left90_far_dist < param->front_dist_offset4 &&
         param->wall_off_front_ctrl_min < se->ego.right90_far_dist &&
