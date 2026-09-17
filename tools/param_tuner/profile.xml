@@ -691,6 +691,94 @@
     </DockSplitter>
    </Container>
   </Tab>
+  <Tab containers="1" tab_name="wall_off_hf">
+   <Container>
+    <DockSplitter count="3" orientation="-" sizes="0.3336;0.3328;0.3336">
+     <DockSplitter count="2" orientation="|" sizes="0.5;0.5">
+      <DockArea name="hf_dist (4kHz slots + min-hold)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-4.500000" left="-34.619531" right="288.000000" top="184.500000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="hf_d0"/>
+        <curve color="#d62728" name="hf_d1"/>
+        <curve color="#1ac938" name="hf_d2"/>
+        <curve color="#ff7f0e" name="hf_d3"/>
+        <curve color="#9467bd" name="hf_min"/>
+        <curve color="#7f7f7f" name="hf_dist"/>
+       </plot>
+      </DockArea>
+      <DockArea name="side45 (1kHz)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-4.500000" left="-34.619531" right="288.000000" top="184.500000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="left45_d"/>
+        <curve color="#d62728" name="right45_d"/>
+        <curve color="#1ac938" name="sen_dist_l45"/>
+        <curve color="#ff7f0e" name="sen_dist_r45"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="3" orientation="|" sizes="0.332277;0.335446;0.332277">
+      <DockArea name="hf_x_rel / hf_edge_rel">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-6.000000" left="-34.619531" right="288.000000" top="60.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="hf_x0"/>
+        <curve color="#d62728" name="hf_x1"/>
+        <curve color="#1ac938" name="hf_x2"/>
+        <curve color="#ff7f0e" name="hf_x3"/>
+        <curve color="#9467bd" name="hf_edge_rel"/>
+       </plot>
+      </DockArea>
+      <DockArea name="hf_cnt / hf_n">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-0.350000" left="-34.619531" right="288.000000" top="4.350000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="hf_cnt"/>
+        <curve color="#d62728" name="hf_n"/>
+       </plot>
+      </DockArea>
+      <DockArea name="hf_seq / gpos">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-1.000000" left="-34.619531" right="288.000000" top="100.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="hf_seq"/>
+        <curve color="#d62728" name="gpos_lo"/>
+        <curve color="#1ac938" name="gpos_hi"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="3" orientation="|" sizes="0.332277;0.335446;0.332277">
+      <DockArea name="hf_d vs x (row position)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="XYPlot">
+        <range bottom="-4.500000" left="0.000000" right="200.000000" top="184.500000"/>
+        <limitY/>
+        <curve color="#1f77b4" curve_x="x" curve_y="hf_d0" name="[x;hf_d0]"/>
+        <curve color="#d62728" curve_x="x" curve_y="hf_d1" name="[x;hf_d1]"/>
+        <curve color="#1ac938" curve_x="x" curve_y="hf_d2" name="[x;hf_d2]"/>
+        <curve color="#ff7f0e" curve_x="x" curve_y="hf_d3" name="[x;hf_d3]"/>
+       </plot>
+      </DockArea>
+      <DockArea name="motion_state">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-0.350000" left="-34.619531" right="288.000000" top="14.350000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="motion_state"/>
+        <curve color="#d62728" name="continuous_turn"/>
+       </plot>
+      </DockArea>
+      <DockArea name="dist / ideal_dist">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-5.163574" left="-34.619531" right="288.000000" top="192.839355"/>
+        <limitY/>
+        <curve color="#1f77b4" name="dist"/>
+        <curve color="#d62728" name="ideal_dist"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
   <Tab containers="1" tab_name="imu_accel">
    <Container>
     <DockSplitter count="3" orientation="-" sizes="0.3336;0.3328;0.3336">

@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { SensorTimeseriesPlot, type TimeSeries } from "@/components/sensor-timeseries-plot";
 import { TrajectoryPlot } from "@/components/trajectory-plot";
 import {
+  computeHfEdgeEvents,
   computeMotionTransitionEvents,
   computeSensorDropEvents,
   computeSensorTroughEvents,
@@ -52,6 +53,8 @@ const EVENT_COLOR: Record<AnalysisEvent["kind"], string> = {
   "wall-off-arm": "text-yellow-400",
   "wall-off-edge": "text-green-400",
   "wall-off-edge-sensor": "text-green-300",
+  "hf-edge": "text-fuchsia-400",
+  "hf-edge-sensor": "text-fuchsia-300",
 };
 
 interface LogFileInfo {
@@ -86,6 +89,9 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   const [csvText, setCsvText] = useState<string | null>(null);
   const [showLeft45, setShowLeft45] = useState(true);
   const [showRight45, setShowRight45] = useState(true);
+  // WALL_OFF中の4kHz相当サンプル(hf_*列、2026-09-15以降のfirmware)の点群と
+  // 壁切れ検出マーカー
+  const [showHf, setShowHf] = useState(true);
   // trajectory.ts's world-space x origin - depends on where this robot's
   // sensor/frame zero sits relative to the maze grid, so it's a user field
   // rather than a fixed constant.
@@ -260,9 +266,14 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
     xOffset,
   ]);
 
+  const hfEvents = useMemo<AnalysisEvent[]>(() => {
+    if (!showHf || rawRows.length === 0 || !("hf_edge_rel" in rawRows[0])) return [];
+    return computeHfEdgeEvents(rawRows, { pointByRow, xOffset });
+  }, [showHf, rawRows, pointByRow, xOffset]);
+
   const analysisEvents = useMemo(
-    () => [...dropEvents, ...transitionEvents, ...troughEvents, ...wallOffEvents],
-    [dropEvents, transitionEvents, troughEvents, wallOffEvents]
+    () => [...dropEvents, ...transitionEvents, ...troughEvents, ...wallOffEvents, ...hfEvents],
+    [dropEvents, transitionEvents, troughEvents, wallOffEvents, hfEvents]
   );
 
   const chartSeries = useMemo<TimeSeries[]>(() => {
@@ -287,10 +298,10 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
 
   const chartMarkers = useMemo(
     () =>
-      [...(troughEnabled ? troughEvents : []), ...(wallOffEnabled ? wallOffEvents : [])].filter(
+      [...(troughEnabled ? troughEvents : []), ...(wallOffEnabled ? wallOffEvents : []), ...hfEvents].filter(
         (e) => e.seriesIndex !== undefined
       ),
-    [troughEnabled, troughEvents, wallOffEnabled, wallOffEvents]
+    [troughEnabled, troughEvents, wallOffEnabled, wallOffEvents, hfEvents]
   );
 
   const openPlotJuggler = useCallback(async (name?: string) => {
@@ -432,6 +443,13 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
           <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={showRight45} onChange={(e) => setShowRight45(e.target.checked)} />
             Right45
+          </label>
+          <label
+            className="flex items-center gap-1 text-xs"
+            title="WALL_OFF中の4kHz相当サンプル(hf_*列)を行の姿勢から位置内挿して投影した点群と、firmwareの壁切れ検出位置(◇/□)"
+          >
+            <input type="checkbox" checked={showHf} onChange={(e) => setShowHf(e.target.checked)} />
+            hf点群
           </label>
           <label className="flex items-center gap-1 text-xs" title="プロットの原点Xオフセット(mm)。ロボットのセンサー/座標系の原点とグリッドのズレを補正する">
             原点Xオフセット
@@ -647,6 +665,7 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
             data={trajectoryData}
             showLeft45={showLeft45}
             showRight45={showRight45}
+            showHf={showHf}
             markers={analysisEvents}
             onPointClick={(p) => setClickInfo(p ? formatClickInfo(p) : null)}
           />

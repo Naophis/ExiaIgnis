@@ -24,6 +24,7 @@ const MARKER_COLOR: Partial<Record<AnalysisEvent["kind"], string>> = {
   "wall-off-actual": "#ff8c42",
   "wall-off-arm": "#eab308",
   "wall-off-edge": "#22c55e",
+  "hf-edge-sensor": "#e879f9", // firmware hf(4kHz相当)壁切れ検出、trajectory-plot.tsx と同色
 };
 
 const PAD_LEFT = 48;

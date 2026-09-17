@@ -8,6 +8,8 @@ interface Props {
   data: TrajectoryData | null;
   showLeft45: boolean;
   showRight45: boolean;
+  // WALL_OFF中の4kHz相当サンプル(TrajectoryData.hfWallPoints)を描くか
+  showHf: boolean;
   markers?: AnalysisEvent[];
   onPointClick: (point: TrajectoryPoint | null) => void;
 }
@@ -34,6 +36,9 @@ const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | 
   "wall-off-arm": { color: "#eab308", shape: "circle" },
   "wall-off-edge": { color: "#22c55e", shape: "x" },
   "wall-off-edge-sensor": { color: "#22c55e", shape: "square" },
+  // firmware の hf(4kHz相当)壁切れ検出。点群(hfWallPoints)と同じ色相。
+  "hf-edge": { color: "#e879f9", shape: "diamond" },
+  "hf-edge-sensor": { color: "#e879f9", shape: "square" },
 };
 
 const PADDING = 24;
@@ -92,7 +97,7 @@ function makeTransform(bounds: TrajectoryData["worldBounds"], w: number, h: numb
   return { toCanvas, toWorld, scale };
 }
 
-export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPointClick }: Props) {
+export function TrajectoryPlot({ data, showLeft45, showRight45, showHf, markers, onPointClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -228,6 +233,18 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
     if (showLeft45) drawWall(data.leftWallPoints, false);
     if (showRight45) drawWall(data.rightWallPoints, true);
 
+    // 4kHz相当のhfサンプル。1kHzの壁点(白)より小さい紫の点で、位置内挿の
+    // 結果として1kHz点の間に等間隔に並ぶはず(並ばなければ内挿かログの問題)。
+    if (showHf && data.hfWallPoints.length > 0) {
+      ctx.fillStyle = "rgba(232,121,249,0.85)";
+      for (const w of data.hfWallPoints) {
+        const [cx, cy] = toCanvas(w.x, w.y);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 1.6 * iz, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     if (markers && markers.length > 0) {
       const r = 6 * iz;
       for (const m of markers) {
@@ -278,7 +295,7 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, markers, onPoint
         }
       }
     }
-  }, [data, size, showLeft45, showRight45, markers, view, rotated]);
+  }, [data, size, showLeft45, showRight45, showHf, markers, view, rotated]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current?.moved) return; // drag-to-pan, not a point pick

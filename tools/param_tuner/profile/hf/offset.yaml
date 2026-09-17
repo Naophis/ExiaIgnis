@@ -116,6 +116,23 @@ wall_off_hold_noexist_th_r2: 66.5
 wall_off_hold_dist_str_l: -3.5 #p_wall_off.left_str
 wall_off_hold_dist_str_r: -10.5 #p_wall_off.right_str
 
+# 2026-09-15: WALL_OFF中の注視側45°LED1高頻度サンプリング(hf)。
+# sensing_task.cppがTIMER0 alarm3で1msあたりsub_samples回の追加サンプルを取り
+# (3で4kHz相当)、「min-hold + delta を confirm_n サンプル連続で超えた」点を
+# サンプル間補間して壁切れ位置(global_pos.dist基準)を確定する。
+# wall_off_controller.cppはこれを最優先で拾い、発火までに進んだ距離を
+# 残距離から差し引く(ポーリング/指令受け取りの遅れが定数に混ざらない)。
+#   壁あり開始(A)のdeltaは既存の wall_off_hold_exist_delta_l/r を使う。
+#   壁なし開始(B)のdeltaは下の hf_delta_b(6本のB走行で同側ばらつき0.3mm以下、
+#   接近中の誤発火なしを確認した値)。
+# 有効化後は left_str/right_str/*_exist を再測定すること(旧値には1kHz判定の
+# 頂点→発火の遅れ 約3mm@1500 が含まれている)。
+wall_off_hf_enable: 1
+wall_off_hf_sub_samples: 3
+wall_off_hf_delta_b: 0.5
+wall_off_hf_confirm_n: 2
+wall_off_hf_min_valid: 100
+
 wall_off_diff_ref_th: 6.5
 wall_off_diff_ref_front_th: 30 # 壁切れ偏差チェックの前後距離差条件
 
