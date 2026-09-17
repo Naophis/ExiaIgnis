@@ -48,6 +48,9 @@ export interface TrajectoryData {
   groups: TrajectoryGroup[];
   leftWallPoints: WallPoint[];
   rightWallPoints: WallPoint[];
+  // WALL_OFF中の高頻度(4kHz相当)サンプルの投影点(hfSamplePose参照)。
+  // 旧ログ(hf_*列なし)では空。
+  hfWallPoints: WallPoint[];
   gridLines: GridLine[];
   allPoints: TrajectoryPoint[];
   worldBounds: { xMin: number; xMax: number; yMin: number; yMax: number };
@@ -174,6 +177,61 @@ function projectWallSensor(
   }
 }
 
+// --- WALL_OFF中の高頻度(4kHz相当)壁切れサンプル ------------------------------
+//
+// firmware(sensing_task.cpp、2026-09-15)はWALL_OFF中に注視側45°LED1を1msあたり
+// 4回サンプリングし、1kHzのログ行に「前1msの最大4サンプル」を
+//   hf_d{k}: 距離[mm]
+//   hf_x{k}: 行取得時のglobal_pos.distからの進行方向オフセット[mm](過去なので負)
+//   hf_cnt : 有効スロット数、hf_side: 注視側(0=左45, 1=右45、無効-1)
+// として載せる(structs.hpp log_data_t2 参照)。1kHzの行の姿勢(x, y, θ)を
+// hf_x{k} だけ進行方向へ内挿した点をセンサー原点にすれば、通常の45度投影
+// (projectSensorPoint)と同じ幾何で壁面上の点に置ける。壁切れ中は等速直進
+// なので直線内挿で足りる(θは行の値をそのまま使う)。
+export const HF_SLOTS = 4;
+
+export function hfSampleSide(
+  raw: Record<string, number>
+): { column: "left45_d" | "right45_d"; sideSign: 1 | -1 } | null {
+  const side = raw.hf_side;
+  if (side === 0) return { column: "left45_d", sideSign: 1 };
+  if (side === 1) return { column: "right45_d", sideSign: -1 };
+  return null;
+}
+
+// k番目のhfサンプル時点の姿勢。raw には投影用に column=hf_d{k} だけを持たせる。
+export function hfSamplePose(
+  p: Pick<TrajectoryPoint, "x" | "y" | "angleCorrected" | "raw">,
+  k: number,
+  column: "left45_d" | "right45_d"
+): Pick<TrajectoryPoint, "x" | "y" | "angleCorrected" | "raw"> | null {
+  const cnt = p.raw.hf_cnt;
+  if (!(cnt > k)) return null;
+  const dx = p.raw[`hf_x${k}`];
+  const d = p.raw[`hf_d${k}`];
+  if (!Number.isFinite(dx) || !Number.isFinite(d)) return null;
+  const a = p.angleCorrected;
+  return {
+    x: p.x + dx * Math.cos(a),
+    y: p.y + dx * Math.sin(a),
+    angleCorrected: a,
+    raw: { [column]: d },
+  };
+}
+
+function projectHfSamples(points: TrajectoryPoint[], out: WallPoint[], xOffset: number) {
+  for (const p of points) {
+    const side = hfSampleSide(p.raw);
+    if (!side) continue;
+    for (let k = 0; k < HF_SLOTS; k++) {
+      const sp = hfSamplePose(p, k, side.column);
+      if (!sp) continue;
+      const wp = projectSensorPoint(sp, side.column, side.sideSign, xOffset);
+      if (wp) out.push(wp);
+    }
+  }
+}
+
 const CELL_SIZE = 90; // mm, one maze cell
 const HALF_CELL = CELL_SIZE / 2; // 45mm auxiliary pitch (cell center lines)
 const CELL_Y_OFFSET = 45; // matches the historical plot_gui.py row-boundary offset
@@ -283,13 +341,16 @@ export function buildTrajectoryData(rawRows: Record<string, number>[], xOffset: 
     if (y > worldYMax) worldYMax = y;
   };
 
+  const hfWallPoints: WallPoint[] = [];
   for (const group of groups) {
     projectWallSensor(group.points, "left45_d", 1, leftWallPoints, xOffset);
     projectWallSensor(group.points, "right45_d", -1, rightWallPoints, xOffset);
+    projectHfSamples(group.points, hfWallPoints, xOffset);
     for (const p of group.points) allPoints.push(p);
   }
   for (const w of leftWallPoints) grow(w.x, w.y);
   for (const w of rightWallPoints) grow(w.x, w.y);
+  for (const w of hfWallPoints) grow(w.x, w.y);
   worldXMin = Math.min(worldXMin, xMin);
   worldXMax = Math.max(worldXMax, xMax);
 
@@ -303,6 +364,7 @@ export function buildTrajectoryData(rawRows: Record<string, number>[], xOffset: 
     groups,
     leftWallPoints,
     rightWallPoints,
+    hfWallPoints,
     gridLines,
     allPoints,
     worldBounds: { xMin: worldXMin, xMax: worldXMax, yMin: worldYMin, yMax: worldYMax },

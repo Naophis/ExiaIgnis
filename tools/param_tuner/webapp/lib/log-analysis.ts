@@ -6,7 +6,7 @@
 // not timestamp-sorted) - use the raw parseCsv() output, not trajectory.ts's
 // sorted rows.
 
-import { projectSensorPoint, type TrajectoryPoint } from "@/lib/trajectory";
+import { hfSampleSide, projectSensorPoint, type TrajectoryPoint } from "@/lib/trajectory";
 
 // Client-side port of tools/param_tuner/wall_off_edge_check.py, extended to
 // place markers on the spatial trajectory plot and value-vs-index chart
@@ -45,7 +45,12 @@ export interface AnalysisEvent {
     | "wall-off-actual-sensor"
     | "wall-off-arm"
     | "wall-off-edge"
-    | "wall-off-edge-sensor";
+    | "wall-off-edge-sensor"
+    // firmware(2026-09-15)の高頻度サンプリング壁切れ検出(hf_edge_rel列)。
+    // 4kHz系列をサンプル間補間して確定した壁切れ位置と、その位置での
+    // 注視側センサーの壁面上の点。
+    | "hf-edge"
+    | "hf-edge-sensor";
   label: string;
   // Companion anchor for a leader line: raw logged robot (x, y) of the same
   // row, so a sensor-anchored marker can be drawn tied to the robot marker it
@@ -444,6 +449,79 @@ export function computeMotionTransitionEvents(
         }
       }
     }
+  }
+  return events;
+}
+
+// --- firmware hf 壁切れ検出(2026-09-15) --------------------------------------
+//
+// sensing_task.cpp がWALL_OFF中に注視側45°LED1を4kHz相当でサンプリングし、
+// min-hold+delta の交差点をサンプル間補間して壁切れ位置(global_pos.dist基準)
+// を確定する。ログの hf_edge_rel は検出後の各行で
+// 「行取得時の global_pos.dist − 壁切れ位置」なので、最初に正になった行の
+// 姿勢をその分だけ進行方向に後退させた点が壁切れ位置になる。壁面上の点は、
+// その行の4スロットのうち壁切れ位置に最も近いサンプルの読みで投影する。
+
+export interface HfEdgeOptions {
+  pointByRow?: RowPointMap;
+  xOffset: number;
+}
+
+export function computeHfEdgeEvents(rows: Record<string, number>[], opts: HfEdgeOptions): AnalysisEvent[] {
+  const events: AnalysisEvent[] = [];
+  let prevRel = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rel = asNum(row, "hf_edge_rel") ?? 0;
+    const fired = rel > 0 && !(prevRel > 0);
+    prevRel = rel;
+    if (!fired || !hasXY(row)) continue;
+    const tp = opts.pointByRow?.get(row);
+    const angle = tp?.angleCorrected ?? 0;
+    const ex = row.x - rel * Math.cos(angle);
+    const ey = row.y - rel * Math.sin(angle);
+    const side = hfSampleSide(row);
+    const label =
+      `hf壁切れ idx=${fmt(row, "index")} 検出行から-${rel.toFixed(2)}mm` +
+      ` hf_min=${fmt(row, "hf_min")} side=${side ? side.column : "?"}`;
+    events.push({ x: ex, y: ey, anchored: "robot", kind: "hf-edge", label });
+    if (!tp || !side) continue;
+
+    // 壁切れ位置に最も近いスロット(hf_x{k} ≈ -rel)の読みで壁面上の点を置く
+    const cnt = asNum(row, "hf_cnt") ?? 0;
+    let best = -1;
+    let bestErr = Infinity;
+    for (let k = 0; k < Math.min(cnt, 4); k++) {
+      const dx = asNum(row, `hf_x${k}`);
+      if (dx === undefined) continue;
+      const err = Math.abs(dx + rel);
+      if (err < bestErr) {
+        bestErr = err;
+        best = k;
+      }
+    }
+    if (best < 0) continue;
+    const d = asNum(row, `hf_d${best}`);
+    if (d === undefined) continue;
+    const wp = projectSensorPoint(
+      { x: ex, y: ey, angleCorrected: angle, raw: { [side.column]: d } },
+      side.column,
+      side.sideSign,
+      opts.xOffset
+    );
+    if (!wp) continue;
+    events.push({
+      x: wp.x,
+      y: wp.y,
+      anchored: "sensor",
+      kind: "hf-edge-sensor",
+      label: `${label} ${side.column}=${d.toFixed(1)} → 壁(${wp.x.toFixed(1)}, ${wp.y.toFixed(1)})`,
+      linkX: ex,
+      linkY: ey,
+      column: side.column,
+      seriesIndex: asNum(row, "index"),
+      seriesValue: d,
+    });
   }
   return events;
 }
