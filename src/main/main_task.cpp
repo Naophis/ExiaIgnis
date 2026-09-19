@@ -43,6 +43,7 @@ bool rx_usb_cmd(char *buf, int len);
 bool consume_am32_write_request();
 bool consume_am32_read_request();
 bool consume_dprobe_request();
+bool consume_dshot_dir_request();
 int consume_dither_request();
 
 void MainTask::load_param_after() {
@@ -62,6 +63,13 @@ void MainTask::load_param_after() {
                                               sys_.test.suction_ramp_rate_us_y);
   printf("[param] suction_ramp_rate_table: %u points\n",
          (unsigned)sys_.test.suction_ramp_rate_us_x.size());
+  // 回転方向はここでESCへ送らない(通電+DShotロック待ちで1.5秒以上かかる
+  // ため、毎起動のコストにしたくない)。値だけ表示し、書き込みはUSBコマンド
+  // "DSHOTDIR" / テストモード27 で明示的に行う
+  // (MainTask::set_suction_spin_direction())。
+  printf("[param] suction_dshot_reverse = %d (send \"DSHOTDIR\" to write it "
+         "into the ESC)\n",
+         sys_.test.suction_dshot_reverse);
   test_search_mode = sys_.test.search_mode;
 }
 
@@ -163,6 +171,12 @@ void MainTask::run() {
         }
         if (consume_am32_read_request()) {
           read_am32_param();
+        }
+        // "system.yaml@..." アップロード + "DSHOTDIR" で、吸引ESCの回転方向を
+        // 物理ボタン操作なしに書き換えられる(このループを抜けないので
+        // 反転→試運転→戻すの反復がしやすい)。
+        if (consume_dshot_dir_request()) {
+          set_suction_spin_direction();
         }
         {
           const int dr = consume_dither_request();

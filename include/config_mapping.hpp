@@ -920,6 +920,7 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "alpha", dst.alpha);
     from_json_field(src, "ang", dst.ang);
     from_json_field(src, "suction_active", dst.suction_active);
+    from_json_field(src, "suction_dshot_reverse", dst.suction_dshot_reverse);
     from_json_field(src, "suction_duty", dst.suction_duty);
     from_json_field(src, "suction_duty_low", dst.suction_duty_low);
     from_json_field(src, "suction_duty_burst", dst.suction_duty_burst);

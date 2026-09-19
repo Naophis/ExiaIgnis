@@ -61,9 +61,9 @@ maze_size: 32
 debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
-mode: 0 # メイン
+# mode: 0 # メイン
 # mode: 1 # 最短スローム
-# mode: 2 # 直進
+mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
@@ -88,8 +88,8 @@ test: # テスト走行時に使用するパラメータ群
   # 2026-08-30: sysid(duty5/10)実測の定常速度と同じ目標速度で定速直進させ、
   # そのときのFF出力duty%が実測のduty5/10と一致するかを検証する用
   # (v_inf@duty5=414mm/s, v_inf@duty10=997mm/s)。まずv_max=414から。
-  v_max: 1500
-  accl: 42500
+  v_max: 400
+  accl: 2500
   # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
   # 減速(decel)には効かない。
   accl_v_x: [0,      2500, 5000, 7500, 8000]
@@ -104,11 +104,16 @@ test: # テスト走行時に使用するパラメータ群
   decel_v_max_x: [0, 3000, 4500, 6000, 7000]
   decel_v_max_y: [47500, 42500, 46000, 45000, 42500]
 
-  decel: -47500
-  dia_accl: 45000
-  dia_decel: -47500
-  dist: 120 #直進
-  suction_active: 2
+  decel: -2500
+  dia_accl: 2500
+  dia_decel: -2500
+  dist: 720 #直進
+  suction_active: 0
+  # 吸引ESC(ESCape32)の回転方向。0 = 正転(revdir=0)、1 = 逆転(revdir=1)。
+  # この値は起動時にはESCへ送られない。値を変えたら USBコマンド "DSHOTDIR"
+  # (send_file.py dshotdir) または テストモード27 を実行すると、DShotの
+  # SPIN_DIRECTION + SAVE_SETTINGS コマンドでESCのフラッシュへ永続化される。
+  suction_dshot_reverse: 1
 
   end_v: 10
   dia: 0
@@ -124,15 +129,10 @@ test: # テスト走行時に使用するパラメータ群
   # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
   # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
   # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
-  suction_duty: 1900
-  suction_duty_low: 1900
-
-  # Alter
-  # suction_duty_burst: 4.0
-  # suction_duty_burst_low: 3.750
-  # Nova
-  suction_duty_burst: 1900
-  suction_duty_burst_low: 1900 # suction_duty_burst -0.25
+  suction_duty: 1800
+  suction_duty_low: 1800
+  suction_duty_burst: 1800
+  suction_duty_burst_low: 1800 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
@@ -160,7 +160,7 @@ test: # テスト走行時に使用するパラメータ群
   # 確定(ControlLaw::set_next_duty()参照)。
   # 空にすれば従来通りsuction_esc_ramp_us_per_secの固定レートに戻る。
   suction_ramp_rate_us_x: [1000, 1600, 1800, 1999]
-  suction_ramp_rate_us_y: [350, 650,  600,  450 ]
+  suction_ramp_rate_us_y: [750, 1800, 1000,  750]
 
   # バッテリー電圧が低いほど始動失敗が顕著という実測傾向への対策。
   # AM32 ESCは閉ループRPM制御ではなく、指令dutyをバッテリー電圧に対する

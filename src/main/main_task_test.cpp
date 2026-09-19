@@ -86,6 +86,9 @@ void MainTask::run_test_mode(int mode) {
     } else if (mode == 26) {
       printf("am32 restore\n");
       restore_am32_param();
+    } else if (mode == 27) {
+      printf("suction dshot dir\n");
+      set_suction_spin_direction();
     }
   }
 }

@@ -20,14 +20,13 @@ bool rx_usb_cmd(char *buf, int len);
 namespace {
 void am32_printf_line(const char* line) { printf("%s\n", line); }
 
-// 設定通信を終えた後、信号線をCore1(ControlLaw)が回し続けているPWMスライスへ
-// 戻す。SuctionEscActuator::init()でPWMスライス自体は起動時から動作し続けて
-// おり、config中もCore1は変わらずpwm_set_chan_level()を叩き続けている
-// (物理ピンがPIOへ切り替わっているため単に信号がESCへ届いていないだけ)。
-// そのためスライス自体の再初期化は不要で、GPIO機能をPWMへ戻すだけでよい。
-void restore_suction_pwm_pin() {
-  gpio_set_function(SUCTION_ESC_PWM, GPIO_FUNC_PWM);
-}
+// 設定通信を終えた後、信号線をCore1(ControlLaw)が回し続けている出力へ戻す。
+// 吸引ESCへの出力(サーボPWMならPWMスライス、DShotならPIO+DMA)はconfig中も
+// 動き続けており、Core1も変わらず毎tick apply_us()を叩いている
+// (物理ピンがAM32設定用PIOへ切り替わっているため単に信号がESCへ届いて
+// いないだけ)。そのため出力側の再初期化は不要で、GPIOのファンクションを
+// 元の周辺機能へ割り当て直すだけでよい(SuctionEsc::reattach_pin())。
+void restore_suction_pwm_pin(SuctionEsc &esc) { esc.reattach_pin(); }
 
 // read_am32_param()/write_am32_param()の開始時点の生設定byte列を保存しておき、
 // restore_am32_param()で書き戻せるようにする。人間単位への変換(motor_kv()等)
@@ -100,6 +99,32 @@ void apply_am32_target_doc(const JsonDocument& doc, AM32Settings& out) {
 }
 }  // namespace
 
+// system.yaml の test.suction_dshot_reverse をESCへ書き込む。
+// DShot特殊コマンド(SPIN_DIRECTION_1/2 + SAVE_SETTINGS)で行うため、ESCの
+// フラッシュへ永続化され、以降の電源投入でも保持される
+// (SuctionEscDshotActuator::set_spin_direction()のコメント参照)。
+void MainTask::set_suction_spin_direction() {
+  const bool reversed = (sys_.test.suction_dshot_reverse != 0);
+
+  // Core1が1kHzで書き続ける目標を最小パルス(停止)へ落としてから始める。
+  // 回っているモーターにはコマンドが届かない(ESCape32: ertm!=0なら無視)。
+  planning_->suction_disable();
+  while (planning_->is_suction_ramping()) {
+    sleep_ms(5);
+  }
+
+  printf("== DSHOT dir start ==\n");
+  printf("system.yaml test.suction_dshot_reverse = %d (%s)\n",
+         sys_.test.suction_dshot_reverse,
+         reversed ? "reversed" : "normal");
+
+  const bool ok = planning_->esc_.set_spin_direction(reversed,
+                                                     /*save_to_esc=*/true);
+  // send_file.py dshotdir はこの "== DSHOT dir done" 行でログ表示を打ち切る
+  // (成否どちらでも1行出すこと)。
+  printf("== DSHOT dir done (%s) ==\n", ok ? "ok" : "FAILED");
+}
+
 void MainTask::read_am32_param() {
   // Core1がconfig中も1kHzでsuction PWMを書き続けるため、意図しない残り
   // duty(旧テストの目標値)がESC復帰直後に反映されないよう先に止めておく。
@@ -119,7 +144,7 @@ void MainTask::read_am32_param() {
     printf("enterConfigMode failed: %s (%s)\n",
            am32_config_status_to_string(st),
            Am32Protocol::status_to_string(esc.last_protocol_status()));
-    restore_suction_pwm_pin();
+    restore_suction_pwm_pin(planning_->esc_);
     return;
   }
   // [重要] handshake成功直後、次のESC通信(readSettings)を始めるまでの間に
@@ -137,7 +162,7 @@ void MainTask::read_am32_param() {
   printf("\n");
 
   esc.exitConfigMode();
-  restore_suction_pwm_pin();
+  restore_suction_pwm_pin(planning_->esc_);
 
   // ESCとの通信区間の外側(config mode終了後)でLittleFSへ書き込む
   // (理由: apply_am32_target_doc()のコメント参照)。
@@ -172,7 +197,7 @@ void MainTask::write_am32_param() {
     printf("enterConfigMode failed: %s (%s)\n",
            am32_config_status_to_string(st),
            Am32Protocol::status_to_string(esc.last_protocol_status()));
-    restore_suction_pwm_pin();
+    restore_suction_pwm_pin(planning_->esc_);
     planning_->suction_disable();
     return;
   }
@@ -245,7 +270,7 @@ void MainTask::write_am32_param() {
   }
 
   esc.exitConfigMode();
-  restore_suction_pwm_pin();
+  restore_suction_pwm_pin(planning_->esc_);
 
   // ESCとの通信区間の外側(config mode終了後)でLittleFSへ書き込む。
   // "before"値(=書き換え前の生byte)をrestore_am32_param()用に保存する。
@@ -293,7 +318,7 @@ void MainTask::restore_am32_param() {
     printf("enterConfigMode failed: %s (%s)\n",
            am32_config_status_to_string(st),
            Am32Protocol::status_to_string(esc.last_protocol_status()));
-    restore_suction_pwm_pin();
+    restore_suction_pwm_pin(planning_->esc_);
     return;
   }
 
@@ -304,7 +329,7 @@ void MainTask::restore_am32_param() {
     printf("writeSettings failed (validation): %s -- %s\n",
            am32_config_status_to_string(st), verr);
     esc.exitConfigMode();
-    restore_suction_pwm_pin();
+    restore_suction_pwm_pin(planning_->esc_);
     return;
   }
 
@@ -332,7 +357,7 @@ void MainTask::restore_am32_param() {
   }
 
   esc.exitConfigMode();
-  restore_suction_pwm_pin();
+  restore_suction_pwm_pin(planning_->esc_);
   printf("== AM32 restore done ==\n");
 }
 

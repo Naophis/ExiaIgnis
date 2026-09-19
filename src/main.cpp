@@ -56,14 +56,17 @@ int main() {
   stdio_init_all();
   set_sys_clock_khz(150000, true);
 
-  // 吸引ESC(AM32)は電源投入直後から有効なPWM信号(最小パルス1000us)が
-  // 来ていることを期待する。この後に続くConfigLoader::init()やsleep_ms
-  // (1500)等でGPIOが未設定(フローティング)のまま数秒経過すると、ESCが
-  // 信号ロストと判断してエラーブザーを鳴らし続けてしまう。他の初期化より
-  // 先に、PlanningTaskを生成してesc_.init()だけ済ませておくことで、電源
-  // 投入からできるだけ早く最小パルス出力を開始する
-  // (PlanningTask::init()側でも再度esc_.init()が呼ばれるが、GPIO/PWM
-  // レジスタの再設定なので副作用はない)。
+  // 吸引ESCは電源投入直後から有効なスロットル信号(停止指令)が来ている
+  // ことを期待する。この後に続くConfigLoader::init()やsleep_ms(1500)等で
+  // GPIOが未設定(フローティング)のまま数秒経過すると、ESCが信号ロストと
+  // 判断してエラーブザーを鳴らし続けてしまう。他の初期化より先に、
+  // PlanningTaskを生成してesc_.init()だけ済ませておくことで、電源投入から
+  // できるだけ早く停止指令の出力を開始する。
+  // DShot経路ではPIO+DMAが、サーボPWM経路ではハードウェアPWMスライスが、
+  // どちらもCPU非関与でこの出力を維持し続ける(Core1起動前・planning IRQが
+  // 止まっている間も途切れない)。
+  // (PlanningTask::init()側でも再度esc_.init()が呼ばれるが、2回目以降は
+  // 何もしない/レジスタ再設定のみで副作用はない)。
   auto planning = PlanningTask::create();
   planning->esc_.init();
 

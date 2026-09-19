@@ -14,6 +14,7 @@ namespace {
 bool g_am32_write_requested = false;
 bool g_am32_read_requested = false;
 bool g_dprobe_requested = false;   // "DPROBE": DitherPwm レイテンシプローブ(2026-09-14 診断)
+bool g_dshot_dir_requested = false; // "DSHOTDIR": 吸引ESCの回転方向書き込み
 int  g_dither_request = -1;        // "DITHER:0/1": -1 = 要求なし
 }  // namespace
 
@@ -46,6 +47,13 @@ bool consume_am32_read_request() {
   return v;
 }
 
+// 同上、"DSHOTDIR"用。
+bool consume_dshot_dir_request() {
+  const bool v = g_dshot_dir_requested;
+  g_dshot_dir_requested = false;
+  return v;
+}
+
 // ─── USB シリアル受信 ─────────────────────────────────────────────────────
 // idle_ms の無通信が続いたら返す。\n で終端された行を1つ読み込む。
 int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms) {
@@ -69,7 +77,7 @@ int usb_read_with_timeout(char *buf, size_t max_size, uint32_t idle_ms) {
 // ─── USB コマンド処理 ─────────────────────────────────────────────────────
 // "filename@content" → ファイルを保存して true を返す (再ロード要)。
 // "LIST" / "SHOW:name" / "READ:name" / "DELETE:name" / "DELETEALL" /
-// "AM32WRITE" / "AM32READ" を処理する。
+// "AM32WRITE" / "AM32READ" / "DSHOTDIR" を処理する。
 bool rx_usb_cmd(char *buf, int len) {
   while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
     buf[--len] = '\0';
@@ -90,6 +98,17 @@ bool rx_usb_cmd(char *buf, int len) {
   // read_am32_param() (物理ボタン操作なし) を実行する。
   if (strcmp(buf, "AM32READ") == 0) {
     g_am32_read_requested = true;
+    printf("OK\n");
+    fflush(stdout);
+    return false;
+  }
+
+  // ── DSHOTDIR ──────────────────────────────────────────────────────────
+  // system.yaml の test.suction_dshot_reverse を吸引ESC(ESCape32)へ
+  // DShotコマンドで書き込み、ESC側へ永続化する(物理ボタン操作なし)。
+  // 先に "system.yaml@..." を送って値を更新しておくこと。
+  if (strcmp(buf, "DSHOTDIR") == 0) {
+    g_dshot_dir_requested = true;
     printf("OK\n");
     fflush(stdout);
     return false;

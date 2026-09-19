@@ -178,6 +178,34 @@ PlanningTask は以下のサブシステムを内包:
 
 `timebase_path_create()` では `other_route_map` に候補分岐マスを記録し、`exec_param` の1〜5パターンで `path_create_with_change()` を試して最短タイムの経路を `path_set_map` (priority_queue) から取得します。
 
+### 吸引 ESC（ESCape32 / DShot）
+
+吸引モーターは外付け ESC（ESCape32 ファームウェア）が駆動します。ファームウェア側は
+「スロットル指令を出すだけ」で、コミュテーションは ESC が担当します。
+
+| クラス | ファイル | 役割 |
+|--------|---------|------|
+| `SuctionEscDshotActuator` | `include/planning/suction_esc_dshot_actuator.hpp` | 標準(非反転) DShot600 出力（既定） |
+| `SuctionEscActuator` | `include/planning/suction_esc_actuator.hpp` | RC サーボ標準 PWM 出力（AM32 時代の経路、フォールバック） |
+| `DshotTx` | `include/driver/dshot_tx.hpp`, `pio/dshot_tx_std.pio` | PIO + DMA による DShot フレームの自律反復送出 |
+
+`include/planning/suction_esc.hpp` の `SuctionEsc` 型エイリアスがどちらを使うかを決め、
+切り替えは `define.hpp` の `SUCTION_ESC_USE_DSHOT`（1=DShot / 0=サーボ PWM）で行います。
+
+- **自律出力**: DMA が固定アドレス（`frame_word_`）を ENDLESS で読み PIO TX FIFO へ流すため、
+  CPU が止まっていても最後のフレームが送出され続けます（`SUCTION_ESC_DSHOT_FRAME_HZ` = 2.5kHz）。
+  `apply_us()` は 32bit ストア 1 回だけで、Core1 の 1kHz IRQ から呼べます。
+- **パルス幅(us)互換**: `apply_us()` が受け取る 1000〜2000us は ESCape32 のサーボ PWM 入力と
+  同じ式（`throt_min+50` のデッドバンド付き線形）で DShot スロットル値へ変換されます。
+  そのため `system.yaml` の `suction_duty` 系（us 単位）はそのまま使えます。
+- **回転方向**: `system.yaml` の `test.suction_dshot_reverse`（0/1）を、USB コマンド `DSHOTDIR`
+  または テストモード 27 で ESC へ書き込みます（DShot コマンド 7/8 + 12 で ESC のフラッシュへ
+  永続化）。起動時には送りません（ESC 通電＋DShot ロック待ちで 1.5 秒以上かかるため）。
+  ESCape32 はコマンドを「telemetry 要求 bit が立っている・モーター停止中・同一コマンドが
+  6 フレーム連続」の条件でのみ受け付けます。
+- **テレメトリ**: 未実装。双方向 DShot 用の `DshotBidir`（`pio/dshot_bidir.pio`）は未結線・未検証で、
+  受信側のビット周期と GCR のトグル復号に既知の誤りがあります（ヘッダーのコメント参照）。
+
 ### LoggingTask (`include/logging/logging_task.hpp`)
 
 PSRAM バンプアロケータ (`psram_heap::alloc`) を使い、`std::vector<LogEntry, PsramAllocator<LogEntry>>` にデータを蓄積。
@@ -259,6 +287,8 @@ stdio は USB のみ（UART 無効）。起動後のボタン待ちループ中�
 | `LIST` | ファイル一覧を `name:size` 形式で出力 |
 | `DELETE:filename` | `/filename` を削除 |
 | `READ:filename` | `size\n content OK\n` 形式で内容を出力 |
+| `AM32READ` / `AM32WRITE` | AM32 ESC 設定の読み出し/書き込み（AM32 ファームウェア搭載 ESC 用） |
+| `DSHOTDIR` | `system.yaml` の `test.suction_dshot_reverse` を吸引 ESC へ書き込み、ESC のフラッシュへ永続化 |
 
 flash_range_erase/prog は USB CDC を ~100ms 切断するため、書き込み前に `OK\n` を送信してから 80ms 待機します。
 

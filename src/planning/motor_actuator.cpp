@@ -70,7 +70,7 @@ void MotorActuator::apply(float duty_l, float duty_r) {
   const uint32_t ql = to_q16(duty_l);
   const uint32_t qr = to_q16(duty_r);
   if (duty_l <= 0.0f) pwm_.set_levels_q16(0, 0u, ql); else pwm_.set_levels_q16(0, ql, 0u);
-  if (duty_r <= 0.0f) pwm_.set_levels_q16(1, 0u, qr); else pwm_.set_levels_q16(1, qr, 0u);
+  if (duty_r >= 0.0f) pwm_.set_levels_q16(1, 0u, qr); else pwm_.set_levels_q16(1, qr, 0u);
 
   // 左右の指令を揃えてから 1 回だけ update: 両 slice のリングに同じ read 位置基準で
   // commit されるので、同じ wrap で反映される。

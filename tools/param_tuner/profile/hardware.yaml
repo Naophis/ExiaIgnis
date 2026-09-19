@@ -7,6 +7,7 @@ tire: 13.9650 #30deg
 tire2: 13.9650 #30deg
 
 battery_gain: 4.057349148300616
+# battery_gain: 5.736949470345313
 # battery_gain: 4.253592106693843
 # battery_gain: 4.567
 
@@ -33,7 +34,7 @@ motor_r_cw_ccw_type: 1 # 1: duty > 0 -> true, 0: duty < 0 -> true
 motor_l_cw_ccw_type: 0 # 1: duty > 0 -> true, 0: duty < 0 -> true
 # debug for motor io direction
 motor_debug_mode: 0
-motor_debug_mode_duty_r: -10
+motor_debug_mode_duty_r: 10
 motor_debug_mode_duty_l: 10
 
 # MotorHz: 37500

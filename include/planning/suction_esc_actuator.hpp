@@ -58,6 +58,16 @@ public:
   void power_on();
   void power_off();
 
+  // 他の機能(AM32設定通信など)がGPIOを奪った後に信号線を戻す。
+  // PWMスライスは奪われている間も動き続けているため、GPIOのファンクションを
+  // PWMへ割り当て直すだけでよい。
+  void reattach_pin();
+
+  // DShot版(SuctionEscDshotActuator)とAPIを揃えるためのスタブ。
+  // サーボPWMでは回転方向を指令できない(ESC側の設定 revdir / 相の入れ替えで
+  // 対応する)ため、何もせずfalseを返す。
+  bool set_spin_direction(bool reversed, bool save_to_esc);
+
 private:
   void write_ticks(float pulse_us);
 

@@ -4,7 +4,7 @@
 #include "planning/ego_estimator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
-#include "planning/suction_esc_actuator.hpp"
+#include "planning/suction_esc.hpp"
 #include "planning/trajectory_generator.hpp"
 #include "structs.hpp"
 #include <memory>
@@ -19,7 +19,7 @@ public:
   // から走行開始のSTRAIGHT指令受理時に呼ぶ。
   void skip_keep_dist_once();
   // ---- ライフサイクル ----
-  void init(MotorActuator *motor, SuctionEscActuator *esc,
+  void init(MotorActuator *motor, SuctionEsc *esc,
             SensorProcessor *sensor, TrajectoryGenerator *trj,
             EgoEstimator *ego, std::shared_ptr<motion_tgt_val_t> tgt_val,
             std::shared_ptr<sensing_result_entity_t> sensing_result,
@@ -76,7 +76,7 @@ public:
 private:
   // ---- サブシステム参照 ----
   MotorActuator       *motor_  = nullptr;
-  SuctionEscActuator  *esc_    = nullptr;
+  SuctionEsc          *esc_    = nullptr;
   SensorProcessor     *sensor_ = nullptr;
   TrajectoryGenerator *trj_    = nullptr;
   EgoEstimator        *ego_    = nullptr;

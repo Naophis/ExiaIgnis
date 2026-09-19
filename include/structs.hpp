@@ -1565,6 +1565,13 @@ typedef struct {
   float alpha = 0;
   float ang = 0;
   int suction_active = 0;
+  // 吸引ESC(ESCape32)の回転方向。DShot経路(define.hppのSUCTION_ESC_USE_DSHOT)
+  // でのみ有効。0 = DSHOT_CMD_SPIN_DIRECTION_1(ESCape32 revdir=0)、
+  // 1 = DSHOT_CMD_SPIN_DIRECTION_2(revdir=1)。
+  // 値そのものは起動時には送らない(ESC通電+ロック待ちで1.5秒以上かかるため)。
+  // USBコマンド "DSHOTDIR" またはテストモード27で、この値をESCへ書き込んで
+  // 永続化する(MainTask::set_suction_spin_direction()参照)。
+  int suction_dshot_reverse = 0;
   // AM32 ESC移行後、suction_duty/duty_low/duty_burst/duty_burst_lowは
   // 全てESCへの目標パルス幅を「us(1000〜2000)」で直接指定する値として
   // 扱う(0〜100%のduty%ではない。ControlLaw::set_next_duty()参照)。

@@ -1,0 +1,56 @@
+;
+; dshot_tx_std.pio - 標準(非反転)DShot 送信専用 PIOプログラム。
+; 吸引ESC(ESCape32)へのスロットル指令に使う。include/driver/dshot_tx.hpp 参照。
+;
+; bidirectional(反転)DShot用の pio/dshot_bidir.pio とは別物:
+;   - こちらは idle=LOW の標準DShot。ESCape32 は信号線のidleレベルから極性を
+;     自動判別し(src/io.c dshotirq(): dshotinv = IOTIM_IDR)、非反転と判定した
+;     場合は信号線を一切駆動しない(テレメトリはESCの別ピンへ出る)。
+;     よって送信側はGPIOを常時駆動し続けてよく、半二重の切り替えが不要。
+;   - 反転DShotではESCがフレーム後30usで同じ線を駆動してテレメトリを返すため、
+;     常時駆動すると出力衝突になる(=こちらのプログラムでは使えない)。
+;
+; 変調(標準DShotのデファクト仕様):
+;   - 1ビット = 8 PIOサイクル固定。DShot600 なら 8cycle = 1/600000sec になるよう
+;     clkdivを選ぶ(dshot_tx_std_program_init()の呼び出し側で計算)。
+;   - bit='1': high 6サイクル + low 2サイクル (75%)
+;   - bit='0': high 3サイクル + low 5サイクル (37.5%)
+;   - MSB firstで16bitフレーム(throttle 11bit + telemetry要求 1bit + CRC 4bit)。
+;   - フレーム間は idle-low。ESCape32 は「2ビット時間エッジなし」でフレーム境界を
+;     判定する(src/io.c: dshotarr1 = 2bit時間)ため、ギャップはそれ以上必要。
+;     ギャップ長はこのプログラムではなくDMAのペーシング(dshot_tx.cpp)で決める:
+;     pull block でフレームを待つ間 idle-low を維持するだけ。
+
+.program dshot_tx_std
+.side_set 1
+
+; side-set pin 0 と OUT pin 0 は同一GPIO(ESCのS信号線)にマップする。
+; C側は16bitフレームをuint32_tの上位16bitに詰めてTX FIFOへ投入する
+; (out shift方向=left, autopull無効)。
+.wrap_target
+frame_start:
+    pull block          side 0      ; 次フレームが来るまで idle-low を維持
+    set y, 15           side 0      ; ビットカウンタ = 15 (16回ループ)
+bitloop:
+    out x, 1            side 1 [1]  ; high開始(2cyc)。OSR上位ビットから1bit取り出す
+    jmp !x do_zero      side 1      ; high継続(1cyc、ここまでhigh計3cyc)
+do_one:
+    nop                 side 1 [2]  ; bit=1: high をさらに3cyc延長(high計6cyc=75%)
+    jmp y-- bitloop     side 0 [1]  ; low 2cyc(bit計8cyc)、残りビットがあれば継続
+    jmp frame_start     side 0      ; (最終ビットが'1'だった場合のみ到達)
+do_zero:
+    jmp y-- bitloop     side 0 [4]  ; bit=0: low 5cyc(bit計8cyc、high 3cyc=37.5%)
+    jmp frame_start     side 0      ; (最終ビットが'0'だった場合のみ到達)
+.wrap
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+static inline void dshot_tx_std_program_init(PIO pio, uint sm, uint offset, uint pin, float clkdiv) {
+    pio_sm_config c = dshot_tx_std_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, false, false, 32); // shift_right=false(MSB first)、autopull無効
+    sm_config_set_sideset_pins(&c, pin);
+    sm_config_set_clkdiv(&c, clkdiv);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

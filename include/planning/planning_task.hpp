@@ -8,7 +8,7 @@
 #include "planning/bldc_actuator.hpp"
 #include "planning/motor_actuator.hpp"
 #include "planning/sensor_processor.hpp"
-#include "planning/suction_esc_actuator.hpp"
+#include "planning/suction_esc.hpp"
 #include "planning/trajectory_generator.hpp"
 #include "structs.hpp"
 #include "utils/kalman_filter.hpp"
@@ -93,7 +93,7 @@ public:
   // enable()/disable()いずれも呼ばれなくなったが、コードは参照用に残す
   // (再度自前コミュテーションへ戻す場合の土台として)。実行系は esc_ 側。
   BldcActuator                      bldc_;
-  SuctionEscActuator                esc_;
+  SuctionEsc                        esc_;
   SensorProcessor                   sensor_;
   TrajectoryGenerator               trj_;
   ControlLaw                        ctl_;

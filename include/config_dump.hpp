@@ -672,6 +672,7 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["alpha"]               = src.alpha;
     dst["ang"]                 = src.ang;
     dst["suction_active"]      = src.suction_active;
+    dst["suction_dshot_reverse"] = src.suction_dshot_reverse;
     dst["suction_duty"]        = src.suction_duty;
     dst["suction_duty_low"]    = src.suction_duty_low;
     dst["suction_duty_burst"]  = src.suction_duty_burst;

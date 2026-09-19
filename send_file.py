@@ -50,6 +50,13 @@ Pico へ USB CDC 経由でファイルを操作するスクリプト。
       (tools/param_tuner/profile/am32.yaml を編集するたびにこれ1つ叩けばよい)。
       パス省略時は tools/param_tuner/profile/am32.yaml を使う。
       例: python send_file.py am32sync
+
+  dshotdir
+      "DSHOTDIR" コマンドを送り、system.yaml の test.suction_dshot_reverse を
+      吸引ESC(ESCape32)へ DShot コマンドで書き込ませる (ESC側のフラッシュへ
+      永続化される)。事前に system.yaml をアップロードしておくこと。
+      実行ログを "== DSHOT dir done ==" まで表示する。
+      例: python send_file.py dshotdir
 """
 
 import json
@@ -69,7 +76,7 @@ except ImportError:
 TIMEOUT_SEC = 10
 PICO_VID    = 0x2E8A  # Raspberry Pi
 COMMANDS    = {"write", "read", "list", "delete", "deleteall", "show",
-               "am32read", "am32write", "am32sync"}
+               "am32read", "am32write", "am32sync", "dshotdir"}
 AM32_YAML_DEFAULT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "tools", "param_tuner", "profile", "am32.yaml")
@@ -222,7 +229,8 @@ def cmd_show(ser: serial.Serial, remote_name: str) -> None:
 
 def _stream_am32_log(ser: serial.Serial, done_prefix: str,
                      timeout_sec: float) -> None:
-    """AM32READ/AM32WRITE実行中のデバイス側ログをdone_prefixが出るまで流す。"""
+    """デバイス側コマンド(AM32READ/AM32WRITE/DSHOTDIR)実行中のログを
+    done_prefixの行が出るまで流す。"""
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         raw = ser.readline()
@@ -263,6 +271,18 @@ def cmd_am32read(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
     print("read_am32_param() 実行中... "
           "(電源制御が無い場合は表示に従ってESCのバッテリを挿し直してください)")
     _stream_am32_log(ser, "== AM32 read done", timeout_sec)
+
+
+def cmd_dshotdir(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
+    ser.write(b"DSHOTDIR\n")
+    ser.flush()
+    ack = readline_skip_sensor(ser)
+    if ack != "OK":
+        print(f"失敗: {ack}", file=sys.stderr)
+        sys.exit(1)
+    print("set_suction_spin_direction() 実行中... "
+          "(ESCへ通電したまま数秒かかります)")
+    _stream_am32_log(ser, "== DSHOT dir done", timeout_sec)
 
 
 def cmd_am32sync(ser: serial.Serial, local_path: str) -> None:
@@ -346,6 +366,9 @@ def main() -> None:
         elif command == "am32sync":
             local = args[1] if len(args) > 1 else AM32_YAML_DEFAULT
             cmd_am32sync(ser, local)
+
+        elif command == "dshotdir":
+            cmd_dshotdir(ser)
 
         else:
             print(f"不明なコマンド: {command}\n", file=sys.stderr)

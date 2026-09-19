@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 
-void ControlLaw::init(MotorActuator *motor, SuctionEscActuator *esc,
+void ControlLaw::init(MotorActuator *motor, SuctionEsc *esc,
                       SensorProcessor *sensor,
                       TrajectoryGenerator *trj, EgoEstimator *ego,
                       std::shared_ptr<motion_tgt_val_t> tgt_val,

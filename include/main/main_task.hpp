@@ -156,6 +156,12 @@ private:
   void test_search_pivot();
   void test_system_identification(bool para);
 
+  // system.yaml の test.suction_dshot_reverse を吸引ESC(ESCape32)へ
+  // DShot特殊コマンドで書き込み、ESC側のフラッシュへ永続化する。
+  // USBコマンド "DSHOTDIR" とテストモード27から呼ぶ(実行中は吸引を停止し、
+  // ESCへ通電したまま約2秒ブロックする)。
+  void set_suction_spin_direction();
+
   void read_am32_param();
   void write_am32_param();
   // read_am32_param()/write_am32_param()実行時に自動保存されるバックアップ

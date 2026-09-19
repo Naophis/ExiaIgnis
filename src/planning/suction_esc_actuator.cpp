@@ -93,3 +93,15 @@ void SuctionEscActuator::disable() {
 
 void SuctionEscActuator::power_on()  { gpio_put(SUCTION_POWER_EN, true); }
 void SuctionEscActuator::power_off() { gpio_put(SUCTION_POWER_EN, false); }
+
+void SuctionEscActuator::reattach_pin() {
+  gpio_set_function(SUCTION_ESC_PWM, GPIO_FUNC_PWM);
+}
+
+bool SuctionEscActuator::set_spin_direction(bool reversed, bool save_to_esc) {
+  (void)reversed;
+  (void)save_to_esc;
+  printf("[suction_esc] set_spin_direction: not supported on servo-PWM path "
+         "(set SUCTION_ESC_USE_DSHOT=1 in define.hpp, or change revdir on the ESC)\n");
+  return false;
+}

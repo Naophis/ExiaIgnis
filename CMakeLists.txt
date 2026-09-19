@@ -127,6 +127,7 @@ add_executable(ExiaIgnis
     src/driver/am32_protocol.cpp
     src/driver/am32_config.cpp
     src/driver/dshot_gcr.cpp
+    src/driver/dshot_tx.cpp
     src/driver/dshot_bidir.cpp
     src/config_loader.cpp
 
@@ -170,6 +171,9 @@ pico_generate_pio_header(ExiaIgnis
 )
 pico_generate_pio_header(ExiaIgnis
     ${CMAKE_CURRENT_LIST_DIR}/pio/dshot_bidir.pio
+)
+pico_generate_pio_header(ExiaIgnis
+    ${CMAKE_CURRENT_LIST_DIR}/pio/dshot_tx_std.pio
 )
 
 # Modify the below lines to enable/disable output over UART/USB

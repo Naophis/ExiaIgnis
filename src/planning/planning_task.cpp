@@ -120,11 +120,12 @@ void PlanningTask::timer_irq_handler() {
   const uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;
   self->prev_ts_ = now;
 
-  // AM32 ESC移行によりbldc_.tick()は呼ばない(旧BLDC自前コミュテーション
+  // 外付けESC移行によりbldc_.tick()は呼ばない(旧BLDC自前コミュテーション
   // 用の1kHz駆動。planning_task.hppのbldc_メンバのコメント参照)。
-  // esc_側はMotorActuatorと同じくハードウェアPWMが自律的に出力し続ける
-  // ため、毎tickのCPU介入は不要(ControlLaw::set_next_duty()からapply()
-  // が呼ばれた時だけCCレジスタを書き換える)。
+  // esc_側はMotorActuatorと同じく自律的に出力し続けるため、毎tickのCPU介入は
+  // 不要(ControlLaw::set_next_duty()からapply_us()が呼ばれた時だけ、
+  // DShot経路ならDMAが読むフレーム語、サーボPWM経路ならCCレジスタを
+  // 書き換える)。
 
   self->tick(dt_us);
   sem_release(&self->tick_sem_);
