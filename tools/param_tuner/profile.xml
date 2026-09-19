@@ -699,12 +699,12 @@
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-4.500000" left="-34.619531" right="288.000000" top="184.500000"/>
         <limitY/>
-        <curve color="#1f77b4" name="hf_d0"/>
+        <!-- <curve color="#1f77b4" name="hf_d0"/>
         <curve color="#d62728" name="hf_d1"/>
         <curve color="#1ac938" name="hf_d2"/>
         <curve color="#ff7f0e" name="hf_d3"/>
         <curve color="#9467bd" name="hf_min"/>
-        <curve color="#7f7f7f" name="hf_dist"/>
+        <curve color="#7f7f7f" name="hf_dist"/> -->
        </plot>
       </DockArea>
       <DockArea name="side45 (1kHz)">
@@ -723,28 +723,28 @@
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-6.000000" left="-34.619531" right="288.000000" top="60.000000"/>
         <limitY/>
-        <curve color="#1f77b4" name="hf_x0"/>
+        <!-- <curve color="#1f77b4" name="hf_x0"/>
         <curve color="#d62728" name="hf_x1"/>
         <curve color="#1ac938" name="hf_x2"/>
         <curve color="#ff7f0e" name="hf_x3"/>
-        <curve color="#9467bd" name="hf_edge_rel"/>
+        <curve color="#9467bd" name="hf_edge_rel"/> -->
        </plot>
       </DockArea>
       <DockArea name="hf_cnt / hf_n">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-0.350000" left="-34.619531" right="288.000000" top="4.350000"/>
         <limitY/>
-        <curve color="#1f77b4" name="hf_cnt"/>
-        <curve color="#d62728" name="hf_n"/>
+        <!-- <curve color="#1f77b4" name="hf_cnt"/>
+        <curve color="#d62728" name="hf_n"/> -->
        </plot>
       </DockArea>
       <DockArea name="hf_seq / gpos">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-1.000000" left="-34.619531" right="288.000000" top="100.000000"/>
         <limitY/>
-        <curve color="#1f77b4" name="hf_seq"/>
+        <!-- <curve color="#1f77b4" name="hf_seq"/>
         <curve color="#d62728" name="gpos_lo"/>
-        <curve color="#1ac938" name="gpos_hi"/>
+        <curve color="#1ac938" name="gpos_hi"/> -->
        </plot>
       </DockArea>
      </DockSplitter>
@@ -753,10 +753,10 @@
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="XYPlot">
         <range bottom="-4.500000" left="0.000000" right="200.000000" top="184.500000"/>
         <limitY/>
-        <curve color="#1f77b4" curve_x="x" curve_y="hf_d0" name="[x;hf_d0]"/>
+        <!-- <curve color="#1f77b4" curve_x="x" curve_y="hf_d0" name="[x;hf_d0]"/>
         <curve color="#d62728" curve_x="x" curve_y="hf_d1" name="[x;hf_d1]"/>
         <curve color="#1ac938" curve_x="x" curve_y="hf_d2" name="[x;hf_d2]"/>
-        <curve color="#ff7f0e" curve_x="x" curve_y="hf_d3" name="[x;hf_d3]"/>
+        <curve color="#ff7f0e" curve_x="x" curve_y="hf_d3" name="[x;hf_d3]"/> -->
        </plot>
       </DockArea>
       <DockArea name="motion_state">
