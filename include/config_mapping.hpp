@@ -508,6 +508,7 @@ inline void convertFromJson(JsonVariantConst src, hold_settle_t& dst) {
     from_json_field(src, "ang_th", dst.ang_th);
     from_json_field(src, "stable_ms", dst.stable_ms);
     from_json_field(src, "lp_ms", dst.lp_ms);
+    from_json_field(src, "total_max_ms", dst.total_max_ms);
 }
 
 inline void convertFromJson(JsonVariantConst src, start_align_t& dst) {

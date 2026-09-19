@@ -261,6 +261,7 @@ inline void convertToJson(const hold_settle_t& src, JsonVariant dst) {
     dst["ang_th"]    = src.ang_th;
     dst["stable_ms"] = src.stable_ms;
     dst["lp_ms"]     = src.lp_ms;
+    dst["total_max_ms"] = src.total_max_ms;
 }
 
 inline void convertToJson(const start_align_t& src, JsonVariant dst) {

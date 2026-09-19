@@ -52,12 +52,16 @@ void MotorActuator::init(uint32_t motor_hz, uint32_t control_hz) {
       pwm_set_wrap(slice, motor_wrap_);
       pwm_set_enabled(slice, true);
     }
-    apply_legacy_(0.0f, 0.0f);
+    legacy_all_low_();
   }
 }
 
 // duty[%] -> (A, B) の Q16.16 count。方向の割り当ては従来と同一:
 //   duty >= 0: A=0, B=level / duty < 0: A=level, B=0
+// MOTOR_DRIVE_SLOW_DECAY=1 のときは同じ方向割り当てのまま drive<->brake にする:
+//   駆動側(従来 level を出していた側) = 100%(H 固定)
+//   反対側(従来 0 だった側)           = 100% - level (反転 PWM)
+//   → 両方 H の区間が brake、反対側が L の区間が drive。duty=0 は両方 H = brake。
 __attribute__((noinline, section(".time_critical.motor_actuator")))
 void MotorActuator::apply(float duty_l, float duty_r) {
   if (legacy_) { apply_legacy_(duty_l, duty_r); return; }
@@ -67,10 +71,19 @@ void MotorActuator::apply(float duty_l, float duty_r) {
     if (q > 4294967040.0f) q = 4294967040.0f;   // uint32 上限(set_levels_q16 で max_level にクランプ)
     return (uint32_t)q;
   };
+#if MOTOR_DRIVE_SLOW_DECAY
+  const uint32_t full = (motor_wrap_ + 1u) << 16;   // 100% (H 固定)
+  auto clamp_full = [&](uint32_t q) -> uint32_t { return q > full ? full : q; };
+  const uint32_t ql = clamp_full(to_q16(duty_l));
+  const uint32_t qr = clamp_full(to_q16(duty_r));
+  if (duty_l <= 0.0f) pwm_.set_levels_q16(0, full - ql, full); else pwm_.set_levels_q16(0, full, full - ql);
+  if (duty_r >= 0.0f) pwm_.set_levels_q16(1, full - qr, full); else pwm_.set_levels_q16(1, full, full - qr);
+#else
   const uint32_t ql = to_q16(duty_l);
   const uint32_t qr = to_q16(duty_r);
   if (duty_l <= 0.0f) pwm_.set_levels_q16(0, 0u, ql); else pwm_.set_levels_q16(0, ql, 0u);
   if (duty_r >= 0.0f) pwm_.set_levels_q16(1, 0u, qr); else pwm_.set_levels_q16(1, qr, 0u);
+#endif
 
   // 左右の指令を揃えてから 1 回だけ update: 両 slice のリングに同じ read 位置基準で
   // commit されるので、同じ wrap で反映される。
@@ -79,32 +92,35 @@ void MotorActuator::apply(float duty_l, float duty_r) {
 
 __attribute__((noinline, section(".time_critical.motor_actuator")))
 void MotorActuator::apply_legacy_(float duty_l, float duty_r) {
-  auto set_drive_l = [&](uint slice, float duty) {
-    uint16_t level = (uint16_t)((float)(motor_wrap_ + 1u) * std::fabs(duty) / 100.0f);
-    if (duty >= 0.0f) {
-      pwm_set_chan_level(slice, PWM_CHAN_A, level);
-      pwm_set_chan_level(slice, PWM_CHAN_B, 0);
-    } else {
-      pwm_set_chan_level(slice, PWM_CHAN_A, 0);
-      pwm_set_chan_level(slice, PWM_CHAN_B, level);
-    }
+  // drive: 従来 level を出していた側 / other: 従来 0 だった側
+  auto set_drive = [&](uint slice, uint drive, uint other, float duty) {
+    const uint32_t full = motor_wrap_ + 1u;
+    uint32_t level = (uint32_t)((float)full * std::fabs(duty) / 100.0f);
+    if (level > full) level = full;
+#if MOTOR_DRIVE_SLOW_DECAY
+    pwm_set_chan_level(slice, drive, (uint16_t)full);
+    pwm_set_chan_level(slice, other, (uint16_t)(full - level));
+#else
+    pwm_set_chan_level(slice, drive, (uint16_t)level);
+    pwm_set_chan_level(slice, other, 0);
+#endif
   };
 
-  auto set_drive_r = [&](uint slice, float duty) {
-    uint16_t level = (uint16_t)((float)(motor_wrap_ + 1u) * std::fabs(duty) / 100.0f);
-    if (duty >= 0.0f) {
-      pwm_set_chan_level(slice, PWM_CHAN_A, 0);
-      pwm_set_chan_level(slice, PWM_CHAN_B, level);
-    } else {
-      pwm_set_chan_level(slice, PWM_CHAN_A, level);
-      pwm_set_chan_level(slice, PWM_CHAN_B, 0);
-    }
-  };
-
-  set_drive_l(slice_L_, duty_l);
-  set_drive_r(slice_R_, duty_r);
+  if (duty_l >= 0.0f) set_drive(slice_L_, PWM_CHAN_A, PWM_CHAN_B, duty_l);
+  else                set_drive(slice_L_, PWM_CHAN_B, PWM_CHAN_A, duty_l);
+  if (duty_r >= 0.0f) set_drive(slice_R_, PWM_CHAN_B, PWM_CHAN_A, duty_r);
+  else                set_drive(slice_R_, PWM_CHAN_A, PWM_CHAN_B, duty_r);
 }
 
+// 従来経路の全出力 LOW(= MPQ6612A では coast)。slice を止める前・経路切替時用。
+// slow decay では duty=0 が「両方 H(brake)」なので apply_legacy_(0,0) では LOW にならない。
+__attribute__((noinline, section(".time_critical.motor_actuator")))
+void MotorActuator::legacy_all_low_() {
+  for (uint slice : {slice_L_, slice_R_}) {
+    pwm_set_chan_level(slice, PWM_CHAN_A, 0);
+    pwm_set_chan_level(slice, PWM_CHAN_B, 0);
+  }
+}
 
 __attribute__((noinline, section(".time_critical.motor_actuator")))
 bool MotorActuator::set_dither(bool enable) {
@@ -119,10 +135,10 @@ bool MotorActuator::set_dither(bool enable) {
       pwm_set_wrap(slice, motor_wrap_);
       pwm_set_enabled(slice, motor_en);
     }
-    apply_legacy_(0.0f, 0.0f);
+    legacy_all_low_();
   } else {
     // 従来経路 → DitherPwm。モーター有効中なら start() で DMA を回す。
-    apply_legacy_(0.0f, 0.0f);
+    legacy_all_low_();
     legacy_ = false;
     pwm_.set_levels_q16(0, 0, 0);
     pwm_.set_levels_q16(1, 0, 0);
@@ -191,7 +207,7 @@ void MotorActuator::motor_disable() {
   // 位相によっては出力ピンが HIGH のまま固定されてしまう（duty=0 の CC 値は
   // 次の wrap まで反映されない）。先に duty=0 を書き込み、1 周期分待って
   // 出力が確実に LOW に落ちてから PWM を止める。
-  apply_legacy_(0.0f, 0.0f);
+  legacy_all_low_();
   busy_wait_us(2u * 1000000u / motor_hz_);
   pwm_set_enabled(slice_L_, false);
   pwm_set_enabled(slice_R_, false);

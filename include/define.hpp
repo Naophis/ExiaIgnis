@@ -51,6 +51,18 @@
 
 #define MOTOR_PWM_FREQ_HZ  100000u
 
+// 駆動モーターの PWM 減衰モード。
+//   1: drive <-> brake (slow decay)。駆動側 IN を H 固定、反対側 IN を反転 PWM。
+//      OFF 期間は両 LS-FET オンでモーター短絡 → 平均電圧 = duty * Vbat で線形、
+//      電流は両方向に流れる(回生制動が効く)。
+//   0: drive <-> coast (fast decay)。駆動側 IN を PWM、反対側 IN を L 固定。
+// MPQ6612A は IN1=IN2=L が Hi-Z(coast)、IN1=IN2=H が brake。旧 MP6551L は
+// 「PWM/0」がそのまま drive<->brake になっていたので、同じ出し方だと MPQ6612A では
+// coast になり電流不連続で duty->トルクに約15%duty の不感帯が出る
+// (20260920_014858/015141.csv: 400mm/s 巡航に 16.4%duty、旧 4.3%)。
+// 注意: duty=0 は IN1=IN2=H になり、約1ms 続くと MPQ6612A は low-IQ brake に入る。
+#define MOTOR_DRIVE_SLOW_DECAY  1
+
 // ============================================================
 // Suction ESC スロットル信号 (パルス幅 1000〜2000us 相当のスケール)
 // ============================================================

@@ -16,22 +16,22 @@ void MainTask::test_run() {
   reset_ego_data();
   planning_->motor_enable();
 
-  // float time = sys_.test.suction_bldc_hz /
-  //              sys_.test.suction_batt_ramp_gain_table[0] * 1000;
-  if (sys_.test.suction_active == 1) {
-    planning_->suction_enable(sys_.test.suction_duty,
-                              sys_.test.suction_duty_low);
-    while (planning_->is_suction_ramping()) {
-      sleep_ms(10);
+  // 2026-09-20: 従来はsleep_ms(2500)固定(is_suction_ramping()待ちは
+  // suction_enable()直後にfalseを返して素通りするため、ランプ開始から2.5秒)。
+  // 本走行(exec_path_running)/test_slaと同じくhold()〜hold_settle_wait()〜
+  // unhold()へ揃え、ランプ完了+向きの収束(hardware.yaml hold_settle、
+  // total_max_msで絶対打ち切り)で走り出す。
+  if (sys_.test.suction_active == 1 || sys_.test.suction_active == 2) {
+    mp->hold();
+    if (sys_.test.suction_active == 1) {
+      planning_->suction_enable(sys_.test.suction_duty,
+                                sys_.test.suction_duty_low);
+    } else {
+      planning_->suction_enable(sys_.test.suction_duty_burst,
+                                sys_.test.suction_duty_burst_low);
     }
-    sleep_ms(2500);
-  } else if (sys_.test.suction_active == 2) {
-    planning_->suction_enable(sys_.test.suction_duty_burst,
-                              sys_.test.suction_duty_burst_low);
-    while (planning_->is_suction_ramping()) {
-      sleep_ms(10);
-    }
-    sleep_ms(2500);
+    mp->hold_settle_wait();
+    mp->unhold();
   }
   if (param_->test_log_enable > 0) {
     lt_->start();

@@ -416,7 +416,8 @@ void MotionPlanning::hold_settle_wait() {
   // Core1側は必ず反映済み。プラトー中は電圧ブースト分で目標usが微動し
   // is_suction_ramping()が一瞬trueへ戻り得るので、一度完了したらラッチする。
   // 吸引無しで呼ばれた場合は初回で完了扱い(=従来どおり呼び出しからの時間)。
-  constexpr int kRampWaitMaxMs = 3000; // ランプが終わらない場合の安全弁
+  // total_max_msは段階(ランプ待ち/収束待ち)に関係なく、呼び出しからの
+  // 絶対時間で無条件に打ち切る(0以下で無効)。
   bool ramp_done = false;
   int total = 0;  // 呼び出しからの経過[ms]
   int t = 0;      // ランプ完了からの経過[ms]
@@ -425,8 +426,11 @@ void MotionPlanning::hold_settle_wait() {
     sleep_ms(10);
     total += 10;
     kim_lp += (sensing_result->ego.kim_theta - kim_lp) * alpha;
+    if (hs.total_max_ms > 0 && total >= hs.total_max_ms) {
+      break;
+    }
     if (!ramp_done) {
-      if (pt->is_suction_ramping() && total < kRampWaitMaxMs) {
+      if (pt->is_suction_ramping()) {
         continue;
       }
       ramp_done = true;

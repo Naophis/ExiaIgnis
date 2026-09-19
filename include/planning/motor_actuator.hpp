@@ -51,4 +51,5 @@ private:
   bool     dither_ok_  = false;   // DitherPwm::init() 成功
 
   void apply_legacy_(float duty_l, float duty_r);
+  void legacy_all_low_();
 };

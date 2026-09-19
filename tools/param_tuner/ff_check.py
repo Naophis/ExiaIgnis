@@ -21,13 +21,18 @@ V_ff を同じく回帰した係数の比が 1.0 なら FF は正しい。1.0 �
 使い方:
     python3 tools/param_tuner/ff_check.py logs/2026*.csv
     python3 tools/param_tuner/ff_check.py --pool logs/A.csv logs/B.csv   # 複数本まとめて1回帰
+    python3 tools/param_tuner/ff_check.py --resist=4.4 logs/old.csv      # ログ取得時の Resist を指定
 """
 import sys
 import numpy as np
 import pandas as pd
 
-# hardware.yaml と合わせること
-RESIST = 4.4
+# hardware.yaml と合わせること(ログを取った時点の値)。
+# Resist は 2026-09-20 に 4.4 -> 4.0。それ以前のログは --resist=4.4 を付ける。
+RESIST = 4.0
+for _a in sys.argv[1:]:
+    if _a.startswith('--resist='):
+        RESIST = float(_a.split('=', 1)[1])
 KM = 0.00180
 GEAR = 63.0 / 13.0
 TIRE = 13.9750          # 直径[mm] (半径ではない)
