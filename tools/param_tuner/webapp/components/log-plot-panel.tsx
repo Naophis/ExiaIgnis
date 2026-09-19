@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -83,7 +83,13 @@ interface AutoOpenRequest {
   nonce: number;
 }
 
-export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }) {
+export function LogPlotPanel({
+  autoOpen,
+  onAutoOpenHandled,
+}: {
+  autoOpen?: AutoOpenRequest | null;
+  onAutoOpenHandled?: () => void;
+}) {
   const [files, setFiles] = useState<LogFileInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
@@ -327,11 +333,23 @@ export function LogPlotPanel({ autoOpen }: { autoOpen?: AutoOpenRequest | null }
   // Triggered by clicking the "PlotJugglerで開く" action on the save
   // notification toast (see app/page.tsx's "saved" SSE handler). Keyed off
   // `nonce` so repeated requests for the same file still re-fire.
+  //
+  // The request must be strictly one-shot. Effects also run on every mount
+  // (and on every Fast Refresh in dev), not just when `nonce` changes, and
+  // this panel is unmounted whenever the editor/templates/matrix view is
+  // showing - so a request left behind in the parent's state used to relaunch
+  // PlotJuggler with the same stale file each time one of those views was
+  // closed. Hand the request back to the parent to clear once consumed; the
+  // ref covers StrictMode's double-invoked mount effect, where both runs see
+  // the same props before the parent's state update lands.
+  const handledNonceRef = useRef<number | null>(null);
   useEffect(() => {
     if (!autoOpen) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (handledNonceRef.current === autoOpen.nonce) return;
+    handledNonceRef.current = autoOpen.nonce;
     setSelected(autoOpen.file);
     void openPlotJuggler(autoOpen.file);
+    onAutoOpenHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpen?.nonce]);
 

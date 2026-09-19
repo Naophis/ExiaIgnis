@@ -515,7 +515,7 @@ export default function Home() {
                 />
               </div>
               <div className={`min-h-0 flex-1 ${rightTab === "plot" ? "flex" : "hidden"}`}>
-                <LogPlotPanel autoOpen={plotAutoOpen} />
+                <LogPlotPanel autoOpen={plotAutoOpen} onAutoOpenHandled={() => setPlotAutoOpen(null)} />
               </div>
             </div>
           )}
