@@ -3,6 +3,7 @@
 #include "config_loader.hpp"
 #include "config_mapping.hpp"
 #include "define.hpp"
+#include "driver/psram_check.hpp"
 #include "hardware/pwm.h"
 #include "pico/error.h"
 #include "pico/stdio_usb.h"
@@ -105,6 +106,18 @@ void MainTask::run() {
   printf("[run] C: coin\n");
   ui_->coin(60);
   ui_->coin(60);
+
+  // main() step6 の PSRAM 書き込みテスト結果(その時点ではブザー未初期化)。
+  // ログが一切残らない状態であることに、シリアル無し・ボタンを押す前の
+  // 段階で気づけるようにする。走行自体は止めない。
+  if (!psram_check::boot_ok()) {
+    printf("[run] WARNING: PSRAM write/readback failed at boot -- "
+           "logging will be disabled\n");
+    for (int i = 0; i < 4; i++) {
+      ui_->coin(40);
+      sleep_ms(60);
+    }
+  }
 
   // ─── 起動時に破損検出されていた場合のデファードリフォーマット ──────────────
   // Core1 起動後なので flash_safe_execute が正常動作する
@@ -212,6 +225,15 @@ void MainTask::run() {
   //           static_cast<size_t>(param_->log_size));
   lt_->init(reinterpret_cast<void *>(0x15000000u), 8u * 1024u * 1024u,
             static_cast<size_t>(param_->log_size));
+  if (!lt_->psram_ok() && psram_check::boot_ok()) {
+    // 起動時は通ったのに記録開始直前で落ちた場合だけ鳴らす(起動時から
+    // 落ちている場合は run() 冒頭で警告済み)。走行自体は止めない。
+    // 2026-09-19: PSRAM無応答で全ログがゴミ値になったのに気づけなかった。
+    for (int i = 0; i < 4; i++) {
+      ui_->coin(40);
+      sleep_ms(60);
+    }
+  }
 
   sleep_ms(25);
 

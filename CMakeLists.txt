@@ -128,6 +128,7 @@ add_executable(ExiaIgnis
     src/driver/am32_config.cpp
     src/driver/dshot_gcr.cpp
     src/driver/dshot_tx.cpp
+    src/driver/psram_check.cpp
     src/driver/dshot_bidir.cpp
     src/config_loader.cpp
 

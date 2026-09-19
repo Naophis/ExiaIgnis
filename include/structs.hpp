@@ -751,12 +751,16 @@ typedef struct {
 // する(2026-09-06)。従来はsleep_ms(2450/2500)固定で、プラトー中にファンの
 // 突発トルクで動いた場合(20260906_045232.csv: idx2160前後で+0.4°動き、残り
 // 0.2秒ではI項が育ち切らず+0.25°を残してunhold)に取り返せなかった。
-// min_msは従来の固定待ちと同じ(ここまでは無条件に待つ)。その後、
-// |kim_theta|<ang_th[deg]がstable_ms連続したら抜ける。max_msで打ち切り。
-// 実際に待った時間はmotion_tgt_val_t::hold_settle_msに残す。
+// min_msまでは無条件に待つ。その後、|kim_theta|<ang_th[deg]がstable_ms
+// 連続したら抜ける。max_msで打ち切り。
+// 2026-09-19: min_ms/max_msは吸引ランプ完了(プラトー到達)からの時間
+// (hold_settle_wait()がランプ完了を検出してから数える)。従来はランプ開始
+// からの時間で、2450/3500 = 旧ランプ約1.94s + プラトー約0.5s/1.55s だった。
+// プラトー分はそのまま500/1500へ引き継ぎ、ランプが速くなった分だけ自動で
+// 縮む。実際に待った時間(ランプ込み)はmotion_tgt_val_t::hold_settle_msに残す。
 typedef struct {
-  int min_ms = 2450;
-  int max_ms = 3500;
+  int min_ms = 500;
+  int max_ms = 1500;
   float ang_th = 0.15f;
   int stable_ms = 300;
   // 判定に使うkim_thetaの1次LPF時定数[ms](Core0側10ms周期で更新)。0で生値。

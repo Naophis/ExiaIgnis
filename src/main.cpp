@@ -9,6 +9,7 @@
 extern "C" {
 #include "sfe_psram.h"
 }
+#include "driver/psram_check.hpp"
 #include "hardware/uart.h"
 #include "logging/logging_task.hpp"
 #include "main/main_task.hpp"
@@ -55,6 +56,12 @@ int main() {
 
   stdio_init_all();
   set_sys_clock_khz(150000, true);
+
+  // PIO/DMA(吸引ESCのDShot)など他の初期化が一切走る前の素の状態で1回。
+  // この時点ではUSB未接続でprintfが届かないので、結果はstep6でまとめて出す。
+  // 所要時間は数十us(5MHz×8byte)で、ESCへの信号開始は実質遅れない。
+  psram_check::ProbeResult probe_early{};
+  psram_check::probe(PSRAM_CS_PIN, &probe_early);
 
   // 吸引ESCは電源投入直後から有効なスロットル信号(停止指令)が来ている
   // ことを期待する。この後に続くConfigLoader::init()やsleep_ms(1500)等で
@@ -138,11 +145,53 @@ int main() {
   main_task->set_tgt_val(tgt_val);
 
   printf("[boot] step6: PSRAM init (sfe_setup_psram)\n");
+  // step6 の各段は割り込み禁止区間/XIP 停止を含むため、途中で止まると USB の
+  // 送信バッファに残った printf が一切出ない(2026-09-20: CE# 直列抵抗を外して
+  // CE# が浮いた基板で、step5 の表示を最後に無言で hang した)。段ごとに
+  // 吐き出してから進むことで、どこで止まったかをログに残す。
+  auto sync_log = [] {
+    stdio_flush();
+    sleep_ms(5);
+  };
+  sync_log();
+
+  // early が正常で late だけ異常 → その間のファーム初期化が原因。
+  // 両方異常 → 基板側(電源/CS/SD線/チップ)。
+  psram_check::print_probe("early", probe_early);
+  printf("[boot] step6a: late probe\n");
+  sync_log();
+  psram_check::ProbeResult probe_late{};
+  psram_check::probe(PSRAM_CS_PIN, &probe_late);
+  psram_check::print_probe("late ", probe_late);
+
+  printf("[boot] step6b: sfe_setup_psram\n");
+  sync_log();
   size_t psram_sz = sfe_setup_psram(PSRAM_CS_PIN);
   if (psram_sz == 0) {
-    printf("[boot] PSRAM not detected!\n");
+    // ID 判定はあくまで間接証拠。not detected のままだと QPI enable も
+    // QMI M1 設定もされず、下の書き込みテストが「チップが生きていても」必ず
+    // 落ちるので、ID を見ずに強制初期化してから実際に書いて確かめる。
+    printf("[boot] PSRAM not detected! (ID read) -- forcing QPI init to "
+           "verify by actual write/readback\n");
+    printf("[boot] step6c: force_qpi_init\n");
+    sync_log();
+    psram_check::force_qpi_init(PSRAM_CS_PIN);
   } else {
     printf("[boot] PSRAM: %u KB detected\n", (unsigned)(psram_sz / 1024));
+  }
+  // 直接証拠: ログが使うのと同じ非キャッシュ窓へ実際に書いて読み戻す。
+  {
+    printf("[boot] step6d: rw_test\n");
+    sync_log();
+    const size_t test_sz = psram_sz ? psram_sz : (8u * 1024u * 1024u);
+    const psram_check::RwResult rw = psram_check::rw_test(0x15000000u, test_sz);
+    psram_check::print_rw("boot", rw);
+    psram_check::set_boot_result(rw.pass());
+    if (rw.pass() && psram_sz == 0) {
+      printf("[boot] NOTE: write/readback PASSED although ID read failed -- "
+             "PSRAM is usable, the ID path (SO line in SPI mode) is suspect\n");
+    }
+    sync_log();
   }
 
   printf("[boot] step7: multicore_launch_core1\n");

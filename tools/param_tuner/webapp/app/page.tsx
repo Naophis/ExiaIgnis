@@ -139,8 +139,17 @@ export default function Home() {
     });
 
     es.addEventListener("dumpFailed", (e) => {
-      const { reason } = JSON.parse((e as MessageEvent).data) as { reason: string };
-      toast.error(`ダンプ受信が壊れました。もう一度お試しください (${reason})`);
+      const { reason, deviceError } = JSON.parse((e as MessageEvent).data) as {
+        reason: string;
+        deviceError?: boolean;
+      };
+      // deviceError: firmware refused to dump (dumperr_ line, e.g. PSRAM FAIL).
+      // Retrying won't help, so don't tell the user to.
+      toast.error(
+        deviceError
+          ? `デバイスがダンプを拒否しました: ${reason}`
+          : `ダンプ受信が壊れました。もう一度お試しください (${reason})`,
+      );
     });
 
     // Device sent a clear-screen escape (e.g. dump1()'s live redraw loop):

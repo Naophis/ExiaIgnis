@@ -52,7 +52,7 @@ void ASM330LHH::setup() {
   printf("ASM330LHH regs: CTRL1_XL=0x%02X(%s) CTRL2_G=0x%02X(%s) CTRL3_C=0x%02X "
          "CTRL4_C=0x%02X\n",
          ctrl1_xl, ctrl1_xl == 0x94 ? "OK" : "NG", ctrl2,
-         ctrl2 == 0x98 ? "OK" : "NG", ctrl3, ctrl4);
+         ctrl2 == 0x91 ? "OK" : "NG", ctrl3, ctrl4);
 }
 
 __attribute__((noinline, section(".time_critical.sensing.asm330_read")))

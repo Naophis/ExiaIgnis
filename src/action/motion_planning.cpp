@@ -407,12 +407,33 @@ void MotionPlanning::hold_settle_wait() {
   const float alpha =
       hs.lp_ms > 0 ? std::min(1.0f, 10.0f / (float)hs.lp_ms) : 1.0f;
   float kim_lp = sensing_result->ego.kim_theta;
-  int t = 0;
+  // 2026-09-19: min_ms/max_msは「吸引ランプ完了(プラトー到達)から」の時間。
+  // 従来はランプ開始からの固定2450ms(=旧ランプ約1.94s+プラトー約0.5s)で、
+  // ランプが速くなっても(現行テーブルで約0.65〜0.8s)待ちが縮まなかった。
+  // 呼び出し側のwhile(is_suction_ramping())はsuction_enable()直後(Core1の
+  // 次tickでsuction_en_/目標usが反映される前)にfalseを返して素通りするため、
+  // ここで改めてランプ完了を検出する。最初の判定はsleep_ms(10)の後なので
+  // Core1側は必ず反映済み。プラトー中は電圧ブースト分で目標usが微動し
+  // is_suction_ramping()が一瞬trueへ戻り得るので、一度完了したらラッチする。
+  // 吸引無しで呼ばれた場合は初回で完了扱い(=従来どおり呼び出しからの時間)。
+  constexpr int kRampWaitMaxMs = 3000; // ランプが終わらない場合の安全弁
+  bool ramp_done = false;
+  int total = 0;  // 呼び出しからの経過[ms]
+  int t = 0;      // ランプ完了からの経過[ms]
   int stable = 0;
   while (true) {
     sleep_ms(10);
-    t += 10;
+    total += 10;
     kim_lp += (sensing_result->ego.kim_theta - kim_lp) * alpha;
+    if (!ramp_done) {
+      if (pt->is_suction_ramping() && total < kRampWaitMaxMs) {
+        continue;
+      }
+      ramp_done = true;
+    }
+    t += 10;
+    // 収束判定もプラトー到達後だけ数える(回転はランプ中に起きるので、
+    // それ以前に静止していた時間は根拠にならない)。
     if (std::abs(kim_lp) < th) {
       stable += 10;
     } else {
@@ -425,7 +446,7 @@ void MotionPlanning::hold_settle_wait() {
       break;
     }
   }
-  tgt_val->hold_settle_ms = t;
+  tgt_val->hold_settle_ms = total;
 }
 
 __attribute__((noinline, section(".time_critical.motion_planning")))

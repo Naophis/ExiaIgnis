@@ -61,6 +61,10 @@ public:
     void   stop();
     bool   is_logging() const { return active_; }
     size_t count()      const { return log_vec_.size(); }
+    // init() の疎通確認(Test A/B)結果。false の間は start()/dump_*() が
+    // 何もしない(無応答PSRAMはQSPI線に残ったアドレスの残像を返すため、
+    // そのままダンプすると「形だけ正しいゴミCSV」になる。2026-09-19)。
+    bool   psram_ok()   const { return psram_ok_; }
     // calc_time_diff > 3000us で log_timer_callback() がその場でスキップした
     // (=記録から欠落した) tick数。overrun発生の有無を示す診断用カウンタ。
     size_t dropped_ticks() const { return dropped_ticks_; }
@@ -93,6 +97,7 @@ private:
     static std::shared_ptr<LoggingTask> s_instance;
 
     volatile bool active_  = false;
+    bool          psram_ok_ = false;
     size_t        log_cap_ = 0;
     uint8_t      *send_buf_ = nullptr;
     volatile size_t dropped_ticks_ = 0;

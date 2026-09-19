@@ -1,5 +1,6 @@
 #include "logging/logging_task.hpp"
 #include "define.hpp"
+#include "driver/psram_check.hpp"
 #include "hardware/structs/qmi.h"
 #include "hardware/structs/xip.h"
 #include "hardware/sync.h"
@@ -133,8 +134,22 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
   printf("[PSRAM] C clean+inv+R   : %s  0x%08X 0x%08X\n", ok_c ? "OK" : "FAIL",
          (unsigned)p[2], (unsigned)p[3]);
 
-  const bool psram_ok = ok_a && ok_b;
-  printf("[LoggingTask] PSRAM %s\n", psram_ok ? "OK" : "FAIL");
+  // Test A はXIPキャッシュ内で完結するためチップ無応答でも通る。実チップとの
+  // 疎通を示すのは Test B (clean_all → キャッシュミス読み出し)。
+  // さらに、ログが実際に使う窓(psram_base)へ書いて読み戻して確かめる。
+  // 起動時(main() step6)にも同じテストを行うが、こちらはボタン待ち中の
+  // LittleFS 書き込み(QMI M1 設定が一度リセットされる)を経た、記録開始
+  // 直前の状態に対する判定。log_vec_ はまだ空なので内容を壊して問題ない。
+  const psram_check::RwResult rw =
+      psram_check::rw_test(reinterpret_cast<uintptr_t>(psram_base), psram_size);
+  psram_check::print_rw("log ", rw);
+  psram_ok_ = ok_a && ok_b && rw.pass();
+  printf("[LoggingTask] PSRAM %s\n", psram_ok_ ? "OK" : "FAIL");
+  if (!psram_ok_) {
+    printf("[LoggingTask] ERROR: PSRAM not responding -- logging disabled. "
+           "check PSRAM power/decoupling/CS wiring "
+           "(see \"[boot] PSRAM ...\" line above)\n");
+  }
 
   log_cap_ = max_entries;
   log_vec_.reserve(max_entries); // PSRAM に一括確保 (以降 realloc なし)
@@ -147,6 +162,12 @@ void LoggingTask::init(void *psram_base, size_t psram_size,
 void LoggingTask::start() {
   log_vec_.clear(); // size=0 に戻す (capacity・PSRAM 確保は維持)
   dropped_ticks_ = 0;
+  if (!psram_ok_) {
+    // 無応答PSRAMへ書いても読み戻せない。走行自体は止めず、記録だけ諦める
+    // (dump_*() 側が dumperr_ 行でホストへ理由を通知する)。
+    printf("[LoggingTask] start skipped: PSRAM FAIL\n");
+    return;
+  }
   active_ = true;
   add_repeating_timer_us(-1000, log_timer_callback, nullptr, &log_timer_);
   printf("[LoggingTask] start\n");
@@ -382,6 +403,13 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
 //   LogStruct1〜10 を memcpy した 480 byte × n エントリ (合計 total_bytes)
 // ============================================================
 void LoggingTask::dump_csv() const {
+  if (!psram_ok_) {
+    // ホスト(serial-manager.ts)は dumperr_ 行を dumpFailed イベントに変換する。
+    printf("dumperr_:PSRAM FAIL (not responding at boot) - no log was recorded. "
+           "check PSRAM power/decoupling/CS wiring\n");
+    fflush(stdout);
+    return;
+  }
   const size_t n = log_vec_.size();
 
   LogStruct1 ls1{};
@@ -879,6 +907,13 @@ void LoggingTask::dump_csv() const {
 //   end___\n     … 終了 → rx_term.js が logs/ に保存
 // ============================================================
 void LoggingTask::dump_csv_text() const {
+  if (!psram_ok_) {
+    // ホスト(serial-manager.ts)は dumperr_ 行を dumpFailed イベントに変換する。
+    printf("dumperr_:PSRAM FAIL (not responding at boot) - no log was recorded. "
+           "check PSRAM power/decoupling/CS wiring\n");
+    fflush(stdout);
+    return;
+  }
   const size_t n = log_vec_.size();
 
   printf("csv___\n");

@@ -485,6 +485,15 @@ class SerialManager extends EventEmitter {
       dump.record = "";
     }
 
+    // Device refused to dump (e.g. PSRAM failed its boot-time check, so there
+    // is no log to send). Surface the device's own reason instead of leaving
+    // the user waiting for a dump that will never start.
+    if (/^dumperr_:/.test(data)) {
+      const reason = data.slice("dumperr_:".length).trim();
+      this.emit("log", `[LoggingTask] device refused dump: ${reason}`);
+      this.emit("dumpFailed", { reason, deviceError: true });
+    }
+
     if (/^ready___/.test(data)) {
       dump.dumpToCsvReady = true;
       dump.fileName = nowStamp("csv");
