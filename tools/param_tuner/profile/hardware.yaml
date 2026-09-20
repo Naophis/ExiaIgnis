@@ -146,7 +146,7 @@ Mass: 0.0285
 slip_param_K: 0.5
 slip_param_k2: 150
 
-sakiyomi_time: 4
+sakiyomi_time: 2
 
 # 2026-09-05: MotionPlanning::hold()(吸引ランプ中の静止保持)専用の姿勢復元
 # ゲイン。通常のgyro_pid.c(0.0075)はduty換算0.57%/度と弱すぎて、吸引ファンの
@@ -598,9 +598,9 @@ gyro_pid:
   # そもそもなぜ発生するのか)の方。0(無効)に戻す。
   windup_i_max: 0
 
-  p: 0.000295
+  p: 0.0003125
   i: 0.01465 # dif angle
-  b: 0.0000195 #summation
+  b: 0.0000215 #summation
   # 2026-08-30: turn_end_brake/turn_angle_fb再有効化後のベースラインでd=0.0005
   # を試したところ、旋回終端で duty_l/duty_r が±100%近くまで飽和し
   # v_kf_rが-448まで振れる(左右逆回転)重度の悪化を確認(20260830_222932.csv)。
