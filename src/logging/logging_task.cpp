@@ -787,10 +787,10 @@ void LoggingTask::dump_csv() const {
     ls8.right45_3 = e.right45_3_lp;
     ls8.left45_2 = e.left45_2_lp;
     ls8.left45_3 = e.left45_3_lp;
-    ls8.right45_2_d = halfToFloat(e.sen_log_r45_2);
-    ls8.right45_3_d = halfToFloat(e.sen_log_r45_3);
-    ls8.left45_2_d = halfToFloat(e.sen_log_l45_2);
-    ls8.left45_3_d = halfToFloat(e.sen_log_l45_3);
+    ls8.right45_2_d = r45_2;
+    ls8.right45_3_d = r45_3;
+    ls8.left45_2_d = l45_2;
+    ls8.left45_3_d = l45_3;
     ls8.sen_dist_l45_2 = halfToFloat(e.sen_log_l45_2);
     ls8.sen_dist_r45_2 = halfToFloat(e.sen_log_r45_2);
     ls8.sen_dist_l45_3 = halfToFloat(e.sen_log_l45_3);
