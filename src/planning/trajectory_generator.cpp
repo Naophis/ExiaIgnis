@@ -222,8 +222,8 @@ void TrajectoryGenerator::copy_tgt(float dt) {
   tgt_val->ego_in.slip.vx   = mpc_next_ego.slip.vx;
   tgt_val->ego_in.slip.vy   = mpc_next_ego.slip.vy;
 
-  ideal_v_r = tgt_val->ego_in.v - tgt_val->ego_in.w * param->tire_tread / 2;
-  ideal_v_l = tgt_val->ego_in.v + tgt_val->ego_in.w * param->tire_tread / 2;
+  ideal_v_r = tgt_val->ego_in.v + tgt_val->ego_in.w * param->tire_tread / 2;
+  ideal_v_l = tgt_val->ego_in.v - tgt_val->ego_in.w * param->tire_tread / 2;
 
   tgt_val->ego_in.ideal_px = mpc_next_ego.ideal_px;
   tgt_val->ego_in.ideal_py = mpc_next_ego.ideal_py;
