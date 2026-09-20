@@ -36,7 +36,7 @@ large:
   # なので、本来front.left==front.rightのはず。ズレは左右非対称バグの
   # 打ち消し跡である可能性が高い。
   # front: { left: 15.1502694878657064, right: 6.4002694878657064 }
-  front: { left: 17.506519, right: 16.250277 }
+  front: { left: 9.506519, right: 15.250277 }
   back: { left: 28.59381550343086, right: 28.59381550343086 }
 
   # v: 2000
@@ -81,11 +81,11 @@ large:
 dia45:
   v: 1800
   ang: 45
-  pow_n: 2
-  rad: 42.0
+  pow_n: 4
+  rad: 52.0
   # front: { left: 9.25716513994989235, right: 9.00716513994989235 }
   # back: { left: 40.07891890533133, right: 40.07891890533133 }
-  front: { left: 16.75, right: 12.0 }
+  front: { left: 8.25, right: 14.5 }
   back: { left: 33.298, right: 33.298 }
 # 2026-09-05: dia45と同じ理由で pow_n 4 -> 2。
 #   n=4 rad=60: alpha=6652 FF=86.7% a_lat=5.50G
