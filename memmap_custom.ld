@@ -37,7 +37,35 @@ SECTIONS
         KEEP (*(.reset))
         *(.init)
         *libgcc.a:cmse_nonsecure_call.o
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib*_a-mem*.o *libm.a:) .text*)
+        *(EXCLUDE_FILE(
+            *libgcc.a: *libc.a:*lib*_a-mem*.o *libm.a:
+            /* ---- RAM 配置リスト (.text と .rodata の 2 箇所で同一に保つこと) ----
+             * ここに挙げたオブジェクトは flash から除外され、.data 内の *(.text*) /
+             * *(.rodata*) で RAM に入る。関数単位の .time_critical 属性に頼らず、
+             * ホットなモジュールはファイルごと RAM に置く(属性の付け忘れ対策)。
+             * 対象外(flash のまま): src/main/ の UI/テスト/USB/パラメータロード、
+             * config_loader, am32_*, psram_check, littlefs, cJSON, printf, TinyUSB。 */
+            /* Core1 1kHz IRQ (sensing / planning) */
+            */src/planning/*.cpp.o */src/sensing_task.cpp.o */src/utils/*.cpp.o
+            */src/logging/*.cpp.o */gen_code_*/*.o
+            */src/driver/ads7042.cpp.o */src/driver/as5147p.cpp.o
+            */src/driver/asm330lhh.cpp.o */src/driver/dither_pwm.cpp.o
+            */src/driver/dshot_gcr.cpp.o */src/driver/dshot_tx.cpp.o
+            /* Core0 走行中 (探索 / 最短のモーションオーケストレーション) */
+            */src/action/*.cpp.o */src/search/*.cpp.o */src/ui.cpp.o
+            */src/main/main_task_run.cpp.o
+            /* 上記から呼ばれる SDK */
+            */pico_time/*.c.o */pico_util/*.c.o */pico_sync/*.c.o
+            */hardware_timer/*.c.o */hardware_spi/*.c.o */hardware_gpio/*.c.o
+            */hardware_irq/*.c.o */hardware_clocks/*.c.o */hardware_dma/*.c.o
+            */hardware_adc/*.c.o */hardware_pio/*.c.o */hardware_sync/*.c.o
+            */hardware_sync_spin_lock/*.c.o */pico_malloc/*.c.o
+            */pico_cxx_options/*.cpp.o */pico_float/*.o */pico_double/*.o
+            /* std::set/map・unordered_map の実体と malloc/free (探索・経路生成で多用) */
+            *libstdc++.a:tree.o *libstdc++.a:hashtable_c++0x.o
+            *libc.a:*lib*_a-mallocr.o *libc.a:*lib*_a-freer.o *libc.a:*lib*_a-reallocr.o
+            *libc.a:*lib*_a-malloc.o *libc.a:*lib*_a-mlock.o *libc.a:*lib*_a-strlen*.o
+        ) .text*)
         *(.fini)
         *crtbegin.o(.ctors)
         *crtbegin?.o(.ctors)
@@ -82,7 +110,35 @@ SECTIONS
         "ERROR: Pico second stage bootloader must be no more than 256 bytes in size")
 
     .rodata : {
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib*_a-mem*.o *libm.a:) .rodata*)
+        *(EXCLUDE_FILE(
+            *libgcc.a: *libc.a:*lib*_a-mem*.o *libm.a:
+            /* ---- RAM 配置リスト (.text と .rodata の 2 箇所で同一に保つこと) ----
+             * ここに挙げたオブジェクトは flash から除外され、.data 内の *(.text*) /
+             * *(.rodata*) で RAM に入る。関数単位の .time_critical 属性に頼らず、
+             * ホットなモジュールはファイルごと RAM に置く(属性の付け忘れ対策)。
+             * 対象外(flash のまま): src/main/ の UI/テスト/USB/パラメータロード、
+             * config_loader, am32_*, psram_check, littlefs, cJSON, printf, TinyUSB。 */
+            /* Core1 1kHz IRQ (sensing / planning) */
+            */src/planning/*.cpp.o */src/sensing_task.cpp.o */src/utils/*.cpp.o
+            */src/logging/*.cpp.o */gen_code_*/*.o
+            */src/driver/ads7042.cpp.o */src/driver/as5147p.cpp.o
+            */src/driver/asm330lhh.cpp.o */src/driver/dither_pwm.cpp.o
+            */src/driver/dshot_gcr.cpp.o */src/driver/dshot_tx.cpp.o
+            /* Core0 走行中 (探索 / 最短のモーションオーケストレーション) */
+            */src/action/*.cpp.o */src/search/*.cpp.o */src/ui.cpp.o
+            */src/main/main_task_run.cpp.o
+            /* 上記から呼ばれる SDK */
+            */pico_time/*.c.o */pico_util/*.c.o */pico_sync/*.c.o
+            */hardware_timer/*.c.o */hardware_spi/*.c.o */hardware_gpio/*.c.o
+            */hardware_irq/*.c.o */hardware_clocks/*.c.o */hardware_dma/*.c.o
+            */hardware_adc/*.c.o */hardware_pio/*.c.o */hardware_sync/*.c.o
+            */hardware_sync_spin_lock/*.c.o */pico_malloc/*.c.o
+            */pico_cxx_options/*.cpp.o */pico_float/*.o */pico_double/*.o
+            /* std::set/map・unordered_map の実体と malloc/free (探索・経路生成で多用) */
+            *libstdc++.a:tree.o *libstdc++.a:hashtable_c++0x.o
+            *libc.a:*lib*_a-mallocr.o *libc.a:*lib*_a-freer.o *libc.a:*lib*_a-reallocr.o
+            *libc.a:*lib*_a-malloc.o *libc.a:*lib*_a-mlock.o *libc.a:*lib*_a-strlen*.o
+        ) .rodata*)
         *(.srodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))

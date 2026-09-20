@@ -47,6 +47,16 @@ cd build && cmake .. -DCMAKE_BUILD_TYPE=Release
 
 パフォーマンスが重要な関数には `__attribute__((noinline, section(".time_critical.<module>")))` を付与し、SRAM に配置しています。モジュール名は `search` / `path_creator` / `main` など。IRQ ハンドラやホットパスに適用してください。
 
+### ファイル単位の SRAM 配置（`memmap_custom.ld`）
+
+属性の付け忘れ対策として、ホットなモジュールは**オブジェクトファイル単位**で SRAM に配置しています。`memmap_custom.ld` の `.text` と `.rodata` の `EXCLUDE_FILE(...)` に挙げたファイルは flash から除外され、`.data` 内の `*(.text*)` / `*(.rodata*)` で RAM に入ります（2 箇所のリストは同一に保つこと）。
+
+- 対象: `src/planning/` `src/action/` `src/search/` `src/utils/` `src/logging/` `src/sensing_task.cpp` `src/ui.cpp` `src/main/main_task_run.cpp` `gen_code_*/`、センサー/PWM/DShot ドライバ、そこから呼ばれる SDK（`pico_time` `hardware_timer/spi/gpio/irq/...`）、`libstdc++` の `tree.o`/`hashtable_c++0x.o`、libc の `malloc/free` と `mem*`
+- 対象外（flash のまま）: `src/main/` の UI・テスト・USB・パラメータロード、`config_loader`、`am32_*`、`psram_check`、LittleFS、cJSON、printf、TinyUSB
+- SDK の float/double 実装は `CMakeLists.txt` の `PICO_FLOAT_IN_RAM=1` / `PICO_DOUBLE_IN_RAM=1` で RAM に配置
+- 新しいホットなソースを上記ディレクトリ外に置いた場合は、リストへの追加が必要です。配置の確認は `arm-none-eabi-nm -n build/ExiaIgnis.elf | awk '$1 ~ /^20/ && /veneer/'`（RAM 上のコードから flash への呼び出し一覧）が手早いです。
+- libc の除外パターンは `*lib*_a-mem*.o`。SDK 標準の `*lib_a-mem*.o` は現行ツールチェーンのオブジェクト名 `libc_a-memcpy.o` に一致しません。
+
 ### SensingTask IRQ 構造 (`src/sensing_task.cpp`)
 
 TIMER0 のハードウェアアラームを2本使用（alarm_pool オーバーヘッドなし）:
