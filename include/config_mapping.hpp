@@ -561,6 +561,8 @@ inline void convertFromJson(JsonVariantConst src, wall_fit_t& dst) {
 inline void convertFromJson(JsonVariantConst src, turn_angle_fb_t& dst) {
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "gain", dst.gain);
+    from_json_vector(src, "gain_v", dst.gain_v);
+    from_json_vector(src, "gain_tbl", dst.gain_tbl);
     from_json_field(src, "gain_i", dst.gain_i);
     from_json_field(src, "i_max", dst.i_max);
     from_json_field(src, "i_w_gate", dst.i_w_gate);
@@ -743,6 +745,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "sensor_gain", dst.sensor_gain);
     from_json_nested(src, "gain", dst.sensor_gain);
     from_json_field(src, "sakiyomi_time", dst.sakiyomi_time);
+    from_json_field(src, "turn_end_w_i_restore", dst.turn_end_w_i_restore);
     from_json_field(src, "hold_ang_gain", dst.hold_ang_gain);
     from_json_field(src, "hold_ang_i_gain", dst.hold_ang_i_gain);
     from_json_field(src, "hold_ang_i_reset_ang_th", dst.hold_ang_i_reset_ang_th);

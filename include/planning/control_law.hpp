@@ -130,6 +130,7 @@ private:
   float last_accl                  = 0.0f;
   bool  gyro_pid_windup_histerisis = false;
   float gyro_pid_histerisis_i      = 0.0f;
+  float w_error_i_before_turn_     = 0.0f;  // 旋回突入時のヨーレートI項(turn_end_w_i_restore用)
   // アンチワインド・ヒステリシスのON/OFF判定デバウンス用カウンタ(2026-08-30)。
   // control_law.cpp calc_angle_velocity_ctrl()参照。判定条件がdeadband境界
   // 付近でノイズにより毎tick反転すると、脱出時の再点火(ee->ang.error_p/dt_、
@@ -257,6 +258,7 @@ private:
   void  reset_pid_val();
   void  calc_angle_i_bias();
   bool  angle_i_bias_active(MotionType mt) const;
+  float turn_angle_fb_p_gain();
   void  calc_translational_ctrl();
   void  calc_angle_velocity_ctrl();
   void  calc_front_ctrl_duty();

@@ -804,6 +804,15 @@ typedef struct {
 typedef struct {
   int enable = 0;
   float gain = 0.0f; // P: ee->ang.i_biasに掛けてduty_rollへ追加(gyro_pid.cとは別枠)
+  // 2026-09-21: 速度(ego_in.v, mm/s 昇順)→P gain テーブル。gain_v・gain_tbl は
+  // 同じ長さ(2点以上)で指定する。範囲外は端の値で固定。未指定・長さ不一致なら
+  // 上の gain をそのまま使う(control_law.cpp turn_angle_fb_p_gain()参照)。
+  // P項は SLALOM 突入の1tickで入口の i_bias に丸ごと掛かるステップ入力になる。
+  // 吸引OFFの低速(v=400)では gain=0.065×3.6°=差動duty34%で4輪が空転して発散
+  // した(20260921_025500.csv idx4482、22%までは正常)一方、吸引ONの高速では
+  // 0.065 が必要なため、単一の値では両立しない。
+  std::vector<float> gain_v;
+  std::vector<float> gain_tbl;
   // I: ang.i_bias専用の積分項。既存w_error_i(アンチワインドヒステリシス付き)
   // の流用は実機で発散したため、単純なクランプ付き積分を別途新設
   // (turn_angle_fb_integral_参照)。旋回開始でゼロクリアされ、
@@ -990,6 +999,12 @@ typedef struct {
   sen_ref_param_t sen_ref_p;
   sensor_gain_t sensor_gain;
   float sakiyomi_time = 1;
+  // 2026-09-21: 旋回終了(SLALOM/SLA_BACK_STR→他モーション)時のヨーレートI項の扱い。
+  // 0: 0クリア(従来)。1: 旋回へ入る直前に直進で保持していた値へ戻す。
+  // 直進には一定のヨー外乱(09-20/21 実測で左右差動 約+0.24V、吸引ON高速時)があり、
+  // I項がそれを打ち消している。0クリアすると貯まり直すまで外乱の向きへ流され、
+  // 旋回後の残留角の戻りが左右で非対称になる(左ターン後だけ約-1°が50ms残る)。
+  int turn_end_w_i_restore = 0;
   // 2026-09-05: MotionPlanning::hold()(吸引ランプ中の静止保持)専用の姿勢
   // 復元ゲイン。通常のgyro_pid.c(=0.0075、img_ang-kim.thetaに掛かる)は
   // 長い直進での緩やかな姿勢保持を想定した弱いゲインで、duty換算

@@ -314,6 +314,14 @@ inline void convertToJson(const wall_fit_t& src, JsonVariant dst) {
 inline void convertToJson(const turn_angle_fb_t& src, JsonVariant dst) {
     dst["enable"] = src.enable;
     dst["gain"]   = src.gain;
+    {
+        JsonArray a = dst["gain_v"].to<JsonArray>();
+        for (float v : src.gain_v) a.add(v);
+    }
+    {
+        JsonArray a = dst["gain_tbl"].to<JsonArray>();
+        for (float v : src.gain_tbl) a.add(v);
+    }
     dst["gain_i"] = src.gain_i;
     dst["i_max"]  = src.i_max;
     dst["i_w_gate"] = src.i_w_gate;
@@ -422,6 +430,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["sen_ref_p"]                = src.sen_ref_p;
     dst["sensor_gain"]              = src.sensor_gain;
     dst["sakiyomi_time"]            = src.sakiyomi_time;
+    dst["turn_end_w_i_restore"]     = src.turn_end_w_i_restore;
     dst["hold_ang_gain"]            = src.hold_ang_gain;
     dst["hold_ang_i_gain"]          = src.hold_ang_i_gain;
     dst["hold_ang_i_reset_ang_th"]  = src.hold_ang_i_reset_ang_th;

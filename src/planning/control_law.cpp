@@ -1371,6 +1371,16 @@ bool ControlLaw::angle_i_bias_active(MotionType mt) const {
            mt == MotionType::BACK_STRAIGHT || mt == MotionType::READY ||
            mt == MotionType::FRONT_CTRL);
 }
+// turn_angle_fb の P gain。gain_v/gain_tbl(速度→gain)が有効ならそれを引き、
+// 未指定・長さ不一致なら従来の gain を返す(structs.hpp turn_angle_fb_t参照)。
+__attribute__((noinline, section(".time_critical.control_law")))
+float ControlLaw::turn_angle_fb_p_gain() {
+  auto &fb = param_->turn_angle_fb;
+  if (fb.gain_v.size() < 2 || fb.gain_v.size() != fb.gain_tbl.size()) {
+    return fb.gain;
+  }
+  return sensor_->interp1d(fb.gain_v, fb.gain_tbl, tgt_val_->ego_in.v, false);
+}
 __attribute__((noinline, section(".time_critical.control_law")))
 void ControlLaw::calc_angle_i_bias() {
   if (angle_i_bias_active(tgt_val_->motion_type)) {
@@ -1535,6 +1545,16 @@ ControlLaw::calc_angle_velocity_ctrl() {
       // 級の振動、idx820付近まで約250tick持続してから収束)。
       turn_angle_fb_integral_ = 0.0f;
     }
+    if (!was_turn && now_turn) {
+      // 旋回への突入: 直進で保持していたヨーレートI項を退避する
+      // (turn_end_w_i_restore、旋回終了時に戻す)。SLA_BACK_STR→SLALOMと
+      // 直進を挟まず連続する旋回ではwas_turnのままなので上書きされず、
+      // 最後に直進していたときの値が残る。
+      // このtickの積算(ee->w.error_i += error_p)は既に済んでおり、旋回1tick目の
+      // 誤差(ideal_wの立ち上がりぶん、dia45で約+16)が含まれるので差し引く
+      // (20260921_022133.csv: 直進の最後 10.30 に対し 26.55 を退避していた)。
+      w_error_i_before_turn_ = ee->w.error_i - ee->w.error_p;
+    }
     if (now_turn) {
       // 旋回区間内でのmotion_type切り替え(SLALOM<->SLA_BACK_STR境界含む)
       // でD項の前回値を現在値に同期する。img_angはmotion_type境界で新
@@ -1556,7 +1576,14 @@ ControlLaw::calc_angle_velocity_ctrl() {
       // はmotion_type遷移で無条件に発火し残差の大きさに歯止めがない。
       // error_p/dt_はdt_=0.001で1000倍されるため、わずかな残差でも
       // ヨーレートI項に大きなステップを注入してしまい不安定化した。
-      ee->w.error_i = 0.0f;
+      //
+      // 2026-09-21: turn_end_w_i_restore=1 のときは0ではなく旋回突入時の値
+      // (直進の定常ヨー外乱を打ち消していたぶん)へ戻す。旋回中に貯めた値
+      // (ログのg_pid_i2で100〜160)は従来どおり捨てる。戻す値は直進時の
+      // 大きさ(同5〜20)なので、上のerror_p/dt_再着火のような大きな
+      // ステップにはならない。
+      ee->w.error_i =
+          param_->turn_end_w_i_restore ? w_error_i_before_turn_ : 0.0f;
       gyro_pid_windup_histerisis = false;
       gyro_pid_histerisis_i = 0.0f;
     }
@@ -1829,7 +1856,7 @@ ControlLaw::calc_angle_velocity_ctrl() {
         tgt_val_->motion_type == MotionType::SLA_BACK_STR;
     float turn_angle_fb_gain = 0.0f;
     if (param_->turn_angle_fb.enable && turn_transient) {
-      turn_angle_fb_gain = param_->turn_angle_fb.gain * ee->ang.i_bias;
+      turn_angle_fb_gain = turn_angle_fb_p_gain() * ee->ang.i_bias;
 
       // ang.i_bias専用の積分(2026-08-23): 既存w_error_i(アンチワインド
       // ヒステリシス付き)を再利用したturn_w_pidは実機で発散した
@@ -2299,6 +2326,7 @@ void ControlLaw::clear_ctrl_val() {
   sen_kanayama_dw = 0;
   turn_angle_fb_integral_ = 0;
   turn_angle_fb_i_bias_prev_ = 0;
+  w_error_i_before_turn_ = 0;
   wall_found_prev_ = false;
   sen_ctrl_active_prev_ = false;
   ee->v.error_i = ee->v.error_d = ee->v.error_dd = 0;
