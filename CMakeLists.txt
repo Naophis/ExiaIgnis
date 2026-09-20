@@ -231,6 +231,11 @@ target_compile_definitions(ExiaIgnis PRIVATE
     # header occasionally arrived corrupted/truncated at the Param Console
     # (tools/param_tuner/webapp), traced to this discard-on-timeout behavior.
     PICO_STDIO_USB_STDOUT_TIMEOUT_US=3000000
+    # SDK の float/double 実装(sinf/cosf/expf/atanf, __aeabi_d*)を RAM へ配置。
+    # 1kHz IRQ (mpc_tgt_calc::step, ControlLaw, SensingTask::calc_vel) から毎 tick
+    # 呼ばれるのに既定では flash(XIP) に置かれ、RAM 側から veneer 経由になっていた。
+    PICO_FLOAT_IN_RAM=1
+    PICO_DOUBLE_IN_RAM=1
 )
 
 pico_add_extra_outputs(ExiaIgnis)

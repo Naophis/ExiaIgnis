@@ -43,11 +43,13 @@ float KalmanFilter::get_state() {
   return x;
 }
 
+__attribute__((section(".time_critical.ego_estimator")))
 void KalmanFilter::reset(float reset_val) {
   x = reset_val;
   P = init_P;
 }
 
+__attribute__((section(".time_critical.ego_estimator")))
 void KalmanFilter::offset(float offset) {
   x = x + offset;
 }

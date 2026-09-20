@@ -29,7 +29,7 @@ static inline uint32_t pack_cc(uint32_t a, uint32_t b) {
 }
 
 #ifndef DPWM_HOST_TEST  // ホストシミュレーション時(SDK スタブ)はアドレス検査を外す
-static inline bool in_sram(const void* p) {
+DPWM_RT static inline bool in_sram(const void* p) {
   const uintptr_t x = (uintptr_t)p;
   return x >= 0x20000000u && x < 0x20082000u;  // RAM 512k + SCRATCH
 }
@@ -105,7 +105,7 @@ bool DitherPwm::init(const Config& cfg, const uint* slices, uint n_slices) {
   return true;
 }
 
-void DitherPwm::fill_static_(uint idx, uint16_t a, uint16_t b) {
+DPWM_RT void DitherPwm::fill_static_(uint idx, uint16_t a, uint16_t b) {
   if (a > max_level_) a = (uint16_t)max_level_;
   if (b > max_level_) b = (uint16_t)max_level_;
   const uint32_t w = pack_cc(a, b);
@@ -120,7 +120,7 @@ void DitherPwm::fill_static_(uint idx, uint16_t a, uint16_t b) {
 // ---------------------------------------------------------------------------
 // 開始 / 停止(非 RT)
 // ---------------------------------------------------------------------------
-void DitherPwm::start() {
+DPWM_RT void DitherPwm::start() {
   if (!inited_ || running_) return;
 
   uint32_t dma_mask = 0, pwm_mask = 0;
@@ -163,7 +163,7 @@ void DitherPwm::start() {
   running_ = true;
 }
 
-void DitherPwm::stop(bool disable_slices) {
+DPWM_RT void DitherPwm::stop(bool disable_slices) {
   if (!inited_) return;
   for (uint i = 0; i < n_; ++i) dma_channel_abort(ch_[i]);
   running_ = false;
@@ -332,31 +332,31 @@ DPWM_RT void DitherPwm::update_slice_(uint idx, uint32_t consumed) {
 // ---------------------------------------------------------------------------
 // デバッグ / 変換
 // ---------------------------------------------------------------------------
-uint32_t DitherPwm::dma_read_index(uint idx) const {
+DPWM_RT uint32_t DitherPwm::dma_read_index(uint idx) const {
   const uint32_t ra = dma_hw->ch[ch_[idx]].read_addr;
   return ((ra - (uint32_t)(uintptr_t)ring_[idx]) >> 2) & kRingMask;
 }
 
-uint32_t DitherPwm::probe_write(uint idx, uint32_t offset, uint32_t word) {
+DPWM_RT uint32_t DitherPwm::probe_write(uint idx, uint32_t offset, uint32_t word) {
   const uint32_t r = dma_read_index(idx);
   ring_[idx][(r + offset) & kRingMask] = word;
   return r + offset;
 }
-uint32_t DitherPwm::cc_reg(uint idx) const { return pwm_hw->slice[slice_[idx]].cc; }
-uint32_t DitherPwm::ctr_reg(uint idx) const { return pwm_hw->slice[slice_[idx]].ctr; }
+DPWM_RT uint32_t DitherPwm::cc_reg(uint idx) const { return pwm_hw->slice[slice_[idx]].cc; }
+DPWM_RT uint32_t DitherPwm::ctr_reg(uint idx) const { return pwm_hw->slice[slice_[idx]].ctr; }
 
-uint32_t DitherPwm::ring_word(uint idx, uint32_t sample_no) const {
+DPWM_RT uint32_t DitherPwm::ring_word(uint idx, uint32_t sample_no) const {
   return ring_[idx][sample_no & kRingMask];
 }
 
-uint32_t DitherPwm::q16_from_counts(float counts) {
+DPWM_RT uint32_t DitherPwm::q16_from_counts(float counts) {
   if (counts < 0.0f) counts = 0.0f;
   float q = counts * 65536.0f + 0.5f;
   if (q > 4294967040.0f) q = 4294967040.0f;
   return (uint32_t)q;
 }
 
-uint32_t DitherPwm::q16_from_percent(float duty_percent, uint16_t top) {
+DPWM_RT uint32_t DitherPwm::q16_from_percent(float duty_percent, uint16_t top) {
   return q16_from_counts(duty_percent * 0.01f * (float)((uint32_t)top + 1u));
 }
 

@@ -2,6 +2,7 @@
 #include "rtwtypes.h"
 #include "zero_crossing_types.h"
 
+__attribute__((noinline, section(".time_critical.simple_pid")))
 void Simple_PID_Controller::step(const real32_T *arg_diff,
                                  const real32_T *arg_p_gain,
                                  const real32_T *arg_i_gain,

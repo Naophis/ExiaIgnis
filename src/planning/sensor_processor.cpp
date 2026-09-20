@@ -160,6 +160,7 @@ void SensorProcessor::calc_dist() {
   calc_dist_diff();
 }
 
+__attribute__((noinline, section(".time_critical.sensor_processor")))
 void SensorProcessor::calc_dist_diff() {
   // l45
   if (se->sen.l45.sensor_dist > se->ego.left45_dist ||
@@ -280,6 +281,7 @@ float SensorProcessor::calc_sensor_val(float data, float a, float b) {
   return res;
 }
 
+__attribute__((noinline, section(".time_critical.interp")))
 float SensorProcessor::interp1d(vector<float> &vx, vector<float> &vy, float x,
                                 bool extrapolate) {
   int size = vx.size();
@@ -302,6 +304,7 @@ float SensorProcessor::interp1d(vector<float> &vx, vector<float> &vy, float x,
   return yL + dydx * (x - xL);
 }
 
+__attribute__((noinline, section(".time_critical.interp")))
 int SensorProcessor::interp1d(vector<int> &vx, vector<int> &vy, float x,
                               bool extrapolate) {
   int size = vx.size();

@@ -39,6 +39,7 @@ uint16_t throttle_pct_to_value(float throttle_pct) {
   return v;
 }
 
+__attribute__((noinline, section(".time_critical.dshot")))
 uint16_t build_command_frame(uint16_t throttle, bool telemetry_bit, bool bidirectional) {
   const uint16_t value = (uint16_t)((throttle << 1) | (telemetry_bit ? 1 : 0));
   const uint8_t crc = crc4(value, bidirectional);
