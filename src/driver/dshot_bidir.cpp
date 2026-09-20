@@ -87,6 +87,7 @@ void DshotBidir::deinit() {
     mode_ = BusMode::NONE;
 }
 
+__attribute__((noinline, section(".time_critical.dshot")))
 void DshotBidir::switch_to_tx() {
     if (mode_ == BusMode::TX) return;
     pio_sm_set_enabled(pio_, sm_rx_, false);
@@ -95,6 +96,7 @@ void DshotBidir::switch_to_tx() {
     mode_ = BusMode::TX;
 }
 
+__attribute__((noinline, section(".time_critical.dshot")))
 void DshotBidir::switch_to_rx() {
     if (mode_ == BusMode::RX) return;
     pio_sm_set_enabled(pio_, sm_tx_, false);
@@ -106,6 +108,7 @@ void DshotBidir::switch_to_rx() {
     mode_ = BusMode::RX;
 }
 
+__attribute__((noinline, section(".time_critical.dshot")))
 bool DshotBidir::send_throttle(float throttle_pct, bool request_telemetry) {
     if (!initialized_) return false;
 
@@ -128,6 +131,7 @@ bool DshotBidir::send_throttle(float throttle_pct, bool request_telemetry) {
     return true;
 }
 
+__attribute__((noinline, section(".time_critical.dshot")))
 bool DshotBidir::receive_telemetry(uint32_t *period_us_out, uint32_t timeout_us) {
     if (!initialized_) return false;
     if (mode_ != BusMode::RX) switch_to_rx();

@@ -920,8 +920,8 @@ kanayama_dia:
   windup: 0
   windup_deg: 0
 gyro_param:
-  gyro_w_gain_left: 0.0024615
-  gyro_w_gain_right: 0.0024615
+  gyro_w_gain_left: 0.0024585
+  gyro_w_gain_right: 0.0024585
   retry_min_th: 0
   retry_max_th: 3
   robust_th: 0.95
