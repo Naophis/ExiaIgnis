@@ -46,11 +46,19 @@ typedef struct {
   float alpha = 0;
 } t_kinematics_state;
 
+// エンコーダ補正テーブル(enc_lut)の点数。14bit 生角度の上位 6bit で引く。
+// defines.hpp は本ヘッダを先にインクルードするので、ここに置く。
+constexpr int ENC_LUT_SIZE = 64;
+
 typedef struct {
   float right = 0;
   float left = 0;
   float right_old = 0;
   float left_old = 0;
+  // センサーの生読み値(enc_lut 補正前)。ログの v_l_enc/v_r_enc はこちらを出す
+  // ので、補正の有効/無効に関係なく enc_lut_fit.py で校正し直せる。
+  float right_raw = 0;
+  float left_raw = 0;
 } encoder_data_t;
 
 typedef struct {
@@ -1277,6 +1285,14 @@ typedef struct {
   // 軌道インデックステーブル (trajectory_generator で interp1d に渡す)
   std::vector<int> trj_idx_v;
   std::vector<int> trj_idx_val;
+
+  // エンコーダ角度依存誤差の補正テーブル (/enc_lut.hf、
+  // tools/param_tuner/enc_lut_fit.py が profile/hf/enc_lut.yaml を生成)。
+  // 生角度 256count 刻み ENC_LUT_SIZE 点、単位 count。
+  // 補正後の角度 = 生角度 - table[生角度](点間は線形補間)。
+  int enc_lut_enable = 0;
+  float enc_lut_l[ENC_LUT_SIZE] = {};
+  float enc_lut_r[ENC_LUT_SIZE] = {};
 } input_param_t;
 
 typedef struct {

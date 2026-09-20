@@ -688,10 +688,19 @@ SensingTask::read_spi_sensors() {
   pt->ego.kf_v_r.dt = enc_r_dt;
   pt->ego.kf_v_l.dt = enc_l_dt;
 
+  // 角度依存誤差の補正(enc_lut.hf)。取得失敗(-1)はそのまま下の判定へ流す。
+  // right_old/left_old は補正後の値なので、取得失敗判定用の速度も補正後で計算する。
+  float enc_r_c = enc_r;
+  float enc_l_c = enc_l;
+  if (param->enc_lut_enable) {
+    if (enc_r >= 0) enc_r_c = correct_enc(enc_r, param->enc_lut_r);
+    if (enc_l >= 0) enc_l_c = correct_enc(enc_l, param->enc_lut_l);
+  }
+
   auto tmp_r_v =
-      ABS(calc_enc_v(enc_r, se->encoder.right_old, pt->ego.kf_v_r.dt));
+      ABS(calc_enc_v(enc_r_c, se->encoder.right_old, pt->ego.kf_v_r.dt));
   auto tmp_l_v =
-      ABS(calc_enc_v(enc_l, se->encoder.left_old, pt->ego.kf_v_l.dt));
+      ABS(calc_enc_v(enc_l_c, se->encoder.left_old, pt->ego.kf_v_l.dt));
 
   if (enc_r_dt > 0) {
     pt->ego.kf_v_r.dt = enc_r_dt;
@@ -700,7 +709,8 @@ SensingTask::read_spi_sensors() {
       // エンコーダ取得失敗時更新中止
       enc_r_timestamp_now = enc_r_timestamp_old;
     } else if (enc_r >= 0) {
-      se->encoder.right = enc_r;
+      se->encoder.right = enc_r_c;
+      se->encoder.right_raw = enc_r;
       se->ego.v_r =
           -calc_enc_v(se->encoder.right, se->encoder.right_old, enc_r_dt);
       pt->ego.kf_v_r.update(se->ego.v_r);
@@ -713,7 +723,8 @@ SensingTask::read_spi_sensors() {
     pt->ego.kf_v_l.dt = enc_l_dt;
     pt->ego.kf_v_l.predict(accl_l);
     if (enc_l >= 0) {
-      se->encoder.left = enc_l;
+      se->encoder.left = enc_l_c;
+      se->encoder.left_raw = enc_l;
       se->ego.v_l =
           calc_enc_v(se->encoder.left, se->encoder.left_old, enc_l_dt);
       pt->ego.kf_v_l.update(se->ego.v_l);
@@ -784,6 +795,24 @@ void SensingTask::set_input_param_entity(
 }
 void SensingTask::set_planning_task(std::shared_ptr<PlanningTask> &_pt) {
   pt = _pt;
+}
+
+// エンコーダの角度依存誤差(磁石の芯ずれ・タイヤの振れ)を引く。table は生角度
+// 256count 刻み ENC_LUT_SIZE 点、単位 count で、enc_lut_fit.py が低速直進ログ
+// から同定する。補正後 = 生角度 - table[生角度]、点間は線形補間。
+__attribute__((noinline, section(".time_critical.sensing.correct_enc")))
+float SensingTask::correct_enc(int32_t raw, const float *table) {
+  constexpr float kEncCounts = 16384.0f;
+  const uint32_t idx = ((uint32_t)raw >> 8) & (ENC_LUT_SIZE - 1);
+  const uint32_t next = (idx + 1) & (ENC_LUT_SIZE - 1);
+  const float frac = (float)(raw & 0xFF) * (1.0f / 256.0f);
+  float c = (float)raw - (table[idx] + (table[next] - table[idx]) * frac);
+  if (c < 0.0f) {
+    c += kEncCounts;
+  } else if (c >= kEncCounts) {
+    c -= kEncCounts;
+  }
+  return c;
 }
 
 __attribute__((noinline, section(".time_critical.sensing.calc_enc_v")))

@@ -80,6 +80,9 @@ bool MainTask::load_params() {
   any |= ConfigLoader::load_as("/hardware.txt", *param_);
   any |= ConfigLoader::load_as("/sensor.hf", *param_);
   any |= ConfigLoader::load_as("/offset.hf", *param_);
+  // エンコーダ補正テーブル。無ければ enc_lut_enable=0 のまま(補正なし)
+  ConfigLoader::load_as("/enc_lut.hf", *param_);
+  printf("[param] enc_lut_enable = %d\n", param_->enc_lut_enable);
   any |= ConfigLoader::load_as("/system.txt", sys_);
   load_param_after();
   return any;

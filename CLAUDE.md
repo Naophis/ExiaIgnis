@@ -283,6 +283,7 @@ int val = ConfigLoader::get_int("sensing.led_settle_us", 12);
 | `/profiles.hf` or `/profiles.cl` | `turn_param_profile_t` | TurnType ごとのファイルインデックス |
 | `/vel_prof.hf` or `/vel_prof.cl` | `straight_param_t` | 速度プロファイル (v_prof[]) |
 | `/<slalom_file>` | `slalom_param2_t` | スラロームパラメータ |
+| `/enc_lut.hf` | `input_param_t` | エンコーダ角度補正テーブル (enc_lut_enable / enc_lut_l / enc_lut_r 各64点) |
 
 `sys_.hf_cl == 0` なら `.hf` 、`1` なら `.cl` を使用します。  
 `sys_.circuit_mode == 1` の場合、`path_run()` はサーキットパス (`load_circuit_path()`) を使います。
@@ -344,6 +345,15 @@ self->data.gz_dt   = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z
 - **ASM330LHH**: ジャイロ、SPI mode 3。`init()` で SPI バスを初期化。`setup()` でソフトウェアリセット + 設定シーケンスを実行。Z 軸角速度のみ取得。
 - **AS5147P**: 磁気エンコーダ、SPI mode 1。`init()` は初期化済み SPI バス + CS ピンのみ受け取る。14bit 角度値 [0–16383] を返す。
 - **ADS7042**: バッテリ電圧 ADC、SPI mode 0。結果 = `(rx >> 2) & 0x0FFF`。
+
+### エンコーダ角度補正 (enc_lut)
+
+磁石の芯ずれ・タイヤの振れによる角度依存誤差を、`SensingTask::correct_enc()` が `read_angle()` の直後に引きます(生角度の上位 6bit で 64 点テーブルを引き線形補間、補正後 = 生角度 − table、単位 count)。
+
+- テーブルは `tools/param_tuner/enc_lut_fit.py` が低速直進ログ(v=400 前後、機体を置き直しながら 8 本以上)から同定し、`profile/hf/enc_lut.yaml` を生成します(手で編集しない)。機体へは `/enc_lut.hf` として送られ、ファイルが無い・点数が 64 でない場合は補正なしで動きます。
+- 同定は左右差とジャイロだけを使います(v_c が速度 PID へ戻るため、片輪ごとの平滑化残差では左右の誤差が混ざる)。超信地は 4 輪のスクラブで使えず、ツールが自動で除外します。
+- ログの `v_l_enc` / `v_r_enc` は補正前の生角度(`encoder.left_raw/right_raw`)なので、補正の有効/無効に関係なく校正し直せます。ファームの適用確認は `enc_lut_fit.py --check`。
+- 磁石・タイヤを付け直したら取り直してください。
 
 ## ユーティリティ（`include/utils/`）
 

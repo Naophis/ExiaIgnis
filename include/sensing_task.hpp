@@ -124,4 +124,5 @@ private:
     std::shared_ptr<motion_tgt_val_t> tgt_val;
     std::shared_ptr<PlanningTask> pt;
     float calc_enc_v(float now, float old, float dt);
+    float correct_enc(int32_t raw, const float *table);
 };

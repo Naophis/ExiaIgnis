@@ -230,8 +230,8 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.v_c = floatToHalf(sr->ego.v_c);
   ld.v_c2 = floatToHalf(sr->ego.v_kf);
   ld.v_r = floatToHalf(sr->ego.v_r);
-  ld.v_r_enc = static_cast<int16_t>(sr->encoder.right);
-  ld.v_l_enc = static_cast<int16_t>(sr->encoder.left);
+  ld.v_r_enc = static_cast<int16_t>(sr->encoder.right_raw);
+  ld.v_l_enc = static_cast<int16_t>(sr->encoder.left_raw);
   ld.accl = floatToHalf(tv->ego_in.accl / 1000);
   ld.accl_x = floatToHalf(sr->ego.w_kf);
   ld.dist_kf = floatToHalf(sr->ego.dist_kf);

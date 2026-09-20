@@ -578,7 +578,33 @@ inline void convertFromJson(JsonVariantConst src, turn_w_pid_t& dst) {
  * hardware.txt | offset.txt | sensor.txt
  * root
  */
+// enc_lut.hf の補正テーブル。点数が ENC_LUT_SIZE と違うテーブルを途中まで
+// 読むと角度の対応がずれたまま補正が掛かるので、その場合は読まずに false を返す。
+inline bool from_json_enc_lut(JsonVariantConst src, const char* key,
+                              float (&dst)[ENC_LUT_SIZE]) {
+    if (!src[key].is<JsonArrayConst>()) return false;
+    JsonArrayConst arr = src[key].as<JsonArrayConst>();
+    if (arr.size() != ENC_LUT_SIZE) {
+        printf("[bind] %s: '%s' has %u points (want %d)\n", bind_log::file(), key,
+               (unsigned)arr.size(), ENC_LUT_SIZE);
+        return false;
+    }
+    size_t i = 0;
+    for (JsonVariantConst v : arr) dst[i++] = v.as<float>();
+    return true;
+}
+
 inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
+    // /enc_lut.hf。Core1 の IRQ が読んでいる最中に書き換わるので、テーブルを
+    // 埋め終えてから enable を立てる。テーブルが不正なら補正は無効にする。
+    if (!src["enc_lut_enable"].isNull()) {
+        int enable = 0;
+        from_json_field(src, "enc_lut_enable", enable);
+        dst.enc_lut_enable = 0;
+        const bool ok_l = from_json_enc_lut(src, "enc_lut_l", dst.enc_lut_l);
+        const bool ok_r = from_json_enc_lut(src, "enc_lut_r", dst.enc_lut_r);
+        dst.enc_lut_enable = (ok_l && ok_r) ? enable : 0;
+    }
     from_json_field(src, "dt", dst.dt);
     from_json_field(src, "trj_length", dst.trj_length);
     from_json_field(src, "tire", dst.tire);
