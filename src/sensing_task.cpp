@@ -132,8 +132,9 @@ void SensingTask::timer_b_irq_handler() {
     r45 = l45 = true;
   }
   if (tv->motion_type == MotionType::READY) {
+    // motion_check が左右壁との距離を LED 表示するので 45 度も点ける。
     r90 = l90 = true;
-    r45 = l45 = false;
+    r45 = l45 = true;
   }
   if (tv->motion_type == MotionType::FRONT_CTRL) {
     r90 = l90 = true;

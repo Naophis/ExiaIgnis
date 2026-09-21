@@ -171,8 +171,50 @@ int UserInterface::encoder_operation() {
   return 0;
 }
 
+void UserInterface::update_wall_gauge(WallGauge &g, float raw_dist, float ref) {
+  if (!(MC_WALL_MIN < raw_dist && raw_dist < MC_WALL_MAX)) {
+    g.wall = false;
+    g.ema_valid = false;
+    g.level = 0;
+    return;
+  }
+  g.wall = true;
+  if (g.ema_valid) {
+    g.dist += MC_EMA_ALPHA * (raw_dist - g.dist);
+  } else {
+    g.dist = raw_dist;
+    g.ema_valid = true;
+  }
+
+  // 今の段階から、境界を MC_HYST 以上越えたときだけ移る(ちらつき防止)。
+  const float err = g.dist - ref;
+  if (g.level != 1 && err > MC_OK_TH + MC_HYST) {
+    g.level = 1;
+  } else if (g.level != -1 && err < -MC_OK_TH - MC_HYST) {
+    g.level = -1;
+  } else if ((g.level == 1 && err < MC_OK_TH - MC_HYST) ||
+             (g.level == -1 && err > -MC_OK_TH + MC_HYST)) {
+    g.level = 0;
+  }
+}
+
+void UserInterface::wall_gauge_led(const WallGauge &g, bool blink, int &first,
+                                   int &second) {
+  first = 0;
+  second = 0;
+  if (!g.wall) {
+    return;
+  }
+  // パーキングセンサーと同じ単調な目盛り: 光が増えるほど壁に近い。
+  //   1 個 = 遠い / 2 個 = OK / 2 個点滅 = 近すぎ
+  switch (g.level) {
+  case 1: first = 1; break;
+  case 0: first = 1; second = 1; break;
+  case -1: first = blink; second = blink; break;
+  }
+}
+
 void UserInterface::motion_check() {
-  int c = 0;
   printf("motion check start\n");
   if (tgt_val_ && pt_) {
     tgt_val_->nmr.motion_type = MotionType::READY;
@@ -180,14 +222,45 @@ void UserInterface::motion_check() {
     pt_->send_command(*tgt_val_);
   }
 
+  // b5/b4 = 左壁、b0/b1 = 右壁、b3/b2 = 総合判定。
+  //   片側: 消灯 = 壁なし / 1 個 = 遠い / 2 個 = OK / 2 個点滅 = 近すぎ
+  //   中央: 点灯 = 壁のある側がすべて OK / 消灯 = NG /
+  //         ゆっくり点滅 = 壁が見えていない(待機中の目印)
+  WallGauge gl, gr;
+  int c = 0;
+  int last_pattern = -1;
+
   sleep_ms(1);
   while (1) {
     c++;
-    if (c % 2 == 0) {
-      LED_on_all();
-    } else {
-      LED_off_all();
+    // sensor.yaml の再送が即反映されるよう毎回読む。
+    const float ref_l =
+        param_ ? param_->sen_ref_p.normal.ref.left45 : MC_REF_DEFAULT;
+    const float ref_r =
+        param_ ? param_->sen_ref_p.normal.ref.right45 : MC_REF_DEFAULT;
+    update_wall_gauge(gl, sensing_result->ego.left45_dist, ref_l);
+    update_wall_gauge(gr, sensing_result->ego.right45_dist, ref_r);
+
+    const bool fast_blink = (c / MC_FAST_BLINK_LOOPS) % 2 == 0;
+    const bool slow_blink = (c / MC_SLOW_BLINK_LOOPS) % 2 == 0;
+    int l_first, l_second, r_first, r_second;
+    wall_gauge_led(gl, fast_blink, l_first, l_second);
+    wall_gauge_led(gr, fast_blink, r_first, r_second);
+
+    int center = 0;
+    if (!gl.wall && !gr.wall) {
+      center = slow_blink;
+    } else if ((!gl.wall || gl.level == 0) && (!gr.wall || gr.level == 0)) {
+      center = 1;
     }
+
+    const int pattern = r_first | (r_second << 1) | (center << 2) |
+                        (l_second << 4) | (l_first << 5);
+    if (pattern != last_pattern || c % MC_REFRESH_LOOPS == 0) {
+      LED_bit(r_first, r_second, center, center, l_second, l_first);
+      last_pattern = pattern;
+    }
+
     if (button_state_hold()) {
       LED_off_all();
       break;
@@ -198,13 +271,25 @@ void UserInterface::motion_check() {
         sensing_result->ego.right90_mid_dist > 10) {
       LED_off_all();
       LED_off_all();
+      // 走り出しの横位置を試行ごとに残す(壁なしの側は "-")。
+      printf("motion_check: ");
+      if (gl.wall) {
+        printf("l45=%.2f(%+.2f) ", gl.dist, gl.dist - ref_l);
+      } else {
+        printf("l45=- ");
+      }
+      if (gr.wall) {
+        printf("r45=%.2f(%+.2f)\n", gr.dist, gr.dist - ref_r);
+      } else {
+        printf("r45=-\n");
+      }
       for (int i = 0; i < 2; i++) {
         music_sync(MUSIC::C6_, 100);
         sleep_ms(50);
       }
       break;
     }
-    sleep_ms(50);
+    sleep_ms(MC_LOOP_MS);
   }
 }
 
