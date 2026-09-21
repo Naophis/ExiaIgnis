@@ -161,7 +161,7 @@ test: # テスト走行時に使用するパラメータ群
   # 空にすれば従来通りsuction_esc_ramp_us_per_secの固定レートに戻る。
   suction_ramp_rate_us_x: [1000, 1600, 1800, 1999]
   suction_ramp_rate_us_y: [750, 1800, 1000,  750]
-
+  # suction_ramp_rate_us_y: [600, 900, 1300, 1300]
   # バッテリー電圧が低いほど始動失敗が顕著という実測傾向への対策。
   # AM32 ESCは閉ループRPM制御ではなく、指令dutyをバッテリー電圧に対する
   # 割合として印加するだけなので、同じduty指令でも電圧が下がれば実際の
@@ -201,10 +201,10 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 10
+  file_idx: 4
   sla_dist: 90
   # sla_type: 3
-  sla_type: 2
+  sla_type: 4
   sla_type2: 8 # 復路ターン種類
   sla_return: 0 # 往復フラグ
   # sla_type: 1 normal
