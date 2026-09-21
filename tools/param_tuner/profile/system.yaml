@@ -94,7 +94,7 @@ test: # テスト走行時に使用するパラメータ群
   # 減速(decel)には効かない。
   accl_v_x: [0,      2500, 5000, 7500, 8000]
   # accl_v_y: [57000, 55000, 42000, 35000, 30000]
-  accl_v_y: [45000, 42500, 42500, 35000, 35000]
+  accl_v_y: [37500, 37500, 37500, 35000, 35000]
 
   # v_max→decel絶対値LUT(2026-08-23追加)。mpc_tgt_calc側が残り距離から
   # 実際の減速度を毎tick再計算するため、この`decel`入力は閾値にしか効かず
@@ -129,10 +129,10 @@ test: # テスト走行時に使用するパラメータ群
   # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
   # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
   # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
-  suction_duty: 1825
-  suction_duty_low: 1825
-  suction_duty_burst: 1825
-  suction_duty_burst_low: 1825 # suction_duty_burst -0.25
+  suction_duty: 1925
+  suction_duty_low: 1925
+  suction_duty_burst: 1925
+  suction_duty_burst_low: 1925 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
@@ -201,11 +201,11 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 4
+  file_idx: 10
   sla_dist: 90
   # sla_type: 3
-  sla_type: 4
-  sla_type2: 6 # 復路ターン種類
+  sla_type: 2
+  sla_type2: 8 # 復路ターン種類
   sla_return: 0 # 往復フラグ
   # sla_type: 1 normal
   # sla_type: 2 #orval

@@ -66,10 +66,10 @@ large:
   # rad: 60.5
   # rad: 70   # front.right が 2.22 となり wall_off_hold_dist_str_r(-5.0) を
   #           # 足すと負になるため不可(下の[frontの下限]参照)
-  rad: 60
+  rad: 56
   # front: { left: 4.802694878657064, right: 7.802694878657064 }
   # back: { left: 65.59381550343086, right: 70.59381550343086 }
-  front: { left: 11.74, right: 7.24 }
+  front: { left: 7.74, right: 7.24 }
   back: { left: 37.70, right: 37.70 }
 dia45:
   v: 2400

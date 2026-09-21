@@ -2,13 +2,13 @@ orval:
   v: 2000
   ang: 180.0
   pow_n: 4
-  rad: 44.0
-  rad2: 42.50
+  rad: 40.0
+  rad2: 40.0
   # rad: 50.25
   # rad2: 51.0
   # time2: 0.052484374999995954
-  front: { left: 5, right: 5 }
-  back: { left: 25, right: 25 }
+  front: { left: 8, right: 8 }
+  back: { left: 14, right: 14 }
 normal:
   v: 300.000000
   ang: 90.000000
@@ -29,9 +29,9 @@ large:
   v: 2000
   ang: 90.0
   pow_n: 4
-  rad: 57.5
-  front: { left: 15.502694878657064, right: 13.502694878657064 }
-  back: { left: 32.59381550343086, right: 32.59381550343086 }
+  rad: 55.0
+  front: { left: 9.002694878657064, right: 16.502694878657064 }
+  back: { left: 28.59381550343086, right: 28.59381550343086 }
 
   #circuit
   # v: 2400
