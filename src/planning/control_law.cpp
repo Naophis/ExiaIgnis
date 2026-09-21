@@ -1524,15 +1524,51 @@ void ControlLaw::calc_front_ctrl_duty() {
   gyro_pid_histerisis_i = 0.0f;
 }
 
+// 旋回のヨー制御則を使う区間か。SLALOM/SLA_BACK_STR に加え、turn_settle 有効時は
+// 続く STRAIGHT/WALL_OFF/WALL_OFF_DIA でも角度が収束するまで true を返す
+// (structs.hpp turn_settle_t 参照)。1tick に1回、calc_angle_velocity_ctrl() の
+// 先頭で呼ぶ(内部で収束カウンタを進める)。
+__attribute__((noinline, section(".time_critical.control_law")))
+bool ControlLaw::update_turn_ctx() {
+  const MotionType mt = tgt_val_->motion_type;
+  if (mt == MotionType::SLALOM || mt == MotionType::SLA_BACK_STR) {
+    turn_settle_active_ = param_->turn_settle.enable != 0;
+    turn_settle_ok_cnt_ = 0;
+    turn_settle_elapsed_ = 0;
+    return true;
+  }
+  if (!turn_settle_active_) return false;
+  const bool carry_mt = (mt == MotionType::STRAIGHT ||
+                         mt == MotionType::WALL_OFF ||
+                         mt == MotionType::WALL_OFF_DIA);
+  if (!carry_mt || !param_->turn_settle.enable || !motor_en_) {
+    turn_settle_active_ = false;
+    return false;
+  }
+  // 収束判定は turn_angle_fb が 0 へ追い込む量(i_bias)で行う。探索モードでは
+  // i_bias が常に 0 なので即終了する。
+  const float th = param_->turn_settle.ang_th * m_PI / 180.0f;
+  turn_settle_ok_cnt_ = (ABS(ee->ang.i_bias) < th) ? turn_settle_ok_cnt_ + 1 : 0;
+  turn_settle_elapsed_++;
+  if (turn_settle_ok_cnt_ >= param_->turn_settle.hold_ticks ||
+      turn_settle_elapsed_ >= param_->turn_settle.timeout) {
+    turn_settle_active_ = false;
+    return false;
+  }
+  return true;
+}
+
 __attribute__((noinline, section(".time_critical.control_law"))) void
 ControlLaw::calc_angle_velocity_ctrl() {
   const auto se = sensing_result_;
-  if (tgt_val_->motion_type != ee->ang_log.prev_motion_type) {
-    const MotionType prev_mt = ee->ang_log.prev_motion_type;
-    const bool was_turn = (prev_mt == MotionType::SLALOM ||
-                          prev_mt == MotionType::SLA_BACK_STR);
-    const bool now_turn = (tgt_val_->motion_type == MotionType::SLALOM ||
-                          tgt_val_->motion_type == MotionType::SLA_BACK_STR);
+  // 旋回制御則の区間(turn_settle の引き継ぎ込み)。引き継ぎの終了は motion_type が
+  // 変わらなくても起きるので、motion_type の変化と区間の出入りの両方で下の
+  // 切り替え処理に入る。
+  const bool turn_ctx = update_turn_ctx();
+  if (tgt_val_->motion_type != ee->ang_log.prev_motion_type ||
+      turn_ctx != turn_ctx_prev_) {
+    const bool was_turn = turn_ctx_prev_;
+    const bool now_turn = turn_ctx;
     // turn_angle_fb直接duty注入(gain/gain_i/gain_d)はSLALOM/SLA_BACK_STR
     // 限定(2026-08-23、STRAIGHT等の定常保持はw_gain/offset経路に一本化した
     // ため、直接注入側の積分・D項状態はturn区間の出入りだけを見ればよい)。
@@ -1589,6 +1625,7 @@ ControlLaw::calc_angle_velocity_ctrl() {
     }
     ee->ang_log.omega_ref_prev = tgt_val_->ego_in.w;
     ee->ang_log.prev_motion_type = tgt_val_->motion_type;
+    turn_ctx_prev_ = turn_ctx;
   }
 
   if (tgt_val_->motion_type == MotionType::NONE) {
@@ -1702,9 +1739,14 @@ ControlLaw::calc_angle_velocity_ctrl() {
       ee->aw_log.w_error_i_clamped = w_error_i;
     }
 
+    // turn_settle の引き継ぎ中(STRAIGHT/WALL_OFF/WALL_OFF_DIA)は SLA_BACK_STR と
+    // 同じく gyro_pid.i×角度誤差を効かせる。SLALOM は上で 0 にしたまま。
+    const bool settle_carry =
+        turn_ctx && tgt_val_->motion_type != MotionType::SLALOM &&
+        tgt_val_->motion_type != MotionType::SLA_BACK_STR;
     if (!(tgt_val_->motion_type == MotionType::SLA_FRONT_STR ||
           tgt_val_->motion_type == MotionType::SLA_BACK_STR ||
-          tgt_val_->motion_type == MotionType::PIVOT)) {
+          tgt_val_->motion_type == MotionType::PIVOT || settle_carry)) {
       diff_ang = 0;
       ang_sum = 0;
     }
@@ -1731,7 +1773,7 @@ ControlLaw::calc_angle_velocity_ctrl() {
     // turn_end_brake.p/dも同じ増幅を受けることに注意(小さい値で十分効く)。
     const bool turn_end_brake_active =
         param_->turn_end_brake.enable &&
-        tgt_val_->motion_type == MotionType::SLA_BACK_STR &&
+        (tgt_val_->motion_type == MotionType::SLA_BACK_STR || settle_carry) &&
         ABS(tgt_val_->ego_in.w) < param_->turn_end_brake.w_th;
     // [2026-08-23夜 修正] err_thによるON/OFFゲートを撤去。ゼロ交差の瞬間に
     // |error_p|が一瞬err_th未満へ落ちてbrakeがOFFになり、その間に誤差が
@@ -1851,9 +1893,9 @@ ControlLaw::calc_angle_velocity_ctrl() {
     // 反応する前の短時間)にのみ効かせ、STRAIGHT等の定常保持はw_gain
     // (calc_pid_val_ang_vel()のoffset経由、gyro_pid.bと戦わない経路)に
     // 一本化する(structs.hpp turn_angle_fb_t参照)。
-    const bool turn_transient =
-        tgt_val_->motion_type == MotionType::SLALOM ||
-        tgt_val_->motion_type == MotionType::SLA_BACK_STR;
+    // 2026-09-22: turn_settle の引き継ぎ中も「旋回の過渡」として扱う。
+    // timeout で必ず打ち切るので、上の長時間STRAIGHTでの相殺問題には当たらない。
+    const bool turn_transient = turn_ctx;
     float turn_angle_fb_gain = 0.0f;
     if (param_->turn_angle_fb.enable && turn_transient) {
       turn_angle_fb_gain = turn_angle_fb_p_gain() * ee->ang.i_bias;
@@ -2327,6 +2369,9 @@ void ControlLaw::clear_ctrl_val() {
   turn_angle_fb_integral_ = 0;
   turn_angle_fb_i_bias_prev_ = 0;
   w_error_i_before_turn_ = 0;
+  turn_settle_active_ = false;
+  turn_settle_ok_cnt_ = turn_settle_elapsed_ = 0;
+  turn_ctx_prev_ = false;
   wall_found_prev_ = false;
   sen_ctrl_active_prev_ = false;
   ee->v.error_i = ee->v.error_d = ee->v.error_dd = 0;

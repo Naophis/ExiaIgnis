@@ -162,6 +162,7 @@ private:
   int32_t          last_nmr_timestamp_ = -1;
   int              motion_req_timestamp = 0;
   int              pid_req_timestamp    = 0;
+  bool             prev_cmd_was_hold_   = false;  // 直前の指令がhold()だったか(keep_dist_th_start_skip用)
 
   // ---- アクティブコマンド状態 (Core1 専用) ----
   PlanningCmd      active_cmd_{};                   // IRQ 内でのみ読み書き

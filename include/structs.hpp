@@ -606,6 +606,27 @@ typedef struct {
   float slew = 0.0f;
 } turn_end_brake_t;
 
+// 旋回後の角度収束引き継ぎ(2026-09-22)。SLALOM/SLA_BACK_STR のヨー制御則
+// (turn_angle_fb の直接duty注入 P/I/D、gyro_pid.i×角度誤差、turn_end_brake、
+// ヨーレートI項とアンチワインド状態の保持)は従来 SLA_BACK_STR の終わりで打ち切り、
+// 次の STRAIGHT では I項を捨てて弱い角度ループ(angle_pid.p=4.5、τ約220ms)だけに
+// なるため、旋回終端の残差(2〜4°)が直進中ほとんど戻らなかった
+// (20260921_235314.csv: orval は SLA_BACK_STR 自体がスキップされ、−2.0〜−2.6°の
+// まま 100ms 収束せず横へ 5.5mm 流れた)。
+// enable=1 のとき、旋回に続く STRAIGHT / WALL_OFF / WALL_OFF_DIA でも
+// |i_bias|(=img_ang−kim.theta) が ang_th[deg] 未満を hold_ticks 連続で満たすか
+// timeout[tick] 経過するまで、SLA_BACK_STR と同じヨー制御則を続ける。
+// 打ち切り時に従来の旋回終了処理(I項の0クリア/turn_end_w_i_restore、
+// turn_angle_fb 積分のクリア)を行う。上記以外のモーションに入ったら即終了。
+// 直接duty注入は長く続けるとヨーレートI項に打ち消される(turn_angle_fb_t の
+// コメント参照)ので、timeout は短い過渡に収まる値にすること。
+typedef struct {
+  int enable = 0;
+  float ang_th = 0.3f;  // [deg]
+  int hold_ticks = 5;
+  int timeout = 150;    // [tick]
+} turn_settle_t;
+
 // 走り出し姿勢リセット(start_align、2026-09-06)。吸引ランプ中のhold()で
 // 機体が物理的に1〜2°回ったまま走行を開始すると(20260906_034820.csv:
 // 走り出し直後に壁PDが機体を右へ約2°戻している間、ジャイロ積分の
@@ -972,6 +993,7 @@ typedef struct {
   pid_param_t gyro_pid;
   pid_param_t gyro_pid_gain_limitter;
   turn_end_brake_t turn_end_brake;
+  turn_settle_t turn_settle;
   turn_angle_fb_t turn_angle_fb;
   turn_w_pid_t turn_w_pid;
   pid_param_t str_ang_pid;

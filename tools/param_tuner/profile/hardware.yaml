@@ -156,6 +156,27 @@ sakiyomi_time: 3
 # (右ターン後は外乱が戻りを助けて-0.2°)。ファーム再書き込みなしで 0/1 を比較できる。
 turn_end_w_i_restore: 1
 
+# 2026-09-22: 旋回後の角度収束引き継ぎ。旋回(SLALOM/SLA_BACK_STR)に続く
+# STRAIGHT / WALL_OFF / WALL_OFF_DIA でも、角度が収束するまで SLA_BACK_STR と同じ
+# ヨー制御則(turn_angle_fb の P/I/D 直接注入、gyro_pid.i×角度誤差、turn_end_brake、
+# ヨーレートI項とアンチワインド状態の保持)を続ける。従来は SLA_BACK_STR の終わりで
+# 打ち切って I項を捨て、直進は angle_pid.p=4.5(τ約220ms)だけになるので、旋回終端の
+# 残差が直進中ほとんど戻らなかった(20260921_235314.csv: orval は SLA_BACK_STR 自体が
+# スキップされ −2.0〜−2.6°のまま 100ms 収束せず、横へ 5.5mm 流れた)。
+#   ang_th    : 収束とみなす |img_ang−kim_theta| [deg]
+#   hold_ticks: ang_th 未満がこの tick 数続いたら引き継ぎ終了
+#   timeout   : 収束しなくてもこの tick 数で打ち切る(直接注入は長く続けるとヨーレート
+#               I項に打ち消されるので、短い過渡に収まる値にする)
+# 終了時に従来の旋回終了処理(I項の0クリア/turn_end_w_i_restore)を行う。上記以外の
+# モーション(SLA_FRONT_STR 等)に入ったら即終了。探索モードでは働かない(i_bias=0)。
+# 引き継ぎ中は壁制御の指示姿勢(duty_sen)より img_ang への収束が優先される。
+# ログでは「直進中に g_pid_i が 0 でない区間」= 引き継ぎ中。
+turn_settle:
+  enable: 1
+  ang_th: 0.125
+  hold_ticks: 5
+  timeout: 50
+
 # 2026-09-05: MotionPlanning::hold()(吸引ランプ中の静止保持)専用の姿勢復元
 # ゲイン。通常のgyro_pid.c(0.0075)はduty換算0.57%/度と弱すぎて、吸引ファンの
 # 反動トルクで一瞬回転した分(実測0.3〜0.76°、20260905_2208xx.csv)を
@@ -296,7 +317,7 @@ start_align:
   # (壁基準の進行方向に機体向きを合わせるためクラブ分を毎回足す)、4回で
   # 世界座標が+3.2°回って地図が徐々にずれた。横位置の合わせ込みと走り出しの
   # スナップ抑止は残る。向きの補正は wall_fit(β, crab込み)へ移す(段階2)。
-  apply_th: 0
+  apply_th: 90.0
   # 2026-09-09: 発火時は向きを0へリセット(1)。フィット値hではなく0(ユーザー要件)。
   zero_heading: 1
   # 判定窓の間に壁PDの操舵|duty_sen|がこれ[deg]を超えたら窓をやり直す。
@@ -594,7 +615,7 @@ gyro_pid:
   # ため元に戻す。dゲイン側の検討に戻る。
   antiwindup: 1
   windup_gain: 10.0
-  windup_dead_bind: 1.50
+  windup_dead_bind: 4.0
   # 2026-09-04: SLA_BACK_STR中、w_error_i(g_i2)がw_lpの同符号残差により
   # 20tick程度で-477→+517まで単調に膨れ上がる暴走を確認(20260904_205624.csv)。
   # 既存のtgt_angle基準クランプ(90°→約90000相当)は緩すぎて無効、かつ
@@ -783,7 +804,7 @@ angle_pid: # pid for angle
   # i: 0.0
   # d: 4.5
 
-  p: 4.50
+  p: 7.50
   i: 0.0
   d: 4.5
   b: 40 #deg

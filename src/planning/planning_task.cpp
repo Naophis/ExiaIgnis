@@ -444,12 +444,20 @@ void PlanningTask::cp_request() {
   // hold()(MotionPlanning::hold、v_max=0のSTRAIGHTでhold_active=true)は
   // 走行開始ではないので除外。reset_ego_data()がNONEを送ってから走行の
   // STRAIGHTが来るので、prev_motion_type==NONE が停止状態からの走り出し。
-  if (param->keep_dist_th_start_skip > 0 &&
-      prev_motion_type == MotionType::NONE &&
+  // 2026-09-22: 吸引ありのテスト走行(main_task_test_sla等)は
+  // reset_ego_data()→hold()→unhold()→go_straight と進み、unhold後にNONEを
+  // 挟まないため prev_motion_type がhold()のSTRAIGHTのままで上の条件に
+  // 掛からず、最初の約10mmが無制御のままだった(20260922_043736.csv:
+  // dist=10.7mm/v=904mm/sで初めて壁PDが立ち、いきなり-4.4°を指示)。
+  // 直前の指令がhold()だった場合も走り出しとして扱う。
+  const bool from_stop =
+      prev_motion_type == MotionType::NONE || prev_cmd_was_hold_;
+  if (param->keep_dist_th_start_skip > 0 && from_stop &&
       tgt_val->motion_type == MotionType::STRAIGHT && !tgt_val->hold_active &&
       receive_req->nmr.v_max > 0) {
     ctl_.skip_keep_dist_once();
   }
+  prev_cmd_was_hold_ = tgt_val->hold_active;
 
   if (tgt_val->tgt_in.tgt_angle != 0) {
     const auto tmp_ang = tgt_val->ego_in.ang;

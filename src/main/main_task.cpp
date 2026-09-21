@@ -84,6 +84,9 @@ bool MainTask::load_params() {
   ConfigLoader::load_as("/enc_lut.hf", *param_);
   printf("[param] enc_lut_enable = %d\n", param_->enc_lut_enable);
   printf("[param] turn_end_w_i_restore = %d\n", param_->turn_end_w_i_restore);
+  printf("[param] turn_settle: enable=%d ang_th=%.2f hold_ticks=%d timeout=%d\n",
+         param_->turn_settle.enable, param_->turn_settle.ang_th,
+         param_->turn_settle.hold_ticks, param_->turn_settle.timeout);
   any |= ConfigLoader::load_as("/system.txt", sys_);
   load_param_after();
   return any;

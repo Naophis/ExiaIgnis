@@ -246,6 +246,13 @@ inline void convertToJson(const kanayama_t& src, JsonVariant dst) {
     dst["windup_deg"] = src.windup_deg;
 }
 
+inline void convertToJson(const turn_settle_t& src, JsonVariant dst) {
+    dst["enable"]     = src.enable;
+    dst["ang_th"]     = src.ang_th;
+    dst["hold_ticks"] = src.hold_ticks;
+    dst["timeout"]    = src.timeout;
+}
+
 inline void convertToJson(const turn_end_brake_t& src, JsonVariant dst) {
     dst["enable"] = src.enable;
     dst["w_th"]   = src.w_th;
@@ -407,6 +414,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["gyro_pid"]                    = src.gyro_pid;
     dst["gyro_pid_gain_limitter"]      = src.gyro_pid_gain_limitter;
     dst["turn_end_brake"]              = src.turn_end_brake;
+    dst["turn_settle"]                 = src.turn_settle;
     dst["turn_angle_fb"]               = src.turn_angle_fb;
     dst["turn_w_pid"]                  = src.turn_w_pid;
     dst["str_ang_pid"]                 = src.str_ang_pid;

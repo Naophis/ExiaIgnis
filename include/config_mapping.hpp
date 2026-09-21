@@ -493,6 +493,13 @@ inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
     from_json_field(src, "windup_deg", dst.windup_deg);
 }
 
+inline void convertFromJson(JsonVariantConst src, turn_settle_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "ang_th", dst.ang_th);
+    from_json_field(src, "hold_ticks", dst.hold_ticks);
+    from_json_field(src, "timeout", dst.timeout);
+}
+
 inline void convertFromJson(JsonVariantConst src, turn_end_brake_t& dst) {
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "w_th", dst.w_th);
@@ -715,6 +722,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "gyro_pid", dst.gyro_pid);
     from_json_nested(src, "gyro_pid_gain_limitter", dst.gyro_pid_gain_limitter);
     from_json_nested(src, "turn_end_brake", dst.turn_end_brake);
+    from_json_nested(src, "turn_settle", dst.turn_settle);
     from_json_nested(src, "turn_angle_fb", dst.turn_angle_fb);
     from_json_nested(src, "turn_w_pid", dst.turn_w_pid);
     from_json_nested(src, "str_ang_pid", dst.str_ang_pid);
