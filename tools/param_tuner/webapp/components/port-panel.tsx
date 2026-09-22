@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ConnectionStatus, PortInfo } from "@/lib/serial-manager";
@@ -28,6 +29,9 @@ interface Props {
   onDisconnect: () => void;
   onEnableAutoConnect: () => void;
   onFlash: () => void;
+  // 右ペインの「コンソール / プロット」切り替え。右ペイン内に置くと1行分の高さを
+  // 食うので、ヘッダーバーの空いている中央に出す(page.tsx が既定ビューのときだけ渡す)。
+  tabs?: ReactNode;
 }
 
 export function PortPanel({
@@ -39,6 +43,7 @@ export function PortPanel({
   onDisconnect,
   onEnableAutoConnect,
   onFlash,
+  tabs,
 }: Props) {
   const label = !autoConnect
     ? "Disconnected (auto-connect paused)"
@@ -53,6 +58,7 @@ export function PortPanel({
       <span className="text-muted-foreground">
         {connectedPath ?? (ports[0]?.path ? `検出済み: ${ports[0].path}` : "デバイス未検出")}
       </span>
+      {tabs && <div className="ml-4 flex gap-1">{tabs}</div>}
       <div className="flex-1" />
       <Button size="sm" variant="outline" disabled={flashing} onClick={onFlash}>
         {flashing ? "Flashing..." : "Flash"}

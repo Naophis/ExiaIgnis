@@ -399,6 +399,26 @@ export default function Home() {
         onDisconnect={handleDisconnect}
         onEnableAutoConnect={handleEnableAutoConnect}
         onFlash={handleFlash}
+        tabs={
+          !showMatrix && !showTemplates && !editing ? (
+            <>
+              <Button
+                size="sm"
+                variant={rightTab === "console" ? "default" : "outline"}
+                onClick={() => setRightTab("console")}
+              >
+                コンソール
+              </Button>
+              <Button
+                size="sm"
+                variant={rightTab === "plot" ? "default" : "outline"}
+                onClick={() => setRightTab("plot")}
+              >
+                プロット
+              </Button>
+            </>
+          ) : undefined
+        }
       />
       {showMatrix ? (
         <div className="flex flex-1 overflow-hidden">
@@ -485,24 +505,9 @@ export default function Home() {
               onClose={() => setShowTemplates(false)}
             />
           ) : (
-            <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
-              <div className="flex shrink-0 gap-1">
-                <Button
-                  size="sm"
-                  variant={rightTab === "console" ? "default" : "outline"}
-                  onClick={() => setRightTab("console")}
-                >
-                  コンソール
-                </Button>
-                <Button
-                  size="sm"
-                  variant={rightTab === "plot" ? "default" : "outline"}
-                  onClick={() => setRightTab("plot")}
-                >
-                  プロット
-                </Button>
-              </div>
-              {/* Both tabs render inside the same flex column; only their
+            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              {/* タブの切り替えボタンは PortPanel(ヘッダーバー)側に出している。
+                  Both tabs render inside the same flex column; only their
                   visibility toggles so the SSE-fed `lines` state above keeps
                   accumulating in the background regardless of which tab is
                   showing. */}

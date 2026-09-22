@@ -11,8 +11,20 @@ interface Props {
   // WALL_OFF中の4kHz相当サンプル(TrajectoryData.hfWallPoints)を描くか
   showHf: boolean;
   markers?: AnalysisEvent[];
+  // 旋回出口テーブルの行クリックで、その旋回の区間(turn)と旋回後の窓(post)を
+  // 強調する。生の CSV 行オブジェクト(TrajectoryPoint.raw と同一)の集合。
+  // 指定中は他の軌跡点を減光する。
+  highlight?: TrajectoryHighlight | null;
   onPointClick: (point: TrajectoryPoint | null) => void;
 }
+
+export interface TrajectoryHighlight {
+  turn: Set<Record<string, number>>;
+  post: Set<Record<string, number>>;
+}
+
+const HIGHLIGHT_TURN_COLOR = "#ff4fd8";
+const HIGHLIGHT_POST_COLOR = "#ffb84f";
 
 const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | "diamond" | "circle" | "square" }> = {
   drop: { color: "#ff5555", shape: "x" },
@@ -99,7 +111,7 @@ function makeTransform(bounds: TrajectoryData["worldBounds"], w: number, h: numb
   return { toCanvas, toWorld, scale };
 }
 
-export function TrajectoryPlot({ data, showLeft45, showRight45, showHf, markers, onPointClick }: Props) {
+export function TrajectoryPlot({ data, showLeft45, showRight45, showHf, markers, highlight, onPointClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -206,12 +218,28 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, showHf, markers,
       ctx.restore();
     }
 
+    const hl = highlight && (highlight.turn.size > 0 || highlight.post.size > 0) ? highlight : null;
+    if (hl) ctx.globalAlpha = 0.3;
     for (const group of data.groups) {
       ctx.fillStyle = group.color;
       for (const p of group.points) {
+        if (hl && (hl.turn.has(p.raw) || hl.post.has(p.raw))) continue;
         const [cx, cy] = toCanvas(p.x + data.xOffset, p.y);
         ctx.beginPath();
         ctx.arc(cx, cy, 1.8 * iz, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (hl) {
+      ctx.globalAlpha = 1;
+      // 強調区間は太い点で上書き(旋回=マゼンタ、旋回後の窓=アンバー)
+      for (const p of data.allPoints) {
+        const inTurn = hl.turn.has(p.raw);
+        if (!inTurn && !hl.post.has(p.raw)) continue;
+        ctx.fillStyle = inTurn ? HIGHLIGHT_TURN_COLOR : HIGHLIGHT_POST_COLOR;
+        const [cx, cy] = toCanvas(p.x + data.xOffset, p.y);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3 * iz, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -297,7 +325,7 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, showHf, markers,
         }
       }
     }
-  }, [data, size, showLeft45, showRight45, showHf, markers, view, rotated]);
+  }, [data, size, showLeft45, showRight45, showHf, markers, highlight, view, rotated]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current?.moved) return; // drag-to-pan, not a point pick
