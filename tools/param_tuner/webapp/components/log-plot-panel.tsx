@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SensorTimeseriesPlot, type TimeSeries } from "@/components/sensor-timeseries-plot";
 import { TrajectoryPlot } from "@/components/trajectory-plot";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   computeHfEdgeEvents,
   computeMotionTransitionEvents,
@@ -18,6 +19,13 @@ import {
   computeWallOffEdgeEvents,
   type AnalysisEvent,
 } from "@/lib/log-analysis";
+import {
+  analyzeTurnExits,
+  turnSensitivity,
+  type Stat,
+  type TurnExitRow,
+  type TurnExitSummaryRow,
+} from "@/lib/turn-exit";
 import { buildTrajectoryData, DEFAULT_X_OFFSET, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
 
 const TRANSITION_COLUMNS = ["left45_d", "left45_2_d", "left45_3_d", "right45_d", "right45_2_d", "right45_3_d"];
@@ -55,6 +63,7 @@ const EVENT_COLOR: Record<AnalysisEvent["kind"], string> = {
   "wall-off-edge-sensor": "text-green-300",
   "hf-edge": "text-fuchsia-400",
   "hf-edge-sensor": "text-fuchsia-300",
+  "turn-exit": "text-lime-400",
 };
 
 interface LogFileInfo {
@@ -76,6 +85,148 @@ function formatClickInfo(p: TrajectoryPoint): string {
   if (p.raw.left45_d !== undefined) parts.push(`left45_d=${p.raw.left45_d.toFixed(1)}`);
   if (p.raw.right45_d !== undefined) parts.push(`right45_d=${p.raw.right45_d.toFixed(1)}`);
   return parts.join(" | ");
+}
+
+interface TurnExitSummaryData {
+  files: string[];
+  skipped: string[];
+  rows: TurnExitRow[];
+  summary: TurnExitSummaryRow[];
+}
+
+const f1 = (x: number, digits = 1) => (Number.isFinite(x) ? x.toFixed(digits) : "–");
+// API 経由の Stat は NaN が JSON で null になる(n=0)。表示・色付けとも n===0 を先に見る
+const fmtStat = (st: Stat, digits = 1) => (st.n === 0 ? "–" : `${st.mean.toFixed(digits)}±${st.std.toFixed(digits)}`);
+const statFlag = (st: Stat, cond: (mean: number) => boolean) => st.n > 0 && cond(st.mean);
+
+function turnExitLabel(t: TurnExitRow): string {
+  return `turn-exit idx=${t.idx} ${t.kind} ${t.dir} v=${t.v} wide=${f1(t.wide)} yaw0=${f1(t.yaw0)}° sat=${t.sat} v_in=${f1(t.vIn, 2)}`;
+}
+
+function formatTurnExit(t: TurnExitRow): string {
+  return [
+    `${t.kind} ${t.dir} v=${t.v} idx=${t.idx}-${t.endIdx} exit=${t.exitIdx}`,
+    `wmax=${f1(t.wmax)} (${f1(t.latg)}G)`,
+    `w+${f1(t.wOver)}/${f1(t.wUnder)}`,
+    `vc_min=${f1(t.vcMin, 2)} v_in=${f1(t.vIn, 2)} sat=${t.sat}`,
+    `lag=${f1(t.lag)}° yaw0=${f1(t.yaw0)}°`,
+    `off0=${f1(t.off0)} off=${f1(t.off)} yaw=${f1(t.yaw)}° off_c=${f1(t.offC)} wide=${f1(t.wide)}`,
+    `dsen40=${f1(t.dsen40, 0)}° ey40=${f1(t.ey40)}`,
+  ].join(" | ");
+}
+
+function sensitivityTitle(kind: string): string {
+  const sens = turnSensitivity(kind);
+  if (!sens) return kind;
+  return `${kind}: 出口横ずれ(外側正)の感度 rad 1mm → ${sens.rad.toFixed(2)}mm / front 1mm → ${sens.front.toFixed(2)}mm (back は横に効かない)`;
+}
+
+// 列見出しと説明(turn_exit_check.py の docstring と同じ意味)
+const TURN_EXIT_COLUMNS: Array<{ key: string; label: string; title: string }> = [
+  { key: "idx", label: "idx", title: "SLALOM 開始行" },
+  { key: "kind", label: "種別", title: "角度と斜め区間のトグルから判定" },
+  { key: "dir", label: "向き", title: "L/R" },
+  { key: "v", label: "v", title: "ideal_v" },
+  { key: "wmax", label: "wmax", title: "|ideal_w| 最大 [rad/s]" },
+  { key: "latg", label: "G", title: "v*wmax/g [G]" },
+  { key: "vcMin", label: "vc", title: "旋回中 v_c 最小 / ideal_v。接触・スリップで落ちる(w_lp の過不足は行クリックの詳細に出る)" },
+  { key: "vIn", label: "v_in", title: "内輪速度最小 / ideal_v。0.1 未満は内輪停止(接触)" },
+  { key: "sat", label: "sat", title: "|duty|>99 の tick 数" },
+  { key: "lag", label: "lag", title: "旋回終端の ideal_ang−ang [deg]" },
+  { key: "yaw0", label: "yaw0", title: "旋回後 2tick 目の kim_theta [deg]" },
+  { key: "off0", label: "off0", title: "最初に両壁が見えた tick の (l45−r45)/2 [mm]、+は右。斜めへ抜ける旋回は空欄" },
+  { key: "wide", label: "wide", title: "旋回後 25〜50mm の横ずれをヨー分(0.96mm/°)で補正し外側正にした値 [mm]" },
+  { key: "dsen40", label: "dsen", title: "旋回後 40tick の |duty_sen| 最大 [deg](|s_pid_p| 最大は行クリックの詳細に出る)" },
+];
+
+const CELL = "h-6 px-1 py-0 whitespace-nowrap";
+
+function TurnExitTable({ rows, onSelect }: { rows: TurnExitRow[]; onSelect: (t: TurnExitRow) => void }) {
+  return (
+    <Table className="w-auto font-mono text-[11px]">
+      <TableHeader>
+        <TableRow>
+          {TURN_EXIT_COLUMNS.map((c) => (
+            <TableHead key={c.key} className={CELL} title={c.title}>
+              {c.label}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((t) => (
+          <TableRow key={t.idx} className="cursor-pointer" onClick={() => onSelect(t)}>
+            <TableCell className={CELL}>{t.idx}</TableCell>
+            <TableCell className={CELL} title={sensitivityTitle(t.kind)}>
+              {t.kind}
+            </TableCell>
+            <TableCell className={CELL}>{t.dir}</TableCell>
+            <TableCell className={CELL}>{t.v}</TableCell>
+            <TableCell className={CELL}>{f1(t.wmax)}</TableCell>
+            <TableCell className={CELL}>{f1(t.latg)}</TableCell>
+            <TableCell className={`${CELL} ${t.vcMin < 0.75 ? "text-red-400" : ""}`}>{f1(t.vcMin, 2)}</TableCell>
+            <TableCell className={`${CELL} ${t.vIn < 0.1 ? "bg-red-500/30 text-red-200" : ""}`}>{f1(t.vIn, 2)}</TableCell>
+            <TableCell className={`${CELL} ${t.sat > 20 ? "text-amber-400" : ""}`}>{t.sat}</TableCell>
+            <TableCell className={`${CELL} ${Math.abs(t.lag) > 3 ? "text-amber-400" : ""}`}>{f1(t.lag)}</TableCell>
+            <TableCell className={`${CELL} ${Math.abs(t.yaw0) > 3 ? "text-amber-400" : ""}`}>{f1(t.yaw0)}</TableCell>
+            <TableCell className={CELL}>{f1(t.off0)}</TableCell>
+            <TableCell className={`${CELL} ${Math.abs(t.wide) > 3 ? "text-amber-400" : ""}`}>{f1(t.wide)}</TableCell>
+            <TableCell className={`${CELL} ${t.dsen40 > 30 ? "text-amber-400" : ""}`}>{f1(t.dsen40, 0)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function TurnExitSummaryTable({ data }: { data: TurnExitSummaryData }) {
+  const oldest = data.files[data.files.length - 1];
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
+        集計 {data.files.length} 本 ({oldest} 〜 {data.files[0]}) mean±σ、wide&gt;0 は外側/大回り
+        {data.skipped.length > 0 && ` / 読めず: ${data.skipped.join(", ")}`}
+      </span>
+      <Table className="w-auto font-mono text-[11px]">
+        <TableHeader>
+          <TableRow>
+            <TableHead className={CELL}>種別</TableHead>
+            <TableHead className={CELL}>向き</TableHead>
+            <TableHead className={CELL}>v</TableHead>
+            <TableHead className={CELL}>n</TableHead>
+            <TableHead className={CELL} title="出口横ずれ(外側正) [mm]">wide</TableHead>
+            <TableHead className={CELL} title="最初の両壁tickの横ずれ [mm]">off0</TableHead>
+            <TableHead className={CELL} title="出口ヨー [deg]">yaw0</TableHead>
+            <TableHead className={CELL} title="終端角度遅れ [deg]">lag</TableHead>
+            <TableHead className={CELL} title="duty 飽和 tick 数">sat</TableHead>
+            <TableHead className={CELL} title="v_c 最小比">vc</TableHead>
+            <TableHead className={CELL} title="内輪速度最小比">v_in</TableHead>
+            <TableHead className={CELL} title="旋回後 |duty_sen| 最大 [deg]">dsen</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.summary.map((g) => (
+            <TableRow key={`${g.kind}|${g.dir}|${g.v}`}>
+              <TableCell className={CELL} title={sensitivityTitle(g.kind)}>
+                {g.kind}
+              </TableCell>
+              <TableCell className={CELL}>{g.dir}</TableCell>
+              <TableCell className={CELL}>{g.v}</TableCell>
+              <TableCell className={`${CELL} ${g.n < 4 ? "text-muted-foreground" : ""}`}>{g.n}</TableCell>
+              <TableCell className={`${CELL} ${statFlag(g.wide, (m) => Math.abs(m) > 3) ? "text-amber-400" : ""}`}>{fmtStat(g.wide)}</TableCell>
+              <TableCell className={CELL}>{fmtStat(g.off0)}</TableCell>
+              <TableCell className={`${CELL} ${statFlag(g.yaw0, (m) => Math.abs(m) > 3) ? "text-amber-400" : ""}`}>{fmtStat(g.yaw0)}</TableCell>
+              <TableCell className={CELL}>{fmtStat(g.lag)}</TableCell>
+              <TableCell className={`${CELL} ${statFlag(g.sat, (m) => m > 20) ? "text-amber-400" : ""}`}>{fmtStat(g.sat)}</TableCell>
+              <TableCell className={`${CELL} ${statFlag(g.vcMin, (m) => m < 0.75) ? "text-red-400" : ""}`}>{fmtStat(g.vcMin, 2)}</TableCell>
+              <TableCell className={`${CELL} ${statFlag(g.vIn, (m) => m < 0.1) ? "text-red-400" : ""}`}>{fmtStat(g.vIn, 2)}</TableCell>
+              <TableCell className={CELL}>{fmtStat(g.dsen40, 0)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
 }
 
 interface AutoOpenRequest {
@@ -142,6 +293,13 @@ export function LogPlotPanel({
   const [wallOffArmDelta, setWallOffArmDelta] = useState(1.0);
   const [wallOffFitLo, setWallOffFitLo] = useState(1.0);
   const [wallOffFitHi, setWallOffFitHi] = useState(5.0);
+
+  // turn_exit_check.py 相当: 旋回ごとの追従状態と出口残差(lib/turn-exit.ts)。
+  // 選択中の1本はブラウザ側で解析、複数本の集計は /api/logs/turn-exit。
+  const [turnExitEnabled, setTurnExitEnabled] = useState(false);
+  const [turnExitLimit, setTurnExitLimit] = useState(6);
+  const [turnExitSummary, setTurnExitSummary] = useState<TurnExitSummaryData | null>(null);
+  const [turnExitBusy, setTurnExitBusy] = useState(false);
 
   const refreshFiles = useCallback(async () => {
     const res = await fetch("/api/logs");
@@ -277,10 +435,52 @@ export function LogPlotPanel({
     return computeHfEdgeEvents(rawRows, { pointByRow, xOffset });
   }, [showHf, rawRows, pointByRow, xOffset]);
 
+  const turnExitRows = useMemo<TurnExitRow[]>(() => {
+    if (!turnExitEnabled || rawRows.length === 0) return [];
+    return analyzeTurnExits(rawRows, { log: selected?.replace(/\.csv$/, "") ?? "" });
+  }, [turnExitEnabled, rawRows, selected]);
+
+  const turnExitEvents = useMemo<AnalysisEvent[]>(() => {
+    const out: AnalysisEvent[] = [];
+    for (const t of turnExitRows) {
+      const r = rawRows[t.exitIdx];
+      if (!r || !Number.isFinite(r.x) || !Number.isFinite(r.y)) continue;
+      out.push({ x: r.x, y: r.y, anchored: "robot", kind: "turn-exit", label: turnExitLabel(t) });
+    }
+    return out;
+  }, [turnExitRows, rawRows]);
+
   const analysisEvents = useMemo(
-    () => [...dropEvents, ...transitionEvents, ...troughEvents, ...wallOffEvents, ...hfEvents],
-    [dropEvents, transitionEvents, troughEvents, wallOffEvents, hfEvents]
+    () => [...dropEvents, ...transitionEvents, ...troughEvents, ...wallOffEvents, ...hfEvents, ...turnExitEvents],
+    [dropEvents, transitionEvents, troughEvents, wallOffEvents, hfEvents, turnExitEvents]
   );
+
+  // 下のイベント一覧に出す分。turn-exit は旋回テーブルにあるので二重に出さない
+  const listedEvents = useMemo(() => analysisEvents.filter((ev) => ev.kind !== "turn-exit"), [analysisEvents]);
+
+  const fetchTurnExitSummary = useCallback(async (limit: number) => {
+    setTurnExitBusy(true);
+    try {
+      const res = await fetch(`/api/logs/turn-exit?limit=${limit}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "集計に失敗しました");
+      setTurnExitSummary(data as TurnExitSummaryData);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTurnExitBusy(false);
+    }
+  }, []);
+
+  // 有効中は新しいログが保存されるたびに集計し直す。files[0] は常に latest.csv
+  // (複製、mtime が最新)なので、その次のファイル名の変化を新ログの合図にする。
+  const newestLog = files.find((f) => f.name !== "latest.csv")?.name ?? null;
+  useEffect(() => {
+    if (!turnExitEnabled) return;
+    // fetch-on-change: 結果は非同期に setState する(CLAUDE.md「既知のハマりどころ」参照)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchTurnExitSummary(turnExitLimit);
+  }, [turnExitEnabled, turnExitLimit, newestLog, fetchTurnExitSummary]);
 
   const chartSeries = useMemo<TimeSeries[]>(() => {
     if (!chartEnabled || rawRows.length === 0) return [];
@@ -488,7 +688,10 @@ export function LogPlotPanel({
           </Button>
         </div>
         <Separator />
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 p-2 text-xs">
+        {/* 解析トグルは縦に積むと6行になるので、1行に横並び(有効化した解析だけ
+            パラメータが横に展開し、足りなければ折り返す)。 */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 px-1.5 py-0.5">
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={dropEnabled} onChange={(e) => setDropEnabled(e.target.checked)} />
             センサードロップ解析
@@ -533,7 +736,7 @@ export function LogPlotPanel({
             </>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 px-1.5 py-0.5">
           <label className="flex items-center gap-1">
             <input
               type="checkbox"
@@ -554,7 +757,7 @@ export function LogPlotPanel({
             </label>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 px-1.5 py-0.5">
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={troughEnabled} onChange={(e) => setTroughEnabled(e.target.checked)} />
             センサートラフ解析
@@ -612,7 +815,7 @@ export function LogPlotPanel({
             </>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 px-1.5 py-0.5">
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={wallOffEnabled} onChange={(e) => setWallOffEnabled(e.target.checked)} />
             壁切れエッジ解析(wall_off_edge_check.py)
@@ -671,41 +874,112 @@ export function LogPlotPanel({
             </>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-2 text-xs">
-          <label className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 px-1.5 py-0.5">
+          <label
+            className="flex items-center gap-1"
+            title="旋回(SLALOM)ごとの追従状態と出口残差。duty_sen は片壁×2とヨーの見かけ横ずれで誇張されるので、壁読み値から出した wide(外側正)と yaw0 で判定する"
+          >
+            <input type="checkbox" checked={turnExitEnabled} onChange={(e) => setTurnExitEnabled(e.target.checked)} />
+            旋回出口解析(turn_exit_check.py)
+          </label>
+          {turnExitEnabled && (
+            <>
+              <label
+                className="flex items-center gap-1"
+                title="直近 N 本のログをサーバー側で集計(latest.csv は除外)。新しいログが保存されると自動で更新"
+              >
+                集計 直近
+                <input
+                  type="number"
+                  min={1}
+                  max={40}
+                  className="w-14 rounded border border-border bg-background px-1"
+                  value={turnExitLimit}
+                  onChange={(e) => setTurnExitLimit(Math.min(40, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                />
+                本
+              </label>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={turnExitBusy}
+                onClick={() => void fetchTurnExitSummary(turnExitLimit)}
+              >
+                再集計
+              </Button>
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 px-1.5 py-0.5">
+          <label
+            className="flex items-center gap-1"
+            title="センサートラフ解析のチェック列を index 軸で表示。壁切れエッジ/hf のマーカーも重畳"
+          >
             <input type="checkbox" checked={chartEnabled} onChange={(e) => setChartEnabled(e.target.checked)} />
-            時系列グラフ表示(センサートラフ解析のチェック列を表示。壁切れエッジのマーカーも重畳)
+            時系列グラフ
           </label>
         </div>
-        <Separator />
-        <div className="min-h-0 flex-1">
-          <TrajectoryPlot
-            data={trajectoryData}
-            showLeft45={showLeft45}
-            showRight45={showRight45}
-            showHf={showHf}
-            markers={analysisEvents}
-            onPointClick={(p) => setClickInfo(p ? formatClickInfo(p) : null)}
-          />
         </div>
-        {chartEnabled && chartSeries.length > 0 && (
-          <>
-            <Separator />
-            <div className="h-56 shrink-0">
-              <SensorTimeseriesPlot series={chartSeries} markers={chartMarkers} />
+        <Separator />
+        {/* 迷路プロットは正方形で横に余るので、旋回出口解析の表はプロットの右に
+            横分割で置く(既定はプロット 55%、ハンドルでドラッグ可)。表側は
+            collapsible なので、ハンドルを右端まで寄せれば畳める。 */}
+        <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
+          <ResizablePanel order={1} defaultSize={52} minSize={25} className="min-w-0 min-h-0">
+            <div className="flex h-full flex-col overflow-hidden">
+              <div className="min-h-0 flex-1">
+                <TrajectoryPlot
+                  data={trajectoryData}
+                  showLeft45={showLeft45}
+                  showRight45={showRight45}
+                  showHf={showHf}
+                  markers={analysisEvents}
+                  onPointClick={(p) => setClickInfo(p ? formatClickInfo(p) : null)}
+                />
+              </div>
+              {chartEnabled && chartSeries.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="h-56 shrink-0">
+                    <SensorTimeseriesPlot series={chartSeries} markers={chartMarkers} />
+                  </div>
+                </>
+              )}
             </div>
-          </>
-        )}
+          </ResizablePanel>
+          {turnExitEnabled && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel order={2} defaultSize={48} minSize={10} collapsible className="min-w-0 min-h-0">
+                <div className="flex h-full flex-col overflow-hidden">
+                  <ScrollArea className="min-h-0 flex-1">
+                    <div className="flex flex-col gap-2 p-2">
+                      {turnExitRows.length > 0 && (
+                        <TurnExitTable rows={turnExitRows} onSelect={(t) => setClickInfo(formatTurnExit(t))} />
+                      )}
+                      {turnExitRows.length === 0 && rawRows.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          このログに SLALOM 区間がないか、必要な列(kim_theta / s_pid_p 等)がありません
+                        </span>
+                      )}
+                      {turnExitSummary && <TurnExitSummaryTable data={turnExitSummary} />}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
         <Separator />
         <div className="p-2 font-mono text-xs text-muted-foreground">
           {clickInfo ?? (trajectoryData ? "点をクリックすると詳細を表示します" : "x/y列を含むログを選択してください")}
         </div>
-        {analysisEvents.length > 0 && (
+        {listedEvents.length > 0 && (
           <>
             <Separator />
             <ScrollArea className="max-h-32 min-h-0">
               <div className="flex flex-col gap-0.5 p-2 font-mono text-xs">
-                {analysisEvents.map((ev, i) => (
+                {listedEvents.map((ev, i) => (
                   <span key={i} className={EVENT_COLOR[ev.kind]}>
                     {ev.label}
                   </span>

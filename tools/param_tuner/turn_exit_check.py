@@ -118,7 +118,9 @@ def analyze(df, name, post_ticks, lat_k):
         lag = float(df.ideal_ang.values[e - 1] - df.ang.values[e - 1])
 
         post = df.iloc[e:min(e + max(post_ticks, 60), n)]
-        post = post[post.motion_state != SLALOM]  # 次の旋回に入ったら打ち切り
+        nxt_turn = np.flatnonzero(post.motion_state.values == SLALOM)
+        if len(nxt_turn):  # 次の旋回に入ったら打ち切り
+            post = post.iloc[:nxt_turn[0]]
         yaw0 = float(post.kim_theta.values[1]) if len(post) > 1 else np.nan
         both = ((post.left45_d > 1) & (post.left45_d < 90)
                 & (post.right45_d > 1) & (post.right45_d < 90))

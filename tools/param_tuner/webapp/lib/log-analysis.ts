@@ -50,7 +50,10 @@ export interface AnalysisEvent {
     // 4kHz系列をサンプル間補間して確定した壁切れ位置と、その位置での
     // 注視側センサーの壁面上の点。
     | "hf-edge"
-    | "hf-edge-sensor";
+    | "hf-edge-sensor"
+    // lib/turn-exit.ts(turn_exit_check.py 相当): 旋回(SLALOM)を抜けた最初の行。
+    // 旋回テーブルの行と同じ idx を持ち、出口残差をラベルに出す。
+    | "turn-exit";
   label: string;
   // Companion anchor for a leader line: raw logged robot (x, y) of the same
   // row, so a sensor-anchored marker can be drawn tied to the robot marker it

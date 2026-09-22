@@ -39,6 +39,8 @@ const MARKER_STYLE: Record<AnalysisEvent["kind"], { color: string; shape: "x" | 
   // firmware の hf(4kHz相当)壁切れ検出。点群(hfWallPoints)と同じ色相。
   "hf-edge": { color: "#e879f9", shape: "diamond" },
   "hf-edge-sensor": { color: "#e879f9", shape: "square" },
+  // lib/turn-exit.ts: 旋回の出口(SLALOM を抜けた最初の行)。
+  "turn-exit": { color: "#a3e635", shape: "diamond" },
 };
 
 const PADDING = 24;
