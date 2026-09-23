@@ -84,8 +84,10 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 - **左: 軌跡、右: 時系列グラフの縦積み**。全グラフが x 軸(`Domain`)と連動カーソル(CSV の `index`)を共有し、ホイール=ズーム/ドラッグ=パンがすべてのグラフに効く。軌跡には現在のカーソル位置に白いリングが出る。軌跡の点をクリックするとカーソルがそこへ移る。
 - **旋回ストリップ**: `analyzeTurnExits()` の結果を並べたボタン。押すと x 軸をその旋回(前 40tick 〜 出口 +90tick)へズームし、軌跡はその旋回をマゼンタ・旋回後の窓をアンバーで強調する。ホバーで wide / yaw0 / sat が出る。
 - **解析トグル**はプロットタブと同じ `AnalysisToggles`(ドロップ/状態遷移/トラフ/壁切れエッジ/旋回出口)。マーカーは軌跡と各グラフの両方へ出る。旋回出口だけこのページでは既定 ON(旋回ストリップが主な移動手段のため)。「旋回表」で旋回テーブル(行クリックでその旋回へズーム)、「イベント一覧」で検出ラベルの一覧を出す。複数ログの集計はこのページでは出さない(1本を精査する画面なので、`AnalysisToggles` の `showTurnExitSummary` を渡さない)。
-- **グラフ構成**は `lib/log-columns.ts` の `DEFAULT_CHARTS`(角速度/角度/壁PD/速度/duty)が初期値。列チップのクリックで外し、「列 +」で 150 列超から絞り込んで足せる。↑↓ で並び替え、下端のバーをドラッグで高さを変える。
-- **表示設定の保存**: グラフ構成(列・高さ・並び順)と表示トグルを `localStorage`(`exia-log-detail-prefs-v1`)にまとめて保存する。左右の分割幅は `ResizablePanelGroup` の `autoSaveId` が別に持つ。読めなくても既定値で動く。
+- **観点(グラフ構成のプリセット)**は `lib/log-columns.ts` の `CHART_VIEWS`。**PlotJuggler のレイアウト `tools/param_tuner/profile.xml` のタブとプロットをそのまま写したもの**(旋回/概観/制御/FFトルク/位置/Kanayama/横センサー/前センサー/壁切れ/壁切れhf/IMU加速度/エンコーダ/計算時間/その他の14種)。`profile.xml` を編集したらこちらも合わせること。xy プロットと hf のスロット配列は軌跡プロット側の担当なので写していない。
+- 列指定は `name` か `name*係数`(PlotJuggler の Scale 変換と同じ。`parseColumnSpec`/`columnSpecLabel`)。桁の違う列を同じグラフに重ねるため(`alpha*0.01`、`motion_state*100` など)。
+- 列チップのクリックで外し、「列 +」で 150 列超から絞り込んで足せる。↑↓ で並び替え、下端のバーをドラッグで高さを変える。編集は**観点ごと**に覚えるので、観点を切り替えて戻っても編集が残る(見出しに「編集済み」と出る)。「この観点を初期状態に戻す」でその観点だけプリセットへ戻す。
+- **表示設定の保存**: 観点ごとのグラフ構成(`chartsByView`: 列・高さ・並び順)、選択中の観点、表示トグルを `localStorage`(`exia-log-detail-prefs-v1`)にまとめて保存する。左右の分割幅は `ResizablePanelGroup` の `autoSaveId` が別に持つ。読めなくても既定値で動く。プリセットのグラフ id は `観点キー#連番`(ランダムにすると React の key と系列キャッシュが毎描画で変わる)。
 - **状態帯**: `motion_state` の区間をグラフ背景に敷く(`MOTION_STATE_BAND`)。旋回と前後の繋ぎだけ色を付け、直進・停止は透明にして帯だらけにしない。番号は `include/enums.hpp` の `MotionType` と一致させること。
 - **カーソル読み取り行**(最下部)は `CURSOR_READOUT_COLUMNS` の列を出す。
 

@@ -19,14 +19,18 @@ import { buildTrajectoryData, DEFAULT_X_OFFSET, parseCsv, type TrajectoryPoint }
 import { DEFAULT_POST_TICKS, formatTurnExit, turnKey, type TurnExitRow } from "@/lib/turn-exit";
 import { EVENT_COLOR, useAnalysisEvents, useAnalysisSettings } from "@/lib/use-analysis";
 import {
+  CHART_VIEWS,
+  columnSpecLabel,
   CURSOR_READOUT_COLUMNS,
-  DEFAULT_CHARTS,
   DEFAULT_CHART_HEIGHT,
+  DEFAULT_VIEW_KEY,
   MOTION_STATE_BAND,
   motionStateBlocks,
   motionStateLabel,
+  parseColumnSpec,
   SERIES_COLORS,
   usableColumns,
+  viewByKey,
   type ChartSpec,
 } from "@/lib/log-columns";
 
@@ -44,7 +48,9 @@ interface LogFileInfo {
 }
 
 interface ViewPrefs {
-  charts: ChartSpec[];
+  /** 観点(CHART_VIEWS のキー)ごとのグラフ構成。編集した観点だけ入る。 */
+  chartsByView: Record<string, ChartSpec[]>;
+  viewKey: string;
   xOffset: number;
   showLeft45: boolean;
   showRight45: boolean;
@@ -58,8 +64,10 @@ function newId(): string {
   return Math.random().toString(36).slice(2, 9);
 }
 
-function withIds(specs: Omit<ChartSpec, "id">[]): ChartSpec[] {
-  return specs.map((c) => ({ ...c, id: newId() }));
+// プリセットの id は観点キー+並び順から決める(毎回ランダムにすると React の key と
+// 系列キャッシュが毎描画で変わってしまう)。ユーザーが足したグラフだけランダム id。
+function presetCharts(viewKey: string): ChartSpec[] {
+  return viewByKey(viewKey).charts.map((c, i) => ({ ...c, id: `${viewKey}#${i}` }));
 }
 
 /** 列を選ぶポップオーバー。150列超あるので絞り込み必須。 */
@@ -120,7 +128,8 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
   const [files, setFiles] = useState<LogFileInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(initialFile ?? null);
   const [csvText, setCsvText] = useState<string | null>(null);
-  const [charts, setCharts] = useState<ChartSpec[]>(() => withIds(DEFAULT_CHARTS));
+  const [viewKey, setViewKey] = useState(DEFAULT_VIEW_KEY);
+  const [chartsByView, setChartsByView] = useState<Record<string, ChartSpec[]>>({});
   const [domain, setDomain] = useState<Domain | null>(null);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
   const [xOffset, setXOffset] = useState(DEFAULT_X_OFFSET);
@@ -150,9 +159,16 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
       // マウント時の localStorage 読み出し(外部システムからの初期同期)。
       // このルールはこのパターンに対しては過検知(webapp/CLAUDE.md 参照)。
       /* eslint-disable react-hooks/set-state-in-effect */
-      if (Array.isArray(p.charts) && p.charts.length > 0 && p.charts.every((c) => Array.isArray(c.columns))) {
-        setCharts(p.charts.map((c) => ({ ...c, id: c.id || newId() })));
+      if (p.chartsByView && typeof p.chartsByView === "object") {
+        const clean: Record<string, ChartSpec[]> = {};
+        for (const [k, v] of Object.entries(p.chartsByView)) {
+          if (Array.isArray(v) && v.every((c) => c && Array.isArray(c.columns))) {
+            clean[k] = v.map((c, i) => ({ ...c, id: c.id || `${k}#${i}` }));
+          }
+        }
+        setChartsByView(clean);
       }
+      if (typeof p.viewKey === "string" && CHART_VIEWS.some((v) => v.key === p.viewKey)) setViewKey(p.viewKey);
       if (typeof p.xOffset === "number" && Number.isFinite(p.xOffset)) setXOffset(p.xOffset);
       if (typeof p.showLeft45 === "boolean") setShowLeft45(p.showLeft45);
       if (typeof p.showRight45 === "boolean") setShowRight45(p.showRight45);
@@ -168,7 +184,8 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
   useEffect(() => {
     if (!prefsLoaded.current) return;
     const prefs: ViewPrefs = {
-      charts,
+      chartsByView,
+      viewKey,
       xOffset,
       showLeft45,
       showRight45,
@@ -182,7 +199,7 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
     } catch {
       // ignore
     }
-  }, [charts, xOffset, showLeft45, showRight45, showHf, showBands, showTurnTable, showEvents]);
+  }, [chartsByView, viewKey, xOffset, showLeft45, showRight45, showHf, showBands, showTurnTable, showEvents]);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,6 +233,15 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
       cancelled = true;
     };
   }, [selected]);
+
+  // 表示中の観点のグラフ構成。編集していない観点はプリセットをそのまま使う。
+  const charts = useMemo(() => chartsByView[viewKey] ?? presetCharts(viewKey), [chartsByView, viewKey]);
+  const setCharts = useCallback(
+    (updater: (prev: ChartSpec[]) => ChartSpec[]) => {
+      setChartsByView((prev) => ({ ...prev, [viewKey]: updater(prev[viewKey] ?? presetCharts(viewKey)) }));
+    },
+    [viewKey]
+  );
 
   const rawRows = useMemo(() => (csvText ? parseCsv(csvText) : []), [csvText]);
   const trajectoryData = useMemo(() => buildTrajectoryData(rawRows, xOffset), [rawRows, xOffset]);
@@ -256,13 +282,14 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
     const out = new Map<string, TimeSeries[]>();
     for (const chart of charts) {
       const list: TimeSeries[] = [];
-      chart.columns.forEach((col, i) => {
-        if (!(rawRows.length > 0 && col in rawRows[0])) return;
+      chart.columns.forEach((spec, i) => {
+        const { column, scale } = parseColumnSpec(spec);
+        if (!(rawRows.length > 0 && column in rawRows[0])) return;
         const points: { x: number; y: number }[] = [];
         for (const r of rawRows) {
-          if (Number.isFinite(r[col])) points.push({ x: r.index, y: r[col] });
+          if (Number.isFinite(r[column])) points.push({ x: r.index, y: r[column] * scale });
         }
-        list.push({ column: col, color: SERIES_COLORS[i % SERIES_COLORS.length], points });
+        list.push({ column: columnSpecLabel(spec), color: SERIES_COLORS[i % SERIES_COLORS.length], points });
       });
       out.set(chart.id, list);
     }
@@ -465,6 +492,25 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={55} minSize={25} className="min-h-0 min-w-0">
           <Card className="flex h-full flex-col overflow-hidden p-0">
+            <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-1.5 py-1 text-xs">
+              <label className="flex items-center gap-1" title="PlotJuggler のレイアウト(profile.xml)のタブと同じ組み合わせ。観点ごとに編集内容を覚える">
+                観点
+                <select
+                  className="rounded border border-border bg-background px-1.5 py-0.5 text-xs"
+                  value={viewKey}
+                  onChange={(e) => setViewKey(e.target.value)}
+                >
+                  {CHART_VIEWS.map((v) => (
+                    <option key={v.key} value={v.key}>
+                      {v.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-muted-foreground">
+                {charts.length} グラフ{chartsByView[viewKey] ? "(編集済み)" : ""}
+              </span>
+            </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="flex flex-col gap-1 p-1">
                 {charts.map((chart, ci) => (
@@ -480,7 +526,7 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
                           className="rounded px-1 font-mono text-[11px] hover:line-through"
                           style={{ color: SERIES_COLORS[i % SERIES_COLORS.length] }}
                         >
-                          {col}
+                          {columnSpecLabel(col)}
                         </button>
                       ))}
                       <div className="flex-1" />
@@ -549,8 +595,13 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
                   >
                     グラフ追加
                   </Button>
-                  <Button size="xs" variant="ghost" onClick={() => setCharts(withIds(DEFAULT_CHARTS))}>
-                    既定構成に戻す
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    title="この観点のグラフ構成を profile.xml 由来の初期状態へ戻す"
+                    onClick={() => setChartsByView((prev) => ({ ...prev, [viewKey]: presetCharts(viewKey) }))}
+                  >
+                    この観点を初期状態に戻す
                   </Button>
                 </div>
               </div>
