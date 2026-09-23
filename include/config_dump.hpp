@@ -269,6 +269,7 @@ inline void convertToJson(const turn_settle_t& src, JsonVariant dst) {
     dst["ang_th"]     = src.ang_th;
     dst["hold_ticks"] = src.hold_ticks;
     dst["timeout"]    = src.timeout;
+    dst["skip_wall_snap"] = src.skip_wall_snap;
 }
 
 inline void convertToJson(const turn_end_brake_t& src, JsonVariant dst) {

@@ -315,10 +315,21 @@ ControlLaw::calc_sensor_pid() {
   // してしまい、kim.thetaだけが残差を持ち越す食い違いになっていた
   // (20260906_0439xx.csv idx2451→2452)。start_align未発火かつ走行開始から
   // snap_skip_dist以内のときだけ抑止し、それ以外は従来通り。
+  // 2026-09-23: turn_settle の引き継ぎ中もスナップを抑止する
+  // (structs.hpp turn_settle_t::skip_wall_snap 参照)。旋回直後は「壁を新規
+  // 検出した瞬間は壁と正対している」というスナップの前提が成立せず、旋回残差を
+  // ang からだけ消して kim.theta に残すため、kim 基準の turn_settle と ang 基準の
+  // angle_pid が逆向きに引き合って残差が 0 でない値で平衡していた。
+  // turn_settle_active_ は calc_angle_velocity_ctrl() の update_turn_ctx() が
+  // 更新するので、ここでは 1tick 前の値(引き継ぎ窓は 50tick 前後なので影響なし)。
+  const bool skip_snap_turn_settle =
+      param_->turn_settle.enable > 0 && param_->turn_settle.skip_wall_snap > 0 &&
+      turn_settle_active_;
   const bool skip_snap =
-      param_->start_align.enable > 0 && start_align_pending_ &&
-      !search_mode_ &&
-      tgt_val_->global_pos.dist < param_->start_align.snap_skip_dist;
+      skip_snap_turn_settle ||
+      (param_->start_align.enable > 0 && start_align_pending_ &&
+       !search_mode_ &&
+       tgt_val_->global_pos.dist < param_->start_align.snap_skip_dist);
   if (wall_found_now && !wall_found_prev_ && !skip_snap &&
       param_->ang_snap_enable > 0) {
     // wall_fit: angを0へ切る=ジャイロ座標系をang分回すので、格子ずれβは

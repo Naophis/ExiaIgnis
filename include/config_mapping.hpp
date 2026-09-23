@@ -516,6 +516,7 @@ inline void convertFromJson(JsonVariantConst src, turn_settle_t& dst) {
     from_json_field(src, "ang_th", dst.ang_th);
     from_json_field(src, "hold_ticks", dst.hold_ticks);
     from_json_field(src, "timeout", dst.timeout);
+    from_json_field(src, "skip_wall_snap", dst.skip_wall_snap);
 }
 
 inline void convertFromJson(JsonVariantConst src, turn_end_brake_t& dst) {

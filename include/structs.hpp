@@ -669,6 +669,17 @@ typedef struct {
   float ang_th = 0.3f;  // [deg]
   int hold_ticks = 5;
   int timeout = 150;    // [tick]
+  // 2026-09-23: 引き継ぎ中は壁の新規検出スナップ(ang_snap_enable、
+  // control_law.cpp calc_sensor_pid() 冒頭)を抑止する(1)。
+  // スナップは「壁を新規検出した瞬間は壁と正対している」前提で ego_in.ang を
+  // 0 へ切りドリフトを消すが、旋回直後はその前提が成立せず、旋回残差を
+  // ang からだけ消してしまう(kim.theta は残る)。結果、kim 基準の turn_settle と
+  // ang 基準の angle_pid が逆向きに引き合い、残差が 0 でない値で平衡する
+  // (20260923_194001.csv: 旋回3tick後に ang が 3.04→-0.44 と 3.37°飛び、
+  //  +10tick で -88.97°まで戻ったあと -88.74°で数十tick静止。ang と kim の
+  //  最終差 3.00° はスナップ量と一致)。
+  // 引き継ぎが終われば従来どおりスナップするので、ドリフト補正は失われない。
+  int skip_wall_snap = 0;
 } turn_settle_t;
 
 // 走り出し姿勢リセット(start_align、2026-09-06)。吸引ランプ中のhold()で
