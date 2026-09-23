@@ -141,6 +141,22 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
 
   unsigned int cnt = 0;
 
+  // 2026-09-23: 終了判定の基準を ego_in.dist から global_pos.dist の差分へ変更した。
+  // ego_in.dist は Core1 がコマンドを受け取った tick で 0 にリセットされる
+  // (planning_task.cpp の receive 経路)。ところが wall_off() のポーリングは
+  // sleep_ms(1) で tick セマフォを消費しないため、go_straight に入った時点で
+  // permit が溜まっており、最初の wait_tick() が古い permit で即座に返る。
+  // その結果 cnt==2 の時点でまだリセット前、つまり「直前モーションの走行距離」が
+  // 見えることがある。`(cnt == 1) ? 0.0f` のガードは 1 周ぶんしか効かない。
+  // 直前の WALL_OFF が次の p.dist より長いと |now_dist| >= |p.dist| が即成立し、
+  // go_straight が 1 tick 未満で終わる(20260923_185212: 壁が切れず WALL_OFF が
+  // 88.25mm 走り、続く SLA_FRONT_STR が消えて SLALOM へ直行した)。
+  // global_pos.dist は ego_in.dist と同じ se->ego.v_c * dt を sensing_task.cpp の
+  // 777/778 行で隣り合って積算する値で、モーション受信ではリセットされないため
+  // この競合の影響を受けない。基準は cnt==1 の tick で取り、従来の
+  // 「最初の tick を 0 とする」意味をそのまま保つ。
+  float motion_start_dist = 0;
+
   float tmp_dist_before = tgt_val->global_pos.dist;
   float tmp_dist_after = tmp_dist_before;
   int wall_off_state = 0;
@@ -161,7 +177,10 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
       // printf("[mp][go_straight]: start motion\n");
     }
     cnt++;
-    auto now_dist = (cnt == 1) ? 0.0f : tgt_val->ego_in.dist;
+    if (cnt == 1) {
+      motion_start_dist = tgt_val->global_pos.dist;
+    }
+    const auto now_dist = tgt_val->global_pos.dist - motion_start_dist;
 
     // if (cnt % 10 == 0) {
     //   printf(

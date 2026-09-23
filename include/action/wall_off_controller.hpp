@@ -77,6 +77,9 @@ private:
                                      float tmp_dist_before,
                                      float tmp_dist_after, TurnDirection td);
   bool is_wall_exist(TurnDirection td, float threshold_l, float threshold_r);
+  // Core1 の tick 完了まで待つ(ポーリングの位相を Core1 に固定する)。
+  // MotionPlanning::wait_tick と同じくタイムアウト付きで待つ。
+  void wait_tick();
   // 柱の谷(下に凸)検知の結果を拾って ps_front.dist を谷底基準で決める(2026-09-23)。
   // 壁なし開始(exist=false)の経路でのみ呼ぶ。wo_start_x は WALL_OFF 開始時の
   // global_pos.dist(それより pillar_prestart_dist 以上前の谷底は前の柱なので拾わない)。

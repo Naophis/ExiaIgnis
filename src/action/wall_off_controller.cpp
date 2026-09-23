@@ -15,6 +15,37 @@ std::shared_ptr<input_param_t> WallOffController::get_input_param_entity() {
 }
 
 __attribute__((noinline, section(".time_critical.wall_off")))
+void WallOffController::wait_tick() {
+  // 2026-09-23: ポーリングを sleep から Core1 の tick 同期へ変更した。
+  //
+  // 検知そのものは Core1 の SensorProcessor(tick 開始から約 31us)で確定し、
+  // sem_release は tick の終わり(約 178us)に来る。tick 同期で待てば
+  // 「検知 → Core0 が気づく」は常に約 147us(1500mm/s で 0.22mm)に固定される。
+  // sleep で回すと Core0 の位相が Core1 と無関係にずれ、この遅れが走行ごとに
+  // ばらつく。一定のずれは right_str / pillar_str 等の定数へ吸収できるが、
+  // ばらつきは吸収できないので、決定論的にするのが狙い。
+  //
+  // 副次的に、このループが tick セマフォを消費するようになる。従来は sleep で
+  // 回して permit を溜めたまま go_straight へ入り、最初の wait_tick() が古い
+  // permit で即座に返っていた([[go-straight-stale-dist-race-2026-09-23]])。
+  //
+  // タイムアウト付きで待つのは、Core1 が落ちて sem_release が来なくなったとき
+  // にブロックしたままだと、呼び出し側ループの fss.error チェックへ戻れず
+  // 永久に止まるため(MotionPlanning::wait_tick と同じ理由・同じ形)。
+  if (!pt) {
+    sleep_us(200); // pt 未設定時のみ(通常は通らない)
+    return;
+  }
+  static int timeout_count = 0;
+  while (!pt->try_wait_tick_ms(3)) {
+    if (++timeout_count % 100 == 0) {
+      printf("[wall_off][wait_tick] TIMEOUT x%d\n", timeout_count);
+    }
+  }
+  timeout_count = 0;
+}
+
+__attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::execute_wall_off(TurnDirection td,
                                          param_straight_t &ps_front) {
   const auto se = get_sensing_entity();
@@ -39,7 +70,7 @@ bool WallOffController::execute_wall_off(TurnDirection td,
   tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   if (pt) pt->send_command(*tgt_val);
-  sleep_us(200);
+  wait_tick();
 
   return (td == TurnDirection::Right) ? process_right_wall_off(ps_front)
                                       : process_left_wall_off(ps_front);
@@ -110,7 +141,7 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
 
   // 第二段階：壁切れを待つ
@@ -142,7 +173,7 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
   return false;
 }
@@ -212,7 +243,7 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
 
   // 第二段階：壁切れを待つ
@@ -244,7 +275,7 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
   return false;
 }
@@ -369,7 +400,7 @@ bool WallOffController::execute_wall_off_dia(TurnDirection td,
   exist_wall = false;
 
   if (pt) pt->send_command(*tgt_val);
-  sleep_us(200);
+  wait_tick();
 
   return (td == TurnDirection::Right)
              ? process_right_wall_off_dia(ps_front, use_oppo_wall, exist_wall)
@@ -490,7 +521,7 @@ bool WallOffController::process_right_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
 
   // 第二段階：壁切れ終了を待つ
@@ -511,7 +542,7 @@ bool WallOffController::process_right_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
   return false;
 }
@@ -572,7 +603,7 @@ bool WallOffController::process_left_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
 
   // 第二段階：壁切れ終了を待つ
@@ -593,7 +624,7 @@ bool WallOffController::process_left_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_us(200);
+    wait_tick();
   }
   return false;
 }
