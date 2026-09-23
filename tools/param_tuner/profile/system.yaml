@@ -61,8 +61,8 @@ maze_size: 32
 debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
-# mode: 0 # メイン
-mode: 1 # 最短スローム
+mode: 0 # メイン
+# mode: 1 # 最短スローム
 # mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
@@ -201,10 +201,10 @@ test: # テスト走行時に使用するパラメータ群
   suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
   suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
   # suction_duty: 3.25
-  file_idx: 16
+  file_idx: 12
   sla_dist: 90
   # sla_type: 3
-  sla_type: 3
+  sla_type: 2
   sla_type2: 6 # 復路ターン種類
   sla_return: 0 # 往復フラグ
   # sla_type: 1 normal
@@ -226,5 +226,5 @@ test: # テスト走行時に使用するパラメータ群
   sysid_duty: 20 #duty 
 
   sysid_time: 1250 #duty
-  start_turn: 0  #開幕ターンテスト
+  start_turn: 1  #開幕ターンテスト
   front_auto_tune: 0  #test_slaのfront offset自動調整(left45/right45基準フィードバック)有効化: 0無効, 1有効
