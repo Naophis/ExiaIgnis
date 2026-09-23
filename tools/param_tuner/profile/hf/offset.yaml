@@ -146,8 +146,15 @@ wall_off_hf_min_valid: 100
 #   bottom_min: 谷底の下限 [mm]。旋回直後に「今曲がった角の柱」が32〜38mmの近い谷として
 #               見えるのを除外する(遠い柱は実測53〜70mm)。近い物は exist 経路の担当
 #   bottom_max: 谷底の上限 [mm]
-#   curv_th   : [主] 走行距離で正規化した2階微分(曲率)のしきい値 [mm/mm^2]。
-#   curv_n    : [主] curv_th 以上が連続する tick 数。この2つが切れ目の本判定。
+#   curv_th   : [主] 連続とみなす曲率の下限 [mm/mm^2]。既定 0.0 = 「正である」。
+#   curv_n    : [主] その連続の最小 tick 数。
+#   curv_sum  : [主] 連続区間の曲率の合計 [mm/mm](= 傾きの総変化量)。
+#               連続と合計の両方が要る。連続だけだと谷底が丸い走行で1tick遅れ
+#               (173424: 谷底の曲率が0.206しかなく curv_th=0.3 では谷底+2)、
+#               合計だけだと孤立した1発で誤発火する(013712 idx376: 単発1.151の
+#               直後に-0.262)。実機9本で谷底の曲率は0.206〜0.775と4倍近く振れるが、
+#               谷底をまたぐ連続区間の合計は0.77〜1.58とまとまり、首振れランプの
+#               最大0.34とよく離れる。0.7 で9本中8本が谷底+1。
 #               2026-09-23: 首振れ/姿勢ドリフトは読みをほぼ直線に動かすので2階微分では
 #               符号が交互に振れるだけ(013712 idx376-384、ヨー-1.2→-3.3°: -0.99,+0.37,
 #               +0.41,+0.48,-1.61,+2.21,-1.26,+0.56)。柱の切れ目は傾きが変わるので正が
@@ -184,8 +191,9 @@ wall_off_pillar_enable: 1
 wall_off_pillar_depth_min: 8.0
 wall_off_pillar_bottom_min: 48.0
 wall_off_pillar_bottom_max: 80.0
-wall_off_pillar_curv_th: 0.3
+wall_off_pillar_curv_th: 0.0
 wall_off_pillar_curv_n: 2
+wall_off_pillar_curv_sum: 0.7
 wall_off_pillar_slope_min: 1.5
 wall_off_pillar_both_diff_min: -1.0
 wall_off_pillar_rise_min: 1.5
@@ -201,7 +209,7 @@ wall_off_pillar_min_v: 500
 # pillar_str の付け替えは不要。同値が2点並ぶ平坦な谷底では+0.5tickが一意に正しい。
 wall_off_pillar_vertex_interp: 1
 wall_off_pillar_str_l: 2.5
-wall_off_pillar_str_r: 1.0
+wall_off_pillar_str_r: -1.5
 
 wall_off_diff_ref_th: 6.5
 wall_off_diff_ref_front_th: 30 # 壁切れ偏差チェックの前後距離差条件

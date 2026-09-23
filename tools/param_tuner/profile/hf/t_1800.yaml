@@ -29,14 +29,14 @@ large:
   v: 1800
   ang: 90.0
   pow_n: 4
-  rad: 54.0
+  rad: 52.50
   # 2026-09-05: front.left/rightを平均値へ統一(姿勢誤差がfront側の左右非対称
   # チューニングに紛れ込む問題の切り分けのため、[[project-dia45-turn-tuning]]
   # 参照)。90degターンはleft/rightが幾何的に対称(v/rad/pow_n/angが左右共通)
   # なので、本来front.left==front.rightのはず。ズレは左右非対称バグの
   # 打ち消し跡である可能性が高い。
   # front: { left: 15.1502694878657064, right: 6.4002694878657064 }
-  front: { left: 19.006519, right: 24.250277 }
+  front: { left: 23.006519, right: 24.250277 }
   back: { left: 23.59381550343086, right: 23.59381550343086 }
 
   # v: 2000
