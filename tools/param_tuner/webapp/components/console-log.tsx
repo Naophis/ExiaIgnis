@@ -38,7 +38,7 @@ export function ConsoleLog({ lines, paused, onClear, onTogglePause }: Props) {
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full min-h-0 px-4 pb-4">
+        <ScrollArea className="h-full min-h-0 px-2 pb-2">
           <pre className="font-mono text-xs whitespace-pre-wrap break-all">{lines.join("\n")}</pre>
           <div ref={bottomRef} />
         </ScrollArea>

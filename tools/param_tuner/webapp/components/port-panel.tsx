@@ -51,14 +51,14 @@ export function PortPanel({
   const variant = !autoConnect ? "destructive" : STATUS_VARIANT[status];
 
   return (
-    <div className="flex shrink-0 items-center gap-2 rounded-xl border-l-2 border-l-accent-gold bg-card px-3 py-1.5 text-sm ring-1 ring-primary/20">
+    <div className="flex shrink-0 items-center gap-2 rounded-xl border-l-2 border-l-accent-gold bg-card px-2.5 py-1 text-sm ring-1 ring-primary/20">
       <span className="font-semibold tracking-wide text-accent-gold">Exia PARAM CONSOLE</span>
       <span className="text-muted-foreground">Pico (ttyACM*)</span>
       <Badge variant={variant}>{label}</Badge>
       <span className="text-muted-foreground">
         {connectedPath ?? (ports[0]?.path ? `検出済み: ${ports[0].path}` : "デバイス未検出")}
       </span>
-      {tabs && <div className="ml-4 flex gap-1">{tabs}</div>}
+      {tabs && <div className="ml-2 flex gap-1">{tabs}</div>}
       <div className="flex-1" />
       <Button size="sm" variant="outline" disabled={flashing} onClick={onFlash}>
         {flashing ? "Flashing..." : "Flash"}

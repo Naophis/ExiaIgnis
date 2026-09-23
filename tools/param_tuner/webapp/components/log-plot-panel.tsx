@@ -206,7 +206,7 @@ function TipLayer({ tip }: { tip: TipState | null }) {
   const x = Math.min(tip.x, Math.max(8, window.innerWidth - maxW - 8));
   return (
     <div
-      className="pointer-events-none fixed z-50 rounded border border-border bg-popover px-2 py-1.5 font-sans text-xs whitespace-pre-line text-popover-foreground shadow-md"
+      className="pointer-events-none fixed z-50 rounded border border-border bg-popover px-2 py-1 font-sans text-xs whitespace-pre-line text-popover-foreground shadow-md"
       style={{ left: x, top: tip.y, maxWidth: maxW }}
     >
       {tip.text}
@@ -782,7 +782,7 @@ export function LogPlotPanel({
       <ResizablePanelGroup direction="horizontal" autoSaveId="param-console-logplot">
       <ResizablePanel defaultSize={22} minSize={12} maxSize={45} className="min-w-0">
       <div className="flex h-full flex-col overflow-hidden border-r border-border">
-        <div className="flex items-center justify-between p-2">
+        <div className="flex items-center justify-between px-2 py-1">
           <span className="text-sm font-medium">ログファイル</span>
           <div className="flex gap-1">
             <Button size="sm" variant="ghost" onClick={() => void openLogsFolder()}>
@@ -795,7 +795,7 @@ export function LogPlotPanel({
         </div>
         <Separator />
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col p-1">
+          <div className="flex flex-col p-0.5">
             {files.map((f) => (
               <div
                 key={f.name}
@@ -806,7 +806,7 @@ export function LogPlotPanel({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") setSelected(f.name);
                 }}
-                className={`group flex items-center justify-between gap-1 rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                className={`group flex items-center justify-between gap-1 rounded px-1.5 py-1 text-left text-xs transition-colors ${
                   selected === f.name ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                 }`}
               >
@@ -833,7 +833,7 @@ export function LogPlotPanel({
               </div>
             ))}
             {files.length === 0 && (
-              <span className="px-2 py-1 text-xs text-muted-foreground">ログファイルがありません</span>
+              <span className="px-1.5 py-0.5 text-xs text-muted-foreground">ログファイルがありません</span>
             )}
           </div>
         </ScrollArea>
@@ -844,7 +844,7 @@ export function LogPlotPanel({
       <div className="flex h-full flex-col overflow-hidden">
         {/* 表示トグル・解析トグル(チップ)・PlotJuggler ボタンを1行にまとめる。
             有効化した解析だけパラメータが横に展開し、足りなければ折り返す。 */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1.5 py-0.5 text-xs">
           <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={showLeft45} onChange={(e) => setShowLeft45(e.target.checked)} />
             Left45
@@ -1140,7 +1140,7 @@ export function LogPlotPanel({
               <ResizablePanel order={2} defaultSize={48} minSize={10} collapsible className="min-w-0 min-h-0">
                 <div className="flex h-full flex-col overflow-hidden">
                   <ScrollArea className="min-h-0 flex-1">
-                    <div className="flex flex-col gap-2 p-2">
+                    <div className="flex flex-col gap-1.5 p-1.5">
                       {turnExitRows.length > 0 && (
                         <TurnExitTable
                           rows={turnExitRows}
@@ -1166,14 +1166,14 @@ export function LogPlotPanel({
           )}
         </ResizablePanelGroup>
         <Separator />
-        <div className="p-2 font-mono text-xs text-muted-foreground">
+        <div className="px-2 py-1 font-mono text-xs text-muted-foreground">
           {clickInfo ?? (trajectoryData ? "点をクリックすると詳細を表示します" : "x/y列を含むログを選択してください")}
         </div>
         {listedEvents.length > 0 && (
           <>
             <Separator />
             <ScrollArea className="max-h-32 min-h-0">
-              <div className="flex flex-col gap-0.5 p-2 font-mono text-xs">
+              <div className="flex flex-col gap-0.5 px-2 py-1 font-mono text-xs">
                 {listedEvents.map((ev, i) => (
                   <span key={i} className={EVENT_COLOR[ev.kind]}>
                     {ev.label}

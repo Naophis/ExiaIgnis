@@ -230,12 +230,12 @@ export function ParamMatrixPanel({ onClose }: Props) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-2 overflow-hidden p-0 px-4 pb-4">
+      <CardContent className="flex flex-1 flex-col gap-1.5 overflow-hidden p-0 px-2 pb-2">
         {!rows ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">読み込み中...</div>
         ) : (
           <>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               <Input
                 className="w-32"
                 placeholder="新しい速度(mm/sec)"
@@ -251,13 +251,13 @@ export function ParamMatrixPanel({ onClose }: Props) {
               <table className="border-collapse text-sm">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 top-0 z-20 min-w-[140px] border-b border-r border-border bg-card px-3 py-2 text-left">
+                    <th className="sticky left-0 top-0 z-20 min-w-[140px] border-b border-r border-border bg-card px-2 py-1 text-left">
                       mm/sec
                     </th>
                     {rows.map((r, idx) => (
                       <th
                         key={`${idx}-${r.vMax}`}
-                        className="sticky top-0 z-10 min-w-[72px] border-b border-l border-border px-1 py-2 text-center font-semibold"
+                        className="sticky top-0 z-10 min-w-[72px] border-b border-l border-border px-1 py-1 text-center font-semibold"
                         style={{ backgroundColor: columnColor(idx, 1) }}
                       >
                         <VMaxCell
@@ -267,7 +267,7 @@ export function ParamMatrixPanel({ onClose }: Props) {
                         <button
                           type="button"
                           onClick={() => deleteColumn(idx)}
-                          className="mt-1 block w-full text-xs text-destructive hover:underline"
+                          className="block w-full text-xs text-destructive hover:underline"
                         >
                           削除
                         </button>
@@ -399,7 +399,7 @@ function SectionLabelRow({ label, colSpan }: { label: string; colSpan: number })
     <tr>
       <td
         colSpan={colSpan}
-        className="sticky left-0 border-b border-border bg-muted px-3 py-1.5 font-semibold text-muted-foreground"
+        className="sticky left-0 border-b border-border bg-muted px-2 py-0.5 font-semibold text-muted-foreground"
       >
         {label}
       </td>
@@ -409,7 +409,7 @@ function SectionLabelRow({ label, colSpan }: { label: string; colSpan: number })
 
 function RowLabel({ label }: { label: string }) {
   return (
-    <td className="sticky left-0 z-10 min-w-[140px] border-b border-r border-border bg-card px-3 py-1.5 text-muted-foreground">
+    <td className="sticky left-0 z-10 min-w-[140px] border-b border-r border-border bg-card px-2 py-0.5 text-muted-foreground">
       {label}
     </td>
   );
@@ -446,7 +446,7 @@ function NumberCell({ value, onCommit }: { value: number; onCommit: (v: number) 
         if (e.target.value.trim() !== "" && !Number.isNaN(n)) onCommit(n);
         else e.target.value = String(value);
       }}
-      className="h-8 w-16 bg-transparent px-1 text-center text-sm outline-none focus:bg-muted"
+      className="h-7 w-16 bg-transparent px-1 text-center text-sm outline-none focus:bg-muted"
     />
   );
 }
@@ -460,7 +460,7 @@ function TextCell({ value, onCommit }: { value: string; onCommit: (v: string) =>
       type="text"
       defaultValue={value}
       onBlur={(e) => onCommit(e.target.value)}
-      className="h-8 w-16 bg-transparent px-1 text-center text-sm outline-none focus:bg-muted"
+      className="h-7 w-16 bg-transparent px-1 text-center text-sm outline-none focus:bg-muted"
     />
   );
 }
@@ -477,7 +477,7 @@ function VMaxCell({ value, onCommit }: { value: number; onCommit: (v: number) =>
         if (Number.isInteger(n) && n > 0) onCommit(n);
         else e.target.value = String(value);
       }}
-      className="h-8 w-16 bg-transparent px-1 text-center text-base font-semibold outline-none focus:bg-muted"
+      className="h-7 w-16 bg-transparent px-1 text-center text-base font-semibold outline-none focus:bg-muted"
     />
   );
 }

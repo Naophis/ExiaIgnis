@@ -170,7 +170,7 @@ export function SlalomSimPanel({ file, draft, onApply }: Props) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">ターン種別</span>
           <div className="flex min-w-0 flex-wrap gap-1">
@@ -323,7 +323,7 @@ export function SlalomSimPanel({ file, draft, onApply }: Props) {
         )}
 
         {result && (
-          <pre className="overflow-x-auto rounded-md border bg-muted/30 p-2 text-xs">
+          <pre className="overflow-x-auto rounded-md border bg-muted/30 p-1.5 text-xs">
             {`${type}:
   v: ${fields.v}
   ang: ${fields.ang}

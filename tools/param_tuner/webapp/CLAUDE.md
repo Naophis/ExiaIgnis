@@ -81,6 +81,7 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 
 ## 既知のハマりどころ
 
+- **余白は詰めてある(shadcn 既定より狭い)**: 情報密度優先で `components/ui/card.tsx` の `--card-spacing` を `--spacing(4)`→`--spacing(2)`(8px)、`ui/table.tsx` のセルを `px-1.5 py-1` に落とし、`app/page.tsx` のルートを `gap-2 p-2` にしてある。各パネルの `p-*`/`gap-*` もこれに合わせた。`npx shadcn add` で `ui/` を再生成すると既定値(16px)に戻るので、上書きされたら詰め直すこと。
 - **flexアイテムの折り返し**: `flex flex-wrap` な子要素がある行コンテナで、子に `min-w-0` を付け忘れると「コンテンツ基準の自動最小幅」によって折り返さずに親をはみ出す。セグメントボタン群(`test-template-panel.tsx` の `QuickApplySelectRow`)で実際に踏んだ。
 - **ScrollArea が伸びきってスクロールしない**: shadcn/BaseUI の `ScrollArea` は Root 自体に `overflow` を持たない(スクロールはネストされた Viewport が担当)ため、Root に `min-h-0` を付けないと「コンテンツ基準の自動最小サイズ」でスクロール領域が全コンテンツ分に伸びきり、親の `overflow-hidden` に下側が切られる。
 - **Select の controlled/uncontrolled 切り替え警告**: `value` が最初 `undefined`(データ未取得)で後から文字列になると Base UI が警告を出す。値が確定するまで `<Select>` 自体をマウントしない(`components/test-template-panel.tsx` の `QuickApplySelectRow` 参照)。

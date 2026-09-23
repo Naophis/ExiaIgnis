@@ -72,7 +72,7 @@ export function YamlEditor({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-2 overflow-hidden">
+      <CardContent className="flex flex-1 flex-col gap-1.5 overflow-hidden">
         <div className="min-h-0 flex-1 overflow-auto rounded-md border text-xs">
           <CodeMirror
             value={draft}
@@ -82,7 +82,7 @@ export function YamlEditor({
             basicSetup={{ foldGutter: true, highlightActiveLine: true }}
           />
         </div>
-        <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
           {saving ? (
             <span>保存中...</span>
           ) : dirty ? (

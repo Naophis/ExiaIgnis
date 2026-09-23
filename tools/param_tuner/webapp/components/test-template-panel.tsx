@@ -184,8 +184,8 @@ export function TestTemplatePanel({
       <ResizablePanelGroup direction="vertical" autoSaveId="param-console-test-template">
       <ResizablePanel defaultSize={55} minSize={20} className="min-h-0">
       <ScrollArea className="h-full">
-      <div className="flex flex-col gap-3 px-(--card-spacing) py-3">
-        <div className="flex flex-col gap-2 rounded-md border p-3">
+      <div className="flex flex-col gap-2 px-(--card-spacing) py-2">
+        <div className="flex flex-col gap-1.5 rounded-md border p-2">
           <span className="text-xs font-medium text-muted-foreground">クイック適用</span>
           {QUICK_APPLY_KEYS.map((key) => {
             const options =
@@ -220,7 +220,7 @@ export function TestTemplatePanel({
         </div>
         <Separator />
         {editingId ? (
-          <div className="flex flex-col gap-2 rounded-md border p-3">
+          <div className="flex flex-col gap-1.5 rounded-md border p-2">
             <Input
               placeholder="テンプレート名"
               value={name}
@@ -294,7 +294,7 @@ export function TestTemplatePanel({
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={45} minSize={15} className="min-h-0">
       <ScrollArea className="h-full">
-        <div className="flex flex-col gap-2 px-(--card-spacing) py-3">
+        <div className="flex flex-col gap-1.5 px-(--card-spacing) py-2">
             {templates.map((t) => (
               <div
                 key={t.id}
@@ -304,7 +304,7 @@ export function TestTemplatePanel({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") startEdit(t);
                 }}
-                className="flex cursor-pointer flex-col gap-1 rounded-md border p-2 hover:bg-muted"
+                className="flex cursor-pointer flex-col gap-0.5 rounded-md border p-1.5 hover:bg-muted"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{t.name}</span>
@@ -344,7 +344,7 @@ export function TestTemplatePanel({
               </div>
             ))}
             {templates.length === 0 && (
-              <span className="px-2 py-1 text-sm text-muted-foreground">テンプレートがありません</span>
+              <span className="px-1.5 py-0.5 text-sm text-muted-foreground">テンプレートがありません</span>
             )}
         </div>
       </ScrollArea>
@@ -409,7 +409,7 @@ function QuickApplySelectRow({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <span className="w-20 shrink-0 pt-1.5 text-sm">{label}</span>
+      <span className="w-20 shrink-0 pt-1 text-sm">{label}</span>
       {value === undefined || options.length === 0 ? (
         <span className="pt-1.5 text-xs text-muted-foreground">読み込み中...</span>
       ) : (
@@ -423,7 +423,7 @@ function QuickApplySelectRow({
                 disabled={applying}
                 onClick={() => onApply(opt.value)}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap ring-1 ring-border transition-colors disabled:pointer-events-none disabled:opacity-50",
+                  "rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ring-1 ring-border transition-colors disabled:pointer-events-none disabled:opacity-50",
                   active
                     ? "bg-primary text-primary-foreground ring-primary"
                     : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"

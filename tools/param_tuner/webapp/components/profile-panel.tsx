@@ -64,7 +64,7 @@ export function ProfilePanel({
           {needle ? `${shown} / ${total} ファイル` : `${total} ファイル`}
         </span>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-2 overflow-hidden">
+      <CardContent className="flex flex-1 flex-col gap-1.5 overflow-hidden">
         <Button onClick={onSendAll} disabled={isBusy} className="w-full">
           {sending === ALL_SENTINEL ? "送信中..." : "全て送信"}
         </Button>
@@ -75,9 +75,9 @@ export function ProfilePanel({
         />
         <Separator />
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-1 pr-2">
+          <div className="flex flex-col gap-0.5 pr-1.5">
             {shown === 0 && (
-              <span className="px-2 py-1 text-sm text-muted-foreground">該当するファイルがありません</span>
+              <span className="px-1.5 py-0.5 text-sm text-muted-foreground">該当するファイルがありません</span>
             )}
             {base.map((file) => (
               <FileRow
@@ -181,7 +181,7 @@ function FileRow({
             }
           : undefined
       }
-      className={`flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-muted ${editable ? "cursor-pointer" : ""}`}
+      className={`flex items-center justify-between gap-2 rounded px-1.5 py-0.5 hover:bg-muted ${editable ? "cursor-pointer" : ""}`}
     >
       <span className="truncate text-sm">{file}</span>
       <div className="flex shrink-0 items-center gap-1">
