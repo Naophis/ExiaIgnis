@@ -71,9 +71,25 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 
 **WALL_OFF 中の高頻度(4kHz相当)サンプル(2026-09-15〜)**: firmware(`src/sensing_task.cpp`)は 1kHz のログ行に「前1msの最大4サンプル」を `hf_d{k}`(距離)/`hf_x{k}`(行取得時の `global_pos.dist` からの進行方向オフセット、過去なので負)/`hf_cnt`/`hf_side`(0=左45, 1=右45, -1=無効) として載せる。`lib/trajectory.ts` の `hfSamplePose()` が行の姿勢を `hf_x{k}` だけ進行方向に内挿し、通常の45度投影 `projectSensorPoint()` に通して `TrajectoryData.hfWallPoints` を作る(壁切れ中は等速直進なので直線内挿、θは行の値)。`lib/log-analysis.ts` の `computeHfEdgeEvents()` は `hf_edge_rel`(検出後の各行で「行位置 − 壁切れ位置」)が最初に正になった行から壁切れ位置(◇ `hf-edge`)と、その位置に最も近いスロットの読みで投影した壁面点(□ `hf-edge-sensor`)を出す。パネルの「hf点群」チェックで点群・マーカーとも表示切替。旧ログ(hf列なし)では何も出ない。
 
-**旋回出口解析(2026-09-23〜)**: `lib/turn-exit.ts` は `tools/param_tuner/turn_exit_check.py` の移植(純粋関数、ブラウザ/Node 共用。仕様の正本は .py の docstring で、数式を変えるときは両方を直す。`turn_exit_check.py` の出力と一致することを 3 本のログで確認済み)。SLALOM 区間ごとに追従状態(wmax/横G/w_lp 過不足/v_c 最小比/内輪速度最小比 `v_in`/duty 飽和 tick 数/終端角度遅れ)と出口残差(旋回後 2tick 目の `kim_theta`、最初に両壁が見えた tick の横ずれ `off0`、25〜50mm 区間の横ずれをヨー分 0.96mm/° で補正して外側正にした `wide`)を出す。旋回種別は角度と「斜め区間にいるか」(走行開始は直線、45°/135° の旋回ごとにトグル)で決め、斜めへ抜ける旋回は 45° センサーが柱を見るので off 系を NaN にする。パネルでは「旋回出口解析」チェックで、選択中のログを**ブラウザ側で**解析して旋回テーブル(行クリックで詳細をクリック情報欄へ。迷路プロットは正方形で横が余るので、プロットの右に横の `ResizablePanelGroup` で置く。既定はプロット 52%、表側は collapsible。旋回テーブルは横幅を抑えるため w_lp 過不足と ey40 を列に出さず行クリックの詳細に回している。下のイベント一覧には出さない)と出口マーカー(◇ `turn-exit`)を出し、あわせて `/api/logs/turn-exit?limit=N` で直近 N 本の集計テーブル((種別, 向き, v) ごとの n / mean±σ)を表示する。集計は有効中、ファイル一覧の先頭(`latest.csv` を除く)が変わるたび=新しいログが保存されるたびに再取得する。API の JSON では NaN が `null` になるので、集計側の表示・色付けは `Stat.n === 0` を先に見る(`fmtStat`/`statFlag`)。
+**解析まわりの置き場所(2026-09-23 に共通化)**: 重畳解析の設定と計算は `lib/use-analysis.ts`(`useAnalysisSettings()` / `useAnalysisEvents()`)、チップ UI は `components/analysis-toggles.tsx`、旋回テーブルは `components/turn-exit-table.tsx` にあり、**プロットタブと詳細ログ解析ページ(/logs)が同じものを使う**。解析を足すときは lib 側に設定と計算、toggles 側にチップを足せば両画面に出る。片方だけに実装しないこと。
+
+**旋回出口解析(2026-09-23〜)**: `lib/turn-exit.ts` は `tools/param_tuner/turn_exit_check.py` の移植(純粋関数、ブラウザ/Node 共用。仕様の正本は .py の docstring で、数式を変えるときは両方を直す。`turn_exit_check.py` の出力と一致することを 3 本のログで確認済み)。SLALOM 区間ごとに追従状態(wmax/横G/w_lp 過不足/v_c 最小比/内輪速度最小比 `v_in`/duty 飽和 tick 数/終端角度遅れ)と出口残差(旋回後 2tick 目の `kim_theta`、最初に両壁が見えた tick の横ずれ `off0`、25〜50mm 区間の横ずれをヨー分 0.96mm/° で補正して外側正にした `wide`)を出す。旋回種別は角度と「斜め区間にいるか」(走行開始は直線、45°/135° の旋回ごとにトグル)で決め、斜めへ抜ける旋回は 45° センサーが柱を見るので off 系を NaN にする。パネルでは「旋回出口」チェックで、選択中のログを**ブラウザ側で**解析して旋回テーブル(行クリックで詳細をクリック情報欄へ。迷路プロットは正方形で横が余るので、プロットの右に横の `ResizablePanelGroup` で置く。既定はプロット 52%、表側は collapsible。旋回テーブルは横幅を抑えるため w_lp 過不足と ey40 を列に出さず行クリックの詳細に回している。下のイベント一覧には出さない)と出口マーカー(◇ `turn-exit`)を出し、あわせて `/api/logs/turn-exit?limit=N` で直近 N 本の集計テーブル((種別, 向き, v) ごとの n / mean±σ)を表示する。集計は有効中、ファイル一覧の先頭(`latest.csv` を除く)が変わるたび=新しいログが保存されるたびに再取得する。API の JSON では NaN が `null` になるので、集計側の表示・色付けは `Stat.n === 0` を先に見る(`fmtStat`/`statFlag`)。
 
 右ペインの「コンソール / プロット」切り替えボタンは右ペイン内ではなく `PortPanel`(ヘッダーバー)の `tabs` スロットに出す(既定ビューのときだけ `app/page.tsx` が渡す)。右ペイン内に置くと1行分の高さを食うため。表示トグル(Left45/Right45/hf点群/原点X)・解析トグル(ドロップ/状態遷移/トラフ/壁切れエッジ/旋回出口/時系列)・PlotJuggler ボタンは**1行**にまとめてある(解析はチップ、有効化した解析だけパラメータ入力が横に展開、ラベルは短縮して説明は `title` ツールチップ)。行を増やす変更はプロット領域を削るので避ける。列の意味は `COLUMN_HELP`(log-plot-panel.tsx)に日本語で持ち、見出し・値セルのどちらにホバーしても `useTip`/`TipLayer`(position: fixed の即時ツールチップ。native の title は1秒待つ上に ScrollArea に切られるので不採用)で表示する。列を足すときは `COLUMN_HELP` にも説明を足す。旋回テーブルの行クリックは `selectedTurnKey`(`log|idx`)で選択し、`TrajectoryPlot` の `highlight` prop に旋回区間(SLALOM 行)と旋回後の窓(出口〜40tick、次の旋回で打ち切り)を生行オブジェクトの集合で渡す。プロット側は他の点を減光し、旋回をマゼンタ・窓をアンバーの太い点で上書きする。同じ行をもう一度クリックで解除。
+
+## 詳細ログ解析ページ — `/logs`(`app/logs/page.tsx` / `components/log-detail-view.tsx`)
+
+1本のログを画面いっぱいで精査する別ページ。`?file=<name>.csv` で開くファイルを指定でき、プロットタブの「詳細解析」ボタンがこれを使う。**プロットタブ側は残してある**(走った直後にその場で見る用途はそちらが速い)ので、機能を重複して増やさないこと。任意列の時系列は PlotJuggler が担当なので、このページはそこと張り合わない(旋回を軸にした精査が役割)。
+
+- **左: 軌跡、右: 時系列グラフの縦積み**。全グラフが x 軸(`Domain`)と連動カーソル(CSV の `index`)を共有し、ホイール=ズーム/ドラッグ=パンがすべてのグラフに効く。軌跡には現在のカーソル位置に白いリングが出る。軌跡の点をクリックするとカーソルがそこへ移る。
+- **旋回ストリップ**: `analyzeTurnExits()` の結果を並べたボタン。押すと x 軸をその旋回(前 40tick 〜 出口 +90tick)へズームし、軌跡はその旋回をマゼンタ・旋回後の窓をアンバーで強調する。ホバーで wide / yaw0 / sat が出る。
+- **解析トグル**はプロットタブと同じ `AnalysisToggles`(ドロップ/状態遷移/トラフ/壁切れエッジ/旋回出口)。マーカーは軌跡と各グラフの両方へ出る。旋回出口だけこのページでは既定 ON(旋回ストリップが主な移動手段のため)。「旋回表」で旋回テーブル(行クリックでその旋回へズーム)、「イベント一覧」で検出ラベルの一覧を出す。複数ログの集計はこのページでは出さない(1本を精査する画面なので、`AnalysisToggles` の `showTurnExitSummary` を渡さない)。
+- **グラフ構成**は `lib/log-columns.ts` の `DEFAULT_CHARTS`(角速度/角度/壁PD/速度/duty)が初期値。列チップのクリックで外し、「列 +」で 150 列超から絞り込んで足せる。↑↓ で並び替え、下端のバーをドラッグで高さを変える。
+- **表示設定の保存**: グラフ構成(列・高さ・並び順)と表示トグルを `localStorage`(`exia-log-detail-prefs-v1`)にまとめて保存する。左右の分割幅は `ResizablePanelGroup` の `autoSaveId` が別に持つ。読めなくても既定値で動く。
+- **状態帯**: `motion_state` の区間をグラフ背景に敷く(`MOTION_STATE_BAND`)。旋回と前後の繋ぎだけ色を付け、直進・停止は透明にして帯だらけにしない。番号は `include/enums.hpp` の `MotionType` と一致させること。
+- **カーソル読み取り行**(最下部)は `CURSOR_READOUT_COLUMNS` の列を出す。
+
+`SensorTimeseriesPlot` はこのページのために拡張済み: `domain`/`onDomainChange` を渡すと controlled(複数グラフで x 軸共有)、`cursorIndex`/`onCursorChange` で連動カーソル、`bands` で背景帯、`compact` で下部の読み取り行と凡例を省く(見出しの列チップが同じ色で凡例を兼ねる)。カーソル位置の値は各グラフの**右上に固定**で出す(位置が動くと読みにくい)。全グラフが同じ index を指しているので、1枚にマウスを載せれば全グラフの値が同時に読める。カーソルと読み取り枠は**系列とは別のキャンバス**に描くので、カーソルが動いても重い系列の再描画は起きない。controlled のときは「データが変わったら全体にフィットし直す」処理を親に任せる(`domain` を `null` にして `fullDomain` を渡す)。
 
 ## Flash — `lib/flash.ts`
 

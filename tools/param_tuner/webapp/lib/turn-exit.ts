@@ -244,6 +244,32 @@ export function analyzeTurnExits(rows: Record<string, number>[], opts: TurnExitO
   return out;
 }
 
+// ---- 表示ヘルパー(パネル・詳細ページ・マーカーのラベルで共用) ----
+
+/** NaN を "–" にする数値整形 */
+export const fmtNum = (x: number, digits = 1): string => (Number.isFinite(x) ? x.toFixed(digits) : "–");
+
+/** テーブル行の選択キー。idx だけだと別ログの同じ行番号に当たりうるのでログ名を含める。 */
+export const turnKey = (t: TurnExitRow): string => `${t.log}|${t.idx}`;
+
+/** 軌跡プロットの出口マーカーに出す1行 */
+export function turnExitLabel(t: TurnExitRow): string {
+  return `turn-exit idx=${t.idx} ${t.kind} ${t.dir} v=${t.v} wide=${fmtNum(t.wide)} yaw0=${fmtNum(t.yaw0)}° sat=${t.sat} v_in=${fmtNum(t.vIn, 2)}`;
+}
+
+/** 行を選んだときに読み取り欄へ出す全項目 */
+export function formatTurnExit(t: TurnExitRow): string {
+  return [
+    `${t.kind} ${t.dir} v=${t.v} idx=${t.idx}-${t.endIdx} exit=${t.exitIdx}`,
+    `wmax=${fmtNum(t.wmax)} (${fmtNum(t.latg)}G)`,
+    `w+${fmtNum(t.wOver)}/${fmtNum(t.wUnder)}`,
+    `vc_min=${fmtNum(t.vcMin, 2)} v_in=${fmtNum(t.vIn, 2)} sat=${t.sat}`,
+    `lag=${fmtNum(t.lag)}° yaw0=${fmtNum(t.yaw0)}°`,
+    `off0=${fmtNum(t.off0)} off=${fmtNum(t.off)} yaw=${fmtNum(t.yaw)}° off_c=${fmtNum(t.offC)} wide=${fmtNum(t.wide)}`,
+    `dsen40=${fmtNum(t.dsen40, 0)}° ey40=${fmtNum(t.ey40)}`,
+  ].join(" | ");
+}
+
 export interface Stat {
   n: number;
   mean: number;

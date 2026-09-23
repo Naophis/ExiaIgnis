@@ -15,6 +15,8 @@ interface Props {
   // 強調する。生の CSV 行オブジェクト(TrajectoryPoint.raw と同一)の集合。
   // 指定中は他の軌跡点を減光する。
   highlight?: TrajectoryHighlight | null;
+  // 時系列グラフと連動するカーソル位置。その点に大きなリングを描く。
+  cursorPoint?: TrajectoryPoint | null;
   onPointClick: (point: TrajectoryPoint | null) => void;
 }
 
@@ -111,7 +113,16 @@ function makeTransform(bounds: TrajectoryData["worldBounds"], w: number, h: numb
   return { toCanvas, toWorld, scale };
 }
 
-export function TrajectoryPlot({ data, showLeft45, showRight45, showHf, markers, highlight, onPointClick }: Props) {
+export function TrajectoryPlot({
+  data,
+  showLeft45,
+  showRight45,
+  showHf,
+  markers,
+  highlight,
+  cursorPoint,
+  onPointClick,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -325,7 +336,20 @@ export function TrajectoryPlot({ data, showLeft45, showRight45, showHf, markers,
         }
       }
     }
-  }, [data, size, showLeft45, showRight45, showHf, markers, highlight, view, rotated]);
+
+    if (cursorPoint) {
+      const [cx, cy] = toCanvas(cursorPoint.x + data.xOffset, cursorPoint.y);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2 * iz;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 7 * iz, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2 * iz, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, [data, size, showLeft45, showRight45, showHf, markers, highlight, cursorPoint, view, rotated]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current?.moved) return; // drag-to-pan, not a point pick
