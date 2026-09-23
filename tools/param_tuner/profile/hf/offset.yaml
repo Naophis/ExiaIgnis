@@ -77,8 +77,8 @@ wall_off_hold_dist: 88
 ctrl_exist_wall_th_l: 46.5 #探索壁切れ
 ctrl_exist_wall_th_r: 46.5 #探索壁切れ
 go_straight_wide_ctrl_th: 75
-search_wall_off_l_dist_offset: 56.25
-search_wall_off_r_dist_offset: 52.5
+search_wall_off_l_dist_offset: 59.50
+search_wall_off_r_dist_offset: 56.0
 # search_wall_off_l_dist_offset: 50.0
 # search_wall_off_r_dist_offset: 50.0
 search_wall_off_offset_dist: 5.0
@@ -108,13 +108,13 @@ wall_off_hold_dist_str_r_exist: -1.0 #p_wall_off.right_str_exist
 
 # 壁切れ In2(最初からないとき)
 wall_off_hold_exist_dist_l2: 60 #p_wall_off.exist_dist_l2
-wall_off_hold_exist_dist_r2: 60 #p_wall_off.exist_dist_r2
+wall_off_hold_exist_dist_r2: 68 #p_wall_off.exist_dist_r2
 # 壁切れ Out2(最初からないとき)
 wall_off_hold_noexist_th_l2: 60.5
-wall_off_hold_noexist_th_r2: 60.5
+wall_off_hold_noexist_th_r2: 68.5
 # 壁切れ オフセット距離(最初からないとき)
 wall_off_hold_dist_str_l: -2.0 #p_wall_off.left_str
-wall_off_hold_dist_str_r: -4.5 #p_wall_off.right_str
+wall_off_hold_dist_str_r: -7.5 #p_wall_off.right_str
 
 # 2026-09-15: WALL_OFF中の注視側45°LED1高頻度サンプリング(hf)。
 # sensing_task.cppがTIMER0 alarm3で1msあたりsub_samples回の追加サンプルを取り
@@ -146,32 +146,60 @@ wall_off_hf_min_valid: 100
 #   bottom_min: 谷底の下限 [mm]。旋回直後に「今曲がった角の柱」が32〜38mmの近い谷として
 #               見えるのを除外する(遠い柱は実測53〜70mm)。近い物は exist 経路の担当
 #   bottom_max: 谷底の上限 [mm]
-#   slope_min : 離脱の上昇率 [mm/mm](走行1mmあたり)を2tick連続で超えること
+#   curv_th   : [主] 走行距離で正規化した2階微分(曲率)のしきい値 [mm/mm^2]。
+#   curv_n    : [主] curv_th 以上が連続する tick 数。この2つが切れ目の本判定。
+#               2026-09-23: 首振れ/姿勢ドリフトは読みをほぼ直線に動かすので2階微分では
+#               符号が交互に振れるだけ(013712 idx376-384、ヨー-1.2→-3.3°: -0.99,+0.37,
+#               +0.41,+0.48,-1.61,+2.21,-1.26,+0.56)。柱の切れ目は傾きが変わるので正が
+#               続く(160516 idx85-89: -0.07,+1.21,+0.94,+2.13,+1.04)。実機8本で7本が
+#               谷底+1 で発火、平均lag 4.53mm→1.71mm。両点灯ch(LED1より約2tick遅れて
+#               谷底を打つ)に依存しないのも効いている。
+#               柱8本の「2tickペアの小さい方」は 0.357〜0.632 で、0.3 に対する余裕は
+#               最悪19%。0.4 にすると 152125 が谷底+5 まで落ちる。使える窓は 0.25〜0.35。
+#   slope_min : [保険] 1階微分版の上昇率 [mm/mm]。曲率が閾値に届かない形のとき用。
+#               曲率ルールのほうが常に先に出るので、通常はこちらは発火しない。
+#   both_diff_min: 両点灯 ch の 1tick 差分がこれより大きいこと [mm]。接近中(両 ch が
+#               毎tick −1.5〜−3mm 下降)の LED1 単独の跳ねを弾く。0 にすると従来どおり
+#               「両点灯 ch も上昇」を要求するが、両点灯 ch は LED1 より約 2tick 遅れる
 #   rise_min  : 谷底からの上昇量 [mm]
 #   far_th    : 確認条件。ここまで抜けたら離脱確定 [mm]
 #   max_lag   : 谷底からこれ以内に離脱しなければ柱ではない(壁の平坦を除外) [mm]
-#   stale_dist: 谷底がこれより古ければ追跡し直す(前のセルの柱を拾わない) [mm]
+#   stale_dist: 谷底がこれより古ければ追跡し直す [mm]
+#   prestart_dist: WALL_OFF 開始よりこれ以上前にある谷底は拾わない [mm]。検知器は直線中
+#               も柱(壁なし区間で90mmごと)を検知するので、直前の柱を次の旋回の柱と
+#               取り違えないための窓。谷底が開始の直前(SLA_BACK_STR 中や直線末尾、
+#               実測 −2〜−12mm)にある本物の柱は拾う
 #   min_v     : これ未満の速度では追跡のみで発火しない [mm/s]
 # 首振れ耐性: 45°読みのヨー感度≈1.1mm/deg@65mm、直線中の観測最大ヨー1.5°/tick
-# でも1tick≤1.7mm(壁読みの|Δd| p99=1.8mm/tick)。slope_min=1.5は1800mm/sで
-# ≥2.7mm/tickを2tick連続要求、far_thは+30mm以上を要求するので首振れでは成立
-# しない。首振れ由来の浅い谷(実測4.7mm、20260923_064338.csv idx410)は
+# でも1tick≤1.7mm(壁読みの|Δd| p99=1.8mm/tick)。早期条件は1800mm/sで
+# ≥2.7mm/tickの単発上昇+前tick上昇+累積4mm以上を要求、far_thは+30mm以上を
+# 要求するので首振れでは成立しない。首振れ由来の浅い谷(実測4.7mm、20260923_064338.csv idx410)は
 # depth_min=8で棄却。
 # wall_off_pillar_str_l/r の初期値は従来経路(谷底から2〜3tick後に発火 +
 # left_str/right_str)と同じ位置になる換算値(右: −4.5+5.5, 左: −2.0+4.5)。
 # 有効化後は n≥4 で再測定し、旋回突入時の front_d を基準に合わせ込むこと。
-# ログ列 pillar_st(右*10+左: 1=追跡 2=早期発火 3=確認発火) / pillar_lag_l,r /
+# ログ列 pillar_st(右*10+左: 1=追跡 2=曲率発火 3=far_th確認 4=1階微分保険) / pillar_lag_l,r /
 # pillar_btm_l,r で動作を確認できる。
 wall_off_pillar_enable: 1
 wall_off_pillar_depth_min: 8.0
 wall_off_pillar_bottom_min: 48.0
 wall_off_pillar_bottom_max: 80.0
+wall_off_pillar_curv_th: 0.3
+wall_off_pillar_curv_n: 2
 wall_off_pillar_slope_min: 1.5
-wall_off_pillar_rise_min: 4.0
+wall_off_pillar_both_diff_min: -1.0
+wall_off_pillar_rise_min: 1.5
 wall_off_pillar_far_th: 100.0
 wall_off_pillar_max_lag: 14.0
 wall_off_pillar_stale_dist: 30.0
+wall_off_pillar_prestart_dist: 20.0
 wall_off_pillar_min_v: 500
+# 谷底を放物線(谷底の前・谷底・谷底の次)の頂点でサブtick補正する。0で無効。
+# 手持ちのログでは効果を測れない: 機体は補間なしの谷底にアンカーしているので、
+# 同じ点を基準にした「停止−谷底」では量子化が相殺される。速度を変えた2条件で
+# 停止位置の差が縮むかを見るのが正しい検証。平均のずれは8本で+0.01mmなので
+# pillar_str の付け替えは不要。同値が2点並ぶ平坦な谷底では+0.5tickが一意に正しい。
+wall_off_pillar_vertex_interp: 1
 wall_off_pillar_str_l: 2.5
 wall_off_pillar_str_r: 1.0
 
@@ -187,8 +215,8 @@ wall_off_hold_div_th_l2: 0.5 #p_wall_off.div_th_l2
 wall_off_hold_div_th_r2: 0.5 #p_wall_off.div_th_r2
 
 # 壁切れ 偏差
-wall_off_hold_div_th_l3: 0.25 #p_wall_off.div_th_l3
-wall_off_hold_div_th_r3: 0.25 #p_wall_off.div_th_r3
+wall_off_hold_div_th_l3: 0.01 #p_wall_off.div_th_l3
+wall_off_hold_div_th_r3: 0.01 #p_wall_off.div_th_r3
 
 # wall_off()確定→SLA_FRONT_STR走行完了時点でここまで遠のいていなければ
 # 誤検知(見きれず)とみなしwall_off()をやり直す。壁の有無はだいたい60mm
