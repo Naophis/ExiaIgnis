@@ -363,11 +363,16 @@ void SensorProcessor::update_pillar_trough() {
     p.depth_min = pp.pillar_depth_min;
     p.bottom_min = pp.pillar_bottom_min;
     p.bottom_max = pp.pillar_bottom_max;
+    p.curv_th = pp.pillar_curv_th;
+    p.curv_n = pp.pillar_curv_n;
+    p.curv_sum = pp.pillar_curv_sum;
     p.slope_min = pp.pillar_slope_min;
+    p.both_diff_min = pp.pillar_both_diff_min;
     p.rise_min = pp.pillar_rise_min;
     p.far_th = pp.pillar_far_th;
     p.max_lag = pp.pillar_max_lag;
     p.stale_dist = pp.pillar_stale_dist;
+    p.vertex_interp = (pp.pillar_vertex_interp != 0);
     const bool fire_ok = std::fabs(se->ego.v_c) >= pp.pillar_min_v;
     pillar_r_.update(se->ego.right45_dist, se->ego.right45_2_dist_diff, x, travel,
                      fire_ok, p);

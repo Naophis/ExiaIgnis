@@ -186,7 +186,7 @@ PlanningTask は以下のサブシステムを内包:
 
 #### 壁切れ検知の柱の谷(下に凸)検知 (`include/planning/pillar_trough_detector.hpp`)
 
-壁なし開始の `WALL_OFF` では注視側 45° LED1 が「下降→谷底→急上昇」の谷を見せる。`PillarTroughDetector` は Core1 の `SensorProcessor::update_pillar_trough()` で左右 2 本を毎 tick 更新し(旋回・超信地・停止中は再アーム)、結果を `sensing_result->pillar_l/r` に公開する。Core0 の `WallOffController::take_pillar_trough()` が exist=false の経路で最優先に拾い、発火位置ではなく谷底位置でアンカーして `ps_front.dist += pillar_str − (現在位置 − 谷底位置)` とする。パラメータは `offset.yaml` の `wall_off_pillar_*`。従来の絶対しきい値経路と 25mm 通過の安全網(`detect_pass_through_case2`)は残してある。ホスト検証は `tests/pillar_trough_host/run.sh`(CSV ログを渡すと全行再生)。
+壁なし開始の `WALL_OFF` では注視側 45° LED1 が「下降→谷底→急上昇」の谷を見せる。`PillarTroughDetector` は Core1 の `SensorProcessor::update_pillar_trough()` で左右 2 本を毎 tick 更新し(旋回・超信地・停止中は再アーム)、結果を `sensing_result->pillar_l/r` に公開する。切れ目の判定は**走行距離で正規化した 2 階微分(曲率)が `curv_th` 以上を `curv_n` tick 連続**で行う。首振れや姿勢ドリフトは読みをほぼ直線に動かすので 2 階微分では符号が交互に振れるだけになり、1 階微分では紛らわしい緩い上昇を弾ける。1 階微分ルールと `far_th` 到達は保険として残してある。Core0 の `WallOffController::take_pillar_trough()` が exist=false の経路で最優先に拾い、発火位置ではなく谷底位置でアンカーして `ps_front.dist += pillar_str − (現在位置 − 谷底位置)` とする。パラメータは `offset.yaml` の `wall_off_pillar_*`。従来の絶対しきい値経路と 25mm 通過の安全網(`detect_pass_through_case2`)は残してある。ホスト検証は `tests/pillar_trough_host/run.sh`(CSV ログを渡すと全行再生)。
 
 #### PathCreator の経路最適化
 

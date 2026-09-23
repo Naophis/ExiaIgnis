@@ -59,14 +59,30 @@ static void test_fixed() {
     for (auto &q : r) { q.d = m180(q.d); q.d2 = m180(q.d2); }
     PillarTroughDetector det;
     int k = replay(det, r, p);
-    CHECK(k == 14, "fire index %d (expected 14 = idx2210)", k);
-    CHECK(det.state() == PillarTroughDetector::FIRED_EARLY, "state %d", det.state());
+    CHECK(k == 13, "fire index %d (expected 13 = idx2209)", k);
+    CHECK(det.state() == PillarTroughDetector::FIRED_CURV, "state %d", det.state());
     CHECK(std::fabs(det.bottom() - 68.53f) < 0.01f, "bottom %.2f", det.bottom());
-    CHECK(std::fabs(det.bottom_x() - 7.68f) < 0.01f, "bottom_x %.2f (expected 7.68 = idx2207)", det.bottom_x());
+    // idx2207 と idx2208 が同値(68.53)の平坦な谷底。真の最小はその中間なので
+    // 頂点補間が +0.5 tick(= +0.88mm)寄せる。
+    CHECK(std::fabs(det.bottom_x() - 8.56f) < 0.01f, "bottom_x %.2f (expected 8.56 = idx2207 + 0.5tick)", det.bottom_x());
     std::printf("  fire@%d state=%d bottom=%.2f bottom_x=%.2f lag=%.2f\n", k, det.state(),
                 det.bottom(), det.bottom_x(), det.fire_x() - det.bottom_x());
   }
-  std::printf("[fixed] 20260923_013712 idx372-395 (右, 緩い偽谷73.9→83.7の後に本物の谷64.4)\n");
+  std::printf("[fixed] 20260923_151724 idx78-92 (右, v=1500 実機テスト: 谷底 idx86、idx87 で発火)\n");
+  {
+    std::vector<Row> r = {
+        {-8.5f, 84.21f, 0.0f},  {-7.0f, 79.00f, 0.0f},  {-5.5f, 75.90f, 0.0f},  {-4.0f, 74.18f, 0.0f},
+        {-2.5f, 72.90f, 0.0f},  {-1.0f, 71.14f, 0.0f},  {0.00f, 69.03f, 0.0f},  {1.50f, 67.36f, 64.40f},
+        {3.02f, 66.69f, 63.48f}, {4.56f, 68.05f, 62.87f}, {6.09f, 70.86f, 62.61f}, {7.62f, 74.51f, 62.67f},
+        {9.12f, 82.66f, 63.83f}, {10.64f, 97.62f, 0.0f}, {12.14f, 134.22f, 0.0f}};
+    for (auto &q : r) { q.d = m180(q.d); q.d2 = m180(q.d2); }
+    PillarTroughDetector det;
+    int k = replay(det, r, p);
+    CHECK(k == 9, "fire index %d (expected 9 = idx87, 谷底+1)", k);
+    CHECK(std::fabs(det.bottom_x() - 2.76f) < 0.01f, "bottom_x %.2f (expected 2.76 = idx86 - 0.17tick)", det.bottom_x());
+    std::printf("  fire@%d state=%d bottom=%.2f bottom_x=%.2f lag=%.2f\n", k, det.state(), det.bottom(), det.bottom_x(), det.fire_x() - det.bottom_x());
+  }
+  std::printf("[fixed] 20260923_013712 idx372-395 (右, 首振れのランプ73.9→83.7 では発火せず、本物の谷64.4 で発火)\n");
   {
     std::vector<Row> r = {
         {-6.5f, 102.81f, 66.71f}, {-4.3f, 75.90f, 65.75f}, {-2.1f, 75.19f, 65.44f},
@@ -80,14 +96,38 @@ static void test_fixed() {
     for (auto &q : r) { q.d = m180(q.d); q.d2 = m180(q.d2); }
     PillarTroughDetector det;
     int k = replay(det, r, p);
-    CHECK(k == 22, "fire index %d (expected 22 = idx394)", k);
-    CHECK(std::fabs(det.bottom_x() - 31.41f) < 0.01f, "bottom_x %.2f (expected 31.41 = idx391)", det.bottom_x());
+    // idx376-384 は ang が -1.2° から -3.3° へ振れている最中の緩い上昇。
+    // 1階微分では +2.21mm/tick まで出て柱(+2.69)と紛らわしいが、2階微分は
+    // 符号が交互に振れるだけなので curv_n=2 が成立しない。ここで発火しないこと
+    // (= 最初の発火が本物の谷の側であること)がこのケースの主眼。
+    CHECK(k == 20, "fire index %d (expected 20 = idx392、谷底+1。ランプでは発火しない)", k);
+    CHECK(std::fabs(det.bottom_x() - 31.97f) < 0.01f, "bottom_x %.2f (expected 31.97 = idx391 + 0.28tick)", det.bottom_x());
     std::printf("  fire@%d state=%d bottom=%.2f bottom_x=%.2f lag=%.2f\n", k, det.state(),
                 det.bottom(), det.bottom_x(), det.fire_x() - det.bottom_x());
   }
-  std::printf("[fixed] 20260923_064338 idx399-416 (右, 首振れ由来の二重谷: 発火しないこと)\n");
+  std::printf("[fixed] 20260923_173424 idx78-91 (右, 谷底が丸く谷底の曲率が 0.206 しかない例)\n");
   {
+    // 谷底(idx86)の曲率は 0.206 で、per-tick しきい値 0.3 では谷底+2 になっていた。
+    // 連続区間の合計(0.073+0.153+0.206+0.791 = 1.22)で見ると谷底+1 で出る。
     std::vector<Row> r = {
+        {-9.00f, 84.21f, 0.00f}, {-7.50f, 78.59f, 0.00f}, {-6.00f, 74.51f, 0.00f}, {-4.50f, 72.60f, 0.00f},
+        {-3.00f, 70.59f, 0.00f}, {-1.50f, 68.78f, 0.00f}, {0.00f, 67.13f, 0.00f},  {1.44f, 65.84f, 63.76f},
+        {2.94f, 65.02f, 62.87f}, {4.44f, 66.05f, 62.16f}, {5.94f, 68.78f, 62.22f}, {7.44f, 73.53f, 62.41f},
+        {8.94f, 80.75f, 0.00f},  {10.50f, 94.11f, 0.00f}};
+    for (auto &q : r) { q.d = m180(q.d); q.d2 = m180(q.d2); }
+    PillarTroughDetector det;
+    int k = replay(det, r, p);
+    CHECK(k == 9, "fire index %d (expected 9 = idx87, 谷底+1)", k);
+    CHECK(std::fabs(det.bottom() - 65.02f) < 0.01f, "bottom %.2f", det.bottom());
+    std::printf("  fire@%d state=%d bottom=%.2f bottom_x=%.2f lag=%.2f\n", k, det.state(),
+                det.bottom(), det.bottom_x(), det.fire_x() - det.bottom_x());
+  }
+  std::printf("[fixed] 20260923_064338 idx399-416 (右, 二重谷: 1つ目(柱)で発火、2つ目(首振れ)は無視)\n");
+  {
+    // idx397(SLALOM 末尾, 180)と idx398(85.88)を含める: 深さゲートのピーク(180)は
+    // SLALOM 中の毎 tick 再アームで履歴に入る(実機・CSV 再生と同じ)。
+    std::vector<Row> r = {
+        {-7.9f, 0.0f, 0.0f},      {-5.9f, 85.88f, 62.87f},
         {-3.9f, 70.05f, 62.28f},  {-1.9f, 68.78f, 61.78f},  {0.00f, 69.53f, 61.78f},
         {1.39f, 70.05f, 62.22f},  {3.27f, 74.85f, 63.69f},  {5.30f, 77.01f, 64.69f},
         {7.15f, 77.01f, 64.91f},  {8.88f, 78.18f, 65.06f},  {10.80f, 78.18f, 64.62f},
@@ -95,12 +135,36 @@ static void test_fixed() {
         {18.12f, 73.53f, 61.84f}, {19.98f, 74.51f, 61.71f}, {21.83f, 79.00f, 62.87f},
         {23.62f, 88.32f, 65.06f}, {25.47f, 107.82f, 69.25f}, {27.3f, 144.80f, 76.91f}};
     for (auto &q : r) { q.d = m180(q.d); q.d2 = m180(q.d2); }
-    // 谷底 68.78 は開始前 −1.9mm、離脱(88→108)は 23〜25mm 後 → max_lag=14 で棄却。
-    // 2 つ目の谷 73.5 は深さ 4.7mm(首振れ) → depth_min=8 で棄却。
+    // 1 つ目の谷 68.78(開始前 −1.9mm)が柱(同ターンの 20260923_064918 idx407 では谷が
+    // WALL_OFF 開始位置にあり 1.4mm で発火)。曲率ルールで idx401 まで早まる。
+    // 2 つ目の谷 73.5 は ang −1.3→−4.5° の首振れ中で深さ 4.7mm → 拾わない。
     PillarTroughDetector det;
     int k = replay(det, r, p);
-    CHECK(k == -1, "unexpected fire at %d (state %d, bottom %.2f)", k, det.state(), det.bottom());
-    std::printf("  no fire (state=%d bottom=%.2f)\n", det.state(), det.bottom());
+    CHECK(k == 4, "fire index %d (expected 4 = idx401、谷底+2)", k);
+    CHECK(std::fabs(det.bottom() - 68.78f) < 0.01f, "bottom %.2f (expected 68.78 first trough)", det.bottom());
+    std::printf("  fire@%d state=%d bottom=%.2f bottom_x=%.2f lag=%.2f\n", k, det.state(), det.bottom(), det.bottom_x(), det.fire_x() - det.bottom_x());
+  }
+  std::printf("[fixed] 放物線の頂点補間: 真の谷底がサンプルの中間にあっても位置を復元すること\n");
+  {
+    // 合成データ: y = 62 + 1.2*(x - x_true)^2。谷底サンプル(x=10.5)から真の頂点を
+    // +0.3 tick ずらしてある。tick 単位のままだと 0.45mm ずれるので、頂点補間が
+    // それを取り切れるかを見る。
+    const float h = 1.5f;
+    const float x_true = 10.5f + 0.3f * h;
+    std::vector<Row> r;
+    for (int i = 0; i < 14; i++) {
+      const float x = i * h;
+      float d = 62.0f + 1.2f * (x - x_true) * (x - x_true);
+      if (d > 180.0f) d = 180.0f;
+      r.push_back({x, d, d - 2.0f});
+    }
+    PillarTroughDetector det;
+    int k = replay(det, r, p);
+    CHECK(k > 0, "should fire on a clean parabola");
+    CHECK(std::fabs(det.bottom_x() - x_true) < 0.10f,
+          "bottom_x %.3f (true vertex %.3f, 補間なしなら 10.500)", det.bottom_x(), x_true);
+    std::printf("  fire@%d bottom_x=%.3f (真の頂点 %.3f, 補間なしの谷底 tick は 10.500)\n",
+                k, det.bottom_x(), x_true);
   }
   std::printf("[fixed] 壁の平坦(47±0.3, 60mm)→壁切れ: 発火しないこと(壁は exist 経路の担当)\n");
   {

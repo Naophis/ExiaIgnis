@@ -291,7 +291,7 @@ typedef struct {
 // WallOffController::take_pillar_trough() が読む。書き手は bottom/bottom_x 等を
 // 書いてから __dmb() → state の順、読み手は state を見てから __dmb() → 他フィールド。
 typedef struct {
-  volatile int state = 0;       // PillarTroughDetector::State(0 idle/1 tracking/2 fired early/3 fired confirm)
+  volatile int state = 0;       // PillarTroughDetector::State(0 idle/1 追跡/2 曲率発火/3 far_th確認/4 1階微分保険)
   volatile float bottom = 0;    // 谷底の読み値 [mm]
   volatile float bottom_x = 0;  // 谷底の global_pos.dist [mm](アンカー)
   volatile float peak = 0;      // 谷底より前のピーク [mm]
@@ -584,12 +584,18 @@ typedef struct {
   float pillar_depth_min = 8.0f;
   float pillar_bottom_min = 48.0f;
   float pillar_bottom_max = 80.0f;
-  float pillar_slope_min = 1.5f;
+  float pillar_curv_th = 0.0f;   // 離脱(主): 連続とみなす曲率の下限(既定は「正」)
+  int   pillar_curv_n = 2;       // 同、最小の連続 tick 数
+  float pillar_curv_sum = 0.7f;  // 同、連続区間の曲率の合計(=傾きの総変化量)
+  float pillar_slope_min = 1.5f; // 離脱(保険): 1階微分版
+  float pillar_both_diff_min = -1.0f;
   float pillar_rise_min = 4.0f;
   float pillar_far_th = 100.0f;
   float pillar_max_lag = 14.0f;
   float pillar_stale_dist = 30.0f;
+  float pillar_prestart_dist = 20.0f; // [mm] WALL_OFF 開始よりこれ以上前の谷底は拾わない(前の柱の除外)
   float pillar_min_v = 500.0f;  // [mm/s] これ未満では追跡のみ(発火しない)
+  int   pillar_vertex_interp = 1; // 谷底を放物線の頂点でサブtick補正(効果は未検証、detector のコメント参照)
   float pillar_str_l = 2.5f;    // [mm] 谷底基準の補正距離(左)。要再測定
   float pillar_str_r = 1.0f;    // [mm] 同(右)
 

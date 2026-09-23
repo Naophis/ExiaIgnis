@@ -223,12 +223,18 @@ inline void convertToJson(const wall_off_hold_dist_t& src, JsonVariant dst) {
     dst["wall_off_pillar_depth_min"]   = src.pillar_depth_min;
     dst["wall_off_pillar_bottom_min"]  = src.pillar_bottom_min;
     dst["wall_off_pillar_bottom_max"]  = src.pillar_bottom_max;
+    dst["wall_off_pillar_curv_th"]     = src.pillar_curv_th;
+    dst["wall_off_pillar_curv_n"]      = src.pillar_curv_n;
+    dst["wall_off_pillar_curv_sum"]    = src.pillar_curv_sum;
     dst["wall_off_pillar_slope_min"]   = src.pillar_slope_min;
+    dst["wall_off_pillar_both_diff_min"] = src.pillar_both_diff_min;
     dst["wall_off_pillar_rise_min"]    = src.pillar_rise_min;
     dst["wall_off_pillar_far_th"]      = src.pillar_far_th;
     dst["wall_off_pillar_max_lag"]     = src.pillar_max_lag;
     dst["wall_off_pillar_stale_dist"]  = src.pillar_stale_dist;
+    dst["wall_off_pillar_prestart_dist"] = src.pillar_prestart_dist;
     dst["wall_off_pillar_min_v"]       = src.pillar_min_v;
+    dst["wall_off_pillar_vertex_interp"] = src.pillar_vertex_interp;
     dst["wall_off_pillar_str_l"]       = src.pillar_str_l;
     dst["wall_off_pillar_str_r"]       = src.pillar_str_r;
 }

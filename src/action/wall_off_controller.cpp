@@ -39,7 +39,7 @@ bool WallOffController::execute_wall_off(TurnDirection td,
   tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   if (pt) pt->send_command(*tgt_val);
-  sleep_ms(1);
+  sleep_us(200);
 
   return (td == TurnDirection::Right) ? process_right_wall_off(ps_front)
                                       : process_left_wall_off(ps_front);
@@ -64,7 +64,7 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
     if (!exist) {
       exist = se->ego.right45_dist < p_wall_off.wall_off_exist_wall_th_r;
       // 2026-09-23: 柱の谷(下に凸)検知を最優先で拾う(谷底アンカー)。
-      if (take_pillar_trough(TurnDirection::Right, ps_front)) {
+      if (take_pillar_trough(TurnDirection::Right, ps_front, tmp_dist_before)) {
         return true;
       }
       if (strategy.find_vertical_wall()) {
@@ -110,7 +110,7 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
 
   // 第二段階：壁切れを待つ
@@ -124,7 +124,7 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
         return true;
       }
     } else {
-      if (take_pillar_trough(TurnDirection::Right, ps_front)) {
+      if (take_pillar_trough(TurnDirection::Right, ps_front, tmp_dist_before)) {
         return true;
       }
       if (strategy.detect_wall_missing_by_deviation(exist)) {
@@ -132,12 +132,17 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
         ps_front.dist = MAX(ps_front.dist, 0.1);
         return true;
       }
+      // if(strategy.detect_wall_off_vertical()) {
+      //   ps_front.dist += p_wall_off.right_str;
+      //   ps_front.dist = MAX(ps_front.dist, 0.1);
+      //   return true;
+      // }
     }
 
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
   return false;
 }
@@ -161,7 +166,7 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
     if (!exist) {
       exist = se->ego.left45_dist < p_wall_off.wall_off_exist_wall_th_l;
       // 2026-09-23: 柱の谷(下に凸)検知を最優先で拾う(谷底アンカー)。
-      if (take_pillar_trough(TurnDirection::Left, ps_front)) {
+      if (take_pillar_trough(TurnDirection::Left, ps_front, tmp_dist_before)) {
         return true;
       }
       if (se->ego.left45_dist < p_wall_off.exist_dist_l2) {
@@ -207,7 +212,7 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
 
   // 第二段階：壁切れを待つ
@@ -221,7 +226,7 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
         return true;
       }
     } else {
-      if (take_pillar_trough(TurnDirection::Left, ps_front)) {
+      if (take_pillar_trough(TurnDirection::Left, ps_front, tmp_dist_before)) {
         return true;
       }
       if (strategy.detect_wall_missing_by_deviation(exist)) {
@@ -229,12 +234,17 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
         ps_front.dist = MAX(ps_front.dist, 0.1);
         return true;
       }
+      // if(strategy.detect_wall_off_vertical()) {
+      //   ps_front.dist += p_wall_off.left_str;
+      //   ps_front.dist = MAX(ps_front.dist, 0.1);
+      //   return true;
+      // }
     }
 
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
   return false;
 }
@@ -295,7 +305,8 @@ bool WallOffController::apply_front_sensor_correction(
 
 __attribute__((noinline, section(".time_critical.wall_off")))
 bool WallOffController::take_pillar_trough(TurnDirection td,
-                                           param_straight_t &ps_front) {
+                                           param_straight_t &ps_front,
+                                           float wo_start_x) {
   // 2026-09-23: 柱の谷(下に凸)検知(include/planning/pillar_trough_detector.hpp)。
   // Core1 が谷の形(下降→谷底→急上昇)を確認して state>=2 にする。ここでは
   // 発火位置でなく谷底位置(bottom_x)でアンカーし、発火までの遅れ(検知条件・
@@ -309,12 +320,18 @@ bool WallOffController::take_pillar_trough(TurnDirection td,
   const auto se = get_sensing_entity();
   const pillar_trough_out_t &pt =
       (td == TurnDirection::Right) ? se->pillar_r : se->pillar_l;
-  if (pt.state < PillarTroughDetector::FIRED_EARLY) {
+  if (pt.state < PillarTroughDetector::FIRED_CURV) {
     return false;
   }
   __dmb();
   const float lag = tgt_val->global_pos.dist - pt.bottom_x;
   if (lag < 0.0f || lag > p_wall_off.pillar_stale_dist) {
+    return false;
+  }
+  // 検知器は直線中も柱(壁なし区間で 90mm ごと)を拾うので、WALL_OFF 開始より
+  // pillar_prestart_dist 以上前の谷底は「前の柱」として使わない。開始直前
+  // (SLA_BACK_STR 中や直線末尾、実測 −2〜−12mm)の本物の柱は拾える。
+  if (pt.bottom_x < wo_start_x - p_wall_off.pillar_prestart_dist) {
     return false;
   }
   const float c = (td == TurnDirection::Right) ? p_wall_off.pillar_str_r
@@ -352,7 +369,7 @@ bool WallOffController::execute_wall_off_dia(TurnDirection td,
   exist_wall = false;
 
   if (pt) pt->send_command(*tgt_val);
-  sleep_ms(1);
+  sleep_us(200);
 
   return (td == TurnDirection::Right)
              ? process_right_wall_off_dia(ps_front, use_oppo_wall, exist_wall)
@@ -473,7 +490,7 @@ bool WallOffController::process_right_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
 
   // 第二段階：壁切れ終了を待つ
@@ -494,7 +511,7 @@ bool WallOffController::process_right_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
   return false;
 }
@@ -555,7 +572,7 @@ bool WallOffController::process_left_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
 
   // 第二段階：壁切れ終了を待つ
@@ -576,7 +593,7 @@ bool WallOffController::process_left_wall_off_dia(param_straight_t &ps_front,
     if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
       return false;
     }
-    sleep_ms(1);
+    sleep_us(200);
   }
   return false;
 }
@@ -680,7 +697,7 @@ WallSensorStrategy &WallOffController::get_right_strategy() {
         const auto se = get_sensing_entity();
         return se->ego.right45_dist_diff > p_wall_off.div_th_r2 &&
                se->ego.right45_2_dist_diff > 0 &&
-               se->ego.right45_dist < 70;
+               se->ego.right45_dist < 100;
       },
       // exist_wall
       [this]() -> bool {
@@ -747,7 +764,7 @@ WallSensorStrategy &WallOffController::get_right_strategy() {
                  se->sen.r45.sensor_dist + p_wall_off.exist_delta_r)) &&
                se->ego.right45_dist_diff > 0 &&
                (se->ego.right45_dist_diff > p_wall_off.div_th_r3 &&
-                se->ego.right45_2_dist_diff > 0 &&
+                se->ego.right45_2_dist_diff >= 0 &&
                 se->ego.right45_dist < 100);
       },
       // detect_wall_missing_by_deviation
@@ -758,7 +775,7 @@ WallSensorStrategy &WallOffController::get_right_strategy() {
         return ((se->ego.right45_dist > p->wall_off_dist.noexist_th_r2) ||
                 (se->sen.r45.sensor_dist + 1) < se->ego.right45_dist) &&
                se->ego.right45_dist_diff > p_wall_off.div_th_r3 &&
-               se->ego.right45_2_dist_diff > 0 &&
+               se->ego.right45_2_dist_diff >= 0 &&
                se->ego.right45_dist < 100;
       },
       // detect_wall_off_vertical
@@ -784,7 +801,7 @@ WallSensorStrategy &WallOffController::get_left_strategy() {
         const auto se = get_sensing_entity();
         return se->ego.left45_dist_diff > p_wall_off.div_th_l3 &&
                se->ego.left45_2_dist_diff > 0 &&
-               se->ego.left45_dist < 70;
+               se->ego.left45_dist < 100;
       },
       // exist_wall
       [this]() -> bool {
@@ -842,7 +859,7 @@ WallSensorStrategy &WallOffController::get_left_strategy() {
                  se->sen.l45.sensor_dist + p_wall_off.exist_delta_l)) &&
                se->ego.left45_dist_diff > 0 &&
                (se->ego.left45_dist_diff > p_wall_off.div_th_l3 &&
-                se->ego.left45_2_dist_diff > 0 &&
+                se->ego.left45_2_dist_diff >= 0 &&
                 se->ego.left45_dist < 100);
       },
       // detect_wall_missing_by_deviation
@@ -853,7 +870,7 @@ WallSensorStrategy &WallOffController::get_left_strategy() {
         return ((se->ego.left45_dist > param->wall_off_dist.noexist_th_l2) ||
                 (se->sen.l45.sensor_dist + 1) < se->ego.left45_dist) &&
                se->ego.left45_dist_diff > p_wall_off.div_th_l3 &&
-               se->ego.left45_2_dist_diff > 0 &&
+               se->ego.left45_2_dist_diff >= 0 &&
                se->ego.left45_dist < 100;
       },
       // detect_wall_off_vertical
