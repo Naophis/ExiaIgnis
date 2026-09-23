@@ -77,6 +77,9 @@ private:
                                      float tmp_dist_before,
                                      float tmp_dist_after, TurnDirection td);
   bool is_wall_exist(TurnDirection td, float threshold_l, float threshold_r);
+  // 柱の谷(下に凸)検知の結果を拾って ps_front.dist を谷底基準で決める(2026-09-23)。
+  // 壁なし開始(exist=false)の経路でのみ呼ぶ。拾えたら true。
+  bool take_pillar_trough(TurnDirection td, param_straight_t &ps_front);
   bool process_right_wall_off_dia(param_straight_t &ps_front,
                                   bool &use_oppo_wall, bool &exist_wall);
   bool process_left_wall_off_dia(param_straight_t &ps_front,

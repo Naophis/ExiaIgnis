@@ -454,6 +454,18 @@ inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
     from_json_field(src, "diff_check_dist_dia_2",             dst.diff_check_dist_dia_2);
     from_json_field(src, "wall_off_recheck_dist_l",           dst.wall_off_recheck_dist_l);
     from_json_field(src, "wall_off_recheck_dist_r",           dst.wall_off_recheck_dist_r);
+    from_json_field(src, "wall_off_pillar_enable",            dst.pillar_enable);
+    from_json_field(src, "wall_off_pillar_depth_min",         dst.pillar_depth_min);
+    from_json_field(src, "wall_off_pillar_bottom_min",        dst.pillar_bottom_min);
+    from_json_field(src, "wall_off_pillar_bottom_max",        dst.pillar_bottom_max);
+    from_json_field(src, "wall_off_pillar_slope_min",         dst.pillar_slope_min);
+    from_json_field(src, "wall_off_pillar_rise_min",          dst.pillar_rise_min);
+    from_json_field(src, "wall_off_pillar_far_th",            dst.pillar_far_th);
+    from_json_field(src, "wall_off_pillar_max_lag",           dst.pillar_max_lag);
+    from_json_field(src, "wall_off_pillar_stale_dist",        dst.pillar_stale_dist);
+    from_json_field(src, "wall_off_pillar_min_v",             dst.pillar_min_v);
+    from_json_field(src, "wall_off_pillar_str_l",             dst.pillar_str_l);
+    from_json_field(src, "wall_off_pillar_str_r",             dst.pillar_str_r);
 }
 
 /**

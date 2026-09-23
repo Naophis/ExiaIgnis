@@ -219,6 +219,18 @@ inline void convertToJson(const wall_off_hold_dist_t& src, JsonVariant dst) {
     dst["diff_check_dist_dia_2"]       = src.diff_check_dist_dia_2;
     dst["wall_off_recheck_dist_l"]     = src.wall_off_recheck_dist_l;
     dst["wall_off_recheck_dist_r"]     = src.wall_off_recheck_dist_r;
+    dst["wall_off_pillar_enable"]      = src.pillar_enable;
+    dst["wall_off_pillar_depth_min"]   = src.pillar_depth_min;
+    dst["wall_off_pillar_bottom_min"]  = src.pillar_bottom_min;
+    dst["wall_off_pillar_bottom_max"]  = src.pillar_bottom_max;
+    dst["wall_off_pillar_slope_min"]   = src.pillar_slope_min;
+    dst["wall_off_pillar_rise_min"]    = src.pillar_rise_min;
+    dst["wall_off_pillar_far_th"]      = src.pillar_far_th;
+    dst["wall_off_pillar_max_lag"]     = src.pillar_max_lag;
+    dst["wall_off_pillar_stale_dist"]  = src.pillar_stale_dist;
+    dst["wall_off_pillar_min_v"]       = src.pillar_min_v;
+    dst["wall_off_pillar_str_l"]       = src.pillar_str_l;
+    dst["wall_off_pillar_str_r"]       = src.pillar_str_r;
 }
 
 inline void convertToJson(const fail_check_cnt_t& src, JsonVariant dst) {

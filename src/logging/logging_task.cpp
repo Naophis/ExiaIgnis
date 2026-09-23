@@ -373,6 +373,12 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
     ld.dither_late     = (int16_t)ee->aw_log.dither_late;
     ld.dither_cc       = (int16_t)ee->aw_log.dither_cc;
     ld.dither_backlog  = (int16_t)ee->aw_log.dither_backlog;
+    // 柱谷検知(2026-09-23, structs.hpp pillar_trough_out_t)
+    ld.pillar_st    = (int16_t)(sr->pillar_r.state * 10 + sr->pillar_l.state);
+    ld.pillar_lag_r = floatToHalf(sr->pillar_r.lag);
+    ld.pillar_lag_l = floatToHalf(sr->pillar_l.lag);
+    ld.pillar_btm_r = floatToHalf(sr->pillar_r.bottom);
+    ld.pillar_btm_l = floatToHalf(sr->pillar_l.bottom);
     ld.sat_roll_dir = floatToHalf(ee->aw_log.sat_roll_dir);
     ld.dbg_off_ang = floatToHalf(ee->aw_log.dbg_off_ang);
     ld.dbg_off_wgain = floatToHalf(ee->aw_log.dbg_off_wgain);
@@ -602,6 +608,11 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_late:int:%d\n", (int)sizeof(ls11.dither_late));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_cc:int:%d\n", (int)sizeof(ls11.dither_cc));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dither_backlog:int:%d\n", (int)sizeof(ls11.dither_backlog));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_st:int:%d\n", (int)sizeof(ls11.pillar_st));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_lag_r:float:%d\n", (int)sizeof(ls11.pillar_lag_r));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_lag_l:float:%d\n", (int)sizeof(ls11.pillar_lag_l));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_btm_r:float:%d\n", (int)sizeof(ls11.pillar_btm_r));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_btm_l:float:%d\n", (int)sizeof(ls11.pillar_btm_l));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -865,6 +876,11 @@ void LoggingTask::dump_csv() const {
     ls11.dither_late = e.dither_late;
     ls11.dither_cc = e.dither_cc;
     ls11.dither_backlog = e.dither_backlog;
+    ls11.pillar_st = e.pillar_st;
+    ls11.pillar_lag_r = halfToFloat(e.pillar_lag_r);
+    ls11.pillar_lag_l = halfToFloat(e.pillar_lag_l);
+    ls11.pillar_btm_r = halfToFloat(e.pillar_btm_r);
+    ls11.pillar_btm_l = halfToFloat(e.pillar_btm_l);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

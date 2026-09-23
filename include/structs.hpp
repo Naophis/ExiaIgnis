@@ -286,6 +286,20 @@ typedef struct {
   std::deque<sen_log2_t> list;
 } sen_dist_log_t;
 
+// 柱の谷(下に凸)検知の出力(2026-09-23、include/planning/pillar_trough_detector.hpp)。
+// Core1 の SensorProcessor::update_pillar_trough() が毎 tick 更新し、Core0 の
+// WallOffController::take_pillar_trough() が読む。書き手は bottom/bottom_x 等を
+// 書いてから __dmb() → state の順、読み手は state を見てから __dmb() → 他フィールド。
+typedef struct {
+  volatile int state = 0;       // PillarTroughDetector::State(0 idle/1 tracking/2 fired early/3 fired confirm)
+  volatile float bottom = 0;    // 谷底の読み値 [mm]
+  volatile float bottom_x = 0;  // 谷底の global_pos.dist [mm](アンカー)
+  volatile float peak = 0;      // 谷底より前のピーク [mm]
+  volatile float fire_x = 0;    // 発火時の global_pos.dist [mm]
+  volatile float lag = 0;       // 現在位置 − 谷底位置 [mm](ログ用)
+  volatile int seq = 0;         // 発火ごとに +1
+} pillar_trough_out_t;
+
 typedef struct {
   led_sensor_t led_sen;
   led_sensor_t led_sen_after;
@@ -304,6 +318,8 @@ typedef struct {
   ego_entity_t ego;
   sen_logs_t sen;
   sen_dist_log_t sen_dist_log;
+  pillar_trough_out_t pillar_l; // 左45°の柱谷検知(2026-09-23)
+  pillar_trough_out_t pillar_r; // 右45°の柱谷検知
   int16_t calc_time;
   int16_t calc_time2;
   int16_t t_spi;     // sense_start からの累積 [us]: read_spi_sensors 終了
@@ -554,6 +570,28 @@ typedef struct {
   // exist_delta_l/r)自体には一切手を加えない。
   float wall_off_recheck_dist_l = 60.0f;
   float wall_off_recheck_dist_r = 60.0f;
+
+
+  // 2026-09-23: 柱の谷(下に凸)検知(include/planning/pillar_trough_detector.hpp)。
+  // 壁なし開始の WALL_OFF で注視側 45° LED1 の「下降→谷底→急上昇」の形を検知し、
+  // 発火位置でなく谷底位置でアンカーして残距離を決める
+  // (ps_front.dist += pillar_str − (発火時位置 − 谷底位置))。従来の絶対しきい値
+  // (exist_dist_l2/r2)では右の柱谷底(60〜70mm)を取りこぼし、25mm 走行の安全網
+  // (detect_pass_through_case2)に落ちて旋回が約 20mm 遅れていた
+  // (20260923_064918.csv idx2203)。各値の意味は PillarTroughParams と
+  // profile/hf/offset.yaml のコメント参照。
+  int pillar_enable = 1;
+  float pillar_depth_min = 8.0f;
+  float pillar_bottom_min = 48.0f;
+  float pillar_bottom_max = 80.0f;
+  float pillar_slope_min = 1.5f;
+  float pillar_rise_min = 4.0f;
+  float pillar_far_th = 100.0f;
+  float pillar_max_lag = 14.0f;
+  float pillar_stale_dist = 30.0f;
+  float pillar_min_v = 500.0f;  // [mm/s] これ未満では追跡のみ(発火しない)
+  float pillar_str_l = 2.5f;    // [mm] 谷底基準の補正距離(左)。要再測定
+  float pillar_str_r = 1.0f;    // [mm] 同(右)
 
 } wall_off_hold_dist_t;
 
@@ -2020,6 +2058,11 @@ typedef struct {
   int16_t dither_late;
   int16_t dither_cc;
   int16_t dither_backlog;
+  int16_t pillar_st;      // 柱谷検知の状態 右*10+左 (2026-09-23, structs.hpp pillar_trough_out_t)
+  real16_T pillar_lag_r;  // 現在位置 − 谷底位置 [mm](右)
+  real16_T pillar_lag_l;
+  real16_T pillar_btm_r;  // 谷底の読み値 [mm](右)
+  real16_T pillar_btm_l;
 } log_data_t2;
 
 typedef struct {
@@ -2263,6 +2306,11 @@ typedef struct {
   int dither_late     = 150;
   int dither_cc       = 151;
   int dither_backlog  = 152;
+  int pillar_st       = 153; // 柱谷検知の状態 右*10+左 (2026-09-23)
+  float pillar_lag_r  = 154; // 現在位置 − 谷底位置 [mm](右)
+  float pillar_lag_l  = 155;
+  float pillar_btm_r  = 156; // 谷底の読み値 [mm](右)
+  float pillar_btm_l  = 157;
 } LogStruct11;
 
 #endif

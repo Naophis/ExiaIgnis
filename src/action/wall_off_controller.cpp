@@ -1,4 +1,5 @@
 #include "action/wall_off_controller.hpp"
+#include "planning/pillar_trough_detector.hpp"
 #include "planning/planning_task.hpp"
 #include "pico/stdlib.h"
 #include <algorithm>
@@ -62,6 +63,10 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
     }
     if (!exist) {
       exist = se->ego.right45_dist < p_wall_off.wall_off_exist_wall_th_r;
+      // 2026-09-23: 柱の谷(下に凸)検知を最優先で拾う(谷底アンカー)。
+      if (take_pillar_trough(TurnDirection::Right, ps_front)) {
+        return true;
+      }
       if (strategy.find_vertical_wall()) {
         break;
       }
@@ -119,6 +124,9 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
         return true;
       }
     } else {
+      if (take_pillar_trough(TurnDirection::Right, ps_front)) {
+        return true;
+      }
       if (strategy.detect_wall_missing_by_deviation(exist)) {
         ps_front.dist += p_wall_off.right_str;
         ps_front.dist = MAX(ps_front.dist, 0.1);
@@ -152,6 +160,10 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
     }
     if (!exist) {
       exist = se->ego.left45_dist < p_wall_off.wall_off_exist_wall_th_l;
+      // 2026-09-23: 柱の谷(下に凸)検知を最優先で拾う(谷底アンカー)。
+      if (take_pillar_trough(TurnDirection::Left, ps_front)) {
+        return true;
+      }
       if (se->ego.left45_dist < p_wall_off.exist_dist_l2) {
         break;
       }
@@ -209,6 +221,9 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
         return true;
       }
     } else {
+      if (take_pillar_trough(TurnDirection::Left, ps_front)) {
+        return true;
+      }
       if (strategy.detect_wall_missing_by_deviation(exist)) {
         ps_front.dist += p_wall_off.left_str;
         ps_front.dist = MAX(ps_front.dist, 0.1);
@@ -276,6 +291,37 @@ bool WallOffController::apply_front_sensor_correction(
     }
   }
   return false;
+}
+
+__attribute__((noinline, section(".time_critical.wall_off")))
+bool WallOffController::take_pillar_trough(TurnDirection td,
+                                           param_straight_t &ps_front) {
+  // 2026-09-23: 柱の谷(下に凸)検知(include/planning/pillar_trough_detector.hpp)。
+  // Core1 が谷の形(下降→谷底→急上昇)を確認して state>=2 にする。ここでは
+  // 発火位置でなく谷底位置(bottom_x)でアンカーし、発火までの遅れ(検知条件・
+  // 速度・ポーリング)を残距離から差し引く。谷底が pillar_stale_dist より古い
+  // (前のセルの柱など)場合は使わない。従来の絶対しきい値経路や 25mm 通過の
+  // 安全網(detect_pass_through_case2)はそのまま残す。
+  const auto &p_wall_off = get_wall_off_param();
+  if (!p_wall_off.pillar_enable) {
+    return false;
+  }
+  const auto se = get_sensing_entity();
+  const pillar_trough_out_t &pt =
+      (td == TurnDirection::Right) ? se->pillar_r : se->pillar_l;
+  if (pt.state < PillarTroughDetector::FIRED_EARLY) {
+    return false;
+  }
+  __dmb();
+  const float lag = tgt_val->global_pos.dist - pt.bottom_x;
+  if (lag < 0.0f || lag > p_wall_off.pillar_stale_dist) {
+    return false;
+  }
+  const float c = (td == TurnDirection::Right) ? p_wall_off.pillar_str_r
+                                               : p_wall_off.pillar_str_l;
+  ps_front.dist += c - lag;
+  ps_front.dist = MAX(ps_front.dist, 0.1);
+  return true;
 }
 
 __attribute__((noinline, section(".time_critical.wall_off")))

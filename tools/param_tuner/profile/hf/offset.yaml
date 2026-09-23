@@ -133,6 +133,48 @@ wall_off_hf_delta_b: 0.5
 wall_off_hf_confirm_n: 2
 wall_off_hf_min_valid: 100
 
+# 2026-09-23: 柱の谷(下に凸)検知(include/planning/pillar_trough_detector.hpp)。
+# 壁なし開始の WALL_OFF で、注視側45° LED1 の「下降→谷底→急上昇」の形を検知し、
+# 発火位置ではなく谷底位置でアンカーして残距離を決める:
+#   ps_front.dist += wall_off_pillar_str_{l,r} − (発火時位置 − 谷底位置)
+# 従来の絶対しきい値(exist_dist_l2/r2=60)では谷底が60〜70mmでばらつく右側の柱を
+# 取りこぼし、25mm走行の安全網(pass_through_case2)に落ちて旋回が約20mm遅れていた
+# (20260923_064918.csv idx2203。同じターンを正常検知した走行と旋回突入時の
+# front_d が16〜25mm違う)。既存経路(find_vertical_wall→missing_by_deviation、
+# wall_missing、pass_through)はそのまま残し、この検知が先に成立したときだけ使う。
+#   depth_min : 谷底がその前のピーク(180=範囲外も可)よりこれだけ低いこと [mm]
+#   bottom_min: 谷底の下限 [mm]。旋回直後に「今曲がった角の柱」が32〜38mmの近い谷として
+#               見えるのを除外する(遠い柱は実測53〜70mm)。近い物は exist 経路の担当
+#   bottom_max: 谷底の上限 [mm]
+#   slope_min : 離脱の上昇率 [mm/mm](走行1mmあたり)を2tick連続で超えること
+#   rise_min  : 谷底からの上昇量 [mm]
+#   far_th    : 確認条件。ここまで抜けたら離脱確定 [mm]
+#   max_lag   : 谷底からこれ以内に離脱しなければ柱ではない(壁の平坦を除外) [mm]
+#   stale_dist: 谷底がこれより古ければ追跡し直す(前のセルの柱を拾わない) [mm]
+#   min_v     : これ未満の速度では追跡のみで発火しない [mm/s]
+# 首振れ耐性: 45°読みのヨー感度≈1.1mm/deg@65mm、直線中の観測最大ヨー1.5°/tick
+# でも1tick≤1.7mm(壁読みの|Δd| p99=1.8mm/tick)。slope_min=1.5は1800mm/sで
+# ≥2.7mm/tickを2tick連続要求、far_thは+30mm以上を要求するので首振れでは成立
+# しない。首振れ由来の浅い谷(実測4.7mm、20260923_064338.csv idx410)は
+# depth_min=8で棄却。
+# wall_off_pillar_str_l/r の初期値は従来経路(谷底から2〜3tick後に発火 +
+# left_str/right_str)と同じ位置になる換算値(右: −4.5+5.5, 左: −2.0+4.5)。
+# 有効化後は n≥4 で再測定し、旋回突入時の front_d を基準に合わせ込むこと。
+# ログ列 pillar_st(右*10+左: 1=追跡 2=早期発火 3=確認発火) / pillar_lag_l,r /
+# pillar_btm_l,r で動作を確認できる。
+wall_off_pillar_enable: 1
+wall_off_pillar_depth_min: 8.0
+wall_off_pillar_bottom_min: 48.0
+wall_off_pillar_bottom_max: 80.0
+wall_off_pillar_slope_min: 1.5
+wall_off_pillar_rise_min: 4.0
+wall_off_pillar_far_th: 100.0
+wall_off_pillar_max_lag: 14.0
+wall_off_pillar_stale_dist: 30.0
+wall_off_pillar_min_v: 500
+wall_off_pillar_str_l: 2.5
+wall_off_pillar_str_r: 1.0
+
 wall_off_diff_ref_th: 6.5
 wall_off_diff_ref_front_th: 30 # 壁切れ偏差チェックの前後距離差条件
 

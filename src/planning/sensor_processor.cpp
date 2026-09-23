@@ -1,4 +1,6 @@
 #include "planning/sensor_processor.hpp"
+#include "hardware/sync.h" // __dmb
+#include "pico/stdlib.h"
 #include <algorithm>
 #include <cmath>
 
@@ -158,6 +160,7 @@ void SensorProcessor::calc_dist() {
   }
 
   calc_dist_diff();
+  update_pillar_trough();
 }
 
 __attribute__((noinline, section(".time_critical.sensor_processor")))
@@ -325,4 +328,63 @@ int SensorProcessor::interp1d(vector<int> &vx, vector<int> &vy, float x,
   }
   float dydx = (yR - yL) / (xR - xL);
   return (int)(yL + dydx * (x - xL));
+}
+
+__attribute__((noinline, section(".time_critical.sensor_processor")))
+void SensorProcessor::update_pillar_trough() {
+  const auto &pp = param->wall_off_dist;
+  const float x = tgt_val->global_pos.dist;
+  const auto mt = tgt_val->motion_type;
+
+  // 形が意味を持たない区間(旋回・超信地・停止・前壁制御)は毎 tick 再アーム。
+  // 既存の sen.*.sensor_dist の SLALOM リセット(trajectory_generator.cpp)と同じ考え。
+  // STRAIGHT / SLA_BACK_STR / WALL_OFF 等では連続して追跡するので、谷底が
+  // WALL_OFF 開始より前(直前の直線や SLA_BACK_STR 中)にあっても拾える。
+  const bool rearm =
+      (mt == MotionType::SLALOM || mt == MotionType::PIVOT ||
+       mt == MotionType::PIVOT_PRE || mt == MotionType::PIVOT_PRE2 ||
+       mt == MotionType::PIVOT_AFTER || mt == MotionType::PIVOT_OFFSET ||
+       mt == MotionType::NONE || mt == MotionType::READY ||
+       mt == MotionType::FRONT_CTRL);
+
+  float travel = 0.0f;
+  if (pillar_x_valid_) {
+    travel = x - pillar_x_prev_;
+    if (travel < 0.0f) travel = 0.0f; // global_pos.dist のリセット(走行開始)時
+  }
+  pillar_x_prev_ = x;
+  pillar_x_valid_ = true;
+
+  if (!pp.pillar_enable || rearm) {
+    pillar_r_.arm(se->ego.right45_dist, x);
+    pillar_l_.arm(se->ego.left45_dist, x);
+  } else {
+    PillarTroughParams p;
+    p.depth_min = pp.pillar_depth_min;
+    p.bottom_min = pp.pillar_bottom_min;
+    p.bottom_max = pp.pillar_bottom_max;
+    p.slope_min = pp.pillar_slope_min;
+    p.rise_min = pp.pillar_rise_min;
+    p.far_th = pp.pillar_far_th;
+    p.max_lag = pp.pillar_max_lag;
+    p.stale_dist = pp.pillar_stale_dist;
+    const bool fire_ok = std::fabs(se->ego.v_c) >= pp.pillar_min_v;
+    pillar_r_.update(se->ego.right45_dist, se->ego.right45_2_dist_diff, x, travel,
+                     fire_ok, p);
+    pillar_l_.update(se->ego.left45_dist, se->ego.left45_2_dist_diff, x, travel,
+                     fire_ok, p);
+  }
+
+  auto publish = [x](const PillarTroughDetector &d, pillar_trough_out_t &o) {
+    o.bottom = d.bottom();
+    o.bottom_x = d.bottom_x();
+    o.peak = d.peak();
+    o.fire_x = d.fire_x();
+    o.lag = x - d.bottom_x();
+    o.seq = d.seq();
+    __dmb();
+    o.state = d.state();
+  };
+  publish(pillar_r_, se->pillar_r);
+  publish(pillar_l_, se->pillar_l);
 }
