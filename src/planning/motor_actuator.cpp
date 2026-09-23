@@ -76,7 +76,7 @@ void MotorActuator::apply(float duty_l, float duty_r) {
   auto clamp_full = [&](uint32_t q) -> uint32_t { return q > full ? full : q; };
   const uint32_t ql = clamp_full(to_q16(duty_l));
   const uint32_t qr = clamp_full(to_q16(duty_r));
-  if (duty_l <= 0.0f) pwm_.set_levels_q16(0, full - ql, full); else pwm_.set_levels_q16(0, full, full - ql);
+  if (duty_l >= 0.0f) pwm_.set_levels_q16(0, full - ql, full); else pwm_.set_levels_q16(0, full, full - ql);
   if (duty_r >= 0.0f) pwm_.set_levels_q16(1, full - qr, full); else pwm_.set_levels_q16(1, full, full - qr);
 #else
   const uint32_t ql = to_q16(duty_l);
