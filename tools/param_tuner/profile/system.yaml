@@ -61,9 +61,9 @@ maze_size: 32
 debug: 0 #
 circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
 hf_cl: 0 # half(0) or classic(1)
-mode: 0 # メイン
+# mode: 0 # メイン
 # mode: 1 # 最短スローム
-# mode: 2 # 直進
+mode: 2 # 直進
 # mode: 3 # 超信地
 # mode: 5 # 探索スラローム: sla_wall_ref_l/r
 # mode: 7 # front ctrl
@@ -88,7 +88,7 @@ test: # テスト走行時に使用するパラメータ群
   # 2026-08-30: sysid(duty5/10)実測の定常速度と同じ目標速度で定速直進させ、
   # そのときのFF出力duty%が実測のduty5/10と一致するかを検証する用
   # (v_inf@duty5=414mm/s, v_inf@duty10=997mm/s)。まずv_max=414から。
-  v_max: 1500
+  v_max: 15000
   accl: 42500
   # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
   # 減速(decel)には効かない。
@@ -107,7 +107,7 @@ test: # テスト走行時に使用するパラメータ群
   decel: -47500
   dia_accl: 45000
   dia_decel: -47500
-  dist: 120 #直進
+  dist: 720 #直進
   suction_active: 2
   # 吸引ESC(ESCape32)の回転方向。0 = 正転(revdir=0)、1 = 逆転(revdir=1)。
   # この値は起動時にはESCへ送られない。値を変えたら USBコマンド "DSHOTDIR"
@@ -120,7 +120,7 @@ test: # テスト走行時に使用するパラメータ群
   w_max: 12.5
   alpha: 180
   ang: 3600
-  search_mode: 0
+  search_mode: 1
   
   # [重要] AM32 ESC移行により、suction_duty系は0〜100%のduty%ではなく
   # ESCへの目標パルス幅を「us(1000〜2000)」で直接指定する値になった
@@ -129,10 +129,10 @@ test: # テスト走行時に使用するパラメータ群
   # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
   # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
   # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
-  suction_duty: 1925
-  suction_duty_low: 1925
-  suction_duty_burst: 1925
-  suction_duty_burst_low: 1925 # suction_duty_burst -0.25
+  suction_duty: 1950
+  suction_duty_low: 1950
+  suction_duty_burst: 1950
+  suction_duty_burst_low: 1950 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
@@ -204,7 +204,7 @@ test: # テスト走行時に使用するパラメータ群
   file_idx: 12
   sla_dist: 90
   # sla_type: 3
-  sla_type: 2
+  sla_type: 3
   sla_type2: 6 # 復路ターン種類
   sla_return: 0 # 往復フラグ
   # sla_type: 1 normal
@@ -226,5 +226,5 @@ test: # テスト走行時に使用するパラメータ群
   sysid_duty: 20 #duty 
 
   sysid_time: 1250 #duty
-  start_turn: 1  #開幕ターンテスト
+  start_turn: 0  #開幕ターンテスト
   front_auto_tune: 0  #test_slaのfront offset自動調整(left45/right45基準フィードバック)有効化: 0無効, 1有効
