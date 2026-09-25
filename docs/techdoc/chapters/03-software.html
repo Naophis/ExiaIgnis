@@ -1,0 +1,147 @@
+<p class="eyebrow">CHAPTER 3</p>
+<h1>ソフトウェア構成</h1>
+<p class="lede">OS を使わず、2 コアとタイマー IRQ だけで組んだファームウェアの構造です。ビルドは Pico SDK 2.2.0 + GCC 15.2、C++20、<code>-O3</code>。</p>
+
+<h2 id="cores">3.1 マルチコアと IRQ</h2>
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="Core0 と Core1 の役割分担と、共有エンティティを介したデータの流れ">
+  <defs><marker id="arr5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <g font-size="11" fill="currentColor">
+    <rect x="10" y="20" width="300" height="210" rx="6" fill="none" stroke="currentColor"/>
+    <text x="24" y="42" font-weight="700">Core0</text>
+    <text x="24" y="66">MainTask: パラメータロード / UI / ボタン</text>
+    <text x="24" y="86">探索・最短走行のオーケストレーション</text>
+    <text x="24" y="106">USB CDC (printf, ファイル受信, コマンド)</text>
+    <text x="24" y="126">LoggingTask: repeating_timer 1 kHz → PSRAM</text>
+    <text x="24" y="146">LittleFS の読み書き (Core1 を一時停止)</text>
+    <text x="24" y="176" font-size="10" opacity="0.8">TinyUSB が Core0 固定 → printf は Core0 のみ</text>
+    <text x="24" y="194" font-size="10" opacity="0.8">flash 書き込み中は USB CDC が約 100 ms 切れる</text>
+
+    <rect x="450" y="20" width="300" height="210" rx="6" fill="#24665A" fill-opacity="0.08" stroke="#24665A"/>
+    <text x="464" y="42" font-weight="700">Core1 (__wfi でスリープ、IRQ のみ)</text>
+    <text x="464" y="66">SensingTask: TIMER0 alarm 1 (1 kHz)</text>
+    <text x="480" y="84" font-size="10">alarm 2 = LED 点灯シーケンスの継続</text>
+    <text x="464" y="108">PlanningTask: TIMER1 alarm 0 (1 kHz)</text>
+    <text x="480" y="126" font-size="10">tick(): 推定 → 軌道 → 制御 → PWM</text>
+    <text x="464" y="156">ホットコードは SRAM 上 (.time_critical / ファイル単位)</text>
+    <text x="464" y="176">IRQ 優先度は最高、alarm は絶対時刻で再アーム</text>
+    <text x="464" y="196" font-size="10" opacity="0.8">Core1 スタック 8 KB (SRAM 上、SCRATCH_X は 4 KB で不足)</text>
+
+    <rect x="330" y="60" width="100" height="130" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>
+    <text x="380" y="82" text-anchor="middle" font-size="10">shared_ptr</text>
+    <text x="380" y="100" text-anchor="middle" font-size="10">sensing_result</text>
+    <text x="380" y="116" text-anchor="middle" font-size="10">input_param</text>
+    <text x="380" y="132" text-anchor="middle" font-size="10">motion_tgt_val</text>
+    <text x="380" y="148" text-anchor="middle" font-size="10">Command / State</text>
+    <text x="380" y="176" text-anchor="middle" font-size="9.5">volatile コピー + __dmb</text>
+    <line x1="310" y1="100" x2="330" y2="100" stroke="currentColor" marker-end="url(#arr5)"/>
+    <line x1="430" y1="100" x2="450" y2="100" stroke="currentColor" marker-end="url(#arr5)"/>
+    <line x1="450" y1="150" x2="430" y2="150" stroke="currentColor" marker-end="url(#arr5)"/>
+    <line x1="330" y1="150" x2="310" y2="150" stroke="currentColor" marker-end="url(#arr5)"/>
+    <text x="320" y="92" font-size="9" text-anchor="middle">指示</text>
+    <text x="440" y="164" font-size="9" text-anchor="middle">状態</text>
+  </g>
+</svg>
+<figcaption>Core0 は判断と I/O、Core1 はセンシングと制御だけ。共有データは make_shared したエンティティを両コアが参照し、Core0 → Core1 の指示はダブルバッファのコマンドを原子的なインデックスで受け渡す。</figcaption>
+</figure>
+<ul>
+  <li><strong>コマンド受け渡し</strong>: Core0 の <code>send_command()</code> がバッファに書いて <code>pending_cmd_idx_</code> を release 順序でセットし、Core1 は tick の先頭で acquire して取り込み、<code>cp_request()</code> でセグメントを切り替えます。</li>
+  <li><strong>起動・停止のラッチ</strong>: モーター有効化は Core0 が要求フラグを立て、Core1 が tick 内で KF リセット・軌道バッファ確保・PWM 有効化をまとめて行います。Core1 が毎 ms 触るデータとの競合を避けるためで、二重実行は ack フラグで防ぎます。</li>
+  <li><strong>tick 同期</strong>: Core0 側の待ちは <code>sleep_ms</code> ではなく <code>wait_tick()</code> で Core1 の tick 進行に合わせます。</li>
+  <li><strong>アラームの再アーム</strong>: フラッシュ書き込み中は Core1 が停止し、<code>timer_hw->alarm</code> への生書き込みと重なると SensingTask が恒久停止するレースがありました。目標時刻が過去なら INTF で強制発火させる <code>arm_alarm32_safe()</code> で回避しています。</li>
+  <li><strong>IRQ 内ログ</strong>: <code>irq_log</code> のリングバッファに短いマーカーを積み、クラッシュ箇所の特定に使います。</li>
+</ul>
+
+<h2 id="sram">3.2 SRAM 配置</h2>
+<p>RP2350 の XIP キャッシュは 16 KB なので、平均時間はフラッシュ上でも大きく変わりませんが、Core0 の printf や PSRAM アクセスでキャッシュが追い出されたときのジッタが制御ループに乗ります。対策として、ホットなコードとデータを SRAM に置きます。</p>
+<ul>
+  <li><strong>関数単位</strong>: <code>__attribute__((noinline, section(".time_critical.<モジュール>")))</code> を IRQ ハンドラとホットパスに付与。</li>
+  <li><strong>ファイル単位</strong>: <code>memmap_custom.ld</code> の <code>.text</code> / <code>.rodata</code> の <code>EXCLUDE_FILE(...)</code> に挙げたオブジェクトをフラッシュから除外し、<code>.data</code> 内で RAM に入れます。対象は <code>src/planning/</code> <code>src/action/</code> <code>src/search/</code> <code>src/utils/</code> <code>src/logging/</code>、SensingTask、UI、生成コード、センサー/PWM/DShot ドライバ、そこから呼ばれる SDK (<code>pico_time</code>、<code>hardware_timer/spi/gpio/irq/dma/adc/pio</code>)、libstdc++ の <code>tree.o</code> / <code>hashtable</code>、libc の <code>malloc/free</code> と <code>mem*</code>。printf / USB / LittleFS / cJSON / パラメータロードはフラッシュのまま。</li>
+  <li>SDK の float/double 実装は <code>PICO_FLOAT_IN_RAM=1</code> / <code>PICO_DOUBLE_IN_RAM=1</code>。</li>
+  <li>配置の確認は <code>arm-none-eabi-nm -n build/ExiaIgnis.elf | awk '$1 ~ /^20/ &amp;&amp; /veneer/'</code> で、RAM 上のコードからフラッシュへの呼び出し (veneer) を列挙します。veneer を解決せずにコールグラフを見ると「0 件」と誤判定します。</li>
+</ul>
+<div class="tbl"><table class="compact">
+<tr><th>領域</th><th>サイズ</th><th>備考</th></tr>
+<tr><td>flash .text</td><td class="num">214 KB</td><td>ファイル単位配置の前は 290 KB</td></tr>
+<tr><td>RAM 上のコード (.data)</td><td class="num">223 KB</td><td>同 138 KB</td></tr>
+<tr><td>ヒープ</td><td class="num">266 KB</td><td>パラメータ JSON パース時のピーク推定 40 KB</td></tr>
+<tr><td>RAM → flash の veneer</td><td class="num">55</td><td>同 190。残りは printf / USB / panic / LittleFS / I2C / 初期化のみ</td></tr>
+</table></div>
+<p>実測では配置の効果は −2〜−7 µs でレイアウトノイズ (±3〜5 µs) と同程度でした。tick 時間の増加の正体は DitherPwm (+40 µs) と <code>trj_length</code> 1 → 5 (13 → 66 µs) で、配置ではなく計算量です。ファイル単位配置の価値は「属性の付け忘れ監査が不要になる」保守性にあります。</p>
+
+<h2 id="boot">3.3 起動シーケンス</h2>
+<ol>
+  <li><code>stdio_init_all()</code>。直後に PSRAM の ID を素の状態で 1 回プローブ (結果は後でまとめて出力)。</li>
+  <li>PlanningTask を生成して <code>esc_.init()</code> だけ先に実行。吸引 ESC は通電直後から有効な停止指令を期待するので、GPIO がフローティングのまま数秒経つと信号ロストのブザーが鳴り続ける。</li>
+  <li>タクトスイッチ初期化。</li>
+  <li><code>ConfigLoader::init()</code> (LittleFS マウント、初回はフォーマット + デフォルト生成)。<code>multicore_launch_core1</code> より前に行う。</li>
+  <li>PSRAM 初期化 (<code>sfe_setup_psram</code>) と実書き込みテスト。失敗時はログ機能を無効化し、ダンプ時に <code>dumperr</code> 行を出す。</li>
+  <li>LoggingTask 初期化 (PSRAM 先頭から最大 60,000 サンプル)。</li>
+  <li>Core1 起動: <code>flash_safe_execute_core_init()</code> → SensingTask と PlanningTask の <code>start_irq()</code> → <code>__wfi()</code> ループ。</li>
+  <li>MainTask: ブザー / UI 初期化 → パラメータロード → ボタン待ちループ (USB コマンド受付) → <code>user_mode</code> でテストモードか本走行へ。</li>
+</ol>
+<p>MotionPlanning のポインタ設定 (<code>setup_components()</code>) より前に <code>reset_tgt_data()</code> / <code>reset_ego_data()</code> を呼ぶと null 参照で HardFault になるので、順序を固定しています。</p>
+
+<h2 id="params">3.4 パラメータ (ConfigLoader / LittleFS)</h2>
+<p>パラメータはフラッシュ末尾 256 KB の LittleFS に JSON で置き、起動時に <code>input_param_t</code> / <code>system_t</code> などへ展開します。編集は PC 側の YAML (<code>tools/param_tuner/profile/</code>) で行い、送信ツールが JSON に変換して <code>filename@json\n</code> で書き込みます。</p>
+<div class="tbl"><table class="compact">
+<tr><th>ファイル</th><th>読み込み先</th><th>内容</th></tr>
+<tr><td><code>/config.json</code></td><td>ConfigLoader</td><td>LED 整定時間、センシング周期</td></tr>
+<tr><td><code>/hardware.json</code></td><td>input_param_t</td><td>機体定数、モーターモデル、全 PID、KF ノイズ、start_align など</td></tr>
+<tr><td><code>/sensor.json</code></td><td>input_param_t</td><td>センサー基準値、距離変換ゲイン</td></tr>
+<tr><td><code>/offset.json</code></td><td>input_param_t</td><td>壁切れ距離、柱谷検知、Kanayama、軌道テーブル</td></tr>
+<tr><td><code>/system.json</code></td><td>system_t</td><td>user_mode、迷路サイズ、ゴール、テスト条件、吸引設定</td></tr>
+<tr><td><code>/exec.json</code></td><td>exec_pram_t[]</td><td>最短走行の fast / normal / slow プロファイル組</td></tr>
+<tr><td><code>/profiles.hf</code> (<code>.cl</code>)</td><td>turn_param_profile_t</td><td>スラロームファイルの一覧と TurnType → インデックス</td></tr>
+<tr><td><code>/vel_prof.hf</code> (<code>.cl</code>)</td><td>straight_param_t</td><td>直線の速度・加減速プロファイル (search / fast / dia)</td></tr>
+<tr><td><code>/t_NNNN.hf</code></td><td>slalom_param2_t</td><td>速度別のスラロームパラメータ</td></tr>
+<tr><td><code>/enc_lut.hf</code></td><td>input_param_t</td><td>エンコーダ角度補正テーブル (64 点 ×2)</td></tr>
+<tr><td><code>/maze.txt</code> ほか</td><td>MazeSolverBaseLgc</td><td>探索で得た迷路データ (片側探索・帰還探索は別ファイル)</td></tr>
+</table></div>
+<p><code>hf_cl</code> でハーフ (<code>.hf</code>) とクラシック (<code>.cl</code>) を切り替えます。JSON のパースは ArduinoJson (v7) で、フラッシュ書き込み中は USB CDC が約 100 ms 切れるため、書き込み前に <code>OK\n</code> を返してから 80 ms 待ちます。</p>
+
+<h2 id="usb">3.5 USB シリアルコマンド</h2>
+<div class="tbl"><table class="compact">
+<tr><th>コマンド</th><th>動作</th></tr>
+<tr><td><code>filename@json\n</code></td><td>LittleFS に <code>/filename</code> として書き込み、パラメータを即再ロード</td></tr>
+<tr><td><code>LIST</code></td><td>ファイル一覧を <code>name:size</code> で出力</td></tr>
+<tr><td><code>READ:filename</code> / <code>DELETE:filename</code></td><td>内容の読み出し / 削除</td></tr>
+<tr><td><code>DSHOTDIR</code></td><td><code>system.yaml</code> の <code>test.suction_dshot_reverse</code> を吸引 ESC に書き込み、ESC のフラッシュへ永続化</td></tr>
+<tr><td><code>AM32READ</code> / <code>AM32WRITE</code></td><td>AM32 ファーム時代の ESC 設定読み書き (ESCape32 では未使用、経緯確認のため残置)</td></tr>
+</table></div>
+<p>コマンドは起動後のボタン待ちループでのみ受け付けます。テストモード 14 (センサーダンプ) の実行中も <code>hardware.yaml</code> / <code>sensor.yaml</code> を再送して即反映できます。</p>
+
+<h2 id="logging">3.6 走行ログ (LoggingTask)</h2>
+<ul>
+  <li>Core0 の repeating_timer (1 kHz) が共有エンティティを読み、<code>log_data_t2</code> を PSRAM 上の <code>std::vector</code> (バンプアロケータ、dealloc なし) に追記。Core1 は一切関与しません。</li>
+  <li>最大 60,000 サンプル (60 秒)。tick の間隔が 3 ms を超えた回はスキップして <code>dropped_ticks</code> に数えます。</li>
+  <li>ダンプは USB CDC へのバイナリ (<code>dump_csv</code>、Param Console / <code>rx_term.js</code> のプロトコル) が標準で、テキスト CSV と UART バイナリも残しています。PC 側で <code>tools/param_tuner/logs/YYYYMMDD_HHMMSS.csv</code> になります。</li>
+  <li>列は目標値・推定値・各 PID の内訳 (p/i/d の各項)・FF の各トルク・duty・センサー距離・モーション種別・壁切れ検知の内部状態など。制御則を変えるときは、ログから実効ゲインを逆算できるよう内訳をそのまま出す方針です。</li>
+  <li>受信側はヘッダー行の欠落やバースト時の破損を検出し、破損時は部分復元せず破棄してリトライを促します (中間欠落があるため)。</li>
+</ul>
+
+<h2 id="dirs">3.7 ディレクトリ構成</h2>
+<div class="tbl"><table class="compact">
+<tr><th>パス</th><th>内容</th></tr>
+<tr><td><code>src/main.cpp</code></td><td>エントリ。Core1 起動、MainTask 実行</td></tr>
+<tr><td><code>src/main/</code></td><td>MainTask (走行モード、テストモード、USB、パラメータロード)</td></tr>
+<tr><td><code>src/sensing_task.cpp</code></td><td>SensingTask (TIMER0 IRQ、センサー読み取り)</td></tr>
+<tr><td><code>src/planning/</code></td><td>PlanningTask、EgoEstimator、SensorProcessor、TrajectoryGenerator、ControlLaw、MotorActuator、吸引 ESC</td></tr>
+<tr><td><code>src/action/</code></td><td>MotionPlanning、PathCreator、TrajectoryCreator、WallOffController</td></tr>
+<tr><td><code>src/search/</code></td><td>MazeSolverBaseLgc、Adachi、SearchController</td></tr>
+<tr><td><code>src/driver/</code></td><td>ASM330LHH、AS5147P、ADS7042、DitherPwm、DShot (PIO)、PSRAM 診断、AM32</td></tr>
+<tr><td><code>src/logging/</code> <code>src/utils/</code></td><td>LoggingTask、KalmanFilter、irq_log</td></tr>
+<tr><td><code>gen_code_mpc/</code> <code>gen_code_pid/</code> <code>gen_code_simple_pid/</code></td><td>Simulink から生成した目標値計算・PID</td></tr>
+<tr><td><code>pio/</code></td><td>DShot 送信・双方向、AM32 半二重</td></tr>
+<tr><td><code>memmap_custom.ld</code></td><td>SRAM 配置のリンカスクリプト</td></tr>
+<tr><td><code>tools/param_tuner/</code></td><td>Param Console、送受信スクリプト、解析スクリプト、YAML パラメータ</td></tr>
+<tr><td><code>tests/</code></td><td>ホスト側テスト (DitherPwm シミュレーション、柱谷検知のログ再生)</td></tr>
+<tr><td><code>docs/</code></td><td>設計メモ (DitherPwm、Kanayama、JSON スキーマ、ピン配置) と本資料</td></tr>
+</table></div>
+
+<h2 id="build">3.8 ビルドと書き込み</h2>
+<pre><code>cd build &amp;&amp; cmake .. -DCMAKE_BUILD_TYPE=Release   # 初回または CMakeLists 変更時
+./compile.sh                                       # cmake --build build -- -j
+./flash.sh                                         # BOOTSEL で UF2 書き込み
+./serial_monitor.sh /dev/ttyACM0 115200</code></pre>
+<p>初回の configure で ArduinoJson、LittleFS v2.5.0、SparkFun の PSRAM 初期化コードを FetchContent で取得します (ネットワーク必須)。以後は <code>FETCHCONTENT_UPDATES_DISCONNECTED</code> で更新チェックを省き、configure 時間を抑えています。ホスト側テストは <code>tests/*/run.sh</code> で、実機なしで DitherPwm のリング更新と柱谷検知を検証できます。</p>

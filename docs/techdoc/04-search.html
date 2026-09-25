@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>4. 探索・経路生成 | ExiaIgnis 技術資料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<div class="site">
+<header class="site-head">
+  <a class="brand" href="index.html"><span class="brand-name">ExiaIgnis</span><span class="brand-sub">技術資料</span></a>
+  <nav class="chapters" aria-label="章"><ul><li><a href="index.html"><span>概要</span></a></li>
+<li><a href="01-hardware.html"><span class="nav-num">1</span><span>機体構成</span></a></li>
+<li><a href="02-control.html"><span class="nav-num">2</span><span>制御</span></a></li>
+<li><a href="03-software.html"><span class="nav-num">3</span><span>ソフトウェア</span></a></li>
+<li class="is-current"><a href="04-search.html"><span class="nav-num">4</span><span>探索・経路</span></a></li>
+<li><a href="05-tools.html"><span class="nav-num">5</span><span>ツール</span></a></li>
+<li><a href="06-tuning.html"><span class="nav-num">6</span><span>調整手順</span></a></li>
+<li><a href="07-devlog.html"><span class="nav-num">7</span><span>開発記録</span></a></li>
+<li><a href="08-performance.html"><span class="nav-num">8</span><span>性能・課題</span></a></li>
+<li><a href="09-appendix.html"><span class="nav-num">付録</span><span>付録</span></a></li></ul></nav>
+</header>
+<div class="layout">
+  <aside class="side"><nav class="toc" aria-label="このページの目次"><p class="toc-title">このページ</p><ol><li><a href="#maze">4.1 迷路マップ</a></li><li><a href="#adachi">4.2 足立法 (Adachi)</a></li><li><a href="#vector">4.3 ベクター距離マップ</a></li><li><a href="#path">4.4 最短経路の生成 (PathCreator)</a></li><li><a href="#timebase">4.5 時間ベースの経路最適化</a></li><li><a href="#fastrun">4.6 最短走行の構成</a></li></ol></nav></aside>
+  <main class="content" id="top">
+<p class="eyebrow">CHAPTER 4</p>
+<h1>探索・経路生成</h1>
+<p class="lede">迷路の表現、足立法による探索、斜めを含む最短経路の生成と時間ベースの最適化をまとめます。実装は <code>src/search/</code> と <code>src/action/path_creator.cpp</code>。</p>
+
+<h2 id="maze">4.1 迷路マップ</h2>
+<p><code>map[x + y × maze_size]</code> の 1 バイトにセルの情報を持ちます。ハーフサイズは <code>maze_size: 32</code>、ゴールは <code>system.yaml</code> の <code>goals</code> にセル座標のリストで与えます (左下原点)。</p>
+<div class="tbl"><table class="compact">
+<tr><th>ビット</th><th>意味</th></tr>
+<tr><td>下位 4 bit (0x0f)</td><td>壁の有無。North 0x01 / East 0x02 / West 0x04 / South 0x08</td></tr>
+<tr><td>上位 4 bit (0xf0)</td><td>踏破済みフラグ。North 0x10 / East 0x20 / West 0x40 / South 0x80。全方向踏破 = <code>(map &amp; 0xf0) == 0xf0</code></td></tr>
+</table></div>
+<p>判定ヘルパーは <code>existWall(x, y, dir)</code> (壁あり)、<code>isStep(x, y, dir)</code> (その方向から踏み込んだことがある)、<code>isProceed(x, y, dir)</code> (壁なしかつ踏破済み)。探索結果は LittleFS の <code>/maze.txt</code> に保存し、片側探索・帰還探索は別ファイルに分けます。</p>
+
+<h2 id="adachi">4.2 足立法 (Adachi)</h2>
+<ul>
+  <li>BFS で目的地からの歩数マップを作り、<code>exec()</code> が 1 歩ぶんの次移動方向 (<code>Motion</code>) を返します。</li>
+  <li><code>detect_next_direction()</code> は前進方向を最優先し、左右は「歩数が低い同値でも更新しない」評価 (<code>setNextDirection2</code>) で判定、後退は <code>enable_back</code> の条件下のみ。</li>
+  <li>未踏マスは <code>subgoal_list</code> にキャッシュし、ゴール到達後は帰還先を動的に切り替えます。</li>
+  <li>SearchMode は ALL (全探索) / Kata (片側探索) / Return (帰還探索)。探索時間は <code>seach_timer</code> 450 秒で、超えたら <code>timeup_motion()</code> で帰還します。</li>
+</ul>
+<p>探索走行の速度は 425 mm/s (加減速 2500 mm/s²)、探索スラロームは Normal (v 300、rad 26)。探索中の壁切れ補正 (<code>search_wall_off_*</code>) と前壁補正 (<code>front_dist_offset</code> 94.5 mm) は 2 章の壁制御を探索用しきい値で使います。</p>
+
+<h2 id="vector">4.3 ベクター距離マップ</h2>
+<p>斜め経路のコストは <code>vector_map_t</code> 配列に持ちます。<code>n / e / w / s</code> に各方向のコスト、<code>N1 / NE / E1 / SE / S1 / SW / W1 / NW</code> に 8 方向の通過カウントを格納し、<code>updateVectorMap()</code> が priority_queue で Dijkstra 的に更新します。<code>Direction</code> 列挙は North=1, East=2, NorthEast=3, West=4, NorthWest=5, SouthEast=6, SouthWest=7, South=8 で、<span class="math">now × dir == 8</span> が逆方向判定です。</p>
+
+<h2 id="path">4.4 最短経路の生成 (PathCreator)</h2>
+<p>ベクター距離マップから <code>path_s</code> (区間の直線距離、1 セル = 2 単位) と <code>path_t</code> (ターン種別) の配列を作ります。</p>
+<pre><code>path_create()  →  convert_large_path()  →  diagonalPath()  →  pathOffset()</code></pre>
+<div class="tbl"><table class="compact">
+<tr><th>path_t</th><th>意味</th><th>path_t</th><th>意味</th></tr>
+<tr><td>1 / 2</td><td>Normal Right / Left</td><td>7 / 8</td><td>Dia45 Right / Left</td></tr>
+<tr><td>3 / 4</td><td>Large Right / Left</td><td>9 / 10</td><td>Dia135 Right / Left</td></tr>
+<tr><td>5 / 6</td><td>Orval Right / Left (180°)</td><td>11 / 12</td><td>Dia90 Right / Left</td></tr>
+<tr><td>254</td><td>スキップ (pathOffset で削除)</td><td>255</td><td>ゴール / 終端</td></tr>
+</table></div>
+<p><code>TrajectoryCreator</code> が <code>path_t</code> の値を <code>TurnType</code> / <code>TurnDirection</code> に変換し、<code>MotionPlanning::exec_path_running()</code> が直進・壁切れ待ち・旋回のモーション列に展開して Core1 へ投入します。</p>
+
+<h2 id="timebase">4.5 時間ベースの経路最適化</h2>
+<p><code>timebase_path_create()</code> は候補分岐マスを <code>other_route_map</code> に記録し、<code>exec_param</code> の 1〜5 パターンで <code>path_create_with_change()</code> を試して、<code>calc_goal_time()</code> (直線とスラロームのダミー実行で走行時間を積算) が最短の経路を <code>path_set_map</code> (priority_queue) から取ります。本走行モードには全プロファイルのタイムを計算するだけのサブモード (<code>sim_run_time_all</code>) があり、走らせる前にプロファイル間の比較ができます。</p>
+
+<h2 id="fastrun">4.6 最短走行の構成</h2>
+<p><code>exec.json</code> (YAML では <code>run_prf.yaml</code>) の各行が <code>fast / normal / slow</code> の 3 つのプロファイル番号を持ち、本走行モードの番号 2 以降がこれに対応します。<code>path_run()</code> はこの 3 つを ExecParamType (Fast / Normal / Slow) に割り当ててスラロームと直線のパラメータを読み、旋回ごとに違う速度を使い分けます。<code>circuit_mode: 1</code> のときは迷路ではなく <code>circuit.yaml</code> のサーキットパスを走ります。</p>
+<p>最短走行時の直線は速度に応じた加速度 LUT (<code>accl_v_x/y</code>) を使い、吸引なしのときは固定加速度に落とします。直線の最高速は <code>vel_prof.yaml</code> で 7,750 mm/s まで定義していますが、実測で確認しているのは 5.3 m/s までです (8 章)。</p>
+
+  <footer class="page-foot">
+    <nav class="prevnext" aria-label="前後の章"><a class="pn prev" href="03-software.html"><small>前の章</small>3. ソフトウェア構成</a><a class="pn next" href="05-tools.html"><small>次の章</small>5. 開発環境・ツール</a></nav>
+    <p class="stamp">生成: 2026-09-25 (0b1599c)</p>
+  </footer>
+  </main>
+</div>
+</div>
+
+</body>
+</html>

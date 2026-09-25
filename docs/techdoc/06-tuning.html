@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>6. 調整手順 | ExiaIgnis 技術資料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<div class="site">
+<header class="site-head">
+  <a class="brand" href="index.html"><span class="brand-name">ExiaIgnis</span><span class="brand-sub">技術資料</span></a>
+  <nav class="chapters" aria-label="章"><ul><li><a href="index.html"><span>概要</span></a></li>
+<li><a href="01-hardware.html"><span class="nav-num">1</span><span>機体構成</span></a></li>
+<li><a href="02-control.html"><span class="nav-num">2</span><span>制御</span></a></li>
+<li><a href="03-software.html"><span class="nav-num">3</span><span>ソフトウェア</span></a></li>
+<li><a href="04-search.html"><span class="nav-num">4</span><span>探索・経路</span></a></li>
+<li><a href="05-tools.html"><span class="nav-num">5</span><span>ツール</span></a></li>
+<li class="is-current"><a href="06-tuning.html"><span class="nav-num">6</span><span>調整手順</span></a></li>
+<li><a href="07-devlog.html"><span class="nav-num">7</span><span>開発記録</span></a></li>
+<li><a href="08-performance.html"><span class="nav-num">8</span><span>性能・課題</span></a></li>
+<li><a href="09-appendix.html"><span class="nav-num">付録</span><span>付録</span></a></li></ul></nav>
+</header>
+<div class="layout">
+  <aside class="side"><nav class="toc" aria-label="このページの目次"><p class="toc-title">このページ</p><ol><li><a href="#modes">6.1 テストモード一覧</a></li><li><a href="#order">6.2 調整の順序</a></li></ol></nav></aside>
+  <main class="content" id="top">
+<p class="eyebrow">CHAPTER 6</p>
+<h1>調整手順</h1>
+<p class="lede">テストモード (<code>system.yaml</code> の <code>mode</code>、<code>user_mode != 0</code> で起動) の一覧と、新しい機体や足回り変更後に踏む調整の順序です。Astraea の <code>tuning.md</code> を ExiaIgnis の機能に合わせて更新しました。</p>
+
+<h2 id="modes">6.1 テストモード一覧</h2>
+<div class="tbl"><table class="compact">
+<tr><th>mode</th><th>関数</th><th>内容</th></tr>
+<tr><td class="num">1</td><td><code>test_sla</code></td><td>最短スラローム単体 (<code>file_idx</code> / <code>sla_type</code> / <code>sla_return</code> で種類と往復)</td></tr>
+<tr><td class="num">2</td><td><code>test_run</code></td><td>直進 (<code>test.dist</code>、速度・加減速は <code>test:</code> の値)。壁制御あり</td></tr>
+<tr><td class="num">3</td><td><code>test_turn</code></td><td>超信地旋回 (<code>ang</code> / <code>w_max</code> / <code>alpha</code>)</td></tr>
+<tr><td class="num">4</td><td><code>test_run_sla</code></td><td>直進 + スラロームの組み合わせ</td></tr>
+<tr><td class="num">5</td><td><code>test_search_sla</code></td><td>探索スラローム (壁切れ補正あり)。<code>sla_wall_ref_l/r</code> の調整</td></tr>
+<tr><td class="num">6</td><td><code>test_front_wall_offset</code></td><td>前壁距離のオフセット確認</td></tr>
+<tr><td class="num">7 / 8</td><td><code>test_front_ctrl</code></td><td>前壁補正 (hold あり / なし)</td></tr>
+<tr><td class="num">9</td><td><code>test_sla_walloff</code></td><td>壁切れ → スラローム (<code>search_mode</code> で探索用 / 最短用)</td></tr>
+<tr><td class="num">10</td><td><code>test_back</code></td><td>後退</td></tr>
+<tr><td class="num">11</td><td><code>test_suction</code></td><td>吸引テスト (ランプ・duty の確認)</td></tr>
+<tr><td class="num">12</td><td>—</td><td>silent_keep (静止保持)</td></tr>
+<tr><td class="num">13</td><td><code>keep_pivot</code></td><td>その場での姿勢保持 (速度・角速度ゲインの確認)</td></tr>
+<tr><td class="num">14</td><td><code>dump1</code></td><td>センサー値の連続表示。実行中に <code>hardware.yaml</code> / <code>sensor.yaml</code> を再送して即反映可</td></tr>
+<tr><td class="num">15</td><td><code>dump2</code></td><td>センサー校正用のダンプ (距離 ↔ 生値のテーブル作成)</td></tr>
+<tr><td class="num">16 / 17</td><td><code>test_system_identification</code></td><td>システム同定 (直進系 / 旋回系)。<code>sysid_duty</code> / <code>sysid_time</code>、片輪のみも可</td></tr>
+<tr><td class="num">19</td><td><code>test_dia_walloff</code></td><td>斜め走行の壁切れ</td></tr>
+<tr><td class="num">20 / 21</td><td><code>test_pivot_n</code> / <code>_n2</code></td><td>超信地旋回の反復 (角度精度)</td></tr>
+<tr><td class="num">22</td><td><code>encoder_test</code></td><td>エンコーダ確認 (現在は空)</td></tr>
+<tr><td class="num">23</td><td><code>test_search_pivot</code></td><td>探索時の超信地 (前壁補正込み)</td></tr>
+<tr><td class="num">24〜26</td><td>AM32 設定</td><td>AM32 ファーム時代の ESC 設定 (ESCape32 では未使用)</td></tr>
+<tr><td class="num">27</td><td>DSHOTDIR</td><td>吸引 ESC の回転方向を書き込み</td></tr>
+</table></div>
+<p>本走行 (<code>user_mode: 0</code>) ではタイヤをダイヤル代わりに番号を選び、長押しで決定します: 0 全探索 / 1 片側・帰還探索 / 2〜N+1 最短走行 (<code>exec.json</code> の各行) / N+2 その場旋回 / N+3 吸引テスト / N+4 全プロファイルのタイム計算 / N+5 迷路データ消去。</p>
+
+<h2 id="order">6.2 調整の順序</h2>
+<h3>A. 基本機能の確認</h3>
+<ol>
+  <li>UI: ボタン (GPIO2)、LED (I2C)、ブザー (PWM)。起動音が鳴り、モード番号が LED に出ること。</li>
+  <li>ADC: バッテリー電圧 (<code>battery_gain</code> をテスターと合わせる)、壁センサー 4 ch の暗値と点灯値 (mode 14)。</li>
+  <li>PSRAM: 起動ログの <code>rw_test</code> が PASS であること。FAIL ならログは取れない。</li>
+  <li>駆動モーター: <code>motor_debug_mode</code> で左右の回転方向 (<code>motor_r/l_cw_ccw_type</code>)。タイヤを浮かせて低 duty で確認。</li>
+  <li>吸引: mode 11 でランプと保持。ESC の方向が逆なら mode 27。ロジックアナライザで GPIO11 の DShot 波形 (idle-low、bit 1 = 75 %、フレーム周期 400 µs) を一度は見る。</li>
+</ol>
+<h3>B. センサー</h3>
+<ol>
+  <li>LED 整定時間: mode 14 で <code>led_light_delay_cnt</code> を、点灯値が上がりきる最短に。</li>
+  <li>距離校正: mode 15 で距離を変えながらダンプし、<code>sensor.yaml</code> の変換ゲイン (a, b) を当てはめる。</li>
+  <li>壁基準: mode 2 で片側の壁制御を切りながら中央に置いた時の左右 45° を読み、<code>sla_wall_ref_l/r</code>、<code>exist</code> しきい値を決める。</li>
+</ol>
+<h3>C. 同定 (足回りを触ったら必ず)</h3>
+<ol>
+  <li>タイヤ径: mode 2 でできるだけ長い距離を走らせて <code>tire</code> を合わせる (吸引 ON の潰れ込みで)。</li>
+  <li>エンコーダ LUT: v ≈ 400 mm/s の直進を置き直しながら 8〜11 本取り、<code>enc_lut_fit.py</code> → <code>enc_lut.yaml</code> を送信。<code>--check</code> で適用を確認。超信地はスクラブで使えない。</li>
+  <li>トレッド: <code>tread_check.py</code> で実効 tread と左右径差。tread を変えたら Lm も比例させる。</li>
+  <li>直進 FF: 巡航と高加速 (accl 42,500) の直進ログで <code>ff_check.py</code>。ratio a / v が 1.0 ± 0.05 に入るまで Mass / viscous を追う。低加速 (2500) のログは 10 % の差が 0.03 V にしかならず判定に使えない。</li>
+</ol>
+<h3>D. ゲイン</h3>
+<ol>
+  <li>速度ループ (<code>motor_pid2</code>): mode 2 / 13。60〜200 Hz の duty RMS で判定 (基準 0.41 → 0.19 まで下げた実績)。リミットサイクルが出たら p と i を比率を保って下げる。</li>
+  <li>角速度ループ (<code>gyro_pid</code>): mode 3 / 20 / 21。FF 主導なので P は極小のまま、アンチワインドアップと角度差 I 項の効きを見る。</li>
+  <li>壁 PD (<code>str_ang_pid_fast</code>) と Kanayama: mode 2。左右から強制的にずらして開始し、ey の標準偏差 (0.6 mm 程度) と収束時間で判定。傾けて開始したときの揺れはジャイロゼロ点の問題で別扱い。</li>
+</ol>
+<h3>E. 探索系</h3>
+<ol>
+  <li>前壁補正: mode 7 / 8 で <code>front_dist_offset</code>、左右差しきい値、終了条件。</li>
+  <li>探索スラローム: mode 5 で <code>sla_wall_ref</code>、<code>normal_sla_offset_front/back</code>。</li>
+  <li>探索の壁切れ: mode 9 (<code>search_mode: 1</code>) で <code>search_wall_off_*_dist_offset</code>、<code>clear_dist_ragne_*</code>。</li>
+  <li>超信地: mode 23 で前壁補正込みの反復。</li>
+</ol>
+<h3>F. 最短走行</h3>
+<ol>
+  <li>プロファイルの机上確認: 2.3 節の式で FF 差動 duty ≤ 58 %、横 G ≤ 9.0 G。front は <code>wall_off_hold_dist_str</code> の下限 (負値ぶん + 2 mm) を割らないこと。</li>
+  <li>スラローム単体: mode 1 を往復 (<code>sla_return: 1</code>) で n ≥ 4。<code>turn_exit_check.py</code> の出口残差で判定し、front/back は左右同値から始める。</li>
+  <li>壁切れ → スラローム: mode 9 (<code>search_mode: 0</code>) / 19。柱谷検知の lag は <code>tests/pillar_trough_host</code> でログ再生してから実機。</li>
+  <li>速度スイープ: 同一ルートを t_1800 → t_2100 で走らせ、タイム・飽和率・壁切れ区間の距離増を比べる (8 章)。</li>
+</ol>
+<div class="note"><p>吸引 ON/OFF で摩擦 FF の係数 (<code>*_suction</code>) と旋回の P ゲイン (<code>turn_angle_fb.gain_tbl</code>) が変わります。同定ログは吸引 ON で取ったものが主なので、吸引 OFF の値は未検証です。</p></div>
+
+  <footer class="page-foot">
+    <nav class="prevnext" aria-label="前後の章"><a class="pn prev" href="05-tools.html"><small>前の章</small>5. 開発環境・ツール</a><a class="pn next" href="07-devlog.html"><small>次の章</small>7. 開発記録・知見(2026 シーズン)</a></nav>
+    <p class="stamp">生成: 2026-09-25 (0b1599c)</p>
+  </footer>
+  </main>
+</div>
+</div>
+
+</body>
+</html>

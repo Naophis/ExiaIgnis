@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>付録. 付録 | ExiaIgnis 技術資料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<div class="site">
+<header class="site-head">
+  <a class="brand" href="index.html"><span class="brand-name">ExiaIgnis</span><span class="brand-sub">技術資料</span></a>
+  <nav class="chapters" aria-label="章"><ul><li><a href="index.html"><span>概要</span></a></li>
+<li><a href="01-hardware.html"><span class="nav-num">1</span><span>機体構成</span></a></li>
+<li><a href="02-control.html"><span class="nav-num">2</span><span>制御</span></a></li>
+<li><a href="03-software.html"><span class="nav-num">3</span><span>ソフトウェア</span></a></li>
+<li><a href="04-search.html"><span class="nav-num">4</span><span>探索・経路</span></a></li>
+<li><a href="05-tools.html"><span class="nav-num">5</span><span>ツール</span></a></li>
+<li><a href="06-tuning.html"><span class="nav-num">6</span><span>調整手順</span></a></li>
+<li><a href="07-devlog.html"><span class="nav-num">7</span><span>開発記録</span></a></li>
+<li><a href="08-performance.html"><span class="nav-num">8</span><span>性能・課題</span></a></li>
+<li class="is-current"><a href="09-appendix.html"><span class="nav-num">付録</span><span>付録</span></a></li></ul></nav>
+</header>
+<div class="layout">
+  <aside class="side"><nav class="toc" aria-label="このページの目次"><p class="toc-title">このページ</p><ol><li><a href="#param-hw">A.1 hardware.yaml の主要キー</a></li><li><a href="#param-offset">A.2 offset.yaml の主要キー</a></li><li><a href="#param-system">A.3 system.yaml の主要キー</a></li><li><a href="#glossary">A.4 用語集</a></li><li><a href="#links">A.5 関連資料</a></li></ol></nav></aside>
+  <main class="content" id="top">
+<p class="eyebrow">APPENDIX</p>
+<h1>付録</h1>
+<p class="lede">パラメータファイルの主要キーと、本資料で使う用語の一覧です。全フィールドの定義はリポジトリの <code>docs/json_schema.md</code> を参照してください。</p>
+
+<h2 id="param-hw">A.1 hardware.yaml の主要キー</h2>
+<div class="tbl"><table class="compact">
+<tr><th>キー</th><th>内容</th><th>現在値</th></tr>
+<tr><td><code>tire</code> / <code>tire_tread</code></td><td>タイヤ径 [mm] / 実効トレッド [mm]</td><td>13.925 / 42.32</td></tr>
+<tr><td><code>gear_a</code> / <code>gear_b</code></td><td>減速比の歯数</td><td>63 / 13</td></tr>
+<tr><td><code>Ke</code> <code>Km</code> <code>Resist</code> <code>Lm</code> <code>Mass</code></td><td>モーターモデル (逆起電力、トルク定数、抵抗、ヨー慣性相当、並進慣性相当)</td><td>0.000975 / 0.0018 / 4.4 / 6.7e-6 / 0.0285</td></tr>
+<tr><td><code>coulomb_friction(_suction)</code> / <code>viscous_friction(_suction)</code></td><td>摩擦 FF (吸引 OFF / ON)</td><td>1.5e-5 / 3.6e-4</td></tr>
+<tr><td><code>torque_mode</code></td><td>2 = トルク → 電圧 → duty 変換</td><td>2</td></tr>
+<tr><td><code>MotorHz</code> / <code>max_duty</code></td><td>PWM 周波数 / duty 上限 [%]</td><td>100000 / 99.95</td></tr>
+<tr><td><code>motor_pid2</code></td><td>速度 PID (p, i, d, b = 距離項)</td><td>8.5e-6 / 3.0e-6 / 8.75e-6 / 0</td></tr>
+<tr><td><code>gyro_pid</code></td><td>角速度 PID (p, b = 誤差和, i = 角度差, d)、アンチワインドアップ</td><td>3.125e-4 / 2.15e-5 / 0.01465 / 2.95e-4、dead 4.0</td></tr>
+<tr><td><code>angle_pid</code></td><td>角度 PID (p, d)</td><td>7.5 / 4.5</td></tr>
+<tr><td><code>str_ang_pid_fast</code></td><td>壁 PD (p, i, d)、積算停止 15 mm、クランプ 0.09</td><td>0.0375 / 0.00375 / 0.0325</td></tr>
+<tr><td><code>turn_angle_fb</code></td><td>旋回中の角度誤差補正 (P テーブル, I, D, w_gain)</td><td>0.03→0.065 / 0.375 / 0.3 / 0.3</td></tr>
+<tr><td><code>turn_end_brake</code></td><td>旋回終端の残留角速度ブレーキ (p, d, slew)</td><td>0.0008 / 0.0015 / 0.006</td></tr>
+<tr><td><code>turn_settle</code></td><td>旋回後の制御則引き継ぎ (ang_th, hold_ticks, timeout, skip_wall_snap)</td><td>0.125° / 5 / 50 / 1</td></tr>
+<tr><td><code>turn_end_w_i_restore</code></td><td>旋回終了時に角速度 I 項を旋回前の値へ戻す</td><td>1</td></tr>
+<tr><td><code>sakiyomi_time</code></td><td>ヨー FF の先読み [tick]</td><td>3</td></tr>
+<tr><td><code>brake_yaw_gain</code> / <code>motor_torque_asym</code></td><td>減速中のヨーゲイン倍率 / 左右トルクゲイン差</td><td>×2.5 / ε 0.10</td></tr>
+<tr><td><code>hold_settle</code> / <code>start_align</code> / <code>wall_fit</code></td><td>走り出しの待ち・姿勢リセット・壁基準の姿勢推定</td><td>2.8 節</td></tr>
+<tr><td><code>gyro_param</code></td><td>ジャイロ感度、ゼロ点較正の設定</td><td>gain 0.0024605</td></tr>
+<tr><td><code>*_kalman_config</code></td><td>各 KF の初期共分散・プロセス/観測ノイズ</td><td>—</td></tr>
+<tr><td><code>accl_v_x/y</code> <code>axel_degenerate_x/y</code></td><td>速度 → 加速度 LUT、壁誤差 → 加速度抑制 LUT</td><td>—</td></tr>
+<tr><td><code>fail_check</code></td><td>フェイルセーフのカウントしきい値 (duty / v / w / ang / wall_off)</td><td>—</td></tr>
+</table></div>
+
+<h2 id="param-offset">A.2 offset.yaml の主要キー</h2>
+<div class="tbl"><table class="compact">
+<tr><th>キー</th><th>内容</th></tr>
+<tr><td><code>wall_off_hold_dist_str_l/r</code>, <code>wall_off_hold_exist_dist_*</code>, <code>wall_off_hold_noexist_th_*</code></td><td>壁あり開始の壁切れ距離としきい値 (2.7 節)</td></tr>
+<tr><td><code>wall_off_pillar_*</code></td><td>柱谷検知 (depth_min 8, bottom 48〜80, curv_n 2, curv_sum 0.7, max_lag 14, str_l 2.5 / str_r −1.5)</td></tr>
+<tr><td><code>search_wall_off_*</code>, <code>clear_dist_ragne_*</code>, <code>ctrl_exist_wall_th_*</code></td><td>探索時の壁切れと壁制御範囲</td></tr>
+<tr><td><code>front_dist_offset*</code>, <code>sla_front_ctrl_th</code>, <code>pivot_back_*</code></td><td>前壁補正と超信地前後の距離</td></tr>
+<tr><td><code>sla_wall_ref_l/r</code>, <code>normal_sla_offset_front/back</code></td><td>探索スラロームの壁基準と前後補正</td></tr>
+<tr><td><code>*_offset_enable</code>, <code>*_offset_max_dist</code></td><td>旋回種別ごとの壁切れ補正の有効化と上限</td></tr>
+<tr><td><code>kanayama_straight</code></td><td>直進の Kanayama (ky 0.09, ki 0, k_theta 1.0)</td></tr>
+<tr><td><code>trj_length</code>, <code>trj_idx_v/val</code></td><td>軌道の先読み点数 (5) と速度別のインデックス</td></tr>
+<tr><td><code>seach_timer</code>, <code>logging_time</code>, <code>search_log_enable</code>, <code>fast_log_enable</code></td><td>探索時間 (450 s)、ログ時間、ログ有効化</td></tr>
+</table></div>
+
+<h2 id="param-system">A.3 system.yaml の主要キー</h2>
+<div class="tbl"><table class="compact">
+<tr><th>キー</th><th>内容</th></tr>
+<tr><td><code>goals</code>, <code>maze_size</code>, <code>hf_cl</code>, <code>circuit_mode</code></td><td>ゴール座標、迷路サイズ (32)、ハーフ/クラシック、サーキット走行</td></tr>
+<tr><td><code>mode</code></td><td>0 = 本走行、1〜27 = テストモード (6 章)</td></tr>
+<tr><td><code>test.v_max / accl / decel / dist / ang / w_max / alpha</code></td><td>テスト走行の速度・加減速・距離・旋回角</td></tr>
+<tr><td><code>test.accl_v_x/y</code>, <code>test.decel_v_max_x/y</code></td><td>テスト用の加速度 LUT、速度別の減速度上限</td></tr>
+<tr><td><code>test.suction_active</code>, <code>suction_duty*</code>, <code>suction_esc_ramp_us_per_sec</code>, <code>suction_ramp_rate_us_x/y</code>, <code>suction_batt_boost_*</code></td><td>吸引の有効化、指令 [µs]、ランプ、電圧ブースト</td></tr>
+<tr><td><code>test.suction_dshot_reverse</code></td><td>吸引 ESC の回転方向 (DSHOTDIR で書き込み)</td></tr>
+<tr><td><code>test.file_idx</code>, <code>sla_type</code>, <code>sla_type2</code>, <code>sla_return</code>, <code>search_mode</code>, <code>ignore_opp_sen</code></td><td>スラロームテストの種類と往復、壁切れテストの探索/最短切り替え</td></tr>
+<tr><td><code>test.sysid_test_mode / sysid_duty / sysid_time</code></td><td>システム同定 (両輪 / 左のみ / 右のみ)</td></tr>
+</table></div>
+
+<h2 id="glossary">A.4 用語集</h2>
+<div class="tbl"><table class="compact">
+<tr><th>用語</th><th>意味</th></tr>
+<tr><td>hf / cl</td><td>ハーフサイズ / クラシックサイズ。パラメータファイルの拡張子で切り替え</td></tr>
+<tr><td>tick</td><td>Core1 の 1 kHz 制御周期 (1 ms)</td></tr>
+<tr><td>ego_in / img_*</td><td>計画側の自己伝播状態。<code>img_ang</code> / <code>img_dist</code> はセグメント内の計画角・距離</td></tr>
+<tr><td>kim (x, y, theta)</td><td>位置 KF から作るセグメント座標系の実測位置・向き。旋回の角度誤差の基準</td></tr>
+<tr><td>odm</td><td>軌道点由来のセグメント座標系オドメトリ (ログ用)</td></tr>
+<tr><td>i_bias</td><td><code>img_ang − kim.theta</code>。計画角と実測角の差</td></tr>
+<tr><td>duty_sen</td><td>壁 PD の出力。名前は duty だが角度オフセット [deg]</td></tr>
+<tr><td>duty_roll / duty_c</td><td>ヨー (差動) と並進のフィードバック出力。トルク次元</td></tr>
+<tr><td>ff_duty_rpm</td><td>逆起電力ぶんの電圧 FF (Ke × ω)</td></tr>
+<tr><td>kireme (切れ目)</td><td>壁の切れ目。壁誤差を 0 に落とす区間のしきい値</td></tr>
+<tr><td>wall_off (壁切れ)</td><td>壁が切れた位置を検出して旋回位置を決めるモーション</td></tr>
+<tr><td>柱の谷 (pillar trough)</td><td>壁なし開始の壁切れで 45° センサーが見せる「下に凸」の形</td></tr>
+<tr><td>SLA_FRONT_STR / SLA_BACK_STR</td><td>スラローム前後の直線区間 (front / back オフセット)</td></tr>
+<tr><td>pow_n</td><td>スラロームの角加速度形状の次数。大きいほどピークが高く旋回が短い</td></tr>
+<tr><td>sakiyomi (先読み)</td><td>ヨー FF を数 tick 先の形状関数で作ること</td></tr>
+<tr><td>turn_settle</td><td>旋回の制御則を直後の直進へ引き継ぐ機構</td></tr>
+<tr><td>start_align</td><td>走り出し後、壁と平行になった時点で向きを再アンカーする機構</td></tr>
+<tr><td>hold</td><td>走行開始前の静止保持 (吸引ランプ中)</td></tr>
+<tr><td>slow decay / fast decay</td><td>PWM の OFF 期間にモーターを短絡 (ブレーキ) するか開放 (コースト) するか</td></tr>
+<tr><td>DitherPwm</td><td>PWM 周期ごとに compare 値を N / N+1 で切り替えて平均で 1 count 未満の duty を出す方式</td></tr>
+<tr><td>DShot</td><td>ESC へのデジタルスロットル信号。本機は 600 kbps 標準 (非反転)</td></tr>
+<tr><td>veneer</td><td>RAM 上のコードからフラッシュ上の関数を呼ぶときにリンカが挟む中継コード</td></tr>
+</table></div>
+
+<h2 id="links">A.5 関連資料</h2>
+<ul>
+  <li><a href="https://github.com/Naophis/ExiaIgnis">GitHub: Naophis/ExiaIgnis</a></li>
+  <li><code>CLAUDE.md</code>: 開発者向けのアーキテクチャ・データ構造・IRQ 設計のメモ</li>
+  <li><code>docs/dither_pwm.md</code>: DitherPwm の仕様確認・アルゴリズム・安全性</li>
+  <li><code>docs/kanayama_cascade.md</code>: 直進の Kanayama カスケードの設計記録</li>
+  <li><code>docs/json_schema.md</code>: LittleFS 上の JSON の全フィールド</li>
+  <li><code>docs/pin_assignment.md</code>: 物理ピン番号との対応表</li>
+  <li><code>sample/Astraea/README.md</code>: 前作の技術資料</li>
+</ul>
+
+  <footer class="page-foot">
+    <nav class="prevnext" aria-label="前後の章"><a class="pn prev" href="08-performance.html"><small>前の章</small>8. 性能と今後の課題</a></nav>
+    <p class="stamp">生成: 2026-09-25 (0b1599c)</p>
+  </footer>
+  </main>
+</div>
+</div>
+
+</body>
+</html>

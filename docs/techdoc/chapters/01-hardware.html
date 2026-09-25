@@ -1,0 +1,162 @@
+<p class="eyebrow">CHAPTER 1</p>
+<h1>機体構成</h1>
+<p class="lede">採用した部品と、その理由・困ったことを部位ごとにまとめます。値は 2026-09 時点のパラメータファイル (<code>tools/param_tuner/profile/</code>) と <code>include/define.hpp</code> に基づきます。</p>
+
+<h2 id="mcu">1.1 MCU: RP2350 (Raspberry Pi Pico 2)</h2>
+<div class="tbl"><table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>コア</td><td>Cortex-M33 ×2、150 MHz。Core0 = UI/USB/パラメータ/ログ、Core1 = センシング + 制御 (タイマー IRQ)</td></tr>
+<tr><td>フラッシュ</td><td>QSPI 4 MB。末尾 256 KB を LittleFS にしてパラメータと迷路データを保存</td></tr>
+<tr><td>PSRAM</td><td>APS6404L 8 MB を QMI の CS1 (GPIO0) に接続。走行ログ専用のバンプアロケータで使用</td></tr>
+<tr><td>SRAM</td><td>520 KB。Core1 のホットコードとデータを配置 (RAM 側 .data 約 223 KB、ヒープ約 266 KB)</td></tr>
+<tr><td>PIO / DMA</td><td>PIO1 + DMA で吸引 ESC への DShot を自律送出、PWM + DMA で駆動 duty の時間ディザ</td></tr>
+<tr><td>USB</td><td>USB CDC のみ (UART 無効)。TinyUSB は Core0 固定のため printf は Core0 専用</td></tr>
+</table></div>
+<p><strong>採用理由</strong>: ESP32-S3 (Astraea) では FreeRTOS のタスク優先度と SPI/ADC ドライバのオーバーヘッドが 1 kHz 周期の乱れの原因になっていました。RP2350 はハードウェアアラームから直接 IRQ を受けられ、ADC も 1 変換あたり 2 µs で回せるので、OS なしでセンシングと制御を IRQ だけで組めます。DMA の ENDLESS 転送 (RP2350 で追加) が、後述の DitherPwm と DShot の「CPU 非関与」設計を可能にしました。</p>
+<p><strong>困ったこと</strong>: PSRAM の CE# (GPIO0) が Low に落ちない基板不良で一時ログが取れず、QSPI バスに残ったアドレスの残像が「形だけ正しいゴミ CSV」として出てきました。起動時に実書き込みテスト (<code>psram_check::rw_test</code>) を入れ、失敗時はログ機能を止めるようにしています (7 章参照)。</p>
+
+<h2 id="drive">1.2 駆動系</h2>
+<h3>モーター・ギア・タイヤ</h3>
+<div class="tbl"><table>
+<tr><th>項目</th><th>値</th><th>備考</th></tr>
+<tr><td>モーター</td><td>NFP-D0812-1-3.7 ×2</td><td>φ8 mm コアレス DC。端子間抵抗 4.4 Ω (データシート値をそのまま <code>Resist</code> に使用)</td></tr>
+<tr><td>減速比</td><td>63 : 13 (≈4.85)</td><td><code>gear_a</code> / <code>gear_b</code></td></tr>
+<tr><td>タイヤ径</td><td>13.925 mm</td><td>硬度 30° (yaml のコメント)。新品時 14.12 mm から摩耗ぶんを更新</td></tr>
+<tr><td>実効トレッド</td><td>42.32 mm</td><td><code>tread_check.py</code> でジャイロと左右輪速の回帰から同定。左右径差 −0.78 %</td></tr>
+<tr><td>吸引時荷重</td><td>350〜380 g 相当</td><td>質量 36.3 g に対し約 10 倍</td></tr>
+</table></div>
+<p>モーターの逆起電力定数 <code>Ke</code>・トルク定数 <code>Km</code> はデータシート値ではなく実走の同定値を使っています。データシート値 (Ke=0.00144, Km=0.00130) に置き換えると t2200 の旋回で duty 飽和が 30 % → 41 % に悪化したため、ギアボックス損失を含んだ実効値として旧値を正としました (詳細は 2.4 節)。</p>
+
+<h3>モータードライバ: MPQ6612A</h3>
+<p>2026-09-20 に MP6619L から換装し、直列インダクタも撤去しました。換装直後、400 mm/s 巡航に必要な duty が 4.3 % → 16.4 % に跳ね上がり、原因は抵抗ではなく<strong>減衰モードの違い</strong>でした。</p>
+<div class="tbl"><table>
+<tr><th>IN1 / IN2</th><th>MPQ6612A の出力</th></tr>
+<tr><td>L / L</td><td>Coast (Hi-Z)</td></tr>
+<tr><td>H / L</td><td>Forward</td></tr>
+<tr><td>L / H</td><td>Reverse</td></tr>
+<tr><td>H / H</td><td>Brake (両 LS-FET オン)。約 1 ms 続くと low-IQ brake へ</td></tr>
+</table></div>
+<p>旧ドライバでは「片側 PWM・片側 0」が drive ↔ brake (slow decay) でしたが、MPQ6612A では drive ↔ coast (fast decay) になり、インダクタも無いので電流が不連続になって duty → トルクに約 15 % の不感帯が出ていました。<code>MOTOR_DRIVE_SLOW_DECAY=1</code> で「駆動側 IN を H 固定、反対側 IN を反転 PWM」に変え、OFF 期間をブレーキ (モーター短絡) にすることで平均電圧が duty に線形になり、回生制動も効くようになりました。適用後の巡航 duty は 5.57 %、速度 I 項は +1.39 V → +0.07 V です。</p>
+<p>ループ抵抗の実変化 (インダクタ DCR −0.13 Ω とドライバ RDS(on) 差) は数 % なので <code>Resist</code> は 4.4 Ω のまま動かしていません。換装で機体が 40.0 g → 36.3 g に軽くなったぶんは FF の <code>Mass</code> で受けています。</p>
+
+<h3>PWM 100 kHz と時間ディザ (DitherPwm)</h3>
+<p>PWM は 100 kHz (clk_sys 150 MHz で 1500 count ≈ 10.5 bit)。37.5 kHz から上げた際、低 DCR インダクタと組み合わせて 110 Hz のリミットサイクルが再発し、速度 PID の p/i を比率を保って下げることで解消しました (7 章)。</p>
+<p>1 count 未満の duty は、PWM 周期ごとに compare 値を N / N+1 で切り替える 1 次誤差拡散で表現します。CPU は 1 kHz の制御周期ごとに次の 100 サンプル (+guard) を SRAM リングへ書くだけで、DMA が wrap ごとの DREQ で 1 周期 1 転送を ENDLESS + RING で永久に続けます。CPU が止まっても最後の duty が出続け、GPIO が High に張り付く経路がありません (詳細は <code>docs/dither_pwm.md</code>)。</p>
+
+<h2 id="suction">1.3 吸引系</h2>
+<div class="tbl"><table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>ESC</td><td>ESCape32 ファームウェアを載せた外付け ESC。コミュテーションは ESC 側、ファームは 2.5 kHz でスロットルを送るだけ</td></tr>
+<tr><td>信号</td><td>標準 (非反転) DShot600 を GPIO11 から PIO1 + DMA で自律送出。フレーム 27 µs + idle-low で 400 µs 周期</td></tr>
+<tr><td>電源制御</td><td>GPIO10 でロジックゲート IC を介して ESC の通電を切り替え</td></tr>
+<tr><td>指令の単位</td><td>1000〜2000 µs のパルス幅相当。ESCape32 のサーボ PWM 入力と同じ式 (デッドバンド <code>throt_min+50</code>) で DShot 値に変換するので、<code>system.yaml</code> の <code>suction_duty</code> 系はそのまま使える</td></tr>
+<tr><td>ランプ</td><td>電圧ブーストテーブル (11.1 / 12.0 / 12.6 V → +150 / +50 / 0 µs) とランプ率テーブルで立ち上げ。停止までの待ちは向き収束判定つき (2.8 節)</td></tr>
+<tr><td>回転方向</td><td>USB コマンド <code>DSHOTDIR</code> またはテストモード 27 で DShot コマンド 7/8 + 12 を送り ESC のフラッシュへ永続化</td></tr>
+</table></div>
+<p>AM32 ファームの ESC からサーボ PWM (166 Hz) で駆動していた時期に、原因不明の低速異常回転 (ゴリゴリ) が頻発していました。ESCape32 + DShot へ移行してからは信号側の分解能と周期の問題が消え、指令からの遅れも 1 フレーム (400 µs) に収まっています。テレメトリ (eRPM) は未実装で、双方向 DShot の受信側は未検証です。</p>
+<p>吸引ランプ中の反動トルクは実測で −0.29° (ランプ最速の 1550〜1700 µs 帯)、終了時 +0.23° の戻りで、片側 duty 5 % ≈ 7 mN·m 相当です。走り出しの姿勢ずれの主因のひとつなので、2.8 節の start_align で吸収しています。</p>
+<div class="todo"><p>吸引ファン・モーターの型番、スカート寸法、ダクト形状の記載が必要です (Astraea のメモではスカート 50 × 30 mm、前 10 mm / 横 8 mm オフセット)。</p></div>
+<p><strong>自作 ESC「ECia」</strong>: STM32G431KBU6 + MP6540HA によるセンサレス 6 ステップ ESC を <code>esc/ECia/</code> で開発中です。デバッガと実機をつないだ HIL ループで、duty・時間・RPM を制限しながら段階的に進めています。本機の吸引には現時点では未搭載です。</p>
+
+<h2 id="sensors">1.4 センサー</h2>
+<h3>壁センサー (赤外 LED + 受光素子)</h3>
+<p>受光は R90 / R45 / L45 / L90 の 4 ch (ADC0〜3)。45° 側は LED を 2 灯持ち、<strong>LED1 のみ → LED1 + LED2 → LED2 のみ</strong>の 3 パターンで読み、近距離・遠距離・柱検知に使い分けます。90° 側は 1 灯です。</p>
+<figure>
+<svg viewBox="0 0 760 210" role="img" aria-label="1 kHz の 1 周期内で、SPI 読み取り、暗値 ADC、LED 点灯 ADC の順に進むセンシング時系列">
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <line x1="20" y1="40" x2="740" y2="40" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="20" y="28" font-size="12" fill="currentColor">alarm 1 (1 kHz, 絶対時刻で再アーム)</text>
+  <text x="700" y="28" font-size="11" fill="currentColor" text-anchor="end">t [µs]</text>
+  <rect x="20" y="60" width="120" height="34" rx="3" fill="none" stroke="currentColor"/>
+  <text x="80" y="82" font-size="11" fill="currentColor" text-anchor="middle">SPI 読み取り</text>
+  <text x="80" y="110" font-size="10" fill="currentColor" text-anchor="middle">gyro+accel(DMA) / enc L / enc R / bat</text>
+  <rect x="150" y="60" width="110" height="34" rx="3" fill="none" stroke="currentColor"/>
+  <text x="205" y="82" font-size="11" fill="currentColor" text-anchor="middle">暗値 ADC ×2</text>
+  <text x="205" y="110" font-size="10" fill="currentColor" text-anchor="middle">90° と 45° を tick ごとに交互</text>
+  <g>
+    <rect x="270" y="60" width="62" height="34" rx="3" fill="#A85A1F" fill-opacity="0.18" stroke="#A85A1F"/>
+    <text x="301" y="82" font-size="11" fill="currentColor" text-anchor="middle">R90</text>
+    <rect x="336" y="60" width="62" height="34" rx="3" fill="#A85A1F" fill-opacity="0.18" stroke="#A85A1F"/>
+    <text x="367" y="82" font-size="11" fill="currentColor" text-anchor="middle">L90</text>
+    <rect x="402" y="60" width="54" height="34" rx="3" fill="#A85A1F" fill-opacity="0.18" stroke="#A85A1F"/>
+    <text x="429" y="82" font-size="11" fill="currentColor" text-anchor="middle">R45·1</text>
+    <rect x="460" y="60" width="54" height="34" rx="3" fill="#A85A1F" fill-opacity="0.35" stroke="#A85A1F"/>
+    <text x="487" y="82" font-size="11" fill="currentColor" text-anchor="middle">1+2</text>
+    <rect x="518" y="60" width="54" height="34" rx="3" fill="#A85A1F" fill-opacity="0.18" stroke="#A85A1F"/>
+    <text x="545" y="82" font-size="11" fill="currentColor" text-anchor="middle">R45·2</text>
+    <rect x="576" y="60" width="54" height="34" rx="3" fill="#A85A1F" fill-opacity="0.18" stroke="#A85A1F"/>
+    <text x="603" y="82" font-size="11" fill="currentColor" text-anchor="middle">L45·1</text>
+    <rect x="634" y="60" width="54" height="34" rx="3" fill="#A85A1F" fill-opacity="0.35" stroke="#A85A1F"/>
+    <text x="661" y="82" font-size="11" fill="currentColor" text-anchor="middle">1+2</text>
+    <rect x="692" y="60" width="48" height="34" rx="3" fill="#A85A1F" fill-opacity="0.18" stroke="#A85A1F"/>
+    <text x="716" y="82" font-size="11" fill="currentColor" text-anchor="middle">L45·2</text>
+  </g>
+  <text x="505" y="110" font-size="10" fill="currentColor" text-anchor="middle">LED 点灯 → settle 待ち (alarm 2) → ADC → 消灯、を非同期ステートマシンで連鎖</text>
+  <path d="M270 130 v14 h470 v-14" fill="none" stroke="currentColor"/>
+  <text x="505" y="160" font-size="11" fill="currentColor" text-anchor="middle">diff = lit − dark (負なら 0)、front = (L90 + R90) / 2 → 対数テーブルで mm へ</text>
+  <text x="20" y="190" font-size="10.5" fill="currentColor">settle 待ちは <tspan font-family="monospace">led_light_delay_cnt × us_per_cnt</tspan> (両灯時は cnt2)。点灯 ch はモーション種別で絞る (旋回中は内側 45° のみ、探索直進は 90° を消灯)</text>
+</svg>
+<figcaption>1 tick のセンシング順序。SPI 系を先に読み、暗値を取ってから LED を順に点灯する。待ち時間はビジーウェイトではなく alarm 2 の IRQ で継続するので、Core1 は待ちの間も他の IRQ (制御) を受けられる。</figcaption>
+</figure>
+<div class="tbl"><table>
+<tr><th>GPIO</th><th>機能</th><th>GPIO</th><th>機能</th></tr>
+<tr><td>16</td><td>R90_LED</td><td>26</td><td>R90_SEN (ADC0)</td></tr>
+<tr><td>19 / 20</td><td>R45_LED2 / R45_LED1</td><td>27</td><td>R45_SEN (ADC1)</td></tr>
+<tr><td>21 / 24</td><td>L45_LED1 / L45_LED2</td><td>28</td><td>L45_SEN (ADC2)</td></tr>
+<tr><td>25</td><td>L90_LED</td><td>29</td><td>L90_SEN (ADC3)</td></tr>
+</table></div>
+<div class="todo"><p>LED・受光素子の型番と定電流回路の定数 (Astraea は OSI5FU3A11C + LTR-4206E、BCR421UFD 5 Ω) を確認して記載してください。</p></div>
+
+<h3>IMU: ASM330LHH</h3>
+<p>車載グレードの 6 軸 IMU。SPI mode 3、ジャイロ ODR 3333 Hz / ±4000 dps、加速度 ±16 g。制御には Z 軸角速度だけを使い、DMA で 9 バイト (gz + ax/ay/az) をまとめて読みます。加速度は取り付け位置 (<code>gyro_pos</code>) の回転とレバーアーム補正を掛けたうえでログに出していますが、走行中の S/N 比が低く、自己位置推定への統合は保留中です。</p>
+
+<h3>エンコーダ: AS5147P ×2</h3>
+<p>14 bit の磁気式アブソリュートエンコーダ (SPI mode 1、28,000 rpm 対応)。生角度の上位 6 bit で 64 点の補正テーブルを引き、線形補間して <strong>補正後 = 生角度 − table</strong> とします。テーブルは低速直進ログ (v ≈ 400 mm/s、置き直しながら 8〜11 本) から <code>enc_lut_fit.py</code> が左右差とジャイロだけで同定し、<code>/enc_lut.hf</code> として機体に送ります。同定した誤差は右 p-p 2.2° (1 次 0.92°)、左 p-p 0.93° で、直進の右輪速ノイズが −36 %、large 旋回の右輪速ノイズが −43 % になりました。磁石やタイヤを付け直したら取り直します。</p>
+<p><strong>困ったこと</strong>: 右エンコーダの磁石が外れかけていた期間があり、外輪になったときだけ生カウントが 1〜4 ms 停滞して速度推定が崩れ、両輪 100 % で膨らむ旋回が出ました (7 章)。</p>
+
+<h3>バッテリー電圧: ADS7042</h3>
+<p>12 bit SPI ADC (mode 0)。換算は <span class="math">V = battery_gain × 4 × raw / 4096</span> (<code>battery_gain</code> = 4.057)。LP 値を duty 計算の分母に使い、電圧が下がっても同じ電圧指令が出るようにしています。</p>
+
+<h3>SPI1 共有バス</h3>
+<p>ジャイロ (mode 3)、左右エンコーダ (mode 1)、バッテリー ADC (mode 0) が MISO=12 / CLK=14 / MOSI=15 を共有し、CS で切り替えます。ARM PL022 は CPOL/CPHA を変える前に SSE=0 が必要なので、<code>spi_set_format_safe()</code> (<code>include/driver/spi_util.hpp</code>) を必ず経由します。</p>
+
+<h2 id="power-ui">1.5 電源・UI</h2>
+<div class="tbl"><table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>バッテリー</td><td>LiPo 3 セル (12.2 g)。11.8 V 未満で低電圧警告</td></tr>
+<tr><td>LED 表示</td><td>I2C1 (GPIO22 SDA / GPIO23 SCL、400 kHz) の LED ドライバ (7 bit アドレス 0x4D) に 1 バイト書き込み: <code>(ch[2:0] &lt;&lt; 5) | brightness[4:0]</code>。6 灯をモード番号や壁距離のゲージ表示に使用</td></tr>
+<tr><td>ブザー</td><td>GPIO18、PWM。起動音・モード確定・エラー</td></tr>
+<tr><td>スイッチ</td><td>GPIO2 タクトスイッチ (プルアップ、押下で Low)。モード確定は長押し</td></tr>
+<tr><td>ダイヤル操作</td><td>タイヤを手で回してエンコーダをダイヤル代わりにし、モード番号を選ぶ</td></tr>
+<tr><td>デバッグ</td><td>USB CDC 115200。SWD (SWCLK/SWDIO)</td></tr>
+</table></div>
+<div class="todo"><p>DC-DC / LDO の型番と電源系統図 (Astraea は LXDC55 + MIC5219) を記載してください。</p></div>
+
+<h2 id="pins">1.6 ピンアサイン</h2>
+<div class="tbl"><table class="compact">
+<tr><th>GPIO</th><th>機能</th><th>GPIO</th><th>機能</th></tr>
+<tr><td>0</td><td>PSRAM_CE (QMI CS1)</td><td>15</td><td>SPI1 MOSI</td></tr>
+<tr><td>1</td><td>ENC_CS_L</td><td>16</td><td>R90_LED</td></tr>
+<tr><td>2</td><td>SW1 (タクトスイッチ)</td><td>17</td><td>ENC_CS_R</td></tr>
+<tr><td>3</td><td>BAT_CS (ADS7042)</td><td>18</td><td>buzzer (PWM)</td></tr>
+<tr><td>4 / 5</td><td>M_PWM_L1 / L2 (PWM2 A/B)</td><td>19 / 20</td><td>R45_LED2 / R45_LED1</td></tr>
+<tr><td>6 / 7</td><td>M_PWM_R1 / R2 (PWM3 A/B)</td><td>21</td><td>L45_LED1</td></tr>
+<tr><td>8</td><td>SUCTION_EN (旧 BLDC 直駆動用、未使用)</td><td>22 / 23</td><td>I2C1 SDA / SCL (LED ドライバ)</td></tr>
+<tr><td>9</td><td>SUCTION_PWM1 (同上、未使用)</td><td>24</td><td>L45_LED2</td></tr>
+<tr><td>10</td><td>SUCTION_POWER_EN (ESC 通電)</td><td>25</td><td>L90_LED</td></tr>
+<tr><td>11</td><td>吸引 ESC 信号 (DShot600)</td><td>26〜29</td><td>R90 / R45 / L45 / L90 受光 (ADC0〜3)</td></tr>
+<tr><td>12</td><td>SPI1 MISO</td><td>QSPI</td><td>フラッシュ + PSRAM (CS1 = GPIO0)</td></tr>
+<tr><td>13</td><td>GYRO_CS (ASM330LHH)</td><td>SWD</td><td>SWCLK / SWDIO</td></tr>
+<tr><td>14</td><td>SPI1 CLK</td><td>USB</td><td>D+ / D− (CDC)</td></tr>
+</table></div>
+<p>物理ピン番号との対応は <code>docs/pin_assignment.md</code> にあります。GPIO8/9 は初期の BLDC 直駆動 (<code>BldcActuator</code>) 用で、外付け ESC に移行した現在は未使用です。</p>
+
+<h2 id="mech">1.7 基板・機構</h2>
+<div class="photo">基板写真・機構写真 (要提供)</div>
+<p>本体 24.1 g + バッテリー 12.2 g。吸引でタイヤの潰れが変わるため、タイヤ径は吸引条件で測り直しています。足回りでは次の 2 件が制御に直結しました。</p>
+<ul>
+  <li><strong>左前タイヤの接地不良</strong>: 片輪ごとのシステム同定で左右差の根本原因と判明。修正後は直進 0.2 %・超信地 4 % の差まで縮小。</li>
+  <li><strong>右エンコーダ磁石の緩み</strong>: 目視で確定。再接着後に角度 LUT を取り直し。</li>
+</ul>
+<p>ダウンフォースを 250 g → 300 g 以上に上げた際は旋回残差が 0.7〜1.8° に改善した一方、直線で一定の左ヨーバイアス (1〜2 mm 左寄り) が出て、直線のヨーループが弱いことが見えました。荷重依存の摩擦か吸引ファンの反動トルクかは未分離です。</p>
+<div class="todo"><p>基板 (層構成・寸法)、ホイール/ベアリング周りの構造、吸引スカートの材料と寸法を記載してください。</p></div>

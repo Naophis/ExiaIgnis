@@ -426,7 +426,7 @@ ff_front_dury: 0.95
 
 # fail_safe
 fail_duty_cnt: 150
-fail_v_cnt: 12500
+fail_v_cnt: 20000
 fail_w_cnt: 25000
 fail_ang_cnt: 240
 fail_wall_off_cnt: 500

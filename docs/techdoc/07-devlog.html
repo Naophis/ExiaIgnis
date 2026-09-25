@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>7. 開発記録・知見(2026 シーズン) | ExiaIgnis 技術資料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<div class="site">
+<header class="site-head">
+  <a class="brand" href="index.html"><span class="brand-name">ExiaIgnis</span><span class="brand-sub">技術資料</span></a>
+  <nav class="chapters" aria-label="章"><ul><li><a href="index.html"><span>概要</span></a></li>
+<li><a href="01-hardware.html"><span class="nav-num">1</span><span>機体構成</span></a></li>
+<li><a href="02-control.html"><span class="nav-num">2</span><span>制御</span></a></li>
+<li><a href="03-software.html"><span class="nav-num">3</span><span>ソフトウェア</span></a></li>
+<li><a href="04-search.html"><span class="nav-num">4</span><span>探索・経路</span></a></li>
+<li><a href="05-tools.html"><span class="nav-num">5</span><span>ツール</span></a></li>
+<li><a href="06-tuning.html"><span class="nav-num">6</span><span>調整手順</span></a></li>
+<li class="is-current"><a href="07-devlog.html"><span class="nav-num">7</span><span>開発記録</span></a></li>
+<li><a href="08-performance.html"><span class="nav-num">8</span><span>性能・課題</span></a></li>
+<li><a href="09-appendix.html"><span class="nav-num">付録</span><span>付録</span></a></li></ul></nav>
+</header>
+<div class="layout">
+  <aside class="side"><nav class="toc" aria-label="このページの目次"><p class="toc-title">このページ</p><ol><li><a href="#aug">8 月</a></li><li><a href="#sep1">9 月前半</a></li><li><a href="#sep2">9 月後半</a></li></ol></nav></aside>
+  <main class="content" id="top">
+<p class="eyebrow">CHAPTER 7</p>
+<h1>開発記録・知見 (2026 シーズン)</h1>
+<p class="lede">2026 年 8〜9 月に踏んだ問題を「症状 → 原因 → 対策 → 結果」の形で時系列に並べます。高速ターン (v = 1800〜2300) の duty 飽和と終端角度不足を軸に、FF ゲイン (Lm / Mass / Ke) の同定と座標系・積分器のバグ潰しを繰り返した 2 か月でした。制御の異常に見えた現象の多くは、左前タイヤの浮き、右エンコーダの磁石外れ、PSRAM の CE# 不良、モータードライバの coast 不感帯といった機体側の真因に行き着いています。並行して、ログから同定・判定する解析ツール群 (5 章) が整いました。</p>
+<div class="legend"><span class="l-hard">ハード</span><span class="l-ctrl">制御</span><span class="l-soft">ソフト</span><span class="l-tool">ツール</span><span class="l-ident">同定</span></div>
+
+<h2 id="aug">8 月</h2>
+<div class="cards">
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-08-20〜21</time><h3>高速ターンのヨー I 項リセット</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>v = 1800〜2300 のターンで車頭角振動 (v = 2300 で平均 11.7°) と duty 99.9 % の飽和。旋回終了後もヨーレート I 項が残り振動が続く。</dd>
+<dt>原因</dt><dd>旋回終了時の I 項再着火が <code>img_ang − kim.theta</code> (基準の違う 2 量) を拾い、数十度相当の汚染値を注入していた。</dd>
+<dt>対策</dt><dd>SLALOM / SLA_BACK_STR から他へ遷移する時に <code>w.error_i = 0</code>。ヒステリシス脱出時のみ <code>ang.error_p / dt</code> で再着火。旋回終了にも <code>/dt</code> を使う案は悪化してリバート。</dd>
+<dt>結果</dt><dd>v = 2200、n = 4 で角振動 −31 %、収束時間 −32 %、脱出後の I 項ピーク −61 %。v = 2300 は飽和のままで上限。</dd>
+<dt>教訓</dt><dd>同じ「0 クリア → 残差で再着火」でも、トリガーが小残差を保証するかで安全性が変わる。無条件に発火するトリガーに <code>/dt</code> 系の再着火を使わない。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ソフト">
+<div class="card-head"><time>2026-08-22</time><h3>減速指令の消失とエンコーダ KF の発散</h3><span class="chip">ソフト</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>v_max = 7000 で計画速度が 5544 に張り付き、終端まで減速せず急停止。FF のみ走行 (v = 400) で v_c2 が実測から乖離し負値まで発散。</dd>
+<dt>原因</dt><dd><code>decel_delay_cnt/n</code> が未配線で 0 → <code>pow(0, 0) = 1</code> で減速量が 0 になる (v &gt; 5500 のみ)。KF は「目標 v − 前 tick の実測 v」/dt という偽の加速度 (≈ −250,000) を毎 tick 注入していた。</dd>
+<dt>対策</dt><dd><code>input_param_t</code> に decel_delay_cnt (5) / n (4) を配線し yaml のタイプミスを修正。KF の予測入力を目標加速度 <code>ego_in.accl</code> に統一。</dd>
+<dt>結果</dt><dd>v_max = 7000 で 5684 / 5756 mm/s のピーク後に滑らかに減速。FF のみ v = 400 で v_c = 658 に対し v_c2 = 665 と追従。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="同定">
+<div class="card-head"><time>2026-08-22</time><h3>Resist の同定と Ke / Km の差し戻し</h3><span class="chip">同定</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>ドライバ交換後に Resist = 4.4 Ω が未再校正ではと疑い、t2200 ターンの duty 飽和 (30〜35 %) の原因候補に挙がった。</dd>
+<dt>原因</dt><dd>NFP-D0812 のデータシートの端子間抵抗は 4.4 Ω で一致。生成コード上 Resist は加速度項にしか効かず、定常速度では同定できない。</dd>
+<dt>対策</dt><dd>システム同定モード (16 / 17) を配線。Ke / Km をデータシート逆算値 (0.00144 / 0.00130) にしたが実機で悪化し、経験値へリバート (現在は Ke 0.000975 / Km 0.0018)。</dd>
+<dt>結果</dt><dd>データシート値では飽和 40.7 % / 速度誤差 stdev 138.6 に悪化、リバート後 n = 4 で飽和 31.9 % (基準 32.4 %) に復帰。</dd>
+<dt>教訓</dt><dd>データシート値はギア損失などを含まない。理論値への置換は実機検証してから確定する。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="同定">
+<div class="card-head"><time>2026-08-22</time><h3>IMU 加速度計の有効化 (Stage 1)</h3><span class="chip">同定</span><span class="chip st-open">保留</span></div>
+<dl>
+<dt>症状</dt><dd>t2200 ターンで内部推定より約 15 mm 手前で停止 (スリップ疑い)。エンコーダだけではスリップを検知できない。</dd>
+<dt>原因</dt><dd>ASM330LHH の加速度計が未使用 (Z 軸ジャイロのみ) で、独立した運動情報がなかった。</dd>
+<dt>対策</dt><dd>ジャイロの DMA 読みを 9 バイトに拡張して X/Y/Z を取得、<code>gyro_pos</code> のレバーアーム補正、静止ゲート付きの重力校正 (gain 0.92〜0.95) を実装。</dd>
+<dt>結果</dt><dd>走行中の補正後加速度は真値 2250 mm/s² に対し平均 16.6 mm/s² で S/N 不足。自己位置推定への統合は保留、粗い異常検知用途のみ有望。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-08-22〜23</time><h3>壁 PD の I 項再設計と Kanayama の並列化</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>高速直進の壁 PD に I 項がなく最大 6.5 mm の残留バイアスが加速度抑制 LUT と噛み合って加速度を 50〜90 % カット。安易に I 項を足すと壁ロスト ⇄ 過修正で発散 (角度 ±65°)。</dd>
+<dt>原因</dt><dd>「逆符号のときだけ減衰」型のアンチワインドアップは同方向に持続する壁誤差に不適。既存の <code>str_ang_pid.i</code> は探索モードの D 係数として流用されていた。</dd>
+<dt>対策</dt><dd>高速専用 <code>str_ang_pid_fast</code> (条件付き積分 + 絶対クランプ) を新設。<code>kanayama_straight</code> (ky / ki → 角速度目標のオフセット) を並列に追加。計画側の <code>ego_in.w</code> に直接足していた自己汚染は <code>sen_kanayama_dw</code> 経由に修正。</dd>
+<dt>結果</dt><dd>p 0.0375 / i 0.00375 / d 0.0325 で発散なし。Kanayama 単独は収束 240 ms で直接注入 (40 ms) より遅く、並列構成で ey stdev 0.6 mm・±1.5 mm に収束。</dd>
+<dt>教訓</dt><dd>既存のアンチワインドアップのパターンを別ループへ転用しない。新規フィールドはファーム更新に加えて yaml の再送が要る。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ソフト">
+<div class="card-head"><time>2026-08-22〜23</time><h3>dump1 中の再送とアラーム再アームの喪失</h3><span class="chip">ソフト</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>センサーダンプ (mode 14) の実行中に Param Console から sensor.yaml を送ると SensingTask の 1 kHz 処理が恒久停止 (Planning は動き続ける)。</dd>
+<dt>原因</dt><dd>IRQ での <code>timer_hw->alarm[N]</code> 生書き込みに、フラッシュ書き込みによる Core1 停止が重なると目標時刻が過去になり、32 bit が一周する約 71 分まで一致しない。ダンプ中の USB ポーリング追加で機会が増えた。</dd>
+<dt>対策</dt><dd><code>arm_alarm32_safe()</code> で書き込み直後に時刻を再確認し、追い越していれば INTF で強制発火。ハンドラ先頭で INTF をクリア。sensing の alarm 1 と planning の alarm 0 に適用。</dd>
+<dt>結果</dt><dd>実機で再現・特定して修正。ダンプ中に yaml を再送して校正値をその場で確認できるようになった。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-08-23</time><h3>Kanayama 2D の修正と終端ブレーキの復元</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>2D Kanayama を全モーションに拡張すると壁誤差 0.35 → 2.71 mm、|kim_theta| 0.34 → 5.42° と悪化。SLA_BACK_STR 後に w_lp が −20〜−35°/s 振れる。</dd>
+<dt>原因</dt><dd>e_theta の基準が退化した ang_kf、dx の片側クランプ、ログの上書き。角速度の振れは同日朝のコミットが有効だった <code>turn_end_brake</code> を「未使用」と誤って削除したため。</dd>
+<dt>対策</dt><dd>e_theta を <code>kim.theta + last_tgt_angle</code> 基準へ、dx クランプ削除、2D Kanayama を SLALOM / SLA_BACK_STR 限定に戻す。turn_end_brake を復元し p 0.0008 / d 0.0015 / slew 0.006 を追加。</dd>
+<dt>結果</dt><dd>SLALOM n = 8 中 7 本が逆オーバーシュート 1° 未満。</dd>
+<dt>教訓</dt><dd>enable = 0 の構造体やフラグは実機チューニング中の一時無効化かもしれない。削除前に git blame で経緯を確認する。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-08-23</time><h3>旋回後のヨー保持 turn_angle_fb</h3><span class="chip">制御</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>45° ターン終端で kim_theta が目標に届かず、直進中も無補正でドリフト。角度 PID は基準 ang_kf が計画値そのもので実質無効。</dd>
+<dt>原因</dt><dd>直接 duty 注入は角速度 PID の積分が外乱とみなして相殺する。SLALOM 中に <code>sen_kanayama_dw</code> が更新されず直前の壁追従値 (0.3〜0.4) が凍結して旋回を跨いでいた。</dd>
+<dt>対策</dt><dd><code>turn_angle_fb</code> (gain / gain_i / gain_d = SLALOM 限定の duty 注入、i_w_gate の連続重み、w_gain = 角速度目標オフセット) を実装。制御なし区間で sen_kanayama_dw = 0、壁の新規検出時に ang を 0 へスナップ。</dd>
+<dt>結果</dt><dd>kim_theta が 400 tick 後に 0.045° へ収束することを単発ログで確認。n ≥ 4 の反復は未実施。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-08-23</time><h3>吸引時の摩擦 FF と減速 LUT</h3><span class="chip">制御</span><span class="chip st-open">保留</span></div>
+<dl>
+<dt>症状</dt><dd>吸引 ON の加速で左 duty が 99.9 % に張り付き v_c が目標の 2 倍近く跳ねる。約 6 m/s からの急減速で片輪スリップのヨーキック −2〜3°。</dd>
+<dt>原因</dt><dd>摩擦 FF は吸引 OFF で調整した値で荷重 +250 g を未反映。<code>decel</code> 入力は減速開始タイミングの判定にしか使われず、減速度は毎 tick 距離から逆算される。</dd>
+<dt>対策</dt><dd><code>coulomb / viscous_friction_suction</code> を新設し吸引指令 &gt; 1100 µs で切替。速度別の減速度上限 LUT (<code>decel_v_max</code>) を追加したが効果なし。</dd>
+<dt>結果</dt><dd>吸引側の摩擦 FF は 09-05 / 09-07 に同定。減速レートの出力側クランプ案は未着手。</dd>
+<dt>教訓</dt><dd>配列パラメータはキー欠落時に前回値が残る。配列の空 / 非空ではなく明示フラグで ON / OFF する。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ツール">
+<div class="card-head"><time>2026-08-23〜09-05</time><h3>Param Console のダンプ破損</h3><span class="chip">ツール</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>バイナリログ受信で稀にクラッシュ、または <code>raw_byte</code> 列だけの壊れた CSV (690,626 行)。再書き込み直後はヘッダー 144 行が丸ごと消える。</dd>
+<dt>原因</dt><dd>pico-sdk の USB stdout がホスト無応答 500 ms で残りを静かに破棄しヘッダー行が欠落 (本体は毎回 576 で割り切れ健全)。再書き込み後は再接続前に送信が始まっていた。</dd>
+<dt>対策</dt><dd>先頭の <code>ready___:&lt;byteSize&gt;</code> との突き合わせと型検証、USB stdout タイムアウトを 3 秒へ、書き込み後は接続確認まで待機。破損時は部分復元せず <code>dumpFailed</code> トーストで再試行を促す。</dd>
+<dt>結果</dt><dd>サイレント破損が毎回検出されるようになり無意味な CSV は出なくなった。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ソフト">
+<div class="card-head"><time>2026-08-29</time><h3>kim 座標系のリベース漏れ</h3><span class="chip">ソフト</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>左 → 右の連続スラロームの 2 本目で、odm_y は 0 なのに kim_y が kim_x と 1:1 で 30.8 mm まで成長し、角度 PID が荒れる。</dd>
+<dt>原因</dt><dd><code>kim.x/y</code> はワールド角度基準の増分をそのまま加算し、セグメント境界でリベースされる kim.theta / odm と座標系がずれていく。</dd>
+<dt>対策</dt><dd>増分を <code>pos_theta_z − kim.theta</code> で逆回転してから加算。同日 Lm を 3.5e-7 へ下げた (4.3 倍過大と判断) が、これは 09-05 に誤りと判明。</dd>
+<dt>結果</dt><dd>修正後 kim_y は 0.00〜0.08 mm (修正前 30 mm 超)。右ターンのみ角速度 I 項が −9〜−20 と負バイアスする左右差は n = 4 で残存。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ハード">
+<div class="card-head"><time>2026-08-30</time><h3>左前タイヤの接地不良</h3><span class="chip">ハード</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>右ターンだけ角速度 I 項が −13.9 と負バイアス。片輪ずつのシステム同定で duty 5 % は左が 86 % 速く、duty 15 % は右が 24 % 速い非単調な左右差。右駆動時は従動側が −96〜−114 mm/s で引きずられる。</dd>
+<dt>原因</dt><dd>機械点検で四輪中の左前タイヤが浮いていた。荷重とグリップの配分が左右非対称だった。</dd>
+<dt>対策</dt><dd>車高調整で四輪接地に修正。片輪選択のシステム同定モードと duty 列ログの修正を追加。</dd>
+<dt>結果</dt><dd>駆動輪速度差 24 % → 0.2 %、超信地の左右差 4 %、右ターンの I 項 −13.9 → −1.89。同定と通常巡航 duty が 3〜6 % 差で一致し Ke / Km / Resist の再調整は不要と判断。</dd>
+<dt>教訓</dt><dd>非単調な左右差は、制御側の非対称補正より先に機械側を疑う。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-08-30</time><h3>壁積分の dt スケーリング</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>低速直進で壁誤差は ±2.5 mm なのに積分が 120 ms でクランプ ±90 に到達し −10〜−90 で暴れ、姿勢が微振動。</dd>
+<dt>原因</dt><dd><code>sen.error_i += error_p</code> が dt なしで毎 tick 積算。ただし dt を掛けてゲインを比例再スケールしても数式上は何も変わらず、効くのは ki とクランプの比率変更のみ。</dd>
+<dt>対策</dt><dd>dt スケーリングは単位統一として残し、<code>kanayama_straight.ki</code> を dt 後の単位で 6.0 → 4.0 へ実質削減、<code>windup_i_max</code> = 0.09。</dd>
+<dt>結果</dt><dd>積分が 0〜−0.09 で増減、壁誤差の P 項最大 2 mm 未満、kim_theta 最大 1.3° (n = 3)。</dd>
+<dt>教訓</dt><dd>「dt を掛ける」だけの修正は比例再スケールなら何も変えない。まず数式的に no-op かを確認する。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="同定">
+<div class="card-head"><time>2026-08-30〜09-05</time><h3>SLALOM 入口の超過と Lm の 17 倍過小</h3><span class="chip">同定</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>v = 1800〜2100 の SLALOM 入口で w_lp が計画を最大 58 % 超過、片輪 duty が −50 % 台で内輪速度が負に。角速度 PID の積分ゲインを 1/3 にしても +48 % のまま。</dd>
+<dt>原因</dt><dd>横系 FF ゲイン Lm = 3.5e-7 が約 17 倍過小で、alpha = 5180 で FF が duty 3 % (必要 ≈ 70 %) しか出ず PID が肩代わり。08-29 の「Lm 過大」は飽和領域での誤判断。副産物で SLA_BACK_STR の座標系リセット漏れも発見。</dd>
+<dt>対策</dt><dd>差動トルク指令と実ヨー角加速度の最小二乗で 6.67e-6 / 5.73e-6 と 2 本一致し、Lm 6e-6 へ。cp_request のリセットに SLA_BACK_STR を追加、kim.x/y を last_tgt_angle ぶん回転。</dd>
+<dt>結果</dt><dd>ヨー FF ピーク 3.0 % → 52 %、終端角度誤差 +12.8° → +7.4°、内輪速度の最小 −316 → +96 mm/s。BACK_STR 中の二次オーバーシュートが消失。</dd>
+<dt>教訓</dt><dd>飽和下では FF を増やすと早く飽和して悪化に見える。Lm を触る前に軌道 (pow_n / rad / v) を実現可能にする。</dd>
+</dl>
+</article>
+
+</div>
+
+<h2 id="sep1">9 月前半</h2>
+<div class="cards">
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-05</time><h3>ターン FF 予算の監査と front の左右統一</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>dia45 で「右だけ大回り」。全 136 ターン定義中 47 件が FF 差動 duty &gt; 75 %、pow_n = 6 の dia45 は全件 200 % 超で物理的に出せない指令だった。</dd>
+<dt>原因</dt><dd>旋回終端姿勢が左右で約 2° 違い斜め直進で横ずれに育つため、位置補正の front / back では収束しない。front / back の左右差は非対称バグの打ち消し跡。</dd>
+<dt>対策</dt><dd>設計式 FF% = 0.0130 × alpha_peak、a_lat = v² / rad / 9810 で監査 (FF ≤ 58 %、a_lat ≤ 9.0 G)。t_1800 dia45 は pow_n 4 → 2 / rad 52 → 44、t_2300 large は rad 60 → 67 など。t_1800 の front / back を左右統一。</dd>
+<dt>結果</dt><dd>統一後は角速度超過率が左右一致 (112.3 / 112.0 %)、残る終端角度差は片側 0.75°。90° で pow_n を下げると rad 縮小 → 12.2 G で破綻 (実証)。</dd>
+<dt>教訓</dt><dd>footprint は pow_n と rad だけで決まり v に依らない。pow_n の変更は横 G の余裕を見てターンごとに判断する。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="同定">
+<div class="card-head"><time>2026-09-05</time><h3>直進 FF の同定と 110 Hz リミットサイクル</h3><span class="chip">同定</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>高加速直進で速度 PID の I 項が毎 tick 平均 −2.0 V (duty −18 %) を打ち消し、積分が −2700 まで巻く。400 mm/s 巡航で duty の 71.7 % が 60〜200 Hz (110 Hz) に集中。</dd>
+<dt>原因</dt><dd>Mass 0.040 / viscous 0.001475 が全速度域で約 30 % 過大。摩擦 FF の sign 対策が巡航中に旧値を永久ラッチ。速度 PID の d が p の 2.1 倍で高周波ゲイン過大。</dd>
+<dt>対策</dt><dd><code>ff_check.py</code> で (accl, ideal_v) 回帰し Mass 0.0302、viscous(_suction) 0.00036 へ。ラッチ条件に入力非ゼロを追加。d 半減 (8.75e-6)、i 3.75e-6。</dd>
+<dt>結果</dt><dd>I 項 −2.0 → −0.48 V、距離誤差 2.5 → 1.5 mm、ピーク速度 4.91 → 5.42 m/s。60〜200 Hz RMS 1.254 → 0.367 で 110 Hz トーン消滅。</dd>
+<dt>教訓</dt><dd>開ループ同定ログ (PID が動いていない) は FF 比較に使えない。並進 duty のスペクトルは (duty_l + duty_r) / 2 で見る。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-05〜06</time><h3>壁積分の正帰還と壁切れ判定</h3><span class="chip">制御</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>壁の切れ目で壁 PD の出力が ±5° のレールに張り付き w_lp ±150°/s の bang-bang 振動。低速の SLA_FRONT_STR で壁 PID が 1 tick ゼロ落ちし角速度目標が約 +1 rad/s 跳ぶ。</dd>
+<dt>原因</dt><dd>壁誤差の積分が姿勢 θ と同相 (S = 1.9〜3.0) で <span class="math">ki × S &gt; angle_pid.p</span> の発散側。切れ目判定は tick ごとの生差分で実効感度が速度に反比例し、正規化後は低速でしきい値がノイズ (p95 0.19〜0.25 mm/tick) 以下。</dd>
+<dt>対策</dt><dd><code>kanayama_straight.ki</code> 4.0 → 1.0 (安定条件 ki &lt; angle_pid.p / S)。差分を速度で正規化 (<code>kireme_diff_v_ref</code> 2200) しノイズ下限 0.3 mm/tick と併用。壁ロスト中は積分停止。</dd>
+<dt>結果</dt><dd>切れ目区間で 46 % の tick が壁棄却 (従来 0 %)、ゼロ落ち 189 / 488 → 23 / 488。ki = 1.0 は壁センタリング力不足とのトレードオフ。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-06〜09-22</time><h3>hold 中の回転と吸引ランプの反動</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>吸引ランプ中 (1600〜1900 µs) に w_lp が 50 Hz 級で ±2〜7°/s 揺れて角度がランダムウォーク、プラトー後はスカート摩擦で固着し差動 duty 8 % でも動かず 0.2〜0.8° 残留。</dd>
+<dt>原因</dt><dd>旧 hold の角度 I ゲイン 0.04 では 0.5° の残差に duty 3.7 % / 2.5 s しか育たず実質無効。DShot 化後の実測はランプ最速帯で −0.29°、終了時 +0.23° 戻り (片側 5 % ≈ 7 mN·m)。</dd>
+<dt>対策</dt><dd>hold の I を角度基準の reset-on-move 化 (0.15°、gain 2.0、LPF 50 ms)、|kim| &lt; 0.15° が 300 ms 続くまで待つ hold_settle を導入、DShot 後はプラトー基準で min 100 / max 500 ms。ランプ形状・糸吊り試験・差動 FF は提案のみ。</dd>
+<dt>結果</dt><dd>unhold 時の残留のバッチ平均 0.50° → 0.06°。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-06〜09</time><h3>start_align とクラブ角の正体</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>走り出し kim_theta = 0.16° なのに壁 PD が約 2° 右へ戻す。走行中にジャイロ角が −0.4〜−0.65°/s 流れて見え、位置が右へ最大 −14.7 mm。</dd>
+<dt>原因</dt><dd>壁制御 OFF の直進 6 本の進行方向が +2.1 / +0.62 / +0.09 / +0.65 / +0.50 / +1.14° と 5 本が左 = 置き方 (σ ≈ 0.5°) + 機械的クラブ約 0.6°。ジャイロは正しく、壁 PD がこれをゆっくり機体回転で打ち消していただけ。</dd>
+<dt>対策</dt><dd><code>start_align</code> (壁追従の収束後に一度だけ ang / kim.theta / 積分を 0 へ、force_dist 80 mm) と走り出しの keep_dist スキップを実装。壁基準の姿勢推定 (wall_fit) は推定・ログのみで運用は見送り。2 LED 傾きセンサー案は分解能 1° 以上で不採用。</dd>
+<dt>結果</dt><dd>1.8 m/s で旋回入口が横 ±0.1 mm・傾き ±0.4° に揃った。短窓の壁基準ヘディングは ±0.4° で置き方の粗誤差 (&gt; 1°) にのみ有効。</dd>
+<dt>教訓</dt><dd>「ジャイロが流れる」と見えたら、壁制御 OFF の直進で機体の向きと進行方向のずれを切り分ける。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ハード">
+<div class="card-head"><time>2026-09-07</time><h3>ダウンフォース 300 g 化の総評</h3><span class="chip">ハード</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>ダウンフォース 250 → 300 g と足回り固定の見直し後、直線が常に 1〜2 mm 左寄り (|err| 1.0〜3.9 mm、前日 0.57) で差動 duty +1.2〜4.7 % を出しても戻らない。</dd>
+<dt>原因</dt><dd>一定の左ヨー (機械バイアス) に対し直線のヨーループが弱い (角速度目標への実測の傾き 0.26〜0.80)。ダウンフォース増でヨー摩擦も増加。</dd>
+<dt>対策</dt><dd><code>ff_check.py</code> の格子探索で摩擦 FF を再同定 (Mass 0.0345 / coulomb_suction 0.0012 / viscous_suction 0.00006、当時)。</dd>
+<dt>結果</dt><dd>旋回は残差 +0.7〜+1.8°・出口 &lt; 1° (前日 2〜3.8°) に改善、速度追従 std 56〜95 (前日 140〜196)。5.2 m/s 直線は 4.7 m/s で duty 92〜98 % の頭打ち。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-09</time><h3>停止時の右ヨーとトルク非対称</h3><span class="chip">制御</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>1.8 m/s → 停止 (4.5 G) で毎回 −1.4° (n = 5、±0.03°) の右ヨー。走り出しでも左輪が右輪の 1.5〜2 倍速く立ち上がり +0.5〜1° の左ヨー。</dd>
+<dt>原因</dt><dd>エンコーダ差がジャイロと整合し実回転。ループの差動 duty ÷ トルク分 duty が減速 7 本で 0.082〜0.105、加速 5 本で 0.074〜0.135 と同符号 = 左が電流あたりトルクで約 10 % 低い。</dd>
+<dt>対策</dt><dd>減速中のヨーゲイン倍率 <code>brake_yaw_gain</code> (×2.5)、減速度比例の前置き <code>brake_yaw_ff</code> (後に無効)、トルク指令の左右補正 <code>motor_torque_asym</code> (ε 0.10、逆起電力分は除く) を実装。</dd>
+<dt>結果</dt><dd>ゲイン倍率 ×3 で −1.0 → −0.61 / −0.85°、×4.5 は 8 ms 周期の発振で上限。前置き FF は 4.7 G で −0.27°。トルク非対称の適用後の数値は未記録。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-13</time><h3>PWM 100 kHz 化と速度 PID の再調整</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>PWM 37.5 → 100 kHz と低 DCR インダクタ (350 → 130 mΩ) 化の後、速度ループの 110 Hz リミットサイクルが再発 (60〜200 Hz RMS 1.35 / 2.43、基準 0.41)。</dd>
+<dt>原因</dt><dd>振幅が duty に比例する閉ループ増幅。1 kHz の離散積分器は 110 Hz でゲイン 1.48・位相 −70° で、Ti = 2.2 ms では I が P の 0.7 倍を担い、p だけ下げても効かない。</dd>
+<dt>対策</dt><dd>p : i の比を保って p 8.25 → 6.0e-6 / i 3.75 → 2.7e-6 (その後の換装で再調整、現在値は 2 章)。MotorHz は起動時のみ読まれるため要再起動。</dd>
+<dt>結果</dt><dd>400 mm/s 巡航 n = 4 で 60〜200 Hz RMS 1.04 → 0.25、t_2200 の飽和 5.5 / 7.1 % (旧 3.6〜13.7)。代償は発進 0〜2 m/s の過渡誤差が約 2 倍。</dd>
+<dt>教訓</dt><dd>離散積分器が高周波で P 相当を担う構成では、p だけでなく p : i の比を保って下げる。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ソフト">
+<div class="card-head"><time>2026-09-13〜20</time><h3>DitherPwm と tick 時間の増加</h3><span class="chip">ソフト</span><span class="chip st-open">未解決</span></div>
+<dl>
+<dt>症状</dt><dd>「制御時間が以前より遅い、SRAM 配置の属性漏れでは」。09-14 以降 ControlLaw の時間が状態によらず下限約 48 µs (走行中 72〜80 µs)、軌道生成が 13 → 66 µs。</dd>
+<dt>原因</dt><dd>DitherPwm の組み込みで毎 tick 400 回の変調器ステップ、軌道生成は <code>trj_length</code> 1 → 5。配置ではなく計算量。libc の <code>mem*</code> 除外パターンも不一致だった。</dd>
+<dt>対策</dt><dd>属性付与・リンカスクリプト修正・<code>PICO_FLOAT_IN_RAM</code>・ファイル単位の SRAM 配置まで実施。DitherPwm はホスト 5 テスト PASS と実機サンプル合格後に MotorActuator へ組み込み。</dd>
+<dt>結果</dt><dd>tick 合計 197.5 → 194.6 µs (−1.5 %) でレイアウトノイズ ±3〜5 µs と同程度。組み込み後の指令 → 出力約 1 tick の遅れ (5.2 m/s で距離誤差 1.5 → 6 mm) が未解決。</dd>
+<dt>教訓</dt><dd>遅延の疑いはまずログのステージ別内訳の履歴を見る。veneer を解決しないと属性漏れの監査は 0 件と誤判定する。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ソフト">
+<div class="card-head"><time>2026-09-15〜23</time><h3>SLA_FRONT_STR 距離の異常 2 件</h3><span class="chip">ソフト</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>(1) Large → Dia45 で SLA_FRONT_STR が 62.5 mm と異常に伸び Dia45 の進入が約 40 mm 遅れて衝突。(2) WALL_OFF 後に SLA_FRONT_STR が消えていきなり SLALOM へ。</dd>
+<dt>原因</dt><dd>(1) 前壁補正が front_dist = 180 (範囲外フォールバック) で +40 mm 加算、LP の切り捨てで閾値 150 を跨いだ。(2) go_straight が古い tick の距離を読み、直前の WALL_OFF (88.25 mm) の距離のまま即終了。</dd>
+<dt>対策</dt><dd>(1) 前壁距離が範囲内のときだけ補正するゲートを追加、距離変換を四捨五入化。(2) 終了判定を <code>global_pos.dist</code> の差分へ、壁切れのポーリング 10 箇所を tick 同期化。</dd>
+<dt>結果</dt><dd>(1) ログ再現で前直線 60.9 → 30.8 mm (実機未検証)。(2) 検知 → Core0 の遅れが約 147 µs 固定になりジッタ ±100 µs → ほぼ 0。壁切れの距離判定に同型のレースが残存。</dd>
+<dt>教訓</dt><dd>SLA_FRONT_STR の異常長は ±5 mm クランプの補正ではなく壁切れ内の加算 3 系統を疑い、front_dist が 180 かを最初に見る。</dd>
+</dl>
+</article>
+
+</div>
+
+<h2 id="sep2">9 月後半</h2>
+<div class="cards">
+
+<article class="card" data-cat="ハード">
+<div class="card-head"><time>2026-09-18</time><h3>吸引 ESC の DShot 移行</h3><span class="chip">ハード</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>吸引 ESC のファームが AM32 → ESCape32 に変わり、サーボ PWM 経路と AM32 用の設定コマンドが使えなくなった。</dd>
+<dt>原因</dt><dd>ESCape32 は DShot の極性・レートを自動判別し、方向設定は DShot コマンド (7 / 8 + 12) でのみ行える。</dd>
+<dt>対策</dt><dd>PIO + DMA で固定アドレスを ENDLESS 読みする DShot600 送出 (<code>DshotTx</code>) と <code>SuctionEscDshotActuator</code> を実装。µs → スロットル変換は ESCape32 のサーボ入力式に一致。<code>DSHOTDIR</code> で方向を ESC のフラッシュへ永続化。</dd>
+<dt>結果</dt><dd>ホスト検証で 2000 段階中 1 以内で一致。移行後ランプが約 0.65〜0.8 s へ短縮。波形・方向コマンドの個別確認記録はなく、テレメトリ未実装、双方向 DShot に既知バグ。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ハード">
+<div class="card-head"><time>2026-09-19〜20</time><h3>PSRAM 無応答 (CE# 不良)</h3><span class="chip">ハード</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>ログ CSV の整数列が 0x0000 / 0x2222 / … / 0xEEEE の 8 種のみ、float 列が 4.265625 などの half 復号値。起動時に <code>PSRAM not detected!</code>。</dd>
+<dt>原因</dt><dd>GPIO0 (CE#) が SIO 駆動でも Low へ落ちない基板不良。パスコン外し説は付け直しても未検出で否定。同一ファームで予備機は PASS。</dd>
+<dt>対策</dt><dd>PSRAM 診断 (ID 読み出し / CS 実レベル probe、起動時 rw_test、失敗時のログ無効化と <code>dumperr</code> 行、ブザー警告) を追加。probe は RAM 常駐 + XIP 停止下で実行 (フラッシュ上実行では HardFault)。基板手直し + CE# プルアップで復旧。</dd>
+<dt>結果</dt><dd>rw_test PASS、8192 KB 検出。健全時の署名は in = 1 / low = 0 / high = 1。不良箇所の正確な位置は未特定のまま手直しで解消。</dd>
+<dt>教訓</dt><dd>PSRAM とフラッシュが QSPI を共有する基板で CE# を Low にしうる操作は RAM 上・XIP 停止下で行う。「原因はこれでした」もログで裏が取れるまで確定にしない。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ハード">
+<div class="card-head"><time>2026-09-20</time><h3>MPQ6612A 換装と coast 不感帯</h3><span class="chip">ハード</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>MP6619L → MPQ6612A の換装と外付けインダクタ撤去の後、400 mm/s 巡航の duty が 4.3 % → 16.4 % (2.00 V) に跳ね、I 項が +1.39 V を常時肩代わり。回帰で約 15 % duty の不感帯。</dd>
+<dt>原因</dt><dd>MPQ6612A は片側 PWM / 片側 0 が drive ↔ coast (fast decay) で電流不連続。旧ドライバは drive ↔ ブレーキだった。ループ抵抗の実変化は数 % で Resist は無関係。</dd>
+<dt>対策</dt><dd><code>MOTOR_DRIVE_SLOW_DECAY</code> で駆動側 H 固定 + 反対側を反転 PWM (duty 0 = 両 H のブレーキ)。Resist 4.4 → 4.0 は物理定数の理由でリバートし、軽量化 (40.0 → 36.3 g) ぶんを Mass 0.0319 → 0.0285 で受けた。</dd>
+<dt>結果</dt><dd>巡航 duty 16.4 → 5.57 %、I 項 +0.066 V、ff_check ratio a = 1.004。t_2200 の飽和 15〜20 % → 5.6 %。巡航電圧は逆起電力 0.9865 v + 0.97 V (吸引 ON) と判明、Ke の物理値化は旋回差動 FF −35 % を伴い未適用。</dd>
+<dt>教訓</dt><dd>Resist はモーターの物理定数で 4.4 Ω 未満はあり得ない。係数が変わったらまず重量・タイヤなど「何を変えたか」を全部洗う。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="同定">
+<div class="card-head"><time>2026-09-20〜21</time><h3>トレッドの同定とエンコーダ LUT</h3><span class="chip">同定</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>左右輪速のノイズが大きく、巡航の速度誤差の 85〜97 % が車輪回転 3x / 4x の高調波で KF の調整では消えない。右輪は p-p 2.2° の角度依存誤差。</dd>
+<dt>原因</dt><dd><code>tread</code> キーが yaml になく既定 38 (実効 42.3 mm)。ノイズは磁石の芯ずれなどによるエンコーダ角度の非線形で実運動ではない (IMU が見るのは 9〜14 %)。</dd>
+<dt>対策</dt><dd><code>tread_check.py</code> で 42.32 mm を同定し tread と Lm (× 1.113 = 6.7e-6) を更新。<code>enc_lut_fit.py</code> (低速直進 8 本以上、左右差 + ジャイロ、超信地は除外) で 64 点 LUT を <code>/enc_lut.hf</code> へ、SensingTask で適用。</dd>
+<dt>結果</dt><dd>直進の右輪速ノイズ −36 %、L90 の右輪速 −43 %、dia135 外輪残差は右ターン −38 % / 左ターン −20 %。磁石再固定後に再校正済み。</dd>
+<dt>教訓</dt><dd>LUT の 2〜4 次は IC / 磁石固有で頑健、1 次はタイヤ / ギア側で機械をいじると変わる。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ハード">
+<div class="card-head"><time>2026-09-20</time><h3>右エンコーダの磁石外れ</h3><span class="chip">ハード</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>左ターンだけ浅く、実効トレッドが左 32.7 / 右 37.6 mm。左ターンの外輪 (右輪) 速度残差 std 83〜134 mm/s。dia135 左で右輪速が 2244 → 905 → 2678 mm/s と落ち v_c が 1700 → 750 に崩落。</dd>
+<dt>原因</dt><dd>右エンコーダの生カウントが 1〜4 ms 停滞し、ジャイロ無反応・復帰時のキャッチアップ跳びなし = 磁石が車輪に対して滑っていた。目視で確定。</dd>
+<dt>対策</dt><dd>磁石の再固定。検出手順 (停滞 tick の集計、実効トレッドの左右差、LUT 適用で粗さが減るか) を整理。</dd>
+<dt>結果</dt><dd>停滞 tick 0 件、実効トレッド左 36.3〜36.6 / 右 36.4〜36.5、tick ごとの左右ミラー比較で角速度誤差 ±1 rad/s・角度 ±0.5° まで一致。磁石外れ中に合わせた front / back は再調整対象。</dd>
+<dt>教訓</dt><dd>「片側の輪速だけ暴れる / 実効トレッドが片方向だけ小さい」はスリップやドライバの前に、生カウントの停滞でエンコーダ磁石を疑う。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-20</time><h3>旋回出口の FF 先読み (sakiyomi)</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>dia45 左の旋回終端が −4.1 / −3.1° で、出口ランプ 7 tick に −4.0° 失う。全 41 ターンで出口の w_lp が計画より 1.1〜1.6 ms 先行。</dd>
+<dt>原因</dt><dd>ヨー FF が <code>alpha(t + sakiyomi_time = 4)</code> で 3 tick 先行、指令 → w_lp の遅れは 1.5〜2 tick。出口で先読みぶん早くブレーキが掛かる。ヨー応答の同定でも遅れ 1 tick が最良。</dd>
+<dt>対策</dt><dd><code>sakiyomi_time</code> 4 → 3 (効果検出できず) → 2。turn_angle_fb の gain 0.03 → 0.075 / gain_i 0.45 も試行 (角度は改善だが入口オーバーシュート 124 → 139 %)。</dd>
+<dt>結果</dt><dd>dia45 左の終端誤差 −3.32 ± 0.62° (n = 10) → −1.31 / −1.44° (n = 2)、出口の角速度不足ピーク 11 → 2.8 rad/s。副作用で入口の内輪 duty −100 % が 2 tick。</dd>
+<dt>教訓</dt><dd>走行間 σ に対し 3σ 以上の効果を見込む変更は 1〜2 本で足りる。先にオフライン解析で当たりを付ける。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-20〜21</time><h3>直進の右ヨーバイアスと I 項復元</h3><span class="chip">制御</span><span class="chip st-open">未解決</span></div>
+<dl>
+<dt>症状</dt><dd>旋回終端誤差は左右同じ (−1.3〜−2.3°) なのに、右ターン後は 20 ms で 0 へ戻り、左ターン後は −1.1〜−1.9° が 60 ms 以上残る。巡航で duty_r − duty_l = +1.2〜+4.5 % が常時必要。</dd>
+<dt>原因</dt><dd>空転で右輪が 11〜13 % 遅く一定摩擦 +0.16 V ぶん多い (メンテで −41 %) が、接地時のバイアスは不変。吸引 ON の高速時のみ大きく 09-05〜09 は逆符号 (−0.27 V) = 吸引ファンの反動か荷重依存摩擦が候補、未分離。</dd>
+<dt>対策</dt><dd><code>turn_end_w_i_restore</code> (旋回終了時に I 項を旋回前の値へ戻す) を実装。</dd>
+<dt>結果</dt><dd>復元は正しく動くが効果なし (左 40 ms 後 −1.25 → −1.4°)。左の停滞は角度ループ (τ 222 ms) の設計どおりで、右は外乱に押されて速く見えるだけ。</dd>
+<dt>教訓</dt><dd>収束の律速は角度ループの時定数で決まる。I 項復元で直せるのは左右非対称だけ。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-21</time><h3>低速ターンのゲインステップ発散</h3><span class="chip">制御</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>v = 400・吸引 OFF の斜め → dia45 突入で発散。車輪由来のヨーレート −61 rad/s に対しジャイロ −8 rad/s (v_l = 1725 / v_r = −857) の空転。</dd>
+<dt>原因</dt><dd>SLALOM 突入の 1 tick で角度誤差のゲインが約 10 倍に切り替わり、入口残差 3.6° × gain 0.065 で差動 duty 34 % のステップ。22 % までは正常。</dd>
+<dt>対策</dt><dd><code>turn_angle_fb.gain_v / gain_tbl</code> で速度 → P ゲインをテーブル化 ([0, 1000, 1800] → [0.03, 0.03, 0.065])。</dd>
+<dt>結果</dt><dd>0.03 なら同じ 3.6° でも差動 16 %。t_1200 / 1500 の補間値 0.039 / 0.052 は未検証。</dd>
+<dt>教訓</dt><dd>高速・吸引 ON で詰めたゲインは吸引 OFF の低速ではグリップ限界が桁違いに低い。上げるときは低速走行も回帰確認する。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-21〜22</time><h3>orval の出口と turn_settle</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>orval (180°、v = 2100) だけ終端 −4.25°、出口ランプ 25 tick で −9.4° 失う。SLA_BACK_STR がスキップされ、後続直進で −2.0〜−2.6° のまま 100 ms 収束しない。</dd>
+<dt>原因</dt><dd>出口ランプ 9 tick 後にアンチワインドアップが発火し I 項 157 → −2 (差動 16 % / 片側) を捨てて w が 5〜10 rad/s 先に落ちる (orval 特有の仮説)。直進の角度ループは τ 222 ms で弱い。</dd>
+<dt>対策</dt><dd><code>turn_settle</code> を実装: 直進系でも |i_bias| &lt; ang_th が hold_ticks 続くか timeout まで、SLA_BACK_STR と同じヨー制御則を継続。</dd>
+<dt>結果</dt><dd>orval 左右とも旋回後 30 tick で ±0.25° 以内 (従来 −2.0〜−2.6° 残留)。確定値 ang_th 0.125 / hold 5 / timeout 50。副作用で約 188 Hz のヨー微振動 (w_lp std 0.4〜0.6 → 2.0〜2.5)。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-22</time><h3>走り出しの横ずれ・突入ヨー・角度破棄</h3><span class="chip">制御</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>テスト結果のばらつきが大きい。旋回突入ヨー +1.0° (30 本中 29 本が正)。135° ターン後に純ジャイロ積分が −134° で止まる。走り出し 22.5 mm までヨー I 項が厳密に 0。</dd>
+<dt>原因</dt><dd>吸引立ち上げの揺れで初期横位置が −1.8〜+0.04 mm ばらつき、横位置と突入ヨーの相関 −0.68 (0.8°/mm)。約 90 mm の第 1 直線で壁 PD が最大 13° 指示し修正途中で旋回へ。積分角の差は start_align の強制発火が捨てた 0.3〜1.6°。I 項 0 は走り出しの距離再アンカー。hold は原因ではない。</dd>
+<dt>対策</dt><dd><code>start_align.apply_th: 90</code> で向きの書き換えを停止。hold 経由の発進で keep_dist スキップが不発だった件を修正。置き位置の LED ゲージ UI を追加。</dd>
+<dt>結果</dt><dd>apply_th 90 で収束後の積分角 −134.90° (目標 −135)。壁 PD が 2 tick 目から立つことを確認。手押さえ発進で安定。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-23</time><h3>壁なし開始 WALL_OFF の柱谷検知</h3><span class="chip">制御</span><span class="chip st-verify">適用済み・要検証</span></div>
+<dl>
+<dt>症状</dt><dd>右 Large @1800 で柱の谷 (右 45° が 144 → 68.5 → 180 mm) が 3〜4 tick しか続かず既存判定を飛び越え、安全網 (25 mm 走行) に落ちて旋回突入が約 25 mm 遅れる。</dd>
+<dt>原因</dt><dd>谷底 60〜70 mm が絶対しきい値 60 に届かず、壁なし判定は 1 tick で窓を飛び越え。壁なし開始 54 区間中 8 件がフォールバック (全て右)。</dd>
+<dt>対策</dt><dd><code>PillarTroughDetector</code> (Core1 で左右を毎 tick 更新、谷底位置でアンカー) を実装。判定は走行距離で正規化した 2 階微分が正で 2 tick 連続、合計 ≥ 0.7。4 kHz サンプリングは不要と判断、頂点補間は手持ちログでは検証不能。</dd>
+<dt>結果</dt><dd>実機 9 本中 8 本が谷底 +1 で発火、lag 平均 4.53 → 1.5〜1.7 mm。全ログ再生で WALL_OFF 中 42 件が谷底 48〜74 mm の妥当な柱、首振れのランプでの誤発火なし。開始前に壁が切れているケース (右 4 件) は未対応。</dd>
+<dt>教訓</dt><dd>発火判定のばらつきは tick ごとではなく区間で積分した量で見る。誤発火を防ぐのは曲率単体ではなく谷の追跡ゲート。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="制御">
+<div class="card-head"><time>2026-09-23</time><h3>v2200 の終端: duty 予算と壁スナップ</h3><span class="chip">制御</span><span class="chip st-done">完了</span></div>
+<dl>
+<dt>症状</dt><dd>large90 右 v = 2200 rad 52 で終端 −3.56°。旋回後の戻りが途中で止まり、積分角 −87.96° (2.04° 不足)。</dd>
+<dt>原因</dt><dd>(A) rad 56 → 52 で FF 差動 86 % / 9.49 G (基準 58 % / 9.0 G) を超過し、入口 14 tick 飽和 → I 項が 176 まで巻く → 129 % オーバー → 出口で −6.56° (90° の 18 本で FF% と飽和 tick の相関 0.80)。(B) 旋回直後の壁検出スナップが ang を 3.37° 飛ばし、turn_settle (kim 基準) と角度 PID (ang 基準) が綱引き。</dd>
+<dt>対策</dt><dd><code>turn_settle.skip_wall_snap</code> を追加し引き継ぎ中はスナップ抑止。rad 63 復帰 (FF 58.6 % / 7.83 G) は提案。</dd>
+<dt>結果</dt><dd>(v = 2300 で確認) スナップ段差 3.37 → 0.29°、ang − kim の差 3.0 → 0.02°、turn_settle が 50 tick タイムアウト → 25 tick で収束、巡航終わりの残差 1.26 → 0.03°。終端誤差そのもの (−2.75°) は別軸。</dd>
+<dt>教訓</dt><dd>duty 不足と「収束しない」は別問題。収束は平衡点が 0 かだけを見る。</dd>
+</dl>
+</article>
+
+<article class="card" data-cat="ツール">
+<div class="card-head"><time>2026-09-23〜24</time><h3>ターン評価: 出口残差と速度スイープ</h3><span class="chip">ツール</span><span class="chip st-open">保留</span></div>
+<dl>
+<dt>症状</dt><dd>「ターン直後の壁 PD 出力が大きい = 調整不足」と判断しづらい。同一ルート 20 旋回で t_1800 / 1900 / 2000 / 2100 のタイムが 2426 / 2333 / 2250 / 2245 ms と 2100 で頭打ち。</dd>
+<dt>原因</dt><dd>壁 PD 出力は片壁 ×2 とヨー 0.96 mm/度で出口残差を誇張。増速分は壁切れ区間の距離増 (WALL_OFF 124 → 285 mm など) で相殺される (旋回飽和 → 終端角度不足 → 自己位置ずれ → 壁切れ遅れ)。</dd>
+<dt>対策</dt><dd><code>turn_exit_check.py</code> と Param Console の「旋回出口解析」(全 57 旋回で一致) を作成。横 G 9.0 G 基準の上限速度から dia135 / orval だけ v を落とす案を提示。</dd>
+<dt>結果</dt><dd>dia135_2 @1800 は内側接触、orval @2000 は外輪飽和 13〜58 tick、large90 は外側 1〜3 mm。破綻は定常横 G (12 G) と角加速度インパルス (dia45 14,555 rad/s²) の 2 系統。各速度 n = 1 で要反復。</dd>
+<dt>教訓</dt><dd>ターンの合否は壁 PD 出力ではなく出口残差の表で判定し、接触・飽和はオフセット調整の前に解消する。</dd>
+</dl>
+</article>
+
+</div>
+
+  <footer class="page-foot">
+    <nav class="prevnext" aria-label="前後の章"><a class="pn prev" href="06-tuning.html"><small>前の章</small>6. 調整手順</a><a class="pn next" href="08-performance.html"><small>次の章</small>8. 性能と今後の課題</a></nav>
+    <p class="stamp">生成: 2026-09-25 (0b1599c)</p>
+  </footer>
+  </main>
+</div>
+</div>
+
+</body>
+</html>

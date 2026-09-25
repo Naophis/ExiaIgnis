@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>8. 性能と今後の課題 | ExiaIgnis 技術資料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<div class="site">
+<header class="site-head">
+  <a class="brand" href="index.html"><span class="brand-name">ExiaIgnis</span><span class="brand-sub">技術資料</span></a>
+  <nav class="chapters" aria-label="章"><ul><li><a href="index.html"><span>概要</span></a></li>
+<li><a href="01-hardware.html"><span class="nav-num">1</span><span>機体構成</span></a></li>
+<li><a href="02-control.html"><span class="nav-num">2</span><span>制御</span></a></li>
+<li><a href="03-software.html"><span class="nav-num">3</span><span>ソフトウェア</span></a></li>
+<li><a href="04-search.html"><span class="nav-num">4</span><span>探索・経路</span></a></li>
+<li><a href="05-tools.html"><span class="nav-num">5</span><span>ツール</span></a></li>
+<li><a href="06-tuning.html"><span class="nav-num">6</span><span>調整手順</span></a></li>
+<li><a href="07-devlog.html"><span class="nav-num">7</span><span>開発記録</span></a></li>
+<li class="is-current"><a href="08-performance.html"><span class="nav-num">8</span><span>性能・課題</span></a></li>
+<li><a href="09-appendix.html"><span class="nav-num">付録</span><span>付録</span></a></li></ul></nav>
+</header>
+<div class="layout">
+  <aside class="side"><nav class="toc" aria-label="このページの目次"><p class="toc-title">このページ</p><ol><li><a href="#sweep">8.1 旋回速度スイープ (2026-09-24)</a></li><li><a href="#modes">8.2 破綻モードは 2 系統</a></li><li><a href="#straight">8.3 直進</a></li><li><a href="#turn">8.4 旋回精度</a></li><li><a href="#todo">8.5 今後の課題</a></li></ol></nav></aside>
+  <main class="content" id="top">
+<p class="eyebrow">CHAPTER 8</p>
+<h1>性能と今後の課題</h1>
+<p class="lede">2026-09 時点の到達点と、その先に見えている制約です。数値は各 1 本の走行なので、タイム差の結論には反復が要ります。</p>
+
+<h2 id="sweep">8.1 旋回速度スイープ (2026-09-24)</h2>
+<p>同一ルート (20 旋回) を旋回速度別プロファイルで走らせた結果です。</p>
+<div class="tbl"><table>
+<tr><th>プロファイル</th><th class="num">タイム [ms]</th><th class="num">実走距離 [mm]</th><th class="num">SLALOM 飽和率 [%]</th><th class="num">|角度遅れ| 平均 [°]</th><th class="num">w RMSE [rad/s]</th></tr>
+<tr><td>t_1800</td><td class="num">2426</td><td class="num">5249</td><td class="num">28.8</td><td class="num">1.56</td><td class="num">6.2</td></tr>
+<tr><td>t_1900</td><td class="num">2333</td><td class="num">5377</td><td class="num">46.7</td><td class="num">3.62</td><td class="num">8.5</td></tr>
+<tr><td>t_2000</td><td class="num">2250</td><td class="num">5292</td><td class="num">50.0</td><td class="num">3.08</td><td class="num">8.5</td></tr>
+<tr><td>t_2100</td><td class="num">2245</td><td class="num">5489</td><td class="num">63.7</td><td class="num">4.10</td><td class="num">10.6</td></tr>
+</table></div>
+<p>2000 が膝で、2100 は −5 ms (0.2 %) しか縮みません。平均速度は +4.0 % なのに距離が +3.7 % 伸びていて、増分は WALL_OFF 124 → 285 mm、WALL_OFF_DIA 145 → 232 mm、SLA_BACK_STR 91 → 130 mm。計画速度の積分も同じだけ伸びるのでスリップではなく本当に長く走っています。旋回の duty 飽和 → 終端角度不足と出口残留ヨー → 自己位置ずれ → 壁切れが遅れる → 遅い壁切れ速度で余分に走る、という連鎖です。</p>
+
+<h2 id="modes">8.2 破綻モードは 2 系統</h2>
+<ol>
+  <li><strong>定常横 G</strong>: dia135 (12.0 G)、orval 180 (12.0 G)。t_1800 → t_2100 で rad をほぼ据え置いた (dia135 36 → 37.5 mm) ので横 G が v² で増えます。グリップ側の破綻で、実証済みの上限は 9.0 G。</li>
+  <li><strong>角加速度インパルス</strong>: dia45 / dia45_2 は横 G 8.6 G と低いのに飽和 84〜92 %。alpha_max 14,555 rad/s² (orval の 3 倍、large90 の 2.2 倍) を旋回長 25 ms に詰めているためで、rad ではなく <code>pow_n</code> と旋回時間の問題です。</li>
+</ol>
+<p>横 G 9.0 G 基準での各旋回の上限速度は次のとおりで、観測された飽和の順位とほぼ一致します。プロファイルは旋回ごとに v を持てるので、全体を落とすより dia135 / orval だけ落とすのが筋です。</p>
+<div class="tbl"><table class="compact">
+<tr><th>旋回 (rad)</th><th class="num">上限 v [mm/s]</th></tr>
+<tr><td>dia135 (37.5)</td><td class="num">1820</td></tr>
+<tr><td>orval (40.8)</td><td class="num">1900</td></tr>
+<tr><td>dia90 (44)</td><td class="num">1970</td></tr>
+<tr><td>large90 / dia45 (52)</td><td class="num">2140</td></tr>
+<tr><td>dia45_2 (55)</td><td class="num">2200</td></tr>
+</table></div>
+<p>最悪の個体 (dia135 右) は開始 2 tick 目から終了まで左 duty が 99.9 % に固定 (55 tick 中 54)、角速度誤差和が −549 まで巻いて出口で +38 へ投棄され、終端で −21.6 rad/s が残留・角度 10.2° 不足でした。1800 でも 77 % 飽和なので速度以前にプロファイル過大です。</p>
+
+<h2 id="straight">8.3 直進</h2>
+<ul>
+  <li>5.2 m/s 指令で 5,284 mm/s に到達。4.7 m/s で duty 92〜98 % (11.9 V) と頭打ち。減速は距離どおり。</li>
+  <li>壁誤差は加速中 −4 mm (左) → 減速中 +4.5〜7.9 mm (右)。1.8 m/s からの停止 (4.5 G) では毎回 −1.4° 右へヨーし、左右の制動トルク差が原因。<code>motor_torque_asym</code> と減速中のヨーゲイン倍率で抑えています。</li>
+  <li>速度追従の遅れは 0〜1 ms、巡航の RMSE は速度にほぼ比例 (3 m/s で 39 mm/s、5 m/s で 68 mm/s)。制御の欠陥ではなく車輪高調波が主です。</li>
+</ul>
+
+<h2 id="turn">8.4 旋回精度</h2>
+<ul>
+  <li>orval の旋回後残差は turn_settle 適用で −2.0〜−2.6° → ±0.25° (30 tick)。壁スナップ抑止で large90 の残差 1.26° → 0.03°。</li>
+  <li>dia45 の左右到達角度差は front/back の左右統一で見かけの差がほぼ消え、素の残差 1.5° (片側 0.75°) はグリップ側が本命。</li>
+  <li>走り出しのばらつき: 走り出し横位置と旋回突入ヨーに −0.68 の相関 (n = 28)。手押さえで安定するので、hold 中の揺れが起点。</li>
+  <li>壁基準では約 0.5° 回り足りない走行があり、ジャイロ感度が 0.1〜0.4 % 高い疑い (未検証)。</li>
+</ul>
+
+<h2 id="todo">8.5 今後の課題</h2>
+<div class="tbl"><table>
+<tr><th>項目</th><th>状況</th><th>次の一手</th></tr>
+<tr><td>壁切れ区間の速度</td><td>t_2100 で WALL_OFF + WALL_OFF_DIA + BACK_STR = 647 mm を平均約 1800 mm/s で走行</td><td>残る伸びしろは旋回速度ではなくここ。柱谷検知の早期化、壁切れ待ち区間の速度プロファイル</td></tr>
+<tr><td>dia45 の角加速度</td><td>pow_n 4 で alpha 14,555 rad/s²、飽和 84〜92 %</td><td>45° ターンは pow_n 2 が有効 (footprint 増を rad で吸収)。t_1800 で実施済み、他速度へ展開</td></tr>
+<tr><td>dia135 / orval の横 G</td><td>12 G で上限超過</td><td>旋回ごとの v を 1820 / 1900 に落とす</td></tr>
+<tr><td>走り出しの姿勢</td><td>吸引ランプの反動 −0.29° / +0.23°</td><td>単調増加ランプ、糸吊りでの分離試験、ランプ率連動 FF、エンコーダ差動ロックのいずれか</td></tr>
+<tr><td>直線の左ヨーバイアス</td><td>吸引 ON 高速時のみ +0.24 V 相当、時期により符号が反転</td><td>吸引ファンの反動トルクか荷重依存摩擦かを分離</td></tr>
+<tr><td>ジャイロ感度</td><td>0.1〜0.4 % 高い疑い</td><td>壁基準の 90° 旋回の反復で較正</td></tr>
+<tr><td>Ke の物理値化</td><td>データシート値にすると旋回の差動 FF が −35 %</td><td>旋回の定常抵抗 (約 1 V、現状は PID が負担) を FF に入れてから再挑戦</td></tr>
+<tr><td>加速度計の統合</td><td>重力校正とレバーアーム補正まで。走行中の S/N が低い</td><td>粗い異常検知 (衝突・スリップ) 用途から</td></tr>
+<tr><td>吸引 ESC テレメトリ</td><td>双方向 DShot は未結線・受信側に既知の誤り</td><td>eRPM で吸引の異常を検知。自作 ESC「ECia」との接続も候補</td></tr>
+<tr><td>壁切れの高頻度サンプリング</td><td>パラメータと解析ツールはあるがファーム側は試作ブランチ</td><td>曲率判定で lag 1.7 mm まで詰まったので優先度は低い</td></tr>
+</table></div>
+
+  <footer class="page-foot">
+    <nav class="prevnext" aria-label="前後の章"><a class="pn prev" href="07-devlog.html"><small>前の章</small>7. 開発記録・知見(2026 シーズン)</a><a class="pn next" href="09-appendix.html"><small>次の章</small>付録. 付録</a></nav>
+    <p class="stamp">生成: 2026-09-25 (0b1599c)</p>
+  </footer>
+  </main>
+</div>
+</div>
+
+</body>
+</html>

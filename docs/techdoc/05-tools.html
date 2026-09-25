@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>5. 開発環境・ツール | ExiaIgnis 技術資料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<div class="site">
+<header class="site-head">
+  <a class="brand" href="index.html"><span class="brand-name">ExiaIgnis</span><span class="brand-sub">技術資料</span></a>
+  <nav class="chapters" aria-label="章"><ul><li><a href="index.html"><span>概要</span></a></li>
+<li><a href="01-hardware.html"><span class="nav-num">1</span><span>機体構成</span></a></li>
+<li><a href="02-control.html"><span class="nav-num">2</span><span>制御</span></a></li>
+<li><a href="03-software.html"><span class="nav-num">3</span><span>ソフトウェア</span></a></li>
+<li><a href="04-search.html"><span class="nav-num">4</span><span>探索・経路</span></a></li>
+<li class="is-current"><a href="05-tools.html"><span class="nav-num">5</span><span>ツール</span></a></li>
+<li><a href="06-tuning.html"><span class="nav-num">6</span><span>調整手順</span></a></li>
+<li><a href="07-devlog.html"><span class="nav-num">7</span><span>開発記録</span></a></li>
+<li><a href="08-performance.html"><span class="nav-num">8</span><span>性能・課題</span></a></li>
+<li><a href="09-appendix.html"><span class="nav-num">付録</span><span>付録</span></a></li></ul></nav>
+</header>
+<div class="layout">
+  <aside class="side"><nav class="toc" aria-label="このページの目次"><p class="toc-title">このページ</p><ol><li><a href="#console">5.1 Param Console (Web)</a></li><li><a href="#plot">5.2 ログ可視化</a></li><li><a href="#scripts">5.3 解析スクリプト (tools/param_tuner/)</a></li><li><a href="#slalom">5.4 スラローム設計ツール</a></li><li><a href="#simulink">5.5 MATLAB / Simulink</a></li><li><a href="#hosttest">5.6 ホスト側テスト</a></li><li><a href="#method">5.7 検証の作法</a></li></ol></nav></aside>
+  <main class="content" id="top">
+<p class="eyebrow">CHAPTER 5</p>
+<h1>開発環境・ツール</h1>
+<p class="lede">調整はブラウザの Param Console から、解析は走行ログに対する Python スクリプトで行います。制御則の変更は「ログから実効ゲインを逆算できる」ことを前提に設計しています。</p>
+
+<h2 id="console">5.1 Param Console (Web)</h2>
+<p><code>tools/param_tuner/webapp/</code> の Next.js アプリ。旧来の受信 (<code>rx_term.js</code>) と送信 (<code>tx_term.js</code>) を 1 本の永続シリアル接続に統合し、<code>./param_console.sh</code> で起動して <code>http://localhost:3000</code> を開きます。</p>
+<ul>
+  <li><strong>自動接続</strong>: <code>ttyACM*</code> を 200 ms 間隔でポーリングし、見つかり次第接続。切断後も再検出。</li>
+  <li><strong>コンソール</strong>: 受信をリアルタイム表示。画面クリアのエスケープを検知して自動リセット。</li>
+  <li><strong>パラメータ送信</strong>: <code>profile/hf/</code> と <code>system.yaml</code> / <code>hardware.yaml</code> を一覧し、個別送信・全送信・検索・その場の YAML 編集 (CodeMirror、Ctrl+S 保存)。</li>
+  <li><strong>テストテンプレート</strong>: <code>system.yaml</code> の <code>test:</code> ブロックの特定キー (v_max / accl / dist / suction_active / file_idx / sla_type など) と <code>mode</code> を、コメントを壊さずに書き換える。よく変える値はワンクリックで即時反映。</li>
+  <li><strong>ログプロット</strong>: 受信した CSV から走行軌跡を描画 (状態ごとに色分け、壁センサー検出点、90 mm グリッド)。旋回出口の残差表やチャートプリセットを持つ詳細ビューと、PlotJuggler への連携ボタン。</li>
+  <li><strong>ダンプ受信の頑健化</strong>: バイナリヘッダーの欠落やバーストによる破損を検出し、破損時は破棄してトーストで再試行を促す。</li>
+</ul>
+<p>レイアウトはプロット最優先で、表は右ペイン、操作はヘッダーに寄せています。</p>
+
+<h2 id="plot">5.2 ログ可視化</h2>
+<ul>
+  <li><code>plot_gui.py</code>: <code>tools/param_tuner/logs/</code> の CSV を選び、位置・センサー軌跡を Tk で表示。PlotJuggler (ROS 2 Jazzy の apt 版) を起動・終了するボタンつき。snap 版は AppArmor の制約で <code>pkill</code> が効かないため apt 版を使います。</li>
+  <li>ログの CSV は 1 kHz × 最大 60 秒。反復試行のログは <code>turn_log/NN/</code> に段階ごとに保存し、n ≥ 4 の比較に使います。</li>
+</ul>
+
+<h2 id="scripts">5.3 解析スクリプト (tools/param_tuner/)</h2>
+<div class="tbl"><table>
+<tr><th>スクリプト</th><th>目的</th><th>方法</th></tr>
+<tr><td><code>ff_check.py</code></td><td>直進 FF (Mass / 摩擦 / Ke) の同定</td><td>実際に出た電圧を (accl, v) で回帰し、FF だけから作った電圧の係数と比較。ratio が 1 に近いほど FF が合っている</td></tr>
+<tr><td><code>lat_check.py</code></td><td>直進の横方向ループの符号確認</td><td>壁 PD・角度 PID・Kanayama の各項の符号を突き合わせ。<span class="math">ki &lt; angle_pid.p / S</span> が安定条件</td></tr>
+<tr><td><code>tread_check.py</code></td><td>実効トレッドと左右タイヤ径差</td><td><span class="math">v_r − v_l = tread × w + (e_r − e_l) × v_c</span> の最小二乗</td></tr>
+<tr><td><code>enc_lut_fit.py</code></td><td>エンコーダ角度補正テーブル</td><td>低速直進を複数本プールし、左右差とジャイロだけで 1〜8 次高調波を当てはめて 64 点に。<code>--check</code> でファームの適用確認</td></tr>
+<tr><td><code>turn_exit_check.py</code></td><td>旋回ごとの出口残差 (横ずれ・ヨー) と追従状態</td><td>「旋回直後の duty_sen が大きい」は片壁 ×2 とヨー 0.96 mm/度で 3〜4 倍誇張されるため、出口残差そのもので判定</td></tr>
+<tr><td><code>wall_off_edge_check.py</code></td><td>壁切れ検出位置の数値評価</td><td>ログの 45° 系列から検出位置とアンカーのずれを出す</td></tr>
+<tr><td><code>vel_loop_margin.py</code></td><td>速度ループの位相余裕</td><td>離散 PID + トルク→電圧ゲイン + 遅れ 1.5 ms の開ループを周波数掃引</td></tr>
+<tr><td><code>analyze_sensor_trough.py</code> ほか</td><td>柱谷・センサー落ち込み・状態遷移の切り出し</td><td>モーション種別の区間内で極小点や遷移時刻を列挙</td></tr>
+<tr><td><code>hf_series.py</code></td><td>高頻度壁切れサンプルの復元</td><td>4 kHz 相当のサブサンプル列を 1 kHz ログから展開 (ファーム側は試作ブランチ)</td></tr>
+</table></div>
+
+<h2 id="slalom">5.4 スラローム設計ツール</h2>
+<p><code>tools/slalom/</code> の Tk GUI (<code>main.py</code>) で、v / ang / rad / pow_n から角加速度の形状を積分 (RK) し、前後オフセット (<code>front</code> / <code>back</code>) を求めます。結果は <code>result.yaml</code> に出し、<code>profile/hf/t_NNNN.yaml</code> へ転記します。2.3 節の設計式で duty 予算と横 G を先に確認してから GUI で寸法を詰める流れです。</p>
+
+<h2 id="simulink">5.5 MATLAB / Simulink</h2>
+<p><code>tools/matlab_ws/</code> に、目標値 (位置・角度) と制約 (速度・加速度・角加速度) から指令値を計算するモデル (<code>sim_mpc.slx</code> / <code>mpc_tgt_calc.slx</code>) があります。<code>init.m</code> の <code>test_mode</code> で直進・スラローム (オリジナル加速 / 固定加速)・超信地・後退を切り替えてスコープで確認し、<code>build_mpc_tgt_calc.m</code> で Embedded Coder がコードを生成して <code>gen_code_mpc/</code> に置きます。PID ブロックも同様に <code>gen_code_pid/</code> / <code>gen_code_simple_pid/</code> に生成しています。</p>
+<p>生成コードの注意点: <code>&amp;&amp;</code> と <code>||</code> の優先順位が曖昧な if 文が <code>-Werror=parentheses</code> で止まる (手で括弧を足す)、<code>sign()</code> が入力がちょうど 0 を跨ぐ瞬間だけ 0 を返す仕様で摩擦 FF がチャタリングする (直前値を保持して吸収)、<code>pow(x, 0)</code> が無条件に 1 を返す規約 (減速ソフトスタートの未配線バグの一因)。</p>
+
+<h2 id="hosttest">5.6 ホスト側テスト</h2>
+<ul>
+  <li><code>tests/dither_pwm_host/</code>: DitherPwm のリング更新を DMA 読み位置のモデルとともにシミュレートし、遅延・guard・underrun を確認。</li>
+  <li><code>tests/pillar_trough_host/run.sh</code>: 柱谷検知器に実走ログの CSV を全行再生し、発火位置と lag を出す。しきい値の検討は実機を走らせずにここで行います。</li>
+</ul>
+
+<h2 id="method">5.7 検証の作法</h2>
+<ul>
+  <li>制御変更の効果は単発比較ではなく n ≥ 4 の反復試行で判定する。ばらつきが 3σ で見込める場合は 1〜2 本で足りることもあるが、まずオフラインで当たりを付ける。</li>
+  <li>「収束しない」と「duty が足りない」は別問題として切り分ける (平衡点が 0 か、飽和しているか)。</li>
+  <li>壁切れの判定はしきい値ではなく形で行い、首振れとの分離は離脱の急峻さ・深さの数値で示す。</li>
+  <li>失敗時の防御的コードは破棄だけで終わらせず、生データの保存と診断ログまで行う。</li>
+</ul>
+
+  <footer class="page-foot">
+    <nav class="prevnext" aria-label="前後の章"><a class="pn prev" href="04-search.html"><small>前の章</small>4. 探索・経路生成</a><a class="pn next" href="06-tuning.html"><small>次の章</small>6. 調整手順</a></nav>
+    <p class="stamp">生成: 2026-09-25 (0b1599c)</p>
+  </footer>
+  </main>
+</div>
+</div>
+
+</body>
+</html>

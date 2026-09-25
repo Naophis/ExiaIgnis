@@ -1,0 +1,52 @@
+<p class="eyebrow">TECHNICAL DOCUMENT · 2026 SEASON</p>
+<h1>ExiaIgnis 技術資料</h1>
+<p class="lede">RP2350 (Raspberry Pi Pico 2) を使ったハーフサイズ・マイクロマウス ExiaIgnis の、機体構成と制御を中心にまとめた技術資料です。前作 Astraea シリーズ (ESP32-S3) のソフトウェア資産を引き継ぎつつ、MCU を RP2350 に変えて制御系・電装系を再構成しました。ファームウェアと調整ツールは GitHub の <a href="https://github.com/Naophis/ExiaIgnis">Naophis/ExiaIgnis</a> で公開しています。</p>
+
+<div class="photo">機体写真 (要提供)</div>
+
+<h2 id="spec">主要諸元</h2>
+<dl class="spec">
+  <div><dt>MCU</dt><dd>RP2350 <small>Cortex-M33 ×2 / 150 MHz、Pico 2</small></dd></div>
+  <div><dt>外部メモリ</dt><dd>APS6404L PSRAM 8 MB <small>走行ログ 60 秒ぶん(1 kHz)</small></dd></div>
+  <div><dt>質量</dt><dd>36.3 g <small>本体 24.1 g + バッテリー 12.2 g</small></dd></div>
+  <div><dt>電源</dt><dd>LiPo 3 セル <small>低電圧しきい値 11.8 V</small></dd></div>
+  <div><dt>駆動モーター</dt><dd>NFP-D0812 ×2 <small>端子間抵抗 4.4 Ω、ギア 63:13</small></dd></div>
+  <div><dt>モータードライバ</dt><dd>MPQ6612A <small>PWM 100 kHz、slow decay</small></dd></div>
+  <div><dt>タイヤ / トレッド</dt><dd>φ13.9 mm / 42.3 mm <small>トレッドは走行ログから同定した実効値</small></dd></div>
+  <div><dt>吸引</dt><dd>ダウンフォース 350〜380 g <small>ESCape32 ESC + DShot600</small></dd></div>
+  <div><dt>IMU</dt><dd>ASM330LHH <small>±4000 dps、ODR 3333 Hz</small></dd></div>
+  <div><dt>エンコーダ</dt><dd>AS5147P ×2 <small>14 bit 磁気式、角度 LUT 補正あり</small></dd></div>
+  <div><dt>壁センサー</dt><dd>赤外 LED 6 灯 / 受光 4 ch <small>45° 側は 2 灯を 3 パターンで点灯</small></dd></div>
+  <div><dt>制御周期</dt><dd>1 kHz <small>Core1 のタイマー IRQ で駆動</small></dd></div>
+</dl>
+
+<h2 id="concept">設計の要点</h2>
+<ul>
+  <li><strong>コアの完全分離</strong>。Core1 はセンシングと制御の IRQ だけを走らせ、Core0 が UI・パラメータ・USB・ログを受け持ちます。Core1 のホットコードはファイル単位で SRAM に配置し、フラッシュ (XIP) の遅延を制御ループから追い出しました。</li>
+  <li><strong>モデルベースの前置き補償</strong>。走行の大部分はモーターモデル (逆起電力・抵抗・慣性・摩擦) によるフィードフォワードが担い、PID は残差だけを見ます。ゲインは走行ログの回帰で同定し、Python の検証スクリプトで裏を取る運用です。</li>
+  <li><strong>CPU を介さない出力段</strong>。駆動 PWM は DMA が SRAM リングを永久再生する時間ディザ (DitherPwm) で 1 count 未満の duty を出し、吸引 ESC への DShot も PIO + DMA が自律送出します。Core1 が止まっても最後の指令が出続けます。</li>
+  <li><strong>壁切れは「値」ではなく「形」で判定</strong>。柱の谷を走行距離で正規化した 2 階微分 (曲率) で捉え、谷底位置をアンカーにして旋回位置を決めます。</li>
+  <li><strong>調整はブラウザから</strong>。YAML のパラメータ群を Web の Param Console からシリアル送信し、走行ログはその場で軌跡表示と PlotJuggler 連携ができます。</li>
+</ul>
+
+<h2 id="chapters">章立て</h2>
+<ul class="chapter-list">
+  <li><a href="01-hardware.html"><span class="cl-num">1</span><span class="cl-title">機体構成</span><span class="cl-desc">MCU・駆動系・吸引系・センサー・電源/UI・ピンアサイン・基板と機構</span></a></li>
+  <li><a href="02-control.html"><span class="cl-num">2</span><span class="cl-title">制御</span><span class="cl-desc">1 kHz パイプライン、状態推定、軌道生成、FF/FB、旋回、壁切れ、出力段</span></a></li>
+  <li><a href="03-software.html"><span class="cl-num">3</span><span class="cl-title">ソフトウェア構成</span><span class="cl-desc">マルチコア、IRQ、SRAM 配置、パラメータ、USB コマンド、ログ、ビルド</span></a></li>
+  <li><a href="04-search.html"><span class="cl-num">4</span><span class="cl-title">探索・経路生成</span><span class="cl-desc">迷路マップ、足立法、ベクター距離マップ、時間ベースの経路最適化</span></a></li>
+  <li><a href="05-tools.html"><span class="cl-num">5</span><span class="cl-title">開発環境・ツール</span><span class="cl-desc">Param Console、ログ可視化、解析スクリプト、スラローム設計、Simulink</span></a></li>
+  <li><a href="06-tuning.html"><span class="cl-num">6</span><span class="cl-title">調整手順</span><span class="cl-desc">テストモード一覧と、単体確認から最短走行までの調整順</span></a></li>
+  <li><a href="07-devlog.html"><span class="cl-num">7</span><span class="cl-title">開発記録・知見</span><span class="cl-desc">2026 シーズンに踏んだ問題を「症状 → 原因 → 対策」のカードで</span></a></li>
+  <li><a href="08-performance.html"><span class="cl-num">8</span><span class="cl-title">性能と今後の課題</span><span class="cl-desc">旋回速度スイープ、破綻モード、残っている伸びしろ</span></a></li>
+  <li><a href="09-appendix.html"><span class="cl-num">付録</span><span class="cl-title">パラメータ・用語</span><span class="cl-desc">LittleFS 上のファイル一覧、主要キー、用語集</span></a></li>
+</ul>
+
+<h2 id="lineage">系譜</h2>
+<div class="tbl"><table>
+<tr><th>機体</th><th>MCU</th><th>備考</th></tr>
+<tr><td>Banshee.SSS</td><td>ESP32-S3</td><td>2023 年全日本で 3 セル化。Astraea の母体</td></tr>
+<tr><td>Astraea / Nova / Alter</td><td>ESP32-S3-PICO-1</td><td>正式な 3 セル機。FreeRTOS、MP6551 ドライバ、ベアリングホルダー方式の足回り</td></tr>
+<tr><td><strong>ExiaIgnis</strong></td><td>RP2350</td><td>本資料。OS なし・タイマー IRQ 直駆動、MPQ6612A、DitherPwm、ESCape32 吸引 ESC</td></tr>
+</table></div>
+<p>Astraea までの技術資料は、リポジトリ内 <code>sample/Astraea/README.md</code> に残しています。</p>
