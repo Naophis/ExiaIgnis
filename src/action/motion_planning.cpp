@@ -125,7 +125,22 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
 
   pt->send_command(*tgt_val);
   // printf("[mp][go_straight]: sent command\n");
+
+  // 2026-09-27: 探索直進では終了判定の基準を送信直後、update() の前に取る。
+  // 基準を下のループの cnt==1 で取ると、update() の計算中に進んだ距離が
+  // 数えられず、その分だけ直進が伸びる。update() はゴール到達後かつ
+  // SearchMode::ALL のとき毎区画 searchGoalPosition を回し約 20ms かかる
+  // (20260927_095027.csv idx6745〜7514: 550mm/s の 4 区画が 99.4〜103.0mm、
+  // 計 +46mm。4.5 区画直進後の normal90 左が、前壁 47mm で pivot90 に化けた)。
+  // 09-23 以前の ego_in.dist 方式は受信 tick で 0 に戻るので数えていた。
+  // global_pos.dist は受信でリセットされないので、ここで取っても 09-23 の
+  // レースは再発しない。探索以外の呼び出しは従来どおり cnt==1 で取る
+  // (最短走行の調整済み距離を動かさない)。
+  float motion_start_dist = 0;
+  bool motion_start_latched = false;
   if (search_mode && adachi != nullptr) {
+    motion_start_dist = tgt_val->global_pos.dist;
+    motion_start_latched = true;
     adachi->update();
   }
 
@@ -154,8 +169,8 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   // global_pos.dist は ego_in.dist と同じ se->ego.v_c * dt を sensing_task.cpp の
   // 777/778 行で隣り合って積算する値で、モーション受信ではリセットされないため
   // この競合の影響を受けない。基準は cnt==1 の tick で取り、従来の
-  // 「最初の tick を 0 とする」意味をそのまま保つ。
-  float motion_start_dist = 0;
+  // 「最初の tick を 0 とする」意味をそのまま保つ(探索直進だけは上の
+  // send_command 直後に取得済み)。
 
   float tmp_dist_before = tgt_val->global_pos.dist;
   float tmp_dist_after = tmp_dist_before;
@@ -177,7 +192,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
       // printf("[mp][go_straight]: start motion\n");
     }
     cnt++;
-    if (cnt == 1) {
+    if (cnt == 1 && !motion_start_latched) {
       motion_start_dist = tgt_val->global_pos.dist;
     }
     const auto now_dist = tgt_val->global_pos.dist - motion_start_dist;
