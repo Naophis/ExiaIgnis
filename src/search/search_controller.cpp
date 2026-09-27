@@ -413,23 +413,15 @@ MotionResult SearchController::pivot90(param_set_t &p_set,
     if ((10 < sensing_result->ego.left45_dist) &&
         (sensing_result->ego.left45_dist < param->th_offset_dist)) {
       auto diff = -(param->sla_wall_ref_l - sensing_result->ego.left45_dist);
-      if (diff > param->normal_sla_offset_back) {
-        diff = param->normal_sla_offset_back;
-      } else if (diff < -param->normal_sla_offset_back) {
-        diff = -param->normal_sla_offset_back;
-      }
+      diff = std::clamp(diff, -param->normal_sla_offset_back, param->normal_sla_offset_back);
       offset_dist += diff;
     }
   } else {
     if ((10 < sensing_result->ego.right45_dist) &&
         (sensing_result->ego.right45_dist < param->th_offset_dist)) {
       auto diff = -(param->sla_wall_ref_r - sensing_result->ego.right45_dist);
-      if (diff > param->normal_sla_offset_back) {
-        diff = param->normal_sla_offset_back;
-      } else if (diff < -param->normal_sla_offset_back) {
-        diff = -param->normal_sla_offset_back;
-      }
-      offset_dist = diff;
+      diff = std::clamp(diff, -param->normal_sla_offset_back, param->normal_sla_offset_back);
+      offset_dist += diff;
     }
   }
   if (p.dist < 10) {

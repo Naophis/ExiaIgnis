@@ -635,8 +635,9 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
 
   ps_back.dist = (td == TurnDirection::Right) ? sp.back.right : sp.back.left;
   next_motion.carry_over_dist = 0;
-  bool offset_r = false;
-  bool offset_l = false;
+  // Normal: SLA_FRONT_STR 前に外側 45° で ps_back.dist に足した補正量。
+  // ターン中の壁切れタイミング補正と合計して ±normal_sla_offset_back に収める。
+  float back_corr_pre = 0;
   if (sp.type == TurnType::Normal) {
     // search_front_ctrl(ps_front); // 前壁制御
     ps_front.v_max = next_motion.v_max;
@@ -659,10 +660,10 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
     if (td == TurnDirection::Right) {
       if ((10 < sensing_result->ego.left45_dist) &&
           (sensing_result->ego.left45_dist < param->th_offset_dist)) {
-        offset_l = true;
         float diff = (param->sla_wall_ref_l - sensing_result->ego.left45_dist);
         diff = std::clamp(diff, -param->normal_sla_offset_back,
                           param->normal_sla_offset_back);
+        back_corr_pre = diff;
         ps_back.dist += diff;
         if (ps_back.dist < 0) {
           ps_back.dist = 1;
@@ -671,10 +672,10 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
     } else {
       if ((10 < sensing_result->ego.right45_dist) &&
           (sensing_result->ego.right45_dist < param->th_offset_dist)) {
-        offset_r = true;
         float diff = (param->sla_wall_ref_r - sensing_result->ego.right45_dist);
         diff = std::clamp(diff, -param->normal_sla_offset_back,
                           param->normal_sla_offset_back);
+        back_corr_pre = diff;
         ps_back.dist += diff;
         if (ps_back.dist < 0) {
           ps_back.dist = 1;
@@ -1067,34 +1068,28 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
       return MotionResult::ERROR;
     }
   }
-  if (sp.type == TurnType::Normal && find_in && find_out && count_save > 0
-      // &&     !(offset_l || offset_r)
-  ) {
-    if (td == TurnDirection::Right) {
-      if (ABS(count_save - param->normal_sla_l_wall_off_ref_cnt) >
-              param->normal_sla_l_wall_off_margin &&
-          ABS(count_save - param->normal_sla_l_wall_off_ref_cnt) < 20) {
-        if ((count_save > param->normal_sla_l_wall_off_ref_cnt)) {
-          ps_back.dist += param->normal_sla_l_wall_off_dist;
-        } else {
-          ps_back.dist -= param->normal_sla_l_wall_off_dist;
-        }
-        if (ps_back.dist < 1) {
-          ps_back.dist = 1;
-        }
-      }
-    } else {
-      if (ABS(count_save - param->normal_sla_r_wall_off_ref_cnt) >
-              param->normal_sla_r_wall_off_margin &&
-          ABS(count_save - param->normal_sla_r_wall_off_ref_cnt) < 20) {
-        if ((count_save > param->normal_sla_r_wall_off_ref_cnt)) {
-          ps_back.dist += param->normal_sla_r_wall_off_dist;
-        } else {
-          ps_back.dist -= param->normal_sla_r_wall_off_dist;
-        }
-        if (ps_back.dist < 1) {
-          ps_back.dist = 1;
-        }
+  // 2026-09-26: ターン中の壁切れタイミング補正は、SLA_FRONT_STR 前の外側 45°
+  // 補正(back_corr_pre)と同じ横ずれを別の測り方で見ている(ログ再生: 事前 45°
+  // 読みが 38〜41mm→count_save 141〜147/+6、49〜52mm→122〜124/−6 と同符号)。
+  // 単純に足すと ±6 が ±12mm に二重計上されるので、2 つの補正の合計を
+  // ±normal_sla_offset_back に収め、その差分だけを ps_back.dist に足す。
+  if (sp.type == TurnType::Normal && find_in && find_out && count_save > 0) {
+    const bool right = (td == TurnDirection::Right);
+    const auto ref_cnt = right ? param->normal_sla_l_wall_off_ref_cnt
+                               : param->normal_sla_r_wall_off_ref_cnt;
+    const auto margin = right ? param->normal_sla_l_wall_off_margin
+                              : param->normal_sla_r_wall_off_margin;
+    const auto off_dist = right ? param->normal_sla_l_wall_off_dist
+                                : param->normal_sla_r_wall_off_dist;
+    const auto err = ABS(count_save - ref_cnt);
+    if (err > margin && err < 20) {
+      const float mid = (count_save > ref_cnt) ? off_dist : -off_dist;
+      const float total = std::clamp(back_corr_pre + mid,
+                                     -param->normal_sla_offset_back,
+                                     param->normal_sla_offset_back);
+      ps_back.dist += (total - back_corr_pre);
+      if (ps_back.dist < 1) {
+        ps_back.dist = 1;
       }
     }
   }
