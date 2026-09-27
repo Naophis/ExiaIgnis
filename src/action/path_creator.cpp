@@ -947,13 +947,6 @@ float PathCreator::slalom_dummy(
   float turn_back_dist = 0;
   float v = turn_param[turn_type].v;
 
-  const float offset_after_turn_l = 10;
-  const float offset_after_turn_r = 10;
-  const float offset_after_turn_l2 = 18;
-  const float offset_after_turn_r2 = 18;
-  const float offset_after_turn_dia_l = 24;
-  const float offset_after_turn_dia_r = 24;
-
   if (td == TurnDirection::Right) {
     turn_front_dist = turn_param[turn_type].front.right;
     turn_back_dist = turn_param[turn_type].back.right;
@@ -961,17 +954,10 @@ float PathCreator::slalom_dummy(
     turn_front_dist = turn_param[turn_type].front.left;
     turn_back_dist = turn_param[turn_type].back.left;
   }
-  if (turn_type == TurnType::Large || turn_type == TurnType::Orval) {
-    turn_back_dist -= (td == TurnDirection::Right) ? offset_after_turn_r2
-                                                   : offset_after_turn_l2;
-  } else if (turn_type == TurnType::Dia45 || turn_type == TurnType::Dia135) {
-    turn_back_dist -= (td == TurnDirection::Right) ? offset_after_turn_r
-                                                   : offset_after_turn_l;
-  } else if (turn_type == TurnType::Dia45_2 ||
-             turn_type == TurnType::Dia135_2 || turn_type == TurnType::Dia90) {
-    turn_back_dist -= (td == TurnDirection::Right) ? offset_after_turn_dia_r
-                                                   : offset_after_turn_dia_l;
-  }
+  // 2026-09-28: backからoffset_after_turnを引かない。実走(slalom())は引いた
+  // 距離を次ターン手前のWALL_OFFでターン速度のまま走るので、ここで引くと
+  // その区間が丸ごと抜ける(20260925_015557.csv: 15ターンで壁切れ237mm/123ms、
+  // 仮想1623msに対し実走1787ms)。
 
   if (turn_front_dist < 0)
     turn_front_dist = 0;
