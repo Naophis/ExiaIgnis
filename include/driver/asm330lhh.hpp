@@ -22,6 +22,19 @@
 // (ODRcoeff は 3333Hz 設定で 2)。ST AN5296 / datasheet の INTERNAL_FREQ_FINE。
 #define ASM330LHH_INTERNAL_FREQ_FINE 0x63U
 
+// FIFO (ジャイロのサンプルを取りこぼさず全部読むため、2026-09-29)。
+// 1 ワード = TAG 1 バイト + X/Y/Z 各 2 バイトの 7 バイト。0x78 から連続読みすると
+// 0x7E の次は 0x78 へ戻るので、N ワードを 1 回の転送で読める。
+#define ASM330LHH_FIFO_CTRL3        0x09U  // [7:4] BDR_GY, [3:0] BDR_XL (コードは ODR と同じ、0=格納しない)
+#define ASM330LHH_FIFO_CTRL4        0x0AU  // [2:0] FIFO_MODE (0=bypass, 6=continuous)
+#define ASM330LHH_FIFO_STATUS1      0x3AU  // DIFF_FIFO[7:0] 未読ワード数
+#define ASM330LHH_FIFO_STATUS2      0x3BU  // [6] FIFO_OVR_IA, [1:0] DIFF_FIFO[9:8]
+#define ASM330LHH_FIFO_DATA_OUT_TAG 0x78U  // [7:3] TAG_SENSOR (0x01=ジャイロ)
+#define ASM330LHH_FIFO_WORD_BYTES   7
+#define ASM330LHH_FIFO_TAG_GYRO     0x01U
+#define ASM330LHH_FIFO_MODE_BYPASS     0x00U
+#define ASM330LHH_FIFO_MODE_CONTINUOUS 0x06U
+
 class ASM330LHH {
 public:
     // init() で SPI バスの初期化からピン設定まで行う
@@ -46,6 +59,10 @@ public:
     // odr_code は CTRL1_XL / CTRL2_G の上位 4bit (1=12.5Hz … 9=3333Hz, 10=6667Hz)。
     // 0(power-down) と範囲外は 0 を返す。
     static float actual_odr_hz(uint8_t odr_code, int8_t freq_fine);
+
+    // FIFO を捨てて continuous モードで取り直す(溜まりすぎ・あふれ・タグ不一致時)。
+    // Core1 の SensingTask から呼ぶ。SPI を mode 3 に切り替えてから書く。
+    void fifo_flush();
 
 private:
     spi_inst_t *spi_  = nullptr;

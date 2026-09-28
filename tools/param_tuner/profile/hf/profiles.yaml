@@ -171,20 +171,20 @@ profile_idx:
   - run_param: 15
     suction: 2
     normal: 1
-    large: 12
-    orval: 12
-    dia45: 10
-    dia45_2: 10
-    dia135: 10
-    dia135_2: 10
+    large: 16
+    orval: 14
+    dia45: 14
+    dia45_2: 14
+    dia135: 14
+    dia135_2: 14
     dia90: 6
   - run_param: 16
     suction: 2
     normal: 1
-    large: 12
-    orval: 12
-    dia45: 10
-    dia45_2: 10
+    large: 16
+    orval: 16
+    dia45: 16
+    dia45_2: 16
     dia135: 10
     dia135_2: 10
     dia90: 6

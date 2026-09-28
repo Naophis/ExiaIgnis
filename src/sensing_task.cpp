@@ -623,6 +623,9 @@ SensingTask::read_spi_sensors() {
   dma_start_channel_mask((1u << dma_tx_spi1_) | (1u << dma_rx_spi1_));
   dma_channel_wait_for_finish_blocking(dma_rx_spi1_);
   gpio_put(GYRO_CS_PIN, 1);
+
+  // Phase A2: ジャイロ FIFO (mode3 のまま)。1 点読みは加速度と比較用に残す
+  read_gyro_fifo();
   se->t_gyro = (int16_t)(time_us_64() - spi_t0);
   int16_t gyro = static_cast<int16_t>(
       static_cast<uint16_t>(gyro_dma_rx_[2]) << 8 | gyro_dma_rx_[1]);
@@ -737,14 +740,28 @@ SensingTask::read_spi_sensors() {
     }
   }
   // printf("enc_l: %d m/s, enc_r: %d \n", enc_l, enc_r);
+  gyro_fifo_ang_valid_ = false;
   if (gyro_dt > 0) {
     se->gyro.raw = se->gyro.data = gyro;
-    if ((gyro - tgt_val->gyro_zero_p_offset) >= 0) {
-      se->ego.w_raw = param->gyro_param.gyro_w_gain_left *
-                      (gyro - tgt_val->gyro_zero_p_offset);
-    } else {
-      se->ego.w_raw = param->gyro_param.gyro_w_gain_right *
-                      (gyro - tgt_val->gyro_zero_p_offset);
+    se->ego.w_raw = gyro_raw_to_w(gyro);
+    update_gyro_fifo(se->ego.w_raw, gyro_dt);
+    if (gyro_fifo_ang_valid_) {
+      switch (param->gyro_param.fifo_mode) {
+      case 1:
+        se->ego.w_raw = se->gyro_fifo.w_last;
+        break;
+      case 2:
+        se->ego.w_raw = se->gyro_fifo.w_ma3;
+        break;
+      case 3:
+        se->ego.w_raw = se->gyro_fifo.w_mean;
+        break;
+      case 4:
+        se->ego.w_raw = se->gyro_fifo.w_pred;
+        break;
+      default:
+        break;
+      }
     }
     const auto alpha = (tgt_val->ego_in.w - w_old) / dt;
     pt->ego.kf_w.predict(alpha);
@@ -782,18 +799,176 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   tgt_val->ego_in.dist += se->ego.v_c * dt;
   tgt_val->global_pos.dist += se->ego.v_c * dt;
 
+  // fifo_mode 1〜3 で FIFO が有効な tick は、全サンプルの和 Σw·T_odr で積分する
+  // (T_odr は個体の実 ODR から)。それ以外は従来どおり w × MCU の読み取り間隔。
+  float d_ang;
   if (param->enable_kalman_gyro == 1) {
-    tgt_val->ego_in.ang += se->ego.w_kf * gyro_dt;
-    tgt_val->global_pos.ang += se->ego.w_kf * gyro_dt;
-  } else if (param->enable_kalman_gyro == 2) {
-    tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
-    tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+    d_ang = se->ego.w_kf * gyro_dt;
+  } else if (param->gyro_param.fifo_mode != 0 && gyro_fifo_ang_valid_) {
+    d_ang = se->gyro_fifo.d_ang;
   } else {
-    tgt_val->ego_in.ang += se->ego.w_raw * gyro_dt;
-    tgt_val->global_pos.ang += se->ego.w_raw * gyro_dt;
+    d_ang = se->ego.w_raw * gyro_dt;
   }
+  tgt_val->ego_in.ang += d_ang;
+  tgt_val->global_pos.ang += d_ang;
 
   w_old = tgt_val->ego_in.w;
+}
+
+__attribute__((noinline, section(".time_critical.sensing.gyro_raw_to_w")))
+float SensingTask::gyro_raw_to_w(float raw) const {
+  const float d = raw - tgt_val->gyro_zero_p_offset;
+  return (d >= 0 ? param->gyro_param.gyro_w_gain_left
+                 : param->gyro_param.gyro_w_gain_right) *
+         d;
+}
+
+// ジャイロ FIFO の読み出し(2026-09-29)。Phase A の直後に SPI mode 3 のまま呼ぶ。
+// STATUS1/2 で未読ワード数を取り、その数だけ 0x78 から 1 回の DMA で読む
+// (0x7E の次は 0x78 へ戻る)。途中で届いたサンプルは次の tick に回る。
+// 上限超え・あふれ・タグ不一致は FIFO を捨て、この tick は 1 点読みで代用する。
+__attribute__((noinline, section(".time_critical.sensing.read_gyro_fifo")))
+void SensingTask::read_gyro_fifo() {
+  gyro_fifo_st_tx_[0] = ASM330LHH_FIFO_STATUS1 | 0x80;
+  const uint64_t t_read = time_us_64();
+  gyro_fifo_t_read_ = t_read;
+  gpio_put(GYRO_CS_PIN, 0);
+  dma_channel_configure(dma_tx_spi1_, &dma_cfg_tx_spi1_,
+                        &spi_get_hw(GYRO_SPI)->dr, gyro_fifo_st_tx_, 3, false);
+  dma_channel_configure(dma_rx_spi1_, &dma_cfg_rx_spi1_, gyro_fifo_st_rx_,
+                        &spi_get_hw(GYRO_SPI)->dr, 3, false);
+  dma_start_channel_mask((1u << dma_tx_spi1_) | (1u << dma_rx_spi1_));
+  dma_channel_wait_for_finish_blocking(dma_rx_spi1_);
+  gpio_put(GYRO_CS_PIN, 1);
+
+  const int n = gyro_fifo_st_rx_[1] | ((gyro_fifo_st_rx_[2] & 0x03) << 8);
+  const bool overrun = (gyro_fifo_st_rx_[2] & 0x40) != 0; // FIFO_OVR_IA
+  if (n > kGyroFifoMaxWords || overrun) {
+    gyro_.fifo_flush();
+    gyro_fifo_n_ = -1;
+    return;
+  }
+
+  if (n > 0) {
+    const int len = 1 + ASM330LHH_FIFO_WORD_BYTES * n;
+    gyro_fifo_tx_[0] = ASM330LHH_FIFO_DATA_OUT_TAG | 0x80;
+    gpio_put(GYRO_CS_PIN, 0);
+    dma_channel_configure(dma_tx_spi1_, &dma_cfg_tx_spi1_,
+                          &spi_get_hw(GYRO_SPI)->dr, gyro_fifo_tx_, len, false);
+    dma_channel_configure(dma_rx_spi1_, &dma_cfg_rx_spi1_, gyro_fifo_rx_,
+                          &spi_get_hw(GYRO_SPI)->dr, len, false);
+    dma_start_channel_mask((1u << dma_tx_spi1_) | (1u << dma_rx_spi1_));
+    dma_channel_wait_for_finish_blocking(dma_rx_spi1_);
+    gpio_put(GYRO_CS_PIN, 1);
+
+    for (int i = 0; i < n; i++) {
+      // ワード内: [0]TAG [1]X_L [2]X_H [3]Y_L [4]Y_H [5]Z_L [6]Z_H
+      const uint8_t *w = &gyro_fifo_rx_[1 + ASM330LHH_FIFO_WORD_BYTES * i];
+      if ((w[0] >> 3) != ASM330LHH_FIFO_TAG_GYRO) {
+        gyro_.fifo_flush();
+        gyro_fifo_n_ = -2;
+        return;
+      }
+      gyro_fifo_raw_[i] =
+          static_cast<int16_t>(static_cast<uint16_t>(w[6]) << 8 | w[5]);
+    }
+  }
+  gyro_fifo_n_ = n;
+
+  if (!gyro_fifo_t0_set_) {
+    gyro_fifo_t0_set_ = true;
+    gyro_fifo_t0_ = t_read;
+    gyro_fifo_cnt_ = 0;
+  } else {
+    gyro_fifo_cnt_ += n;
+    gyro_fifo_t_last_ = t_read;
+  }
+}
+
+// FIFO の生値から、制御用の w 候補(最新 / 直近 3 サンプル平均 / tick 平均)と
+// 角度増分を作る。w_snap は従来の 1 点読みの w。
+__attribute__((noinline, section(".time_critical.sensing.update_gyro_fifo")))
+void SensingTask::update_gyro_fifo(float w_snap, float gyro_dt) {
+  auto &gf = sensing_result->gyro_fifo;
+  const float d_ang_snap = w_snap * gyro_dt;
+  gf.w_snap = w_snap;
+  gf.seq++;
+  gf.t_read = static_cast<uint16_t>(gyro_fifo_t_read_);
+  for (int i = 0; i < 4; i++) {
+    gf.raw[i] = i < gyro_fifo_n_ ? gyro_fifo_raw_[i] : 0;
+  }
+  gf.n = static_cast<int16_t>(gyro_fifo_n_);
+
+  if (gyro_fifo_n_ < 0) {
+    if (gyro_fifo_n_ == -1) {
+      gf.flush_cnt++;
+    } else {
+      gf.tag_err_cnt++;
+    }
+    gyro_fifo_hist_n_ = 0;
+    gyro_fifo_t0_set_ = false;
+    gf.w_last = gf.w_ma3 = gf.w_mean = gf.w_pred = w_snap;
+    gf.alpha = 0.0f;
+    gf.d_ang = d_ang_snap;
+    return;
+  }
+
+  float sum = 0.0f;
+  for (int i = 0; i < gyro_fifo_n_; i++) {
+    const float w = gyro_raw_to_w(gyro_fifo_raw_[i]);
+    sum += w;
+    for (int h = 0; h < kGyroFifoHist - 1; h++) {
+      gyro_fifo_hist_[h] = gyro_fifo_hist_[h + 1];
+    }
+    gyro_fifo_hist_[kGyroFifoHist - 1] = w;
+    if (gyro_fifo_hist_n_ < kGyroFifoHist) {
+      gyro_fifo_hist_n_++;
+    }
+  }
+  if (gyro_fifo_n_ > 0) {
+    // n == 0 の tick(読み出しの揺れで新しいサンプルが無い)は前の値を保持
+    const float *newest = &gyro_fifo_hist_[kGyroFifoHist - 1]; // newest[-i] が i 個前
+    gf.w_last = newest[0];
+    gf.w_mean = sum / gyro_fifo_n_;
+    const int k3 = MIN(3, gyro_fifo_hist_n_);
+    float s3 = 0.0f;
+    for (int i = 0; i < k3; i++) {
+      s3 += newest[-i];
+    }
+    gf.w_ma3 = s3 / k3;
+
+    // 角加速度: 直近 K サンプルに当てた直線(最小二乗)の傾き。時刻を最新 0、
+    // i 個前 −i [サンプル]とすると、平均からの偏差は (K−1)/2 − i
+    int K = MIN(MAX(param->gyro_param.fifo_alpha_win, 2), kGyroFifoHist);
+    K = MIN(K, gyro_fifo_hist_n_);
+    float slope = 0.0f; // [rad/s per sample]
+    if (K >= 2) {
+      const float c = 0.5f * (K - 1);
+      float num = 0.0f, den = 0.0f;
+      for (int i = 0; i < K; i++) {
+        const float ti = c - i;
+        num += ti * newest[-i];
+        den += ti * ti;
+      }
+      slope = num / den;
+    }
+    const float t_us = gyro_.gyro_sample_period_us();
+    gf.alpha = slope / (t_us * 1e-6f);
+    // 3 サンプル平均は最新から 1 サンプル遅れ、最新サンプル自体も読んだ時点で
+    // 平均 0.5 サンプル古い(0〜1 サンプルで一様)。その分を傾きで先読みする
+    const float lead = 1.5f + param->gyro_param.fifo_lead_extra_us / t_us;
+    gf.w_pred = gf.w_ma3 + slope * lead;
+  }
+  gf.d_ang = sum * gyro_.gyro_sample_period_us() * 1e-6f;
+  gf.ang_diff += gf.d_ang - d_ang_snap;
+  gyro_fifo_ang_valid_ = true;
+
+  // 実 ODR の実測(1 秒以上数えてから)。INTERNAL_FREQ_FINE の値の検算用
+  if (gyro_fifo_t0_set_ && gyro_fifo_t_last_ > gyro_fifo_t0_ + 1000000) {
+    const float odr = static_cast<float>(gyro_fifo_cnt_) /
+                      (static_cast<float>(gyro_fifo_t_last_ - gyro_fifo_t0_) * 1e-6f);
+    gf.odr_err_pct = (odr / gyro_.gyro_odr_hz() - 1.0f) * 100.0f;
+  }
 }
 void SensingTask::set_input_param_entity(
     std::shared_ptr<input_param_t> &_param) {

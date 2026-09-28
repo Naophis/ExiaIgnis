@@ -180,6 +180,9 @@ inline void convertFromJson(JsonVariantConst src, gyro_param_t& dst) {
     from_json_field(src, "lp_delay", dst.lp_delay);
     from_json_field(src, "list_size", dst.list_size);
     from_json_field(src, "loop_size", dst.loop_size);
+    from_json_field(src, "fifo_mode", dst.fifo_mode);
+    from_json_field(src, "fifo_alpha_win", dst.fifo_alpha_win);
+    from_json_field(src, "fifo_lead_extra_us", dst.fifo_lead_extra_us);
 }
 
 /**

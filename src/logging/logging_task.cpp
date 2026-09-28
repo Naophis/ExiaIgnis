@@ -394,6 +394,23 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.accel_y_corr = floatToHalf(sr->ego.accel_y_corr);
   ld.accel_z_corr = floatToHalf(sr->ego.accel_z_corr);
 
+  // ジャイロ FIFO (2026-09-29, structs.hpp gyro_fifo_out_t)
+  ld.gyro_fifo_n = sr->gyro_fifo.n;
+  ld.w_snap = floatToHalf(sr->gyro_fifo.w_snap);
+  ld.w_fifo_last = floatToHalf(sr->gyro_fifo.w_last);
+  ld.w_fifo_ma3 = floatToHalf(sr->gyro_fifo.w_ma3);
+  ld.w_fifo_mean = floatToHalf(sr->gyro_fifo.w_mean);
+  ld.ang_fifo_diff = floatToHalf(sr->gyro_fifo.ang_diff);
+  ld.gyro_odr_err = floatToHalf(sr->gyro_fifo.odr_err_pct);
+  ld.gyro_raw0 = sr->gyro_fifo.raw[0];
+  ld.gyro_raw1 = sr->gyro_fifo.raw[1];
+  ld.gyro_raw2 = sr->gyro_fifo.raw[2];
+  ld.gyro_raw3 = sr->gyro_fifo.raw[3];
+  ld.gyro_fifo_seq = static_cast<int16_t>(sr->gyro_fifo.seq);
+  ld.gyro_fifo_t = static_cast<int16_t>(sr->gyro_fifo.t_read);
+  ld.w_fifo_pred = floatToHalf(sr->gyro_fifo.w_pred);
+  ld.alpha_fifo = floatToHalf(sr->gyro_fifo.alpha);
+
   self->log_vec_.emplace_back(std::move(ld));
   return true;
 }
@@ -613,6 +630,21 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_lag_l:float:%d\n", (int)sizeof(ls11.pillar_lag_l));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_btm_r:float:%d\n", (int)sizeof(ls11.pillar_btm_r));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_btm_l:float:%d\n", (int)sizeof(ls11.pillar_btm_l));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_fifo_n:int:%d\n", (int)sizeof(ls11.gyro_fifo_n));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_snap:float:%d\n", (int)sizeof(ls11.w_snap));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_fifo_last:float:%d\n", (int)sizeof(ls11.w_fifo_last));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_fifo_ma3:float:%d\n", (int)sizeof(ls11.w_fifo_ma3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_fifo_mean:float:%d\n", (int)sizeof(ls11.w_fifo_mean));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "ang_fifo_diff:float:%d\n", (int)sizeof(ls11.ang_fifo_diff));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_odr_err:float:%d\n", (int)sizeof(ls11.gyro_odr_err));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_raw0:int:%d\n", (int)sizeof(ls11.gyro_raw0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_raw1:int:%d\n", (int)sizeof(ls11.gyro_raw1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_raw2:int:%d\n", (int)sizeof(ls11.gyro_raw2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_raw3:int:%d\n", (int)sizeof(ls11.gyro_raw3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_fifo_seq:int:%d\n", (int)sizeof(ls11.gyro_fifo_seq));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_fifo_t:int:%d\n", (int)sizeof(ls11.gyro_fifo_t));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_fifo_pred:float:%d\n", (int)sizeof(ls11.w_fifo_pred));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "alpha_fifo:float:%d\n", (int)sizeof(ls11.alpha_fifo));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -881,6 +913,21 @@ void LoggingTask::dump_csv() const {
     ls11.pillar_lag_l = halfToFloat(e.pillar_lag_l);
     ls11.pillar_btm_r = halfToFloat(e.pillar_btm_r);
     ls11.pillar_btm_l = halfToFloat(e.pillar_btm_l);
+    ls11.gyro_fifo_n = e.gyro_fifo_n;
+    ls11.w_snap = halfToFloat(e.w_snap);
+    ls11.w_fifo_last = halfToFloat(e.w_fifo_last);
+    ls11.w_fifo_ma3 = halfToFloat(e.w_fifo_ma3);
+    ls11.w_fifo_mean = halfToFloat(e.w_fifo_mean);
+    ls11.ang_fifo_diff = halfToFloat(e.ang_fifo_diff) * 180.0f / m_PI;
+    ls11.gyro_odr_err = halfToFloat(e.gyro_odr_err);
+    ls11.gyro_raw0 = e.gyro_raw0;
+    ls11.gyro_raw1 = e.gyro_raw1;
+    ls11.gyro_raw2 = e.gyro_raw2;
+    ls11.gyro_raw3 = e.gyro_raw3;
+    ls11.gyro_fifo_seq = e.gyro_fifo_seq;
+    ls11.gyro_fifo_t = e.gyro_fifo_t;
+    ls11.w_fifo_pred = halfToFloat(e.w_fifo_pred);
+    ls11.alpha_fifo = halfToFloat(e.alpha_fifo);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

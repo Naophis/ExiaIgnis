@@ -256,4 +256,5 @@ void EgoEstimator::reset_kf_state(
   sensing_result->ang_kf_sum = 0;
   sensing_result->img_ang_sum = 0;
   sensing_result->img_ang_z = 0;
+  sensing_result->gyro_fifo.ang_diff = 0;
 }

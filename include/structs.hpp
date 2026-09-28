@@ -300,6 +300,32 @@ typedef struct {
   volatile int seq = 0;         // 発火ごとに +1
 } pillar_trough_out_t;
 
+// ジャイロ FIFO の読み出し結果(2026-09-29、sensing_task.cpp)。Core1 の
+// SensingTask が毎 tick 書き、ログ(Core0)が読む。1kHz で 1 点読みすると
+// 約 1.19kHz の振動が 195/313Hz に折り返して見えていたため、実 ODR
+// (個体ごと、本機 3508.5Hz)の全サンプルを取る。w の単位は rad/s。
+typedef struct {
+  int16_t n = 0;        // この tick に読んだサンプル数。-1: 溜まりすぎ/あふれで flush、-2: タグ不一致で flush
+  float w_snap = 0;     // 従来の 1 点読み(fifo_mode に関係なく常に入る)
+  float w_last = 0;     // FIFO の最新サンプル
+  float w_ma3 = 0;      // FIFO の直近 3 サンプルの移動平均
+  float w_mean = 0;     // この tick に読んだ全サンプルの平均
+  float w_pred = 0;     // w_ma3 を角加速度で先読みした値(fifo_mode 4)
+  float alpha = 0;      // 直近 fifo_alpha_win サンプルの直線の傾き [rad/s^2]
+  float d_ang = 0;      // この tick の角度増分 Σw·T_odr [rad](FIFO が無効な tick は 1 点読み×dt)
+  float ang_diff = 0;   // Σ(FIFO の角度増分 − 1 点読みの角度増分) [rad]。ang_kf_sum と同時にリセット
+  float odr_err_pct = 0; // MCU 時間で数えた実 ODR の、INTERNAL_FREQ_FINE 由来の値からのずれ [%]
+  uint32_t flush_cnt = 0;
+  uint32_t tag_err_cnt = 0;
+  // 推定方式をオフラインで比べるための生データ(ログ用)。raw は読んだ順(古い順)の
+  // ジャイロ Z 生値で、n>4 の tick は 5 個目以降が欠ける(通常 n は 3 か 4)。
+  // seq は tick ごとに +1(ログの取りこぼし・重複の検出用)、t_read は FIFO_STATUS
+  // を読んだ MCU 時刻 [us] の下位 16bit(サンプル時刻の復元用)。
+  int16_t raw[4] = {0, 0, 0, 0};
+  uint16_t seq = 0;
+  uint16_t t_read = 0;
+} gyro_fifo_out_t;
+
 typedef struct {
   led_sensor_t led_sen;
   led_sensor_t led_sen_after;
@@ -320,6 +346,7 @@ typedef struct {
   sen_dist_log_t sen_dist_log;
   pillar_trough_out_t pillar_l; // 左45°の柱谷検知(2026-09-23)
   pillar_trough_out_t pillar_r; // 右45°の柱谷検知
+  gyro_fifo_out_t gyro_fifo;    // ジャイロ FIFO の読み出し結果(2026-09-29)
   int16_t calc_time;
   int16_t calc_time2;
   int16_t t_spi;     // sense_start からの累積 [us]: read_spi_sensors 終了
@@ -393,6 +420,17 @@ typedef struct {
   float lp_delay = 0;
   int list_size = 256;
   int loop_size = 10;
+  // 制御と角度積分に使うジャイロ値の取り方(2026-09-29、sensing_task.cpp)。
+  // 0: 従来どおり 1kHz で出力レジスタを 1 点読み(FIFO は計算してログに出すだけ)
+  // 1: FIFO の最新サンプル  2: FIFO の直近 3 サンプルの移動平均
+  // 3: FIFO のこの tick の全サンプル平均
+  // 4: 直近 3 サンプル平均を角加速度で先読み(平均の遅れ 1 サンプル + 最新サンプルの
+  //    古さの平均 0.5 サンプル + fifo_lead_extra_us)。角加速度は直近 fifo_alpha_win
+  //    サンプルに当てた直線の傾き
+  // 1〜4 では角度を FIFO の全サンプルの和 Σw·T_odr で積分する。
+  int fifo_mode = 0;
+  int fifo_alpha_win = 6;         // 角加速度を求めるサンプル数(2〜10)
+  float fifo_lead_extra_us = 0.0f; // mode 4 の追加の先読み [us](センサー内部の遅れを試す用)
 } gyro_param_t;
 
 typedef struct {
@@ -2097,6 +2135,21 @@ typedef struct {
   real16_T pillar_lag_l;
   real16_T pillar_btm_r;  // 谷底の読み値 [mm](右)
   real16_T pillar_btm_l;
+  int16_t gyro_fifo_n;    // ジャイロ FIFO (2026-09-29, structs.hpp gyro_fifo_out_t)
+  real16_T w_snap;
+  real16_T w_fifo_last;
+  real16_T w_fifo_ma3;
+  real16_T w_fifo_mean;
+  real16_T ang_fifo_diff;
+  real16_T gyro_odr_err;
+  int16_t gyro_raw0;      // FIFO 生サンプル(古い順、gyro_fifo_out_t.raw)
+  int16_t gyro_raw1;
+  int16_t gyro_raw2;
+  int16_t gyro_raw3;
+  int16_t gyro_fifo_seq;  // tick 通し番号(下位 16bit)
+  int16_t gyro_fifo_t;    // FIFO を読んだ MCU 時刻 [us] 下位 16bit
+  real16_T w_fifo_pred;   // fifo_mode 4 の先読み値 [rad/s]
+  real16_T alpha_fifo;    // FIFO サンプルから求めた角加速度 [rad/s^2]
 } log_data_t2;
 
 typedef struct {
@@ -2345,6 +2398,21 @@ typedef struct {
   float pillar_lag_l  = 155;
   float pillar_btm_r  = 156; // 谷底の読み値 [mm](右)
   float pillar_btm_l  = 157;
+  int gyro_fifo_n     = 158; // この tick の FIFO サンプル数(-1/-2 は flush)(2026-09-29)
+  float w_snap        = 159; // 1 点読みの w [rad/s]
+  float w_fifo_last   = 160; // FIFO 最新サンプル [rad/s]
+  float w_fifo_ma3    = 161; // FIFO 直近 3 サンプル平均 [rad/s]
+  float w_fifo_mean   = 162; // FIFO この tick の平均 [rad/s]
+  float ang_fifo_diff = 163; // Σ(FIFO 角度 − 1 点読み角度) [deg]
+  float gyro_odr_err  = 164; // MCU 時間で数えた実 ODR の FF 由来値からのずれ [%]
+  int gyro_raw0       = 165; // FIFO 生サンプル [LSB](古い順、n 個まで有効)
+  int gyro_raw1       = 166;
+  int gyro_raw2       = 167;
+  int gyro_raw3       = 168;
+  int gyro_fifo_seq   = 169; // tick 通し番号(16bit で一周)
+  int gyro_fifo_t     = 170; // FIFO を読んだ MCU 時刻 [us](16bit で一周)
+  float w_fifo_pred   = 171; // fifo_mode 4 の先読み値 [rad/s]
+  float alpha_fifo    = 172; // FIFO サンプルから求めた角加速度 [rad/s^2]
 } LogStruct11;
 
 #endif

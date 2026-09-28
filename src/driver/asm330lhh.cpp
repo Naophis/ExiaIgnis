@@ -70,6 +70,24 @@ void ASM330LHH::setup() {
          "(period %.2fus) accel ODR=%.1fHz, timestamp LSB=%.3fus\n",
          freq_fine_, 0.15f * freq_fine_, gyro_odr_hz_, gyro_sample_period_us(),
          accel_odr_hz_, 25.0f / (1.0f + 0.0015f * freq_fine_));
+
+  // ジャイロだけを ODR と同じレートで FIFO に入れる(加速度は入れない)。
+  // continuous モードは満杯になると古い順に上書きするので、Core1 が読み始める
+  // までに溜まった分は SensingTask 側の最初の読み出しで flush される。
+  write_reg(ASM330LHH_FIFO_CTRL3, static_cast<uint8_t>(ctrl2 & 0xF0));
+  write_reg(ASM330LHH_FIFO_CTRL4, ASM330LHH_FIFO_MODE_CONTINUOUS);
+  const uint8_t fifo_ctrl3 = read_reg(ASM330LHH_FIFO_CTRL3);
+  const uint8_t fifo_ctrl4 = read_reg(ASM330LHH_FIFO_CTRL4);
+  printf("ASM330LHH FIFO: FIFO_CTRL3=0x%02X(%s) FIFO_CTRL4=0x%02X(%s)\n",
+         fifo_ctrl3, fifo_ctrl3 == (ctrl2 & 0xF0) ? "OK" : "NG", fifo_ctrl4,
+         fifo_ctrl4 == ASM330LHH_FIFO_MODE_CONTINUOUS ? "OK" : "NG");
+}
+
+// bypass へ落とすと FIFO の中身が捨てられ、continuous へ戻すと空から溜め直す。
+__attribute__((noinline, section(".time_critical.sensing.asm330_fifo_flush")))
+void ASM330LHH::fifo_flush() {
+  write_reg(ASM330LHH_FIFO_CTRL4, ASM330LHH_FIFO_MODE_BYPASS);
+  write_reg(ASM330LHH_FIFO_CTRL4, ASM330LHH_FIFO_MODE_CONTINUOUS);
 }
 
 // ODR_actual = (6667 + 0.0015*FREQ_FINE*6667) / ODR_coeff、

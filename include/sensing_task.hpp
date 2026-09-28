@@ -63,6 +63,38 @@ private:
     dma_channel_config dma_cfg_tx_bat_{};
     dma_channel_config dma_cfg_rx_bat_{};
     void init_dma();
+
+    // ============================================================
+    // ジャイロ FIFO (2026-09-29)
+    // 1 点読みでは実 ODR(個体ごと、本機 3508.5Hz)のサンプルの 7 割を捨てて
+    // おり、約 1.19kHz の振動が 195/313Hz に折り返していた。FIFO から全サンプル
+    // を取り、角度は Σw·T_odr で積分する。使い方は gyro_param.fifo_mode。
+    // ============================================================
+    // 1 tick に読む上限。通常は 3〜4 個で、これを超えたら Core1 停止後などで
+    // 溜まりすぎとみなして flush する。
+    static constexpr int kGyroFifoMaxWords = 8;
+    static constexpr int kGyroFifoBufBytes = 1 + ASM330LHH_FIFO_WORD_BYTES * kGyroFifoMaxWords;
+    uint8_t  gyro_fifo_st_tx_[3]{};   // STATUS1/2 読み出し(アドレス + 2 バイト)
+    uint8_t  gyro_fifo_st_rx_[3]{};
+    uint8_t  gyro_fifo_tx_[kGyroFifoBufBytes]{};
+    uint8_t  gyro_fifo_rx_[kGyroFifoBufBytes]{};
+    int16_t  gyro_fifo_raw_[kGyroFifoMaxWords]{}; // この tick のジャイロ Z 生値(古い順)
+    int      gyro_fifo_n_ = 0;          // 読めたサンプル数。-1: 溜まりすぎ/あふれ、-2: タグ不一致(どちらも flush 済み)
+    // 直近のサンプルの w [rad/s]。末尾が最新。3 サンプル平均と、角加速度の
+    // 直線あてはめ(fifo_alpha_win 個、最大 kGyroFifoHist)に使う
+    static constexpr int kGyroFifoHist = 10;
+    float    gyro_fifo_hist_[kGyroFifoHist]{};
+    int      gyro_fifo_hist_n_ = 0;     // 有効な履歴数(flush で 0)
+    bool     gyro_fifo_ang_valid_ = false; // この tick の gyro_fifo.d_ang が FIFO 由来か
+    uint64_t gyro_fifo_t_read_ = 0;        // この tick に FIFO_STATUS を読んだ時刻(ログ用)
+    // 実 ODR の実測: flush 後最初の読み出しを起点に、以後読んだサンプル数を数える
+    bool     gyro_fifo_t0_set_ = false;
+    uint64_t gyro_fifo_t0_ = 0;
+    uint64_t gyro_fifo_t_last_ = 0;
+    uint32_t gyro_fifo_cnt_ = 0;
+    void  read_gyro_fifo();                           // SPI(mode 3 のまま Phase A の直後)
+    void  update_gyro_fifo(float w_snap, float gyro_dt); // 生値 → w / 角度増分
+    float gyro_raw_to_w(float raw) const;             // バイアスを引いて左右別ゲイン
     float w_old = 0;
     int64_t gyro_timestamp_old = 0;
     int64_t gyro_timestamp_now = 0;

@@ -65,6 +65,14 @@ TIMER0 のハードウェアアラームを2本使用（alarm_pool オーバー�
 
 ドリフト防止のため絶対時刻方式を採用: `next_alarm_a_ += interval_us_`
 
+#### ジャイロ FIFO（`read_gyro_fifo()` / `update_gyro_fifo()`）
+
+ASM330LHH はジャイロを実 ODR（個体ごと、本機 3508.5Hz）で FIFO に入れ続け、毎 tick の SPI Phase A の直後に FIFO_STATUS1/2 で個数を読み、その数だけ 0x78 から 1 回の DMA で読みます（7 バイト/ワード、通常 3〜4 ワード）。8 ワード超・あふれ・タグ不一致のときは FIFO を捨て（`fifo_flush()`）、その tick は 1 点読みで代用します。
+
+- 使い方は `hardware.yaml` の `gyro_param.fifo_mode`。0 は従来の 1 点読みのまま（FIFO は計算してログに出すだけ）、1/2/3 は最新・直近 3 サンプル平均・tick 内平均を `w_raw` に使い、角度を Σw·T_odr で積分します。4 は直近 3 サンプル平均を、直近 `fifo_alpha_win` サンプルに当てた直線の傾き(角加速度)で 1.5 サンプル + `fifo_lead_extra_us` 先読みします（平均の遅れ 1 サンプル + 最新サンプルの古さの平均 0.5 サンプルを打ち消す）。
+- ログ列: `gyro_fifo_n`（-1/-2 は flush）、`w_snap`、`w_fifo_last/ma3/mean/pred`、`alpha_fifo`、`ang_fifo_diff`（FIFO 角度 − 1 点読み角度の累積 [deg]）、`gyro_odr_err`（MCU 時間で数えた ODR の FF 由来値からのずれ [%]）、オフライン検証用の生サンプル `gyro_raw0..3`（古い順、n 個まで有効）・`gyro_fifo_seq`（tick 通し番号）・`gyro_fifo_t`（読んだ MCU 時刻 [us] 下位 16bit）。
+- 1 点読み（9 バイト）は加速度の取得と比較用に残してあります。加速度はまだ FIFO に入れていません。
+
 ### PlanningTask IRQ 構造 (`src/planning/planning_task.cpp`)
 
 TIMER1 のハードウェアアラームを1本使用:
