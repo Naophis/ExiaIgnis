@@ -351,6 +351,8 @@ self->data.gz_dt   = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z
 ## ドライバークラス（`include/driver/` + `src/driver/`）
 
 - **ASM330LHH**: ジャイロ、SPI mode 3。`init()` で SPI バスを初期化。`setup()` でソフトウェアリセット + 設定シーケンスを実行。Z 軸角速度のみ取得。
+  - 実 ODR はチップごとに公称値からずれる(内部クロックの製造ばらつき、本機は INTERNAL_FREQ_FINE=35 で +5.25% = 3508.5Hz)。`setup()` が工場校正値 INTERNAL_FREQ_FINE を読んで `gyro_odr_hz()` / `accel_odr_hz()` / `gyro_sample_period_us()` に個体の値を入れる。サンプル数×周期で積分する処理(FIFO 等)は公称の 3333Hz を決め打ちせずこれを使うこと。
+  - 1kHz で最新値を 1 点読みしているため、ODR/2 未満の高周波も折り返して見える(w_lp に常在する 195/313Hz の対は約 1.19kHz の振動の折り返しで、2 本の和 = 実 ODR − 3000)。
 - **AS5147P**: 磁気エンコーダ、SPI mode 1。`init()` は初期化済み SPI バス + CS ピンのみ受け取る。14bit 角度値 [0–16383] を返す。
 - **ADS7042**: バッテリ電圧 ADC、SPI mode 0。結果 = `(rx >> 2) & 0x0FFF`。
 

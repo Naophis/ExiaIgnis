@@ -53,6 +53,33 @@ void ASM330LHH::setup() {
          "CTRL4_C=0x%02X\n",
          ctrl1_xl, ctrl1_xl == 0x94 ? "OK" : "NG", ctrl2,
          ctrl2 == 0x91 ? "OK" : "NG", ctrl3, ctrl4);
+
+  // 実 ODR は個体ごとの工場校正値 INTERNAL_FREQ_FINE から求める。本機は
+  // FREQ_FINE=35(+5.25%)で 3508.5Hz。1kHz 読みのログに出る 195/313Hz の対の
+  // 和(=ODR−3000)とも一致した(2026-09-29)。ODR は設定値でなくレジスタの
+  // 読み戻しから取るので、CTRL1_XL/CTRL2_G を変えてもそのまま追従する。
+  if (who == 0x6B) {
+    freq_fine_ = static_cast<int8_t>(read_reg(ASM330LHH_INTERNAL_FREQ_FINE));
+  } else {
+    freq_fine_ = 0;
+    printf("ASM330LHH WHO_AM_I NG: INTERNAL_FREQ_FINE を読まず公称 ODR を使う\n");
+  }
+  gyro_odr_hz_ = actual_odr_hz(ctrl2 >> 4, freq_fine_);
+  accel_odr_hz_ = actual_odr_hz(ctrl1_xl >> 4, freq_fine_);
+  printf("ASM330LHH INTERNAL_FREQ_FINE=%d (%+.2f%%) -> gyro ODR=%.1fHz "
+         "(period %.2fus) accel ODR=%.1fHz, timestamp LSB=%.3fus\n",
+         freq_fine_, 0.15f * freq_fine_, gyro_odr_hz_, gyro_sample_period_us(),
+         accel_odr_hz_, 25.0f / (1.0f + 0.0015f * freq_fine_));
+}
+
+// ODR_actual = (6667 + 0.0015*FREQ_FINE*6667) / ODR_coeff、
+// ODR_coeff = 2^(10 - odr_code) (6667Hz=1, 3333Hz=2, … 12.5Hz=512)。ST AN5296。
+float ASM330LHH::actual_odr_hz(uint8_t odr_code, int8_t freq_fine) {
+  if (odr_code < 1 || odr_code > 10) {
+    return 0.0f;
+  }
+  return 6667.0f * (1.0f + 0.0015f * freq_fine) /
+         static_cast<float>(1u << (10 - odr_code));
 }
 
 __attribute__((noinline, section(".time_critical.sensing.asm330_read")))
