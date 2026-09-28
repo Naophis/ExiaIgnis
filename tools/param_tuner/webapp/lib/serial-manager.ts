@@ -6,6 +6,7 @@ import { SerialPort } from "serialport";
 import { ReadlineParser } from "@serialport/parser-readline";
 import { ByteLengthParser } from "@serialport/parser-byte-length";
 import { AM32_FILE } from "./am32-shared";
+import { parseMazeText } from "./maze-shared";
 
 // This must stay a single, persistent connection: console.sh (rx_term.js)
 // and update_param.sh (tx_term.js -> send_file.py) used to each open their
@@ -285,11 +286,7 @@ class SerialManager extends EventEmitter {
 
     const filePath = path.join(PROFILE_DIR, mode, file);
     if (/\.maze$/.test(file)) {
-      const text = fs.readFileSync(filePath, "utf-8");
-      const list = text.split(",").map((e) => parseInt(e.trim(), 10) | 0xf0);
-      const swapped = swapMazeTriangle(list);
-      await this.writeAndWaitAck("maze.txt", swapped.join(","));
-      this.emit("log", `[send] ${file} -> maze.txt: OK`);
+      await this.sendMaze(parseMazeText(fs.readFileSync(filePath, "utf-8")), file);
       return;
     }
 
@@ -297,6 +294,15 @@ class SerialManager extends EventEmitter {
     const content = fs.readFileSync(filePath, "utf-8");
     await this.writeAndWaitAck(remoteName, JSON.stringify(loadYaml(content)));
     this.emit("log", `[send] ${file} -> ${remoteName}: OK`);
+  }
+
+  // .maze 形式(idx = x*size + y)の壁を /maze.txt として送る。全マスを踏破済み
+  // (| 0xf0)にしてファームの並びへ転置する。ファームが読むのは次に
+  // run_main_mode() へ入ったときの read_maze_data()。
+  async sendMaze(walls: number[], label: string): Promise<void> {
+    const swapped = swapMazeTriangle(walls.map((w) => (w & 0x0f) | 0xf0));
+    await this.writeAndWaitAck("maze.txt", swapped.join(","));
+    this.emit("log", `[send] ${label} -> maze.txt: OK`);
   }
 
   // Ported from tx_term.js's "all" branch: mode dir's *.yaml (not *.maze),

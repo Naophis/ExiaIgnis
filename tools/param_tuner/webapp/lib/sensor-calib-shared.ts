@@ -424,7 +424,7 @@ export function parseCsv(text: string): { dist: number; dists: number[]; samples
 export const MOTION_STRAIGHT = 1;
 export const MOTION_BACK_STRAIGHT = 5;
 const MOTION_IDLE = new Set([0, 7, 17]); // NONE / READY / SENSING_DUMP
-const SWEEP_MAX_V = 600; // mm/s
+const SWEEP_MAX_V = 3000; // mm/s(速度は system.yaml の test.v_max で決まる)
 const SWEEP_MAX_SPAN = 400; // mm(4 区画ぶんまで)
 const SWEEP_MIN_SPAN = 30; // mm
 const SWEEP_MIN_SAMPLES = 150;
@@ -447,6 +447,9 @@ export interface SweepLog {
   offsets: number[];
   samples: number[][];
   looksLikeSweep: boolean;
+  // looksLikeSweep が false の理由(画面に出す。黙って無視すると、走らせたのに
+  // 何も起きないように見える)
+  reject: string | null;
   forward: boolean;
   pose: SweepPose;
 }
@@ -552,16 +555,23 @@ export function parseSweepLog(text: string): SweepLog | null {
     if (a < angLo) angLo = a;
     if (a > angHi) angHi = a;
   }
-  const looksLikeSweep =
-    pure &&
-    angHi - angLo <= SWEEP_MAX_HEADING_DEG &&
-    maxV <= SWEEP_MAX_V &&
-    hi - lo >= SWEEP_MIN_SPAN &&
-    hi - lo <= SWEEP_MAX_SPAN &&
-    samples.length >= SWEEP_MIN_SAMPLES &&
-    peak >= SWEEP_MIN_PEAK_RAW &&
-    sane &&
-    rises;
+  const span = hi - lo;
+  const reject = !pure
+    ? "直進以外の動きが入っています"
+    : !sane
+      ? "前センサーの値が壊れています(ADC の範囲外)"
+      : span < SWEEP_MIN_SPAN || span > SWEEP_MAX_SPAN
+        ? `走行距離が ${span.toFixed(0)}mm です(${SWEEP_MIN_SPAN}〜${SWEEP_MAX_SPAN}mm を想定)`
+        : samples.length < SWEEP_MIN_SAMPLES
+          ? `点数が ${samples.length} しかありません`
+          : angHi - angLo > SWEEP_MAX_HEADING_DEG
+            ? `走行中に向きが ${(angHi - angLo).toFixed(1)}° 変わっています`
+            : maxV > SWEEP_MAX_V
+              ? `速度が ${maxV.toFixed(0)}mm/s です`
+              : peak < SWEEP_MIN_PEAK_RAW || !rises
+                ? `前壁へ近づいても前センサー(L90/R90)の生値が増えていません(最大 ${peak})。前壁が無い、またはセンサーが消えています`
+                : null;
+  const looksLikeSweep = reject === null;
   const forward = moving === MOTION_STRAIGHT;
   // 姿勢: 測りたい範囲だけを見る(終点 = offset 最小 = 前壁に最も近い点)
   let zLo = Infinity;
@@ -586,5 +596,5 @@ export function parseSweepLog(text: string): SweepLog | null {
     latOffsetMm: latN >= 30 ? latSum / latN : null,
     wallCtrl,
   };
-  return { offsets, samples, looksLikeSweep, forward, pose };
+  return { offsets, samples, looksLikeSweep, reject, forward, pose };
 }

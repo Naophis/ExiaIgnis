@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConsoleLog } from "@/components/console-log";
 import { LogPlotPanel } from "@/components/log-plot-panel";
+import { MazePanel } from "@/components/maze-panel";
 import { ParamMatrixPanel } from "@/components/param-matrix-panel";
 import { ALL_SENTINEL, ProfilePanel } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
@@ -44,9 +45,11 @@ export default function Home() {
   const [sending, setSending] = useState<string | null>(null);
   const [am32Action, setAm32Action] = useState<Am32Action | null>(null);
 
-  const [rightTab, setRightTab] = useState<"console" | "plot" | "calib">("console");
+  const [rightTab, setRightTab] = useState<"console" | "plot" | "calib" | "maze">("console");
   const [flashing, setFlashing] = useState(false);
   const [plotAutoOpen, setPlotAutoOpen] = useState<{ file: string; nonce: number } | null>(null);
+  const [mazeAutoOpen, setMazeAutoOpen] = useState<{ id: string; nonce: number } | null>(null);
+  const [mazeRefreshNonce, setMazeRefreshNonce] = useState(0);
 
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [editorContent, setEditorContent] = useState<string | null>(null);
@@ -132,6 +135,21 @@ export default function Home() {
           >
             保存しました (csv): {data.file}
             <span className="block text-xs text-muted-foreground">クリックでPlotJugglerを開く</span>
+          </button>,
+        );
+      } else if (data.type === "maze") {
+        setMazeRefreshNonce((n) => n + 1);
+        toast.success(
+          <button
+            type="button"
+            className="w-full cursor-pointer text-left hover:underline"
+            onClick={() => {
+              setRightTab("maze");
+              setMazeAutoOpen({ id: `log/${data.file}`, nonce: Date.now() });
+            }}
+          >
+            保存しました (maze): {data.file}
+            <span className="block text-xs text-muted-foreground">クリックで迷路タブに開く</span>
           </button>,
         );
       } else {
@@ -237,6 +255,15 @@ export default function Home() {
     setEditing(null);
     setEditorContent(null);
     setLiveDraft(null);
+  };
+
+  // プロファイル一覧の *.maze(profile/hf/)は迷路タブで開く。
+  const openMaze = (file: string) => {
+    closeEditor();
+    setShowTemplates(false);
+    setShowMatrix(false);
+    setRightTab("maze");
+    setMazeAutoOpen({ id: `edit/${file}`, nonce: Date.now() });
   };
 
   // The slalom sim panel patched the draft (not the saved file) - just
@@ -425,6 +452,14 @@ export default function Home() {
               >
                 センサ校正
               </Button>
+              <Button
+                size="sm"
+                variant={rightTab === "maze" ? "default" : "outline"}
+                onClick={() => setRightTab("maze")}
+                title="迷路ファイル(受信ログ・編集用 .maze・大会迷路)の表示と壁の編集"
+              >
+                迷路
+              </Button>
             </>
           ) : undefined
         }
@@ -442,6 +477,7 @@ export default function Home() {
             onSendFile={sendOne}
             onSendAll={sendAll}
             onEditFile={openEditor}
+            onOpenMaze={openMaze}
             onOpenTemplates={openTemplates}
             onOpenMatrix={openMatrix}
             am32Action={am32Action}
@@ -538,6 +574,16 @@ export default function Home() {
                   <SensorCalibPanel connected={status === "connected"} />
                 </div>
               )}
+              {/* 編集中の迷路を残すため、迷路タブは隠すだけでマウントしたままにする。 */}
+              <div className={`min-h-0 flex-1 ${rightTab === "maze" ? "flex" : "hidden"}`}>
+                <MazePanel
+                  active={rightTab === "maze"}
+                  autoOpen={mazeAutoOpen}
+                  onAutoOpenHandled={() => setMazeAutoOpen(null)}
+                  refreshNonce={mazeRefreshNonce}
+                  onFilesChanged={() => void refreshProfiles()}
+                />
+              </div>
             </div>
           )}
         </ResizablePanel>

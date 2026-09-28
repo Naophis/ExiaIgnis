@@ -291,6 +291,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
   const fwD0Ref = useRef<number | null>(null);
   // このタブを開いてからテストモード28 の機体を一度でも見たか
   const [seenMode28, setSeenMode28] = useState(false);
+  const seenMode28Ref = useRef(false);
   // 範囲の左右連動(L90_near を変えたら R90_near も同じにする)
   const [linkLR, setLinkLR] = useState(true);
   // スイープの開始位置は迷路の寸法で決める(既定)。オンにすると、既知距離に置いた
@@ -384,7 +385,12 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
     }
     const sweep = parseSweepLog(await res.text());
     if (!sweep || (quiet && !sweep.looksLikeSweep)) {
-      if (!quiet) toast.error(`${name}: 直進/後退の区間がありません。テストモード28のログですか?`);
+      if (!quiet) {
+        toast.error(`${name}: 直進/後退の区間がありません。テストモード28のログですか?`);
+      } else if (sweep && seenMode28Ref.current) {
+        // 校正モードの機体から届いたログなのに使えない。理由を出す
+        toast.error(`${name}: スイープのログとして使えません — ${sweep.reject}`, { duration: 30000 });
+      }
       return false;
     }
     // 取り込み待ちの間に同じログが別経路で入っていたら捨てる
@@ -420,8 +426,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
     rowsRef.current = put(rowsRef.current);
     setRows(put);
     setSelectedId(null);
-    if (!sweep.looksLikeSweep)
-      toast.warning(`${name}: スイープ以外の動きを含むログです。最初の直進/後退区間だけを使いました`);
+    if (!sweep.looksLikeSweep) toast.warning(`${name}: ${sweep.reject}。そのまま取り込みました`);
 
     const [lo, hi] = offsetSpan(sweep.offsets);
     const near = placed.dist + lo;
@@ -470,6 +475,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
         if (st.d0 !== undefined && Number.isFinite(st.d0)) fwD0Ref.current = st.d0;
         setFw({ state: st.state, at: Date.now() });
         setSeenMode28(true);
+        seenMode28Ref.current = true;
         return;
       }
       const vals = parseDump2Line(line);
@@ -765,7 +771,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
     }
     if (!connected && seenMode28 && usingSweep) {
       return {
-        text: `前壁スイープ(機体が自分で走ります): 直線 3 区画の奥に前壁 → ${SWEEP_STEPS}。走らずに低い音が鳴るときは前壁が近すぎます`,
+        text: `前壁スイープ(機体が自分で走ります): 直線 3 区画の奥に前壁 → ${SWEEP_STEPS}。走らないとき: 低い音 4 回=前壁が近すぎる / 短い音 1 回=ケーブル接続中と判定`,
         warn: false,
       };
     }
