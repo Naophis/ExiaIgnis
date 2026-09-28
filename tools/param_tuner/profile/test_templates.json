@@ -83,5 +83,17 @@
       "mode": 1,
       "ignore_opp_sen": 1
     }
+  },
+  {
+    "id": "71975459-25f6-4b14-b5df-e2a4da61b17e",
+    "name": "前壁キャリブ",
+    "values": {
+      "mode": 28,
+      "v_max": 100,
+      "accl": 1000,
+      "decel": -1000,
+      "dia_accl": 1000,
+      "dia_decel": -1000
+    }
   }
 ]
