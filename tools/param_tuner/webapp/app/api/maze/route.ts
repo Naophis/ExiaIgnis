@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST {action:"save", id, walls}     編集用ファイルを上書き
-// POST {action:"saveAs", name, walls} profile/hf/<name>.maze へ新規保存
+// POST {action:"saveAs", name, walls} maze_logs/<name>.maze へ新規保存
 // POST {action:"send", walls, label}  /maze.txt として機体へ送信
 export async function POST(request: NextRequest) {
   const body = await request.json();

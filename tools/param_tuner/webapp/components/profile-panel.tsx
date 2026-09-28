@@ -18,7 +18,6 @@ interface Props {
   onSendFile: (scope: SendScope, file: string) => void;
   onSendAll: () => void;
   onEditFile: (scope: SendScope, file: string) => void;
-  onOpenMaze: (file: string) => void;
   onOpenTemplates: () => void;
   onOpenMatrix: () => void;
   onAm32Sync: () => void;
@@ -32,7 +31,6 @@ export function ProfilePanel({
   onSendFile,
   onSendAll,
   onEditFile,
-  onOpenMaze,
   onOpenTemplates,
   onOpenMatrix,
   onAm32Sync,
@@ -145,7 +143,7 @@ export function ProfilePanel({
                 sending={sending}
                 disabled={isBusy}
                 onSend={() => onSendFile("mode", file)}
-                onEdit={() => (file.endsWith(".maze") ? onOpenMaze(file) : onEditFile("mode", file))}
+                onEdit={() => onEditFile("mode", file)}
               />
             ))}
           </div>
@@ -170,8 +168,7 @@ function FileRow({
   onEdit: () => void;
   extra?: ReactNode;
 }) {
-  // *.maze は迷路タブで開く(onEdit 側で振り分け)。
-  const editable = file.endsWith(".yaml") || file.endsWith(".maze");
+  const editable = file.endsWith(".yaml");
   return (
     <div
       role={editable ? "button" : undefined}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CopyIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -56,7 +56,12 @@ interface AutoOpenRequest {
   nonce: number;
 }
 
-export function LogPlotPanel({
+// 非表示のタブでも親(page.tsx)の再描画のたびに 1900 行超のログ一覧を描き直すと、
+// 開発モードで 1 回 500ms かかり、迷路タブの探索の再生が 3 秒ごとに止まっていた。
+// memo で親の再描画から切り離す(page.tsx 側で onAutoOpenHandled を固定している)。
+export const LogPlotPanel = memo(LogPlotPanelInner);
+
+function LogPlotPanelInner({
   autoOpen,
   onAutoOpenHandled,
 }: {
@@ -93,7 +98,13 @@ export function LogPlotPanel({
     const res = await fetch("/api/logs");
     const data = await res.json();
     const nextFiles = data.files as LogFileInfo[];
-    setFiles(nextFiles);
+    // 3 秒ごとの取り直しで中身が同じなら入れ替えない(一覧の描き直しを起こさない)
+    setFiles((prev) =>
+      prev.length === nextFiles.length &&
+      prev.every((f, i) => f.name === nextFiles[i].name && f.mtimeMs === nextFiles[i].mtimeMs && f.size === nextFiles[i].size)
+        ? prev
+        : nextFiles,
+    );
     setSelected((prev) => (prev && nextFiles.some((f) => f.name === prev) ? prev : (nextFiles[0]?.name ?? null)));
   }, []);
 

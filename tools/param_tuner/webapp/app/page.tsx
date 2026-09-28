@@ -49,6 +49,8 @@ export default function Home() {
   const [flashing, setFlashing] = useState(false);
   const [plotAutoOpen, setPlotAutoOpen] = useState<{ file: string; nonce: number } | null>(null);
   const [mazeAutoOpen, setMazeAutoOpen] = useState<{ id: string; nonce: number } | null>(null);
+  // LogPlotPanel は memo なので、渡すコールバックは固定する
+  const handlePlotAutoOpenHandled = useCallback(() => setPlotAutoOpen(null), []);
   const [mazeRefreshNonce, setMazeRefreshNonce] = useState(0);
 
   const [editing, setEditing] = useState<EditTarget | null>(null);
@@ -71,7 +73,9 @@ export default function Home() {
   const refreshPorts = useCallback(async () => {
     const res = await fetch("/api/ports");
     const data = await res.json();
-    setPorts(data.ports as PortInfo[]);
+    const next = data.ports as PortInfo[];
+    // 3 秒ごとの確認で変わっていなければ入れ替えない(画面全体の描き直しを起こさない)
+    setPorts((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
   }, []);
 
   const refreshProfiles = useCallback(async () => {
@@ -255,15 +259,6 @@ export default function Home() {
     setEditing(null);
     setEditorContent(null);
     setLiveDraft(null);
-  };
-
-  // プロファイル一覧の *.maze(profile/hf/)は迷路タブで開く。
-  const openMaze = (file: string) => {
-    closeEditor();
-    setShowTemplates(false);
-    setShowMatrix(false);
-    setRightTab("maze");
-    setMazeAutoOpen({ id: `edit/${file}`, nonce: Date.now() });
   };
 
   // The slalom sim panel patched the draft (not the saved file) - just
@@ -477,7 +472,6 @@ export default function Home() {
             onSendFile={sendOne}
             onSendAll={sendAll}
             onEditFile={openEditor}
-            onOpenMaze={openMaze}
             onOpenTemplates={openTemplates}
             onOpenMatrix={openMatrix}
             am32Action={am32Action}
@@ -565,7 +559,7 @@ export default function Home() {
                 />
               </div>
               <div className={`min-h-0 flex-1 ${rightTab === "plot" ? "flex" : "hidden"}`}>
-                <LogPlotPanel autoOpen={plotAutoOpen} onAutoOpenHandled={() => setPlotAutoOpen(null)} />
+                <LogPlotPanel autoOpen={plotAutoOpen} onAutoOpenHandled={handlePlotAutoOpenHandled} />
               </div>
               {/* 校正パネルは Space キーを記録に使うので、表示中だけマウントする
                   (位置表は localStorage に残るのでタブを切り替えても消えない)。 */}
@@ -581,7 +575,6 @@ export default function Home() {
                   autoOpen={mazeAutoOpen}
                   onAutoOpenHandled={() => setMazeAutoOpen(null)}
                   refreshNonce={mazeRefreshNonce}
-                  onFilesChanged={() => void refreshProfiles()}
                 />
               </div>
             </div>

@@ -112,3 +112,80 @@ export function setEdge(walls: number[], size: number, e: Edge, present: boolean
   for (const s of edgeSides(size, e)) out[s.idx] = present ? out[s.idx] | s.bit : out[s.idx] & ~s.bit & 0x0f;
   return out;
 }
+
+// ゴールの自動検出(ユーザーの条件): ゴールは 3×3 か 2×2 の区画で、中に壁が無く、外周は
+// 壁で囲まれていて必ずどこか 1 か所以上空いている(入口)。入口が少ないもの → 3×3 → スタートから
+// 行けるもの、の順に並べる。3×3 のゴールの中の 2×2 は外周の多くが空いているので自然に後ろへ回る。
+export interface GoalCandidate {
+  cells: Cell[];
+  x: number; // 左下の区画
+  y: number;
+  k: number; // 2 か 3
+  openings: number; // 外周の空いている辺の数
+  reachable: boolean; // スタートから行けるか
+}
+
+// 壁は両側のどちらかが壁と言っていれば壁(食い違いは壁寄りに見る)
+function wallAt(walls: number[], size: number, x: number, y: number, dir: WallDir): boolean {
+  if (x < 0 || y < 0 || x >= size || y >= size) return true;
+  if (walls[mazeIndex(size, x, y)] & WALL_BIT[dir]) return true;
+  const [nx, ny, back] =
+    dir === "N" ? [x, y + 1, WALL_S] : dir === "S" ? [x, y - 1, WALL_N] : dir === "E" ? [x + 1, y, WALL_W] : [x - 1, y, WALL_E];
+  if (nx < 0 || ny < 0 || nx >= size || ny >= size) return true;
+  return (walls[mazeIndex(size, nx, ny)] & back) !== 0;
+}
+
+export function detectGoalCandidates(walls: number[], size: number, maxOpenings = 2): GoalCandidate[] {
+  // スタートから行ける区画
+  const reach = new Uint8Array(size * size);
+  const q: Cell[] = [[0, 0]];
+  reach[mazeIndex(size, 0, 0)] = 1;
+  const step: [WallDir, number, number][] = [
+    ["N", 0, 1],
+    ["E", 1, 0],
+    ["S", 0, -1],
+    ["W", -1, 0],
+  ];
+  while (q.length > 0) {
+    const [x, y] = q.pop()!;
+    for (const [d, dx, dy] of step) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (wallAt(walls, size, x, y, d) || nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
+      if (reach[mazeIndex(size, nx, ny)]) continue;
+      reach[mazeIndex(size, nx, ny)] = 1;
+      q.push([nx, ny]);
+    }
+  }
+
+  const out: GoalCandidate[] = [];
+  for (const k of [3, 2]) {
+    for (let x0 = 0; x0 + k <= size; x0++) {
+      for (let y0 = 0; y0 + k <= size; y0++) {
+        if (x0 === 0 && y0 === 0) continue; // スタート区画は含めない
+        let inner = true;
+        for (let x = x0; x < x0 + k && inner; x++) {
+          for (let y = y0; y < y0 + k && inner; y++) {
+            if (x < x0 + k - 1 && wallAt(walls, size, x, y, "E")) inner = false;
+            if (y < y0 + k - 1 && wallAt(walls, size, x, y, "N")) inner = false;
+          }
+        }
+        if (!inner) continue;
+        let openings = 0;
+        for (let i = 0; i < k; i++) {
+          if (!wallAt(walls, size, x0 + i, y0, "S")) openings++;
+          if (!wallAt(walls, size, x0 + i, y0 + k - 1, "N")) openings++;
+          if (!wallAt(walls, size, x0, y0 + i, "W")) openings++;
+          if (!wallAt(walls, size, x0 + k - 1, y0 + i, "E")) openings++;
+        }
+        if (openings < 1 || openings > maxOpenings) continue;
+        const cells: Cell[] = [];
+        for (let x = x0; x < x0 + k; x++) for (let y = y0; y < y0 + k; y++) cells.push([x, y]);
+        out.push({ cells, x: x0, y: y0, k, openings, reachable: reach[mazeIndex(size, x0, y0)] === 1 });
+      }
+    }
+  }
+  return out.sort(
+    (a, b) => Number(b.reachable) - Number(a.reachable) || a.openings - b.openings || b.k - a.k || a.x - b.x || a.y - b.y,
+  );
+}

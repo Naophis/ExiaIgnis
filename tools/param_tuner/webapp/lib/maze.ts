@@ -8,17 +8,19 @@ const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
 const MAZE_LOGS_DIR = path.join(PARAM_TUNER_ROOT, "maze_logs");
 const MAZE_DATA_DIR = path.join(PARAM_TUNER_ROOT, "maze_data");
 const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
-// 編集用の .maze の置き場所。プロファイルパネルの一覧に出て、そこからも送れる
-// (「全て送信」には含まれない)。
-const EDIT_DIR = path.join(PROFILE_DIR, "hf");
-// VSCode 拡張で使っていた迷路(中身は .maze と同じカンマ区切り)。
-const LEGACY_EDIT_FILE = "maze.yaml";
 const SYSTEM_YAML = path.join(PROFILE_DIR, "system.yaml");
 
-// log     = maze_logs/*.maze   機体から受信した迷路(読み取り専用)
-// edit    = profile/hf/*.maze  編集用(上書き保存できる)+ profile/maze.yaml
-// contest = maze_data/*.yaml   大会迷路(ゴール付き、読み取り専用)
-export type MazeGroup = "log" | "edit" | "contest";
+// log     = maze_logs/*.maze   機体から受信した迷路と、ここで保存した迷路(保存先はここ。ユーザー指定)。
+//           受信した迷路(日時の名前)は記録なので読み取り専用、それ以外は上書き保存できる
+// profile = profile/*.yaml のうち中身が迷路(.maze と同じカンマ区切り)のもの。VSCode 拡張で
+//           使っていた maze.yaml や higashi2024.yaml など(その場で上書き保存できる)
+// contest = maze_data/*.yaml|*.maze  過去の迷路(yaml は大会迷路の形式でゴール付き、読み取り専用)
+export type MazeGroup = "log" | "profile" | "contest";
+
+// 機体から受信した迷路の名前(serial-manager の nowStamp。古いものは YYYYMMDD_HHMM_SS)
+export function isReceivedMazeName(name: string): boolean {
+  return /^\d{8}_\d{4}_?\d{2}\.maze$/.test(name);
+}
 
 export interface MazeFileInfo {
   id: string; // `${group}/${name}`
@@ -43,9 +45,8 @@ function resolveMazePath(id: string): { group: MazeGroup; name: string; file: st
   const name = id.slice(slash + 1);
   if (slash < 0 || !NAME_RE.test(name)) throw new Error("不正なファイル名です");
   if (group === "log" && name.endsWith(".maze")) return { group, name, file: path.join(MAZE_LOGS_DIR, name) };
-  if (group === "contest" && name.endsWith(".yaml")) return { group, name, file: path.join(MAZE_DATA_DIR, name) };
-  if (group === "edit" && name === LEGACY_EDIT_FILE) return { group, name, file: path.join(PROFILE_DIR, name) };
-  if (group === "edit" && name.endsWith(".maze")) return { group, name, file: path.join(EDIT_DIR, name) };
+  if (group === "contest" && /\.(yaml|maze)$/.test(name)) return { group, name, file: path.join(MAZE_DATA_DIR, name) };
+  if (group === "profile" && name.endsWith(".yaml")) return { group, name, file: path.join(PROFILE_DIR, name) };
   throw new Error("不明なファイルです");
 }
 
@@ -57,16 +58,23 @@ function listDir(dir: string, group: MazeGroup, re: RegExp): MazeFileInfo[] {
     .map((name) => ({ id: `${group}/${name}`, group, name, mtimeMs: fs.statSync(path.join(dir, name)).mtimeMs }));
 }
 
+// 中身がカンマ区切りの迷路として読めるか(profile/ のパラメータ yaml と見分ける)。
+function isMazeText(file: string): boolean {
+  try {
+    parseMazeText(fs.readFileSync(file, "utf-8"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function listMazeFiles(): MazeFileInfo[] {
   const logs = listDir(MAZE_LOGS_DIR, "log", /\.maze$/).sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const edits = listDir(EDIT_DIR, "edit", /\.maze$/);
-  if (fs.existsSync(path.join(PROFILE_DIR, LEGACY_EDIT_FILE))) {
-    const mtimeMs = fs.statSync(path.join(PROFILE_DIR, LEGACY_EDIT_FILE)).mtimeMs;
-    edits.push({ id: `edit/${LEGACY_EDIT_FILE}`, group: "edit", name: LEGACY_EDIT_FILE, mtimeMs });
-  }
-  edits.sort((a, b) => a.name.localeCompare(b.name));
-  const contests = listDir(MAZE_DATA_DIR, "contest", /\.yaml$/).sort((a, b) => a.name.localeCompare(b.name));
-  return [...logs, ...edits, ...contests];
+  const profiles = listDir(PROFILE_DIR, "profile", /\.yaml$/)
+    .filter((f) => isMazeText(path.join(PROFILE_DIR, f.name)))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const contests = listDir(MAZE_DATA_DIR, "contest", /\.(yaml|maze)$/).sort((a, b) => a.name.localeCompare(b.name));
+  return [...logs, ...profiles, ...contests];
 }
 
 interface ContestYaml {
@@ -77,7 +85,7 @@ export function readMaze(id: string): MazeContent {
   const { group, file } = resolveMazePath(id);
   if (!fs.existsSync(file)) throw new Error("ファイルが見つかりません");
   const text = fs.readFileSync(file, "utf-8");
-  if (group === "contest") {
+  if (group === "contest" && file.endsWith(".yaml")) {
     const data = (loadYaml(text) as ContestYaml)?.maze_data;
     if (!Array.isArray(data?.wall)) throw new Error("maze_data.wall がありません");
     const walls = data.wall.map((w) => Number(w) & 0x0f);
@@ -88,7 +96,9 @@ export function readMaze(id: string): MazeContent {
     return { id, size, walls, goals: Array.isArray(data.goal) ? data.goal : null, editable: false };
   }
   const walls = parseMazeText(text);
-  return { id, size: mazeSizeOf(walls.length), walls, goals: null, editable: group === "edit" };
+  // 過去の迷路 (maze_data) の .maze と受信した迷路は読み取り専用(編集したら別名保存で maze_logs/ へ)
+  const editable = group === "profile" || (group === "log" && !isReceivedMazeName(path.basename(file)));
+  return { id, size: mazeSizeOf(walls.length), walls, goals: null, editable };
 }
 
 export function checkWalls(walls: unknown): number[] {
@@ -100,22 +110,26 @@ export function checkWalls(walls: unknown): number[] {
 }
 
 export function writeMaze(id: string, walls: unknown): void {
-  const { group, file } = resolveMazePath(id);
-  if (group !== "edit") throw new Error("このファイルは上書きできません。別名で保存してください");
+  const { group, name, file } = resolveMazePath(id);
+  const editable = group === "profile" || (group === "log" && !isReceivedMazeName(name));
+  if (!editable) throw new Error("このファイルは上書きできません。別名で保存してください");
+  // profile/ はパラメータの yaml と同じ場所なので、今の中身が迷路のファイルだけ上書きする
+  if (group === "profile" && !isMazeText(file)) throw new Error("迷路のファイルではないので上書きしません");
   const w = checkWalls(walls);
   fs.writeFileSync(file, formatMazeText(w, mazeSizeOf(w.length)), "utf-8");
 }
 
-// profile/hf/<name>.maze へ新規保存。既存ファイルは上書きしない。
+// maze_logs/<name>.maze へ新規保存。既存ファイルは上書きしない。
 export function saveMazeAs(name: string, walls: unknown): string {
   const base = name.trim().replace(/\.maze$/, "");
   if (!/^[\w-]+$/.test(base)) throw new Error("ファイル名は英数字・_・- だけにしてください");
-  const file = path.join(EDIT_DIR, `${base}.maze`);
+  if (isReceivedMazeName(`${base}.maze`)) throw new Error("受信した迷路と同じ日時の名前は使えません(読み取り専用になるため)");
+  const file = path.join(MAZE_LOGS_DIR, `${base}.maze`);
   if (fs.existsSync(file)) throw new Error(`${base}.maze は既にあります。名前を変えてください`);
   const w = checkWalls(walls);
-  fs.mkdirSync(EDIT_DIR, { recursive: true });
+  fs.mkdirSync(MAZE_LOGS_DIR, { recursive: true });
   fs.writeFileSync(file, formatMazeText(w, mazeSizeOf(w.length)), "utf-8");
-  return `edit/${base}.maze`;
+  return `log/${base}.maze`;
 }
 
 // system.yaml は読むだけ(書き換えは test-templates.ts の行置換で行う決まり)。

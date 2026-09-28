@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
   try {
     const walls = checkWalls(body?.walls);
     const goals = Array.isArray(body?.goals) ? body.goals : null;
+    if (Array.isArray(goals) && goals.length === 0) throw new Error("ゴールがありません(ツールバーの G: でゴールを置いてください)");
     const exec = Number(body?.exec ?? 0);
     const direction = body?.direction === "left" ? "left" : "right";
     return NextResponse.json(await runPathSim({ walls, goals, exec, direction }));

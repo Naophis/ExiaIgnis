@@ -16,6 +16,7 @@ import { usePathSim } from "@/lib/use-path-sim";
 import { useSearchSim } from "@/lib/use-search-sim";
 import {
   blankMaze,
+  detectGoalCandidates,
   edgeKey,
   edgeState,
   isOuterEdge,
@@ -32,11 +33,12 @@ import {
 } from "@/lib/maze-shared";
 
 const GROUP_LABEL: Record<MazeGroup, string> = {
-  log: "受信ログ (maze_logs)",
-  edit: "編集用 (profile/hf)",
-  contest: "大会迷路 (maze_data)",
+  log: "受信ログ・保存した迷路 (maze_logs)",
+  profile: "過去の迷路 (profile)",
+  contest: "過去の迷路 (maze_data)",
 };
-const GROUP_ORDER: MazeGroup[] = ["edit", "log", "contest"];
+// 受信ログは探索のたびに増えるので最後(過去の迷路が埋もれて見つからなかった)
+const GROUP_ORDER: MazeGroup[] = ["profile", "contest", "log"];
 const HISTORY_LIMIT = 200;
 
 // 描画はセル = 1 の座標系。画面の y は下向きなので北を上にするため反転する。
@@ -68,7 +70,34 @@ interface Props {
   autoOpen: { id: string; nonce: number } | null;
   onAutoOpenHandled: () => void;
   refreshNonce: number; // 迷路の受信などで一覧を取り直す
-  onFilesChanged: () => void; // 別名保存でプロファイル一覧が変わった
+}
+
+// ゴールの上書き(system.yaml / ファイル以外のゴール)を迷路ごとに覚える。ブラウザだけの便利機能で、
+// 読めなくても既定のゴールで動く。
+const GOALS_KEY = "exia-maze-goals-v1";
+function readGoalOverrides(): Record<string, Cell[]> {
+  try {
+    return JSON.parse(localStorage.getItem(GOALS_KEY) ?? "{}") as Record<string, Cell[]>;
+  } catch {
+    return {};
+  }
+}
+function writeGoalOverride(id: string, goals: Cell[] | null) {
+  try {
+    const all = readGoalOverrides();
+    if (goals) all[id] = goals;
+    else delete all[id];
+    localStorage.setItem(GOALS_KEY, JSON.stringify(all));
+  } catch {
+    // 保存できなくても動く
+  }
+}
+const sameCell = (a: Cell, b: Cell) => a[0] === b[0] && a[1] === b[1];
+function setGoalCell(list: Cell[], c: Cell, add: boolean): Cell[] {
+  const has = list.some((g) => sameCell(g, c));
+  if (add && !has) return [...list, c];
+  if (!add && has) return list.filter((g) => !sameCell(g, c));
+  return list;
 }
 
 function formatDate(mtimeMs: number): string {
@@ -80,7 +109,9 @@ function formatDate(mtimeMs: number): string {
 function defaultSaveName(doc: MazeDoc): string {
   if (doc.id === null) return "maze_new";
   const base = doc.name.replace(/\.(maze|yaml)$/, "");
-  return doc.id.startsWith("log/") ? `log_${base}` : base;
+  // 受信した迷路は log_<日時>。保存した迷路をさらに別名で保存するときは log_log_ と重ねない
+  if (doc.id.startsWith("log/")) return /^\d{8}_/.test(base) ? `log_${base}` : `${base}_2`;
+  return base;
 }
 
 function wallLetters(w: number): string {
@@ -88,7 +119,7 @@ function wallLetters(w: number): string {
   return s || "-";
 }
 
-export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, onFilesChanged }: Props) {
+export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }: Props) {
   const [files, setFiles] = useState<MazeFileInfo[]>([]);
   const [system, setSystem] = useState<SystemMaze>({ goals: null, mazeSize: null });
   const [doc, setDoc] = useState<MazeDoc | null>(null);
@@ -111,6 +142,10 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   const [playSpeed, setPlaySpeed] = useState(20);
   const [shownCandidate, setShownCandidate] = useState<number | null>(null);
   const [hoverSeg, setHoverSeg] = useState<number | null>(null);
+  // ゴールの上書き(null = ファイルのゴール、無ければ system.yaml)とゴール編集
+  const [goalOverride, setGoalOverride] = useState<Cell[] | null>(null);
+  const [goalMode, setGoalMode] = useState(false);
+  const goalStrokeRef = useRef<{ add: boolean; visited: Set<string> } | null>(null);
 
   const svgRef = useRef<SVGSVGElement>(null);
   // ドラッグ中の 1 ストローク: 最初の壁で決めた「置く/消す」と向き(横=N/縦=E)を、
@@ -119,8 +154,25 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   const strokeRef = useRef<{ present: boolean; dir: "N" | "E"; visited: Set<string> } | null>(null);
 
   const size = doc?.size ?? 0;
-  const goals = doc?.goals ?? system.goals ?? [];
-  const goalSource = doc?.goals ? "ファイル" : system.goals ? "system.yaml" : null;
+  // ゴールの自動検出(2×2 / 3×3、中に壁なし、外周に入口)。既定のゴールは
+  // ファイルのゴール → 自動検出 → system.yaml の順。
+  const goalCands = useMemo(
+    () => (size > 0 && walls.length === size * size ? detectGoalCandidates(walls, size) : []),
+    [walls, size],
+  );
+  const autoGoal = goalCands[0]?.reachable ? goalCands[0] : null;
+  const defaultGoals = doc?.goals ?? autoGoal?.cells ?? system.goals ?? [];
+  const goals = goalOverride ?? defaultGoals;
+  const goalSource = goalOverride
+    ? "手動"
+    : doc?.goals
+      ? "ファイル"
+      : autoGoal
+        ? "自動"
+        : system.goals
+          ? "system.yaml"
+          : null;
+  const defaultSource = doc?.goals ? "ファイルのゴール" : autoGoal ? "自動検出" : "system.yaml";
   const pathSim = usePathSim(pathOn && doc !== null, walls, goals);
   const searchSim = useSearchSim(searchOn && doc !== null, walls, goals);
   const searchResult = searchOn && searchSim.result?.ok ? searchSim.result : null;
@@ -175,6 +227,8 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
         });
         setSavedWalls(content.walls);
         resetEditState(content.walls);
+        setGoalOverride(readGoalOverrides()[id] ?? null);
+        setGoalMode(false);
       } catch (err) {
         toast.error(`${id}: ${(err as Error).message}`);
       }
@@ -192,6 +246,8 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
     setDoc({ id: null, name: `新規 ${n}x${n}`, size: n, goals: null, editable: false });
     setSavedWalls(null);
     resetEditState(blankMaze(n));
+    setGoalOverride(null);
+    setGoalMode(false);
   };
 
   useEffect(() => {
@@ -204,6 +260,11 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
     // autoOpen が変わったときだけ動かす。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpen]);
+
+  // ゴールの上書きを迷路ごとに覚える(開いた直後の読み戻しも同じ値を書くだけ)。
+  useEffect(() => {
+    if (doc?.id) writeGoalOverride(doc.id, goalOverride);
+  }, [doc?.id, goalOverride]);
 
   // ===== 編集 =====
 
@@ -267,6 +328,16 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
 
   const onPointerDown = (ev: PointerEvent<SVGSVGElement>) => {
     if (ev.button !== 0 || !doc) return;
+    if (goalMode) {
+      // ゴール編集: 最初の区画で「足す/外す」を決め、ドラッグで通った区画すべてに当てる
+      const hit = locate(ev);
+      if (!hit) return;
+      ev.currentTarget.setPointerCapture(ev.pointerId);
+      const add = !goals.some((g) => sameCell(g, hit.cell));
+      goalStrokeRef.current = { add, visited: new Set([hit.cell.join(",")]) };
+      setGoalOverride(setGoalCell(goals, hit.cell, add));
+      return;
+    }
     const hit = locate(ev);
     if (!hit?.edge) return;
     ev.currentTarget.setPointerCapture(ev.pointerId);
@@ -278,6 +349,15 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   };
 
   const onPointerMove = (ev: PointerEvent<SVGSVGElement>) => {
+    if (goalMode) {
+      const hit = locate(ev);
+      setHover(hit ? { cell: hit.cell, edge: null } : null);
+      const gs = goalStrokeRef.current;
+      if (!gs || !hit || gs.visited.has(hit.cell.join(","))) return;
+      gs.visited.add(hit.cell.join(","));
+      setGoalOverride((prev) => setGoalCell(prev ?? defaultGoals, hit.cell, gs.add));
+      return;
+    }
     const stroke = strokeRef.current;
     const hit = locate(ev, stroke?.dir);
     setHover(hit);
@@ -291,6 +371,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
 
   const endStroke = () => {
     strokeRef.current = null;
+    goalStrokeRef.current = null;
   };
 
   // ===== 保存・送信 =====
@@ -334,12 +415,13 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
       const id = data.id as string;
       const name = id.slice(id.indexOf("/") + 1);
       // 大会迷路のゴールは .maze に書けないので、保存後は system.yaml のゴールで見る。
+      // .maze にゴールは書けないので、過去の迷路のゴール(と手動のゴール)は上書きとして引き継ぐ
       setDoc({ ...doc, id, name, goals: null, editable: true });
+      setGoalOverride(goalOverride ?? doc.goals);
       setSavedWalls(walls);
       setSaveAsName(null);
-      toast.success(`profile/hf/${name} に保存しました`);
+      toast.success(`maze_logs/${name} に保存しました`);
       void refreshFiles();
-      onFilesChanged();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -391,6 +473,16 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active, undo, redo]);
+
+  // ゴール編集は Esc で終える
+  useEffect(() => {
+    if (!active || !goalMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setGoalMode(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, goalMode]);
 
   // 探索の再生: playSpeed 判断 / 秒で進め、最後で止める。
   useEffect(() => {
@@ -543,7 +635,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
           ref={svgRef}
           className="h-full w-full touch-none select-none"
           viewBox={`${-MARGIN_L} ${-MARGIN_T} ${size + MARGIN_L + MARGIN_R} ${size + MARGIN_T + MARGIN_B}`}
-          style={{ cursor: hover?.edge ? "pointer" : "default" }}
+          style={{ cursor: (goalMode ? hover : hover?.edge) ? "pointer" : "default" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endStroke}
@@ -766,15 +858,52 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
                       食い違い {paths.mismatchCount}
                     </span>
                   )}
-                  <span className="text-muted-foreground" title={goals.map(([x, y]) => `(${x},${y})`).join(" ")}>
-                    {goalSource ? `G: ${goalSource}` : "G: なし"}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setGoalMode((m) => !m)}
+                    className={`rounded px-1 ${goalMode ? "bg-primary text-primary-foreground" : "text-muted-foreground ring-1 ring-border hover:bg-muted"}`}
+                    title={`ゴール: ${goals.map(([x, y]) => `(${x},${y})`).join(" ") || "なし"}\nクリックでゴールを編集(経路・探索の計算に使う。機体の system.yaml は変えない)`}
+                  >
+                    G: {goalSource ?? "なし"}
+                    {goals.length > 0 ? ` ${goals.length}区画` : ""}
+                  </button>
+                  {goalMode ? (
+                    <>
+                      <span className="text-primary">区画をクリック / ドラッグでゴールを追加・削除</span>
+                      <Button size="xs" variant="ghost" onClick={() => setGoalOverride(null)} disabled={goalOverride === null}>
+                        {defaultSource}に戻す
+                      </Button>
+                      {goalCands.slice(0, 3).map((c) => (
+                        <Button
+                          key={`${c.x},${c.y},${c.k}`}
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => setGoalOverride(c.cells)}
+                          title={`自動検出の候補: 中に壁の無い ${c.k}×${c.k}、外周の入口 ${c.openings} か所${c.reachable ? "" : "、スタートから行けない"}`}
+                        >
+                          候補 ({c.x},{c.y}) {c.k}×{c.k}
+                        </Button>
+                      ))}
+                      {system.goals && defaultSource !== "system.yaml" && (
+                        <Button size="xs" variant="ghost" onClick={() => setGoalOverride(system.goals)}>
+                          system.yaml
+                        </Button>
+                      )}
+                      <Button size="xs" variant="ghost" onClick={() => setGoalOverride([])}>
+                        クリア
+                      </Button>
+                      <Button size="xs" onClick={() => setGoalMode(false)} title="ゴール編集を終える (Esc)">
+                        完了
+                      </Button>
+                    </>
+                  ) : (
                   <span className="min-w-0 truncate font-mono text-muted-foreground">
                     {hover
                       ? `(${hover.cell[0]}, ${hover.cell[1]}) ${wallLetters(hoverWall)} [${hoverWall}]` +
                         (hover.edge ? ` クリックで壁を${hoverWouldRemove ? "消す" : "置く"}` : "")
                       : "クリック/ドラッグで壁を置く・消す  Ctrl+Z で戻す"}
                   </span>
+                  )}
                 </>
               ) : (
                 <span className="text-muted-foreground">左の一覧から迷路を選ぶか、新規16/新規32 で作る</span>
@@ -825,7 +954,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
                         void saveAs();
                       }}
                     >
-                      <span className="text-muted-foreground">profile/hf/</span>
+                      <span className="text-muted-foreground">maze_logs/</span>
                       <Input
                         autoFocus
                         className="h-6 w-40 text-xs"
@@ -858,7 +987,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
                       variant={dirty ? "default" : "outline"}
                       disabled={busy !== null}
                       onClick={() => setSaveAsName(defaultSaveName(doc))}
-                      title="受信ログ・大会迷路は上書きしない。profile/hf/ に .maze として保存する (Ctrl+S)"
+                      title="受信した迷路・過去の迷路 (maze_data) は上書きしない。maze_logs/ に .maze として保存する (Ctrl+S)"
                     >
                       別名で保存
                     </Button>

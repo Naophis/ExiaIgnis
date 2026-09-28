@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const walls = checkWalls(body?.walls);
     const goals = Array.isArray(body?.goals) ? body.goals : null;
+    if (Array.isArray(goals) && goals.length === 0) throw new Error("ゴールがありません(ツールバーの G: でゴールを置いてください)");
     return NextResponse.json(await runSearchSim({ walls, goals }));
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message, log: "" }, { status: 500 });

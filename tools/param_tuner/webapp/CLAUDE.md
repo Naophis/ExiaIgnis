@@ -129,8 +129,10 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 `sample/mm_maze_viewer`(VSCode 拡張)の移植(2026-09-28)。形式の扱いは `lib/maze-shared.ts`(ブラウザ/Node 共用)、ファイル操作は `lib/maze.ts`。
 
 - **並び**: `.maze`・`maze_logs/`・`maze_data/*.yaml` の `wall` はどれも `idx = x * size + y`(テキストは 1 行 = 1 列 x)、下位 4bit が壁(N=1/E=2/W=4/S=8)。ファームの `map[x + y * size]` とは転置の関係で、受信(`map___`)と送信(`sendMaze`)で `swapMazeTriangle` が入れ替える。上位 4bit(踏破フラグ)は読込時に捨て、送信時に全マス `| 0xf0`(踏破済み)にする。
-- **一覧**: 編集用(`profile/hf/*.maze` + VSCode 拡張で使っていた `profile/maze.yaml`、上書き保存可)/ 受信ログ(`maze_logs/`、新しい順、読み取り専用)/ 大会迷路(`maze_data/*.yaml`、ゴール付き、読み取り専用)。読み取り専用のものは「別名で保存」で `profile/hf/<名前>.maze` に作る(既存名は拒否)。`profile/hf/*.maze` はプロファイルパネルにも出て、行クリックで迷路タブが開く(「全て送信」には含まれない)。
-- **表示**: 壁は両側の区画の言い分で決める。片側だけに壁がある壁は金の点線で出し、ツールバーに「食い違い N」と数を出す(クリックで両側がそろう)。外周は片側しかないので、外周が欠けたファイルはそのまま欠けて見える。ゴールはファイル自身のもの(大会迷路)、無ければ system.yaml の `goals`。system.yaml は読むだけ(書き換えは行置換の決まり)。
+- **一覧**(上から): 過去の迷路 (profile)(`profile/*.yaml` のうち中身がカンマ区切りの迷路として読めるもの = VSCode 拡張で使っていた `maze.yaml`・`higashi2024.yaml`・`kansai2025.yaml` など。その場で上書き保存可。profile/ はパラメータの yaml と同じ場所なので、上書きは今の中身が迷路として読めるときだけ)/ 過去の迷路 (maze_data)(`maze_data/*.yaml`(大会迷路の形式、ゴール付き)と `*.maze`、読み取り専用)/ 受信ログ・保存した迷路 (maze_logs)(新しい順。探索のたびに増えるので最後)。**保存先は `maze_logs/`**(ユーザー指定。profile/hf → maze_edit/ と変えて最終的にここ)。機体から受信した迷路(日時の名前 `YYYYMMDD_HHMMSS.maze`・古い `YYYYMMDD_HHMM_SS.maze`、`isReceivedMazeName`)は記録なので読み取り専用、それ以外(ここで保存したもの)は上書き保存できる。読み取り専用のものは「別名で保存」で `maze_logs/<名前>.maze` に作る(既存名・日時と同じ形の名前は拒否)。既定の名前は受信した迷路なら `log_<日時>`、保存した迷路なら `<名前>_2`(以前は常に `log_` を足していて `log_log_` が重なった)。
+- **表示**: 壁は両側の区画の言い分で決める。片側だけに壁がある壁は金の点線で出し、ツールバーに「食い違い N」と数を出す(クリックで両側がそろう)。外周は片側しかないので、外周が欠けたファイルはそのまま欠けて見える。ゴールの既定は ファイル自身のもの(大会迷路)→ 自動検出 → system.yaml の `goals` の順。system.yaml は読むだけ(書き換えは行置換の決まり)。
+- **ゴールの自動検出**(`detectGoalCandidates`、maze-shared.ts。ユーザーの条件: ゴールは 3×3 か 2×2、外周は必ずどこか 1 か所以上空いていて入れる): 中に壁の無い 2×2 / 3×3 のうち、外周の空いている辺が 1〜2 のもの。スタートから行ける → 入口が少ない → 3×3、の順に並べ、先頭を既定のゴールにする(3×3 のゴールの中の 2×2 は外周の多くが空くので自然に外れる)。壁は両側のどちらかが壁なら壁。検証: maze_data の大会迷路 12 本すべてで正解が単独 1 位、profile の 3 本も system.yaml のコメントに残る各大会のゴールと一致。受信ログはゴール周りを探索し切っていないと候補なし → system.yaml。
+- **ゴールの変更**(system.yaml 以外のゴールもあり得る、とユーザー指定): ツールバーの「G: 〜」を押すとゴール編集になり、区画のクリック / ドラッグでゴールを足す・外す(最初の区画で足すか外すかを決める。Esc か「完了」で終わる)。「(既定)に戻す」「候補 (x,y) k×k」(自動検出の上位 3 つ)「system.yaml」「クリア」。変えたゴールは迷路ごとに `localStorage`(`exia-maze-goals-v1`、キーは迷路の id)に覚え、別名保存では新しい id へ引き継ぐ(.maze にはゴールを書けないので、過去の迷路のゴールもここで持っていく)。経路・探索の計算はこのゴールを使う。機体の system.yaml は変えない。ゴールが空なら `/api/maze/path`・`/api/maze/search` は計算せずに理由を返す。
 - **編集**: 区画を対角線で 4 分割していちばん近い壁をトグル(拡張と同じ)。ドラッグは最初の壁で「置く/消す」と向き(横/縦)を決め、通った壁すべてに当てる(向きを固定しないと、格子線をなぞっても柱の近くで直交する壁を拾う)。1 ストロークで元に戻す 1 回。外周は触れない。Ctrl+Z / Ctrl+Shift+Z・Ctrl+Y / Ctrl+S はタブ表示中だけ拾う。編集中の内容を残すため、タブは隠すだけでマウントしたまま。
 - **送信**: 表示中の壁(未保存でも)を `/maze.txt` として送る。ファームが読むのは次に `run_main_mode()` へ入ったときの `read_maze_data()`。大きさが system.yaml の `maze_size` と違うと壁が全部ずれるので API で拒否する。
 - 機体から迷路を受信すると(`saved` の `type: "maze"`)一覧を取り直し、トーストのクリックでその迷路を開く。
@@ -163,6 +165,8 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 リポジトリルートの `flash.sh`(picotool)を `spawn` で実行し、stdout/stderr を1行ずつ `[flash] `プレフィックス付きで `serialManager` の `log` イベントへ流す(コンソールパネルにそのまま表示される)。picotool は USB デバイスを排他的に掴み、書き込み成功後は BOOTSEL から通常ファームウェアへ再起動して CDC デバイスが一旦消える。RX 接続を持ったままだと picotool と掴み合いになるため、実行前に `serialManager.disconnect()`、完了後(成功/失敗どちらでも)に `serialManager.enableAutoConnect()` を呼ぶ。明示的な再接続はせず、既存の200ms探索ループに検出を任せる。
 
 ## 既知のハマりどころ
+
+- **定期ポーリングで中身が同じ配列を setState しない**(2026-09-29): `page.tsx` の `/api/ports`(3 秒ごと)と `LogPlotPanel` の `/api/logs`(3 秒ごと)が毎回新しい配列を入れていたため、そのたびに非表示のプロットタブがログ一覧 1900 行超を描き直し(開発モードで約 500ms)、迷路タブの探索の再生が 3 秒ごとに止まっていた。CPU プロファイルで LogPlotPanel が JS 時間の大半と確認。中身が同じなら前の値を返す形にし、`LogPlotPanel` は `memo`(page.tsx 側で `onAutoOpenHandled` を `useCallback` で固定)。page.tsx の state が変わるたび(機体のログ 1 行ごとの `setLines` を含む)に全タブが描き直されるので、重いパネルを足すときは同じく memo と props の固定を考えること。
 
 - **余白は詰めてある(shadcn 既定より狭い)**: 情報密度優先で `components/ui/card.tsx` の `--card-spacing` を `--spacing(4)`→`--spacing(2)`(8px)、`ui/table.tsx` のセルを `px-1.5 py-1` に落とし、`app/page.tsx` のルートを `gap-2 p-2` にしてある。各パネルの `p-*`/`gap-*` もこれに合わせた。`npx shadcn add` で `ui/` を再生成すると既定値(16px)に戻るので、上書きされたら詰め直すこと。
 - **flexアイテムの折り返し**: `flex flex-wrap` な子要素がある行コンテナで、子に `min-w-0` を付け忘れると「コンテンツ基準の自動最小幅」によって折り返さずに親をはみ出す。セグメントボタン群(`test-template-panel.tsx` の `QuickApplySelectRow`)で実際に踏んだ。
@@ -199,5 +203,5 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 | `/api/sensor-calib` | GET/POST | センサ校正: `gains`(現在値)/`dirs`/`load`、POST `save`(csv保存)/`apply`(sensor.yaml置換+任意で送信) |
 | `/api/maze/search` | POST | 探索: `{walls, goals}` で `tools/path_sim` の search_sim を実行(SearchController::exec の再現) |
 | `/api/maze/path` | GET/POST | 経路: GET はモードの選択肢(run_prf の exec_prof)、POST `{walls, goals, exec, direction}` で `tools/path_sim` を実行 |
-| `/api/maze` | GET/POST | 迷路: `list`(一覧 + system.yaml の goals/maze_size)/`read`、POST `save`(編集用を上書き)/`saveAs`(profile/hf/へ新規)/`send`(maze.txt へ送信) |
+| `/api/maze` | GET/POST | 迷路: `list`(一覧 + system.yaml の goals/maze_size)/`read`、POST `save`(上書きできる迷路を上書き)/`saveAs`(maze_logs/へ新規)/`send`(maze.txt へ送信) |
 | `/api/flash` | POST | `flash.sh`(picotool)実行。実行前にシリアル切断、完了後auto-connectを再有効化 |
