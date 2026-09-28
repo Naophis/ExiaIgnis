@@ -9,9 +9,11 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { MazePathPanel } from "@/components/maze-path-panel";
+import { MazeSearchPanel } from "@/components/maze-search-panel";
 import type { MazeContent, MazeFileInfo, MazeGroup } from "@/lib/maze";
 import { buildPathGeometry, pathD, type Pt } from "@/lib/maze-path";
 import { usePathSim } from "@/lib/use-path-sim";
+import { useSearchSim } from "@/lib/use-search-sim";
 import {
   blankMaze,
   edgeKey,
@@ -45,6 +47,8 @@ const MARGIN_R = 0.3;
 const WALL_WIDTH = 0.12;
 const POST_SIZE = 0.16;
 const PATH_COLOR = "oklch(0.82 0.13 230)";
+// Direction の値(N=1 / E=2 / W=4 / S=8)→ 区画単位の向き
+const DIR_VEC: Record<number, Pt> = { 1: [0, 1], 2: [1, 0], 4: [-1, 0], 8: [0, -1] };
 
 interface MazeDoc {
   id: string | null; // null = 未保存の新規
@@ -97,7 +101,14 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   const [saveAsName, setSaveAsName] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "send" | null>(null);
   // 経路(MainTask::path_run() の経路生成を tools/path_sim で再現)
-  const [pathOn, setPathOn] = useState(false);
+  // 右に出すシミュレーション: 経路(MainTask::path_run)/ 探索(SearchController::exec)
+  const [sim, setSim] = useState<"none" | "path" | "search">("none");
+  const pathOn = sim === "path";
+  const searchOn = sim === "search";
+  // 探索のステップ(null = 最後)と再生
+  const [stepRaw, setStepRaw] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [playSpeed, setPlaySpeed] = useState(20);
   const [shownCandidate, setShownCandidate] = useState<number | null>(null);
   const [hoverSeg, setHoverSeg] = useState<number | null>(null);
 
@@ -111,6 +122,10 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   const goals = doc?.goals ?? system.goals ?? [];
   const goalSource = doc?.goals ? "ファイル" : system.goals ? "system.yaml" : null;
   const pathSim = usePathSim(pathOn && doc !== null, walls, goals);
+  const searchSim = useSearchSim(searchOn && doc !== null, walls, goals);
+  const searchResult = searchOn && searchSim.result?.ok ? searchSim.result : null;
+  const nSteps = searchResult?.steps?.length ?? 0;
+  const step = nSteps === 0 ? 0 : stepRaw === null ? nSteps - 1 : Math.min(stepRaw, nSteps - 1);
   const dirty = doc !== null && (savedWalls === null || walls.some((w, i) => w !== savedWalls[i]));
 
   const refreshFiles = useCallback(async () => {
@@ -377,6 +392,40 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
     return () => window.removeEventListener("keydown", onKey);
   }, [active, undo, redo]);
 
+  // 探索の再生: playSpeed 判断 / 秒で進め、最後で止める。
+  useEffect(() => {
+    if (!playing || !searchOn || nSteps === 0) return;
+    const timer = setInterval(() => {
+      setStepRaw((s) => Math.min(nSteps - 1, (s === null ? nSteps - 1 : s) + 1));
+    }, 1000 / playSpeed);
+    return () => clearInterval(timer);
+  }, [playing, playSpeed, searchOn, nSteps]);
+  useEffect(() => {
+    // 最後まで進んだら止める
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (playing && step >= nSteps - 1) setPlaying(false);
+  }, [playing, step, nSteps]);
+
+  // 探索のステップ送り: ← → (Shift で 10)、Home / End。入力欄の中は触らない。
+  useEffect(() => {
+    if (!active || !searchOn || nSteps === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const n = e.shiftKey ? 10 : 1;
+      if (e.key === "ArrowLeft") setStepRaw(Math.max(0, step - n));
+      else if (e.key === "ArrowRight") setStepRaw(Math.min(nSteps - 1, step + n));
+      else if (e.key === "Home") setStepRaw(0);
+      else if (e.key === "End") setStepRaw(nSteps - 1);
+      else return;
+      setPlaying(false);
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, searchOn, nSteps, step]);
+
   // ===== 描画 =====
 
   const paths = useMemo(() => {
@@ -436,6 +485,53 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   const toScreen = (p: Pt): Pt => [p[0], size - p[1]];
   const hoverTurn = hoverSeg !== null ? pathGeo?.turns.find((t) => t.index === hoverSeg) : undefined;
 
+  // 探索: そのステップでロボットが知っている壁・分かっている区画・軌跡・ロボット
+  const searchView = useMemo(() => {
+    if (!searchResult || nSteps === 0 || size === 0) return null;
+    const M = searchResult.maze_size ?? size;
+    const map = searchSim.maps[step];
+    if (!map) return null;
+    let known = "";
+    let cells = "";
+    let knownCells = 0;
+    const seg = (x0: number, y0: number, x1: number, y1: number) => `M${x0} ${size - y0}L${x1} ${size - y1}`;
+    for (let x = 0; x < size; x++) {
+      for (let y = 0; y < size; y++) {
+        const v = map[x + y * M];
+        // 踏破フラグ(上位 4bit)が立っている向きの壁だけ「知っている」
+        if (v & 0x10 && v & 0x01) known += seg(x, y + 1, x + 1, y + 1);
+        if (v & 0x20 && v & 0x02) known += seg(x + 1, y, x + 1, y + 1);
+        if (y === 0 && v & 0x80 && v & 0x08) known += seg(x, 0, x + 1, 0);
+        if (x === 0 && v & 0x40 && v & 0x04) known += seg(0, y, 0, y + 1);
+        if ((v & 0xf0) === 0xf0) {
+          knownCells++;
+          cells += `M${x} ${size - y - 1}h1v1h-1z`;
+        }
+      }
+    }
+    // 判断した位置 = その区画の入口の境界
+    const at = (st: { f: [number, number, number] }): Pt => {
+      const d = DIR_VEC[st.f[2]] ?? [0, 1];
+      return [st.f[0] + 0.5 - d[0] * 0.5, st.f[1] + 0.5 - d[1] * 0.5];
+    };
+    const steps = searchResult.steps!;
+    let trail = "";
+    for (let i = 0; i <= step; i++) {
+      const [x, y] = at(steps[i]);
+      trail += `${i === 0 ? "M" : "L"}${x} ${size - y}`;
+    }
+    const cur = steps[step];
+    const [rx, ry] = at(cur);
+    const d = DIR_VEC[cur.f[2]] ?? [0, 1];
+    // ロボット: 向きの三角形(画面座標は y が下向き)
+    const tip: Pt = [rx + d[0] * 0.32, size - (ry + d[1] * 0.32)];
+    const l: Pt = [rx - d[0] * 0.12 - d[1] * 0.2, size - (ry - d[1] * 0.12 + d[0] * 0.2)];
+    const r: Pt = [rx - d[0] * 0.12 + d[1] * 0.2, size - (ry - d[1] * 0.12 - d[0] * 0.2)];
+    const robot = `M${tip[0]} ${tip[1]}L${l[0]} ${l[1]}L${r[0]} ${r[1]}Z`;
+    const next = step + 1 < nSteps ? at(steps[step + 1]) : null;
+    return { known, cells, knownCells, trail, robot, from: [rx, size - ry] as Pt, next: next ? ([next[0], size - next[1]] as Pt) : null };
+  }, [searchResult, searchSim.maps, step, nSteps, size]);
+
   const labelSize = size > 20 ? 0.42 : 0.5;
   const grouped = GROUP_ORDER.map((g) => ({ group: g, items: files.filter((f) => f.group === g) }));
   const hoverWall = hover ? walls[mazeIndex(size, hover.cell[0], hover.cell[1])] : 0;
@@ -480,13 +576,19 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
             />
           )}
           <path d={paths.grid} stroke="var(--border)" strokeWidth={0.03} fill="none" />
+          {searchView && <path d={searchView.cells} fill="var(--primary)" fillOpacity={0.07} pointerEvents="none" />}
+          {/* 探索中は正解の壁を薄く出し、ロボットが知っている壁を上に重ねる */}
           <path
             d={paths.wall}
-            stroke="var(--chart-2)"
+            stroke={searchView ? "var(--muted-foreground)" : "var(--chart-2)"}
+            strokeOpacity={searchView ? 0.35 : 1}
             strokeWidth={WALL_WIDTH}
             strokeLinecap="square"
             fill="none"
           />
+          {searchView && (
+            <path d={searchView.known} stroke="var(--chart-2)" strokeWidth={WALL_WIDTH} strokeLinecap="square" fill="none" pointerEvents="none" />
+          )}
           <path
             d={paths.mismatch}
             stroke="var(--accent-gold)"
@@ -495,6 +597,21 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
             fill="none"
           />
           <path d={posts} fill="var(--muted-foreground)" />
+          {searchView && (
+            <g pointerEvents="none" strokeLinecap="round" strokeLinejoin="round">
+              <path d={searchView.trail} fill="none" stroke={PATH_COLOR} strokeOpacity={0.55} strokeWidth={0.07} />
+              {searchView.next && (
+                <path
+                  d={`M${searchView.from[0]} ${searchView.from[1]}L${searchView.next[0]} ${searchView.next[1]}`}
+                  fill="none"
+                  stroke="var(--accent-gold)"
+                  strokeWidth={0.07}
+                  strokeDasharray="0.12 0.1"
+                />
+              )}
+              <path d={searchView.robot} fill="var(--accent-gold)" stroke="oklch(0.12 0.015 250)" strokeWidth={0.04} />
+            </g>
+          )}
           {pathGeo && (
             <g pointerEvents="none" fill="none" strokeLinecap="round" strokeLinejoin="round">
               <path
@@ -669,12 +786,24 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
                     size="xs"
                     variant={pathOn ? "default" : "outline"}
                     onClick={() => {
-                      setPathOn((v) => !v);
+                      setSim((v) => (v === "path" ? "none" : "path"));
                       setShownCandidate(null);
                     }}
                     title="機体の最短走行(MainTask::path_run)と同じ経路生成で経路とタイムを出す。全マス既知として扱う"
                   >
                     経路
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant={searchOn ? "default" : "outline"}
+                    onClick={() => {
+                      setSim((v) => (v === "search" ? "none" : "search"));
+                      setStepRaw(null);
+                      setPlaying(false);
+                    }}
+                    title="機体の探索(メインモード 0、SearchController::exec)を足立法そのもので再現し、判断ごとの動きと探索時間を出す"
+                  >
+                    探索
                   </Button>
                   <Button size="xs" variant="ghost" disabled={past.length === 0} onClick={undo} title="元に戻す (Ctrl+Z)">
                     戻す
@@ -746,7 +875,34 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
                 </>
               )}
             </div>
-            {pathOn && doc ? (
+            {searchOn && doc ? (
+              <ResizablePanelGroup direction="horizontal" autoSaveId="param-console-maze-search" className="min-h-0 flex-1">
+                <ResizablePanel defaultSize={60} minSize={30} className="min-w-0">
+                  {mazeView}
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={40} minSize={20} className="min-w-0">
+                  <MazeSearchPanel
+                    result={searchSim.result}
+                    busy={searchSim.busy}
+                    step={step}
+                    onStep={(i) => {
+                      setStepRaw(i);
+                      setPlaying(false);
+                    }}
+                    playing={playing}
+                    onTogglePlay={() => {
+                      if (!playing && step >= nSteps - 1) setStepRaw(0);
+                      setPlaying((p) => !p);
+                    }}
+                    speed={playSpeed}
+                    onSpeed={setPlaySpeed}
+                    knownCells={searchView?.knownCells ?? 0}
+                    totalCells={size * size}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : pathOn && doc ? (
               // 迷路は正方形で横が余るので、経路の表は右に置く(プロットタブの旋回表と同じ配置)。
               <ResizablePanelGroup direction="horizontal" autoSaveId="param-console-maze-path" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize={60} minSize={30} className="min-w-0">

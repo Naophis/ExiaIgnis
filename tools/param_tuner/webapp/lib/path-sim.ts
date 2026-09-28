@@ -1,21 +1,10 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
-import { mazeSizeOf, type Cell } from "./maze-shared";
+import { MODE, PROFILE_DIR, profileFiles, runHostSim, toFirmwareMap } from "./host-sim";
+import type { Cell } from "./maze-shared";
 
-// tools/path_sim(MainTask::path_run() の経路生成のホスト版)を呼ぶ。
-// 経路生成はファームのソースそのもの。実行前に毎回 `make -s` を通すので、
-// ファームのソースを変えると次の計算から反映される(初回ビルドは十数秒)。
-
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
-const MODE = "hf";
-const PATH_SIM_DIR = path.join(PARAM_TUNER_ROOT, "..", "path_sim");
-const PATH_SIM_BIN = path.join(PATH_SIM_DIR, "build", "path_sim");
-const BUILD_TIMEOUT_MS = 180_000;
-const RUN_TIMEOUT_MS = 20_000;
+// tools/path_sim の path_sim(MainTask::path_run() の経路生成のホスト版)を呼ぶ。
 
 export type PathDirection = "right" | "left";
 
@@ -85,19 +74,6 @@ export interface PathSimResult {
   log: string; // ファームの printf(実機のコンソールと同じ)
 }
 
-// 機体へ送るときと同じ名前・同じ変換(yaml → JSON)。serial-manager の sendFile 参照。
-function profileFiles(): Record<string, string> {
-  const files: Record<string, string> = {};
-  for (const f of ["system.yaml", "hardware.yaml"]) {
-    files[f.replace("yaml", "txt")] = JSON.stringify(loadYaml(fs.readFileSync(path.join(PROFILE_DIR, f), "utf-8")));
-  }
-  const modeDir = path.join(PROFILE_DIR, MODE);
-  for (const f of fs.readdirSync(modeDir).filter((n) => n.endsWith(".yaml"))) {
-    files[f.replace("yaml", MODE)] = JSON.stringify(loadYaml(fs.readFileSync(path.join(modeDir, f), "utf-8")));
-  }
-  return files;
-}
-
 function readModeYaml<T>(file: string): T | null {
   try {
     return loadYaml(fs.readFileSync(path.join(PROFILE_DIR, MODE, file), "utf-8")) as T;
@@ -125,76 +101,18 @@ export function readExecOptions(): ExecOption[] {
   });
 }
 
-function runProcess(
-  cmd: string,
-  args: string[],
-  opts: { cwd?: string; input?: string; timeoutMs: number },
-): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error(`${path.basename(cmd)} がタイムアウトしました (${opts.timeoutMs / 1000}s)`));
-    }, opts.timeoutMs);
-    child.stdout.on("data", (b: Buffer) => (stdout += b.toString()));
-    child.stderr.on("data", (b: Buffer) => (stderr += b.toString()));
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ code, stdout, stderr });
-    });
-    child.stdin.end(opts.input ?? "");
-  });
-}
-
-async function ensureBuilt(): Promise<void> {
-  const { code, stdout, stderr } = await runProcess("make", ["-s"], { cwd: PATH_SIM_DIR, timeoutMs: BUILD_TIMEOUT_MS });
-  if (code !== 0) {
-    const tail = (stderr || stdout).trim().split("\n").slice(-12).join("\n");
-    throw new Error(`path_sim のビルドに失敗しました:\n${tail}`);
-  }
-}
-
-// make と実行を 1 本ずつにする(同時に make が走ると .o の書き込みがぶつかる)。
-let queue: Promise<unknown> = Promise.resolve();
-
 export function runPathSim(req: {
   walls: number[]; // .maze の並び(idx = x * size + y)
   goals: Cell[] | null;
   exec: number;
   direction: PathDirection;
 }): Promise<PathSimResult> {
-  const job = async (): Promise<PathSimResult> => {
-    const size = mazeSizeOf(req.walls.length);
-    // ファームの並び map[x + y * size]。シミュレータでは全マス既知(踏破済み)として扱う。
-    const map = new Array<number>(size * size);
-    for (let x = 0; x < size; x++) {
-      for (let y = 0; y < size; y++) map[x + y * size] = (req.walls[x * size + y] & 0x0f) | 0xf0;
-    }
-    const input = JSON.stringify({
-      files: profileFiles(),
-      map,
-      exec: req.exec,
-      direction: req.direction,
-      ...(req.goals ? { goals: req.goals } : {}),
-    });
-    await ensureBuilt();
-    const { stdout, stderr } = await runProcess(PATH_SIM_BIN, [], { input, timeoutMs: RUN_TIMEOUT_MS });
-    let parsed: Omit<PathSimResult, "log">;
-    try {
-      parsed = JSON.parse(stdout);
-    } catch {
-      const tail = stderr.trim().split("\n").slice(-12).join("\n");
-      throw new Error(`path_sim の出力を読めません(異常終了?):\n${tail}`);
-    }
-    return { ...parsed, log: stderr };
-  };
-  const run = queue.then(job, job);
-  queue = run.catch(() => undefined);
-  return run;
+  // シミュレータでは全マス既知(踏破済み)として扱う。
+  return runHostSim<Omit<PathSimResult, "log">>("path_sim", {
+    files: profileFiles(),
+    map: toFirmwareMap(req.walls, 0xf0),
+    exec: req.exec,
+    direction: req.direction,
+    ...(req.goals ? { goals: req.goals } : {}),
+  });
 }

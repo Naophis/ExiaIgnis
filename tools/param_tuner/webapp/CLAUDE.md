@@ -139,12 +139,24 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 
 ツールバーの「経路」で、機体の最短走行(`MainTask::path_run()` の `exec_path_running()` より前)と同じ経路生成を回し、軌跡を迷路に重ね、`calc_goal_time()` の区間ごとの内訳(「区間」)と `load_slalom_param()` が読んだターンごとのパラメータ(「ターン設定」: 種別ごとに fast / normal / slow の 3 行、使ったファイル・v・rad・pow_n・time・front/back、経路で使わない種別は薄く)を右の表に出す。表の v 列の右の数字は直線の終わり = 次のターンに入る速度。**全マス既知(踏破済み)として扱う**(ユーザー指示。受信ログは下位 4bit しか持たないので、実機の探索途中の地図は再現しない)。
 
-- **経路生成はファームのソースそのもの**: `tools/path_sim/Makefile` が `src/search/logic.cpp`・`src/action/path_creator.cpp`・`src/action/trajectory_creator.cpp` をホストの g++ でビルドする(`pico/stdlib.h` は空のスタブ、`UserInterface::button_state*` は false を返すスタブ、JSON はファームと同じ ArduinoJson を `build/_deps` から)。`lib/path-sim.ts` が実行のたびに `make -s` を通すので、ファームのソースを変えれば次の計算から反映される(初回ビルド約 13 秒、以後は数 ms)。make と実行は 1 本ずつ(同時に make が走ると .o がぶつかる)。ファームを一度 cmake configure していないと ArduinoJson が無くてビルドできない。
-- **写しがあるのは MainTask のメンバー関数だけ**(`tools/path_sim/main.cpp`): `load_params`・`load_turn_param_profiles(false, 0)`・`exec_param_prof`・`load_slalom_param`/`load_slas`/`load_straight`・`run_main_mode` の lgc 初期化・`path_run` の経路部分。MainTask は Pico の周辺機能ごとでないと持ち出せないため。**これらを変えたら main.cpp も合わせる**(ファームには手を入れない方針で始めた。共通関数へ出せば写しは消せる)。
+- **経路生成はファームのソースそのもの**: `tools/path_sim/Makefile` が `src/search/logic.cpp`・`src/search/adachi.cpp`・`src/action/path_creator.cpp`・`src/action/trajectory_creator.cpp` をホストの g++ でビルドする(path_sim と search_sim の 2 本。呼び出しの共通部分は `lib/host-sim.ts`)(`pico/stdlib.h` は空のスタブ、`UserInterface::button_state*` は false を返すスタブ、JSON はファームと同じ ArduinoJson を `build/_deps` から)。`lib/path-sim.ts` が実行のたびに `make -s` を通すので、ファームのソースを変えれば次の計算から反映される(初回ビルド約 13 秒、以後は数 ms)。make と実行は 1 本ずつ(同時に make が走ると .o がぶつかる)。ファームを一度 cmake configure していないと ArduinoJson が無くてビルドできない。
+- **写しがあるのは MainTask のメンバー関数だけ**(読込関数は `tools/path_sim/host_common.hpp` の `MainTaskCopy`、path_run は `main.cpp`): `load_params`・`load_turn_param_profiles(false, 0)`・`exec_param_prof`・`load_slalom_param`/`load_slas`/`load_straight`・`run_main_mode` の lgc 初期化・`path_run` の経路部分。MainTask は Pico の周辺機能ごとでないと持ち出せないため。**これらを変えたら main.cpp も合わせる**(ファームには手を入れない方針で始めた。共通関数へ出せば写しは消せる)。
 - **入力**: プロファイルは機体へ送るときと同じ名前・同じ変換(`hardware.txt`・`t_1200.hf` など、yaml → JSON)。つまり**ローカルの yaml**で計算する(機体に未送信の変更も入る)。迷路はファームの並び `map[x + y * size]` に直して `| 0xf0`。ゴールは迷路タブに出しているもの(大会迷路はファイルのゴール)。出力は stdout に JSON、ファームの printf は stderr(実機のコンソールと同じ内容。パネル下の「ファームの出力」)。
 - **走行パラメータ**は `run_prf.yaml` の `exec_prof` をボタンで選ぶ。ボタンには**機体のモード選択の LED と同じ点灯パターン**(`select_mode()` の `lbit.byte = mode_num + 1` を 6 桁の 2 進で、左から b5 b4 b3 / b2 b1 b0。mode 0 = ○○○ ○○●、このシミュレータの 0 番 = mode 2 = ○○○ ○●●)と、**exec_prof の並び順(0 始まり)**の番号を出す(どちらもユーザー指定。mode_num をそのまま番号にしたら「イメージが合わない」と言われた)。左の 3 個の並びは `UserInterface::LED_bit` の配線(LED4 = b5、LED5 = b4、LED6 = b3)から読んだもの。点灯は実機と同じライトグリーン、消灯は暗い点。選択中も LED の色は変えず枠で示し、ボタンは同じ幅の格子に並べてパターンを縦にそろえる(小さい点・輪の消灯・選択時の色反転では「見づらい」と言われた)。プルダウンは操作が面倒と言われたのでボタン。「右: タイム比較」は `set_param_num(1〜5)` の候補を作り最短タイムを採用(機体で右を選んだとき)、「左: 単純」は `path_create` の経路そのまま。候補チップのクリックでその候補の経路を金の破線で重ねる。モードと左右は `localStorage`(`exia-maze-path-prefs-v1`)。迷路・ゴール・モードが変わるたびに 250ms 待って再計算する(壁を編集すると経路が引き直される)。
 - **軌跡の描き方**(`lib/maze-path.ts`): `path_s`/`path_t` から、変換規則(`path_create`→`convert_large_path`→`diagonalPath`)で決まる基準点を半区画グリッドで辿る。約束はファイル冒頭のコメント。要点: `path_s` は前のターンの出口の基準点から次のターンの入口の基準点までの半区画数で、実際の直線は s − 2。入口→出口のずれは Normal/Dia45/Dia90 がなし、Large が step(入)+step(出)、Orval が横へ 1 区画、Dia135 が軸方向 2 ステップ。弧は基準点の前後 1 ステップを 3 次ベジエでつなぐ(見た目だけで、実機の軌跡ではない)。**検証**: 受信ログ 23 本 + 大会迷路 12 本 × モード 4 通り × 左右で、描いた軌跡が壁を横切るのは 0 件、ゴール区画の中心で止まらないのも 0 件(全ターン種別で計 9,683 ターン)。Dia90 を最初「間に 1 区画」としていて壁を横切り、ここで誤りが分かった。変換規則を変えたら同じ検査をすること。
 - ターン番号は 3/4 = Orval(180°)、5/6 = Large(90°)(`TrajectoryCreator::get_turn_type`)。
+
+### 探索(2026-09-29〜)— `tools/path_sim/search_main.cpp` / `lib/search-sim.ts` / `lib/use-search-sim.ts` / `components/maze-search-panel.tsx`
+
+ツールバーの「探索」(「経路」とは切り替え)で、メインモード 0 の探索(`run_main_mode()` の mode_num == 0 → `SearchController::exec(param_set, SearchMode::ALL)`、パラメータは `load_slalom_param(0, 0, 0)` 固定)を、表示中の迷路を正解として再現する。
+
+- **足立法と迷路ロジックはファームのソースそのもの**(`adachi.cpp` / `logic.cpp`)。探索ループは `exec()` の写しで、ユーザー指定の簡略化: 移動方向は `adachi->exec()` のとおり、モーションは `exec()` の選び方で固定(ターンは常にスラローム = `judge2()` の pivot90 は選ばない、直進中の wall_off なし)、壁は正解の迷路から理想どおりに見える。`adachi->update()` は実機と同じ場所(探索直進の開始時 = `MotionPlanning::go_straight(p, adachi, true)`、`pivot()` の後退の後)で呼ぶ。スラロームでは実機も呼ばない。写し元は search_main.cpp の冒頭に列挙。
+  - 最初は本物の `search_controller.cpp` を `MotionPlanning` などの差し替え(仮想ロボット・仮想時計)付きでビルドする案で、コンパイル・リンクが通ることまで確かめたが、1 ステップごとの厳密さは要らない(上の簡略化で良い)と言われて写しにした。
+- **時間**は各モーションの手順を足したもの: 直進 = `PathCreator::go_straight_dummy()`(calc_goal_time と同じ)、スラローム = 前の直線(ターン速度へ)+ `sp.time × 2` + 後ろの直線をターン速度で、後退 = `pivot()` の手順(中央へ → 前壁合わせ → 超信地 → 後退 → 半区画)と `sleep_ms`。超信地は角速度の台形(`w_max` / `alpha`)、前壁合わせは即収束の `front_ctrl_th + 1` ms。`seach_timer` の時間切れも仮想時計で効く。実機の補正動作・センサーの読み違いは入らないので、実機より短めに出るはず(実機の探索ログとの突き合わせは未実施)。
+- `SearchMode::ALL` は全区画を回るモードではない: ゴール後に `searchGoalPosition(true, subgoal_list)` で「最短経路を縮めうる未踏区画」をサブゴールにし、無くなったらスタートへ戻る。2019 ハーフ 16×16 で 256 区画中 245 区画、32×32 で到達可能 867 区画中 799 区画が既知になって終わる(「全面探索じゃない」と言われたので数えた)。
+- **出力**: 1 ステップ = 足立法の判断 1 回。判断した区画と向き(入口の境界にいる)、行き先、動作(S 探索直進 / F 既知の直進 / D 既知→ターン / R / L / B 後退)、時刻、ゴール後か・残りサブゴール数、前の判断からの `lgc->map` の変化(ファームの並び)。画面側は変化を順に当てて各ステップの地図を作る(`useSearchSim` の `maps`)。
+- **表示**: 正解の壁は薄く、そのステップでロボットが知っている壁(踏破フラグが立った向きの壁)を赤で重ねる。4 方向とも分かった区画は薄く塗る。軌跡は判断した位置(入口の境界)をつないだ線、ロボットは金の三角、次の判断位置へ破線。右のパネルに試算(合計・ゴール到達・終了理由・動作ごとの回数と時間)、ステップ操作(⏮ ◀ ▶ ▶| ⏭、スライダー、2〜60 判断/秒の再生、← → で 1、Shift で 10、Home / End)、判断の一覧(クリックで移動)。一覧は 1000 行を超えるので、行は結果が変わったときだけ作り、現在行の強調とスクロールは DOM を直接切り替える。
+- **迷路の大きさ**: system.yaml の `maze_size` より小さい迷路は左下に置き、外側を全部壁で埋めて計算する(実機を maze_size = 32 のまま 16×16 の迷路で走らせるのと同じ)。経路(path_sim)も同じ扱い(外側は踏破済みの壁)。機体への送信(`/api/maze` の send)は従来どおり大きさが違うと拒否する。
 
 ## Flash — `lib/flash.ts`
 
@@ -185,6 +197,7 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 | `/api/logs/turn-exit` | GET | 複数ログの旋回出口集計(`limit=N` 直近N本 / `names=a.csv,b.csv`)。`lib/turn-exit.ts` をサーバー側で回し (ファイル名, mtime) でキャッシュ |
 | `/api/logs/open-folder` | POST | logs/フォルダをファイルマネージャで開く |
 | `/api/sensor-calib` | GET/POST | センサ校正: `gains`(現在値)/`dirs`/`load`、POST `save`(csv保存)/`apply`(sensor.yaml置換+任意で送信) |
+| `/api/maze/search` | POST | 探索: `{walls, goals}` で `tools/path_sim` の search_sim を実行(SearchController::exec の再現) |
 | `/api/maze/path` | GET/POST | 経路: GET はモードの選択肢(run_prf の exec_prof)、POST `{walls, goals, exec, direction}` で `tools/path_sim` を実行 |
 | `/api/maze` | GET/POST | 迷路: `list`(一覧 + system.yaml の goals/maze_size)/`read`、POST `save`(編集用を上書き)/`saveAs`(profile/hf/へ新規)/`send`(maze.txt へ送信) |
 | `/api/flash` | POST | `flash.sh`(picotool)実行。実行前にシリアル切断、完了後auto-connectを再有効化 |
