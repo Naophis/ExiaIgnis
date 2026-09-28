@@ -154,6 +154,11 @@ void SensingTask::timer_b_irq_handler() {
       }
     }
   }
+  if (tv->sensing_force_led) {
+    // センサー校正のスイープ中は、壁制御を切った区間でも生値を取る
+    r90 = l90 = true;
+    r45 = l45 = true;
+  }
 
   // 1. ambient ADC (LED消灯) — skip_sensing で R90/L90 と R45/L45 を交互に取得
   self->skip_sensing_ = !self->skip_sensing_;

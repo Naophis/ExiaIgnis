@@ -766,6 +766,9 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["start_turn"]          = src.start_turn;
     dst["search_mode"]         = src.search_mode;
     dst["front_auto_tune"]     = src.front_auto_tune;
+    dst["sensor_sweep_cells"]  = src.sensor_sweep_cells;
+    dst["sensor_sweep_wall_ctrl_dist"] = src.sensor_sweep_wall_ctrl_dist;
+    dst["sensor_sweep_guard"]  = src.sensor_sweep_guard;
 }
 
 inline void convertToJson(const system_t& src, JsonVariant dst) {

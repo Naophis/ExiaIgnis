@@ -1007,6 +1007,9 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "start_turn", dst.start_turn);
     from_json_field(src, "search_mode", dst.search_mode);
     from_json_field(src, "front_auto_tune", dst.front_auto_tune);
+    from_json_field(src, "sensor_sweep_cells", dst.sensor_sweep_cells);
+    from_json_field(src, "sensor_sweep_wall_ctrl_dist", dst.sensor_sweep_wall_ctrl_dist);
+    from_json_field(src, "sensor_sweep_guard", dst.sensor_sweep_guard);
 }
 /**
  * system.txt

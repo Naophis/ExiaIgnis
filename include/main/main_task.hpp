@@ -145,6 +145,7 @@ private:
   void test_front_ctrl(bool enable);
   void test_sla_walloff();
   void test_back();
+  void test_front_sensor_sweep();
   void test_suction();
   void keep_pivot();
   void dump1();

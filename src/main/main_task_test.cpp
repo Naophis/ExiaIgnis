@@ -89,6 +89,9 @@ void MainTask::run_test_mode(int mode) {
     } else if (mode == 27) {
       printf("suction dshot dir\n");
       set_suction_spin_direction();
+    } else if (mode == 28) {
+      printf("front_sensor_sweep\n");
+      test_front_sensor_sweep();
     }
   }
 }

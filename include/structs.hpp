@@ -1618,6 +1618,11 @@ typedef struct {
   volatile float start_align_ang = 0;
   // hold_settle_wait()が実際に待った時間[ms](Core0確認用)。
   volatile int hold_settle_ms = 0;
+  // センサー校正のスイープ(MainTask::test_front_sensor_sweep)中だけ true。
+  // sensing_task.cpp の LED 点灯条件を上書きして全 LED を点ける。探索モードで
+  // sct=NONE(壁制御なし)の直進は LED を全部消す作りなので、壁制御を切った
+  // 区間で生値が 0 になり校正できなかった(20260928_233335.csv)。
+  volatile bool sensing_force_led = false;
 } motion_tgt_val_t;
 
 typedef struct {
@@ -1751,6 +1756,18 @@ typedef struct {
   // test_sla()のfront offset自動調整(left45_dist/right45_dist基準の
   // フィードバック+LittleFS書き戻し)を有効にするか。0=無効(既定)、1=有効。
   int front_auto_tune = 0;
+  // テストモード28(センサー校正)の前壁スイープ。探索の走り出しと同じく
+  // offset_start_dist_search + cell2 * sensor_sweep_cells 走り、区画中央
+  // (前壁まで 42mm)で止まる。スタート区画 + cells 区画の直線の突き当たりに
+  // 前壁を置く。param console のセンサ校正タブがログから L90/R90 の距離換算を
+  // 求める。速度・加減速・吸引は直進テストと同じ v_max / accl / decel /
+  // suction_active を使う。
+  int sensor_sweep_cells = 2;
+  // 走り出しからこの距離 [mm] だけ壁制御を入れ、そこで切る(決め打ち)。
+  // 前壁へ近づくと 45 度センサーが前壁を見るため。
+  float sensor_sweep_wall_ctrl_dist = 100;
+  // 前壁が走行距離より近く見えるあいだは走らない(0 で無効)
+  int sensor_sweep_guard = 1;
 } test_mode_t;
 
 typedef struct {
