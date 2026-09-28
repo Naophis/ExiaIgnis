@@ -25,6 +25,7 @@ export interface SearchSimResult {
   end_reason?: "home" | "timeup" | "back4" | "none" | "step_limit";
   total_time?: number; // 最後の停止まで s
   goal_time?: number; // ゴール区画に最初に入った時刻 s(-1 = 届かず)
+  goal_by?: "enter" | "known" | "none"; // known = 入らずに到達扱い(残り 1 区画の 4 辺が既知)
   finish_time?: number;
   search_timer?: number; // seach_timer s
   params?: {

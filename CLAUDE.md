@@ -157,6 +157,8 @@ PlanningTask は以下のサブシステムを内包:
 `detect_next_direction()` で前進方向を最優先し、左右を `setNextDirection2()`（= 歩数が低い同値でも更新しない）で評価、後退は `enable_back` 条件下のみ。  
 `subgoal_list` に未踏マスをキャッシュし、ゴール到達後は帰還目的地を動的切り替えします。
 
+ゴール後(`SearchMode::ALL`)のサブゴールは `Adachi::update()` → `searchGoalPosition(true, …)` で、未知を壁なしとみなした重みパターン 1 の最短経路 1 本の上の未知区画。最短走行は 5 パターン + 時間比較で経路を選ぶので、パターン 1 だけだと最短走行が使う区間を見に行かないことがある(japan2025_final で +75 ms)。サブゴールが空になった瞬間に 1 度だけ、パターン 4 → 3 → 2 でも探し直す(`subgoal_fallback_done`、2026-09-29 に旧コードのコメントアウトを解禁。旧コードは空のあいだ毎回回して帰り道の区画ごとに最大 +60 ms だった)。search_sim の 16 迷路で探索時間 +6 %、最短に届かない迷路 3 → 1 本。
+
 ホスト版: `tools/path_sim` の search_sim(Param Console の迷路タブの「探索」)が `adachi.cpp` / `logic.cpp` をそのまま PC でビルドして探索を再現する。`SearchController::exec()` の探索ループ・`judge_wall`・`pivot()` の手順と `run_main_mode()` の mode_num == 0 の準備は `tools/path_sim/search_main.cpp` に写しがあるので、**それらを変えたら search_main.cpp も合わせる**。
 
 ### Action サブシステム (`src/action/`)

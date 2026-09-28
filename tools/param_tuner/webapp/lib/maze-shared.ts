@@ -135,8 +135,8 @@ function wallAt(walls: number[], size: number, x: number, y: number, dir: WallDi
   return (walls[mazeIndex(size, nx, ny)] & back) !== 0;
 }
 
-export function detectGoalCandidates(walls: number[], size: number, maxOpenings = 2): GoalCandidate[] {
-  // スタートから行ける区画
+// スタート (0,0) から行ける区画(1 = 行ける、並びは mazeIndex)
+export function reachableCells(walls: number[], size: number): Uint8Array {
   const reach = new Uint8Array(size * size);
   const q: Cell[] = [[0, 0]];
   reach[mazeIndex(size, 0, 0)] = 1;
@@ -157,7 +157,11 @@ export function detectGoalCandidates(walls: number[], size: number, maxOpenings 
       q.push([nx, ny]);
     }
   }
+  return reach;
+}
 
+export function detectGoalCandidates(walls: number[], size: number, maxOpenings = 2): GoalCandidate[] {
+  const reach = reachableCells(walls, size);
   const out: GoalCandidate[] = [];
   for (const k of [3, 2]) {
     for (let x0 = 0; x0 + k <= size; x0++) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkWalls } from "@/lib/maze";
+import { mazeIndex, mazeSizeOf, reachableCells } from "@/lib/maze-shared";
 import { readExecOptions, runPathSim } from "@/lib/path-sim";
 
 export const runtime = "nodejs";
@@ -20,6 +21,13 @@ export async function POST(request: NextRequest) {
     const walls = checkWalls(body?.walls);
     const goals = Array.isArray(body?.goals) ? body.goals : null;
     if (Array.isArray(goals) && goals.length === 0) throw new Error("ゴールがありません(ツールバーの G: でゴールを置いてください)");
+    if (goals) {
+      // 行けないゴールだと path_create が失敗するだけで理由が分からない(maze_data/32_fake.yaml がこれ)
+      const size = mazeSizeOf(walls.length);
+      const reach = reachableCells(walls, size);
+      const ok = goals.some((g: unknown) => Array.isArray(g) && reach[mazeIndex(size, Number(g[0]), Number(g[1]))] === 1);
+      if (!ok) throw new Error("スタートからゴールへ行けません(ゴールが壁で閉じています)");
+    }
     const exec = Number(body?.exec ?? 0);
     const direction = body?.direction === "left" ? "left" : "right";
     return NextResponse.json(await runPathSim({ walls, goals, exec, direction }));

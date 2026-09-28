@@ -195,7 +195,11 @@ export function MazeSearchPanel({
             </span>
           </div>
           <div className="text-muted-foreground">
-            ゴール到達 {result.goal_time !== undefined && result.goal_time >= 0 ? fmtTime(result.goal_time) : "なし"} · 判断{" "}
+            ゴール到達 {result.goal_time !== undefined && result.goal_time >= 0 ? fmtTime(result.goal_time) : "なし"}
+            {result.goal_by === "known" && (
+              <span title="残り 1 区画のゴールは 4 辺が分かった時点で入らずに到達扱い(Adachi::goal_step_check)">(入らずに確定)</span>
+            )}{" "}
+            · 判断{" "}
             {steps.length} 回 · 上限 {result.search_timer} s
           </div>
           {result.params && (

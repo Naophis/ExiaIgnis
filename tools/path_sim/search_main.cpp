@@ -375,15 +375,26 @@ int main() {
       prm["turn_file"] = sim.tpp.file_list[fi];
   }
 
-  // ゴール区画に最初に入った判断の時刻
+  // ゴール区画に最初に入った判断の時刻。1 区画だけ残ったゴールは 4 辺が分かれば
+  // 入らずに到達扱い(Adachi::goal_step_check)なので、入らなかったときは判定した時刻。
   double goal_time = -1;
+  const char *goal_by = "none";
   for (const auto &st : sim.steps) {
     for (const auto &g : goals) {
       if (goal_time < 0 && st.from.x == g.x && st.from.y == g.y)
-        goal_time = st.t0;
+        goal_time = st.t0, goal_by = "enter";
+    }
+  }
+  if (goal_time < 0) {
+    for (const auto &st : sim.steps) {
+      if (st.goal) {
+        goal_time = st.t0, goal_by = "known";
+        break;
+      }
     }
   }
   out["goal_time"] = goal_time;
+  out["goal_by"] = goal_by;
 
   JsonArray steps = out["steps"].to<JsonArray>();
   for (const auto &st : sim.steps) {
