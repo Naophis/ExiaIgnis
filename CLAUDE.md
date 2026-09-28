@@ -202,6 +202,12 @@ PlanningTask は以下のサブシステムを内包:
 
 `timebase_path_create()` では `other_route_map` に候補分岐マスを記録し、`exec_param` の1〜5パターンで `path_create_with_change()` を試して最短タイムの経路を `path_set_map` (priority_queue) から取得します。
 
+近似コスト(`updateVectorMap`)は区画の手数を数えるだけでターンの種類(Dia135 は遅い・Large は速い等)を見ないため、手数は多いが実際は速い経路が「下り」にならない。`checkOtherRoot()` は分岐候補を「今の値 + `OTHER_ROUTE_MARGIN_CELLS`(0.5 区画)以下」で集める(2026-09-29。以前は「今の値より小さい」で同点も落ちていた)。幅は重みパターンごとの 1 区画のコスト `MazeSolverBaseLgc::cell_cost()` で測る(倍率だとパターンやゴールからの距離で幅が変わり候補が増えすぎる)。path_sim で 19 迷路 × 3 モード: 14 件速く(最大 −0.158 s)、1 件 +0.006 s。
+
+`timebase_path_create()` が候補を 1 つ試すたびに `path_create()` が近似コストの表(`updateVectorMap`、迷路全体の Dijkstra)を作り直していたのをやめ、候補の評価中は直前の `path_create()` で作った表を使い回す(`reuse_vector_map`、2026-09-29)。前提は「同じ重みパターンで `path_create()` してから `timebase_path_create()` を呼ぶ」(`path_run` / `sim_run_time` とも)。57 件で経路・タイムは完全一致、PC 上の計算時間は候補を広げる前の約 1.4 倍(使い回し前は約 3.5 倍)。
+
+`go_straight_dummy()`(`calc_goal_time` の直線を 1 ms 刻みで積み上げる)は、無限ループ対策のボタン確認を計算上 5 ms(ループ 5 回)ごとにしている(以前は毎回で、1 回の path_run で数千万回 GPIO を読んでいた)。加えて、速度が 0 以下のまま距離が残ったら、ボタンを待たずに失敗(ボタンと同じ 10000)を返す(パラメータの抜けで速度 0 だと人が押すまで止まらなかった。path_sim で確認)。どちらも正常な計算の結果は変わらない(57 件と探索 3 本で一致)。
+
 ホスト版: `tools/path_sim`(Param Console の迷路タブの「経路」)が `logic.cpp` / `path_creator.cpp` / `trajectory_creator.cpp` をそのまま PC でビルドして使う。MainTask の読込関数(`load_slalom_param` ほか)は `tools/path_sim/host_common.hpp`、`path_run()` の経路部分は `tools/path_sim/main.cpp` に写しがあるので、**それらを変えたら main.cpp も合わせる**(詳細は `tools/param_tuner/webapp/CLAUDE.md` の「経路」)。
 
 ### 吸引 ESC（ESCape32 / DShot）

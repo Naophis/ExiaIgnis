@@ -50,6 +50,10 @@ private:
 
   param_straight_t ps;
 
+  // true の間、path_create() は近似コストの表(lgc の vector_dist)を作り直さない。
+  // timebase_path_create() が候補を試している間だけ立てる(timebase_path_create() 参照)。
+  bool reuse_vector_map = false;
+
 public:
   std::unordered_map<int, candidate_route_info_t> other_route_map;
   std::unordered_map<int, candidate_route_info_t> other_route_map_bk;
@@ -99,6 +103,8 @@ public:
   void print_path2();
 
   float calc_goal_time(param_set_t &p_set, bool debug = false);
+  // 呼ぶ前に、同じ重みパターン(lgc->set_param_num)で path_create() しておくこと。
+  // 候補の評価ではそのとき作った近似コストの表を使い回す。
   float timebase_path_create(bool is_search, param_set_t &p_set, path_set_t &p);
   path_create_status_t pc_result;
   route_t route;

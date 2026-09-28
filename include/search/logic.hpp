@@ -144,6 +144,9 @@ public:
   const float VectorMaxF = (float)vector_max_step_val;
   int param_num = 1;
   void set_param_num(int type) { param_num = type; }
+  // 今の重みパターン(set_param())での 1 区画ぶんの直進コスト。パターンごとに桁が違う
+  // (7 / 1 / 180 / 7 / 0.5)ので、コストに幅を持たせるときの単位に使う。
+  float cell_cost() const { return St1; }
 
   void set_param() {
     if (param_num == 1) {

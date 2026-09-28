@@ -18,6 +18,9 @@
 //   goals     省略時は system.txt の goals
 // 出力: stdout に結果の JSON 1 行。ファームの printf は stderr(実機のコンソールと同じ内容)。
 
+#include <chrono>
+#include <map>
+
 #include "host_common.hpp"
 #include "include/action/path_creator.hpp"
 #include "include/ui.hpp"
@@ -39,6 +42,7 @@ public:
 
   // path_run() の候補(timebase_path_create の結果)。ファームは捨てるだけ。
   std::vector<path_set_t> candidates;
+  std::map<int, double> type_ms; // 重みパターンごとの計算時間 ms(PC 上)
   int selected_type = -1; // -1 = 候補が全部失敗して単純な経路に戻った / left
   std::string error;
 
@@ -76,6 +80,7 @@ public:
     if (right) {
       //速度ベース経路導出
       for (int i = 1; i <= 5; i++) {
+        const auto t_type = std::chrono::steady_clock::now();
         lgc->set_param_num(i);
         pc->other_route_map.clear();
         const bool res = pc->path_create(false);
@@ -92,6 +97,8 @@ public:
         p.time = 10000;
         pc->timebase_path_create(false, param_set, p);
         pc->path_set_map.push(p);
+        // 重みパターンごとの計算時間(PC 上。どのパターンに時間がかかっているかの目安)
+        type_ms[i] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_type).count();
       }
       // 先頭に最適な経路を持ってくる
       const auto top_p = pc->path_set_map.top();
@@ -242,7 +249,10 @@ int main() {
   }
   sim.setup_maze(map, goals);
 
+  const auto t_start = std::chrono::steady_clock::now();
   const bool ok = sim.path_run(ep.fast_idx, ep.normal_idx, ep.slow_idx, right);
+  // 経路計算にかかった時間(PC 上。機体の時間ではないが、変更前後の比の目安)
+  out["calc_ms"] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
   out["ok"] = ok;
   put_params(out.as<JsonObject>(), sim, ep);
   if (!ok) {
@@ -258,6 +268,7 @@ int main() {
   for (const auto &c : sim.candidates) {
     JsonObject o = cands.add<JsonObject>();
     o["type"] = (int)c.type;
+    o["ms"] = sim.type_ms[c.type];
     o["result"] = c.result;
     o["time"] = c.time;
     put_path(o, c.path_s, c.path_t);
@@ -278,5 +289,12 @@ int main() {
     o["dist"] = pc.path_time_total[i].dist;
   }
   out["goal_time"] = pc.path_time_total.empty() ? 0.0f : pc.path_time_total.back().total_time;
+  // calc_goal_time() が最初の直線で失敗した(直線が進まない = go_straight_dummy が 10000 を
+  // 返した等)ときは内訳が空になる。機体はエラー音を鳴らす経路(path_s が空)に入る。
+  if (pc.path_time_total.empty()) {
+    out["ok"] = false;
+    out["error"] = "タイムを計算できません(直線が進まない: 速度・加速度のパラメータが 0 などを確認)";
+    return finish(1);
+  }
   return finish(0);
 }

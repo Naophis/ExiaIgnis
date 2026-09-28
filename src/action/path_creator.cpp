@@ -129,8 +129,10 @@ bool PathCreator::path_create(bool is_search, int tgt_x, int tgt_y,
   int y = 1;
 
   path_reflash();
-  lgc->set_param();
-  lgc->updateVectorMap(is_search);
+  if (!reuse_vector_map) {
+    lgc->set_param();
+    lgc->updateVectorMap(is_search);
+  }
 
   path_s.emplace_back(3);
   float dist_val = MAX;
@@ -606,6 +608,15 @@ bool PathCreator::path_create_with_change(bool is_search, int tgt_x, int tgt_y,
 __attribute__((noinline, section(".time_critical.path_creator")))
 float PathCreator::timebase_path_create(bool is_search, param_set_t &p_set,
                                         path_set_t &p) {
+  // 2026-09-29: 候補を 1 つ試すたびに path_create() が近似コストの表(updateVectorMap、迷路全体の
+  // Dijkstra)を作り直していた。この間に変わるのは「(x, y) でこの向きへ行く」という指示だけで、
+  // 表を決める壁・ゴール・重みパターンは直前の path_create() と同じなので、そのとき作った表を
+  // 使い回す。どの return でも元に戻す。path_sim の 57 件で経路は同じ、計算は半分以下。
+  struct ReuseVectorMap {
+    bool &flag;
+    explicit ReuseVectorMap(bool &f) : flag(f) { flag = true; }
+    ~ReuseVectorMap() { flag = false; }
+  } reuse_guard(reuse_vector_map);
   bool next_end = false;
   candidate_route_info_t tmp_cand_route;
 
@@ -676,6 +687,9 @@ float PathCreator::timebase_path_create(bool is_search, param_set_t &p_set,
   return 0;
 }
 
+// 分岐候補に入れる近似コストの幅(区画数)。checkOtherRoot() 参照。
+static constexpr float OTHER_ROUTE_MARGIN_CELLS = 0.5f;
+
 __attribute__((noinline, section(".time_critical.path_creator")))
 void PathCreator::checkOtherRoot(int x, int y, Direction now_dir, float now) {
   if (other_route_map.contains(x + y * lgc->maze_size)) {
@@ -684,11 +698,20 @@ void PathCreator::checkOtherRoot(int x, int y, Direction now_dir, float now) {
 
   const int now_d = static_cast<int>(now_dir);
   candidate_route_info_t cand;
+  // 2026-09-29: 分岐候補を「今の値より小さい向き」から「今の値 + 区画の OTHER_ROUTE_MARGIN_CELLS
+  // ぶん以下の向き」にゆるめた。近似コスト(updateVectorMap)はターンの種類を見ないので、
+  // 手数が多くても実際は速い経路(きついターンを避けて斜め + Large で入る等)が「下り」に
+  // ならず、timebase_path_create の時間比較に載らなかった。同点も落ちていた。
+  // 例: log_log_20260927_155341.maze の (8,4) 西向きで、南が param_num 1 で 24.8 と今の値
+  // 21.9 より大きく(差は 0.4 区画)、param_num 2 では同点 → 候補外で 2.017s、入れると 1.982s。
+  // 幅は重みパターンごとの 1 区画のコスト(cell_cost)で測る(倍率だとパターンやゴールからの
+  // 距離で幅が変わり、候補が増えすぎて計算が 5〜6 倍になった)。
+  const float margin = lgc->cell_cost() * OTHER_ROUTE_MARGIN_CELLS;
   for (const auto d : direction_list) {
     const auto dist = lgc->getDistVector(x, y, d);
     const auto d_int = static_cast<int>(d);
-    if (now_d * d_int != 8 && !lgc->existWall(x, y, d) && dist < now &&
-        lgc->isStep(x, y, d)) {
+    if (now_d * d_int != 8 && !lgc->existWall(x, y, d) &&
+        dist <= now + margin && lgc->isStep(x, y, d)) {
       other_route_map[x + y * lgc->maze_size].candidate_dir_set.insert(d);
     }
   }
@@ -887,9 +910,14 @@ float PathCreator::go_straight_dummy(float v1, float vmax, float v2, float ac,
     acc = std::abs((v1 * v1 - v2 * v2) / (2 * dist)) + 1000;
   }
 
+  // 無限ループしたときに人が止めるためのボタン確認は、計算上 5 ms(ループ 5 回)ごと
+  // (2026-09-29。1 ms ごとだと 1 回の path_run で数千万回 GPIO を読んでいた。ループ 1 回は
+  // 実時間では µs 程度なので、5 回ごとでも押してからの遅れは分からない)。
+  constexpr int BUTTON_CHECK_INTERVAL = 5;
+  int loop_cnt = 0;
   while (distance <= dist) {
     time += 1;
-    if (ui->button_state()) {
+    if (++loop_cnt % BUTTON_CHECK_INTERVAL == 0 && ui->button_state()) {
       return 10000;
     }
     d2 = std::abs((V_now + v2) * (V_now - v2) / (2.0 * diac));
@@ -929,8 +957,12 @@ float PathCreator::go_straight_dummy(float v1, float vmax, float v2, float ac,
     if (V_now > planning_time.v_max) {
       planning_time.v_max = V_now;
     }
-    if (V_now < 0) {
-      break;
+    // 速度が 0 以下のまま距離が残っていると、ここから先は進まず抜けられない(パラメータの
+    // 抜けで速度・加速度が 0 のとき等)。ボタンを待たずに失敗(ボタンで止めたときと同じ
+    // 10000)を返す(2026-09-29。以前は負のときだけ break して途中までの時間を返しており、
+    // 走り切れない直線が速く見えていた)。
+    if (V_now <= 0 && distance <= dist) {
+      return 10000;
     }
   }
   planning_time.v_end = V_now;
