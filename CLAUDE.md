@@ -149,6 +149,8 @@ PlanningTask は以下のサブシステムを内包:
 `detect_next_direction()` で前進方向を最優先し、左右を `setNextDirection2()`（= 歩数が低い同値でも更新しない）で評価、後退は `enable_back` 条件下のみ。  
 `subgoal_list` に未踏マスをキャッシュし、ゴール到達後は帰還目的地を動的切り替えします。
 
+ホスト版: `tools/path_sim` の search_sim(Param Console の迷路タブの「探索」)が `adachi.cpp` / `logic.cpp` をそのまま PC でビルドして探索を再現する。`SearchController::exec()` の探索ループ・`judge_wall`・`pivot()` の手順と `run_main_mode()` の mode_num == 0 の準備は `tools/path_sim/search_main.cpp` に写しがあるので、**それらを変えたら search_main.cpp も合わせる**。
+
 ### Action サブシステム (`src/action/`)
 
 走行アクションを組み立てるレイヤー:
@@ -162,17 +164,17 @@ PlanningTask は以下のサブシステムを内包:
 
 #### `path_s` / `path_t` エンコーディング
 
-`path_s[i]` = セグメントの直線距離（1セル = 2単位）  
+`path_s[i]` = セグメントの直線距離（1セル = 2単位。前のターンの出口の基準点から次のターンの入口の基準点までで、実際の直線は `0.5 * path_s − 1` 区画）  
 `path_t[i]` = ターン種別の整数コード:
 
 | 値 | 意味 |
 |----|------|
 | 1 | 右ターン (Normal Right) |
 | 2 | 左ターン (Normal Left) |
-| 3 | Large Right |
-| 4 | Large Left |
-| 5 | Orval Right |
-| 6 | Orval Left |
+| 3 | Orval Right (180°) |
+| 4 | Orval Left (180°) |
+| 5 | Large Right (大回り 90°) |
+| 6 | Large Left (大回り 90°) |
 | 7 | Dia45 Right |
 | 8 | Dia45 Left |
 | 9 | Dia135 Right |
@@ -191,6 +193,8 @@ PlanningTask は以下のサブシステムを内包:
 #### PathCreator の経路最適化
 
 `timebase_path_create()` では `other_route_map` に候補分岐マスを記録し、`exec_param` の1〜5パターンで `path_create_with_change()` を試して最短タイムの経路を `path_set_map` (priority_queue) から取得します。
+
+ホスト版: `tools/path_sim`(Param Console の迷路タブの「経路」)が `logic.cpp` / `path_creator.cpp` / `trajectory_creator.cpp` をそのまま PC でビルドして使う。MainTask の読込関数(`load_slalom_param` ほか)は `tools/path_sim/host_common.hpp`、`path_run()` の経路部分は `tools/path_sim/main.cpp` に写しがあるので、**それらを変えたら main.cpp も合わせる**(詳細は `tools/param_tuner/webapp/CLAUDE.md` の「経路」)。
 
 ### 吸引 ESC（ESCape32 / DShot）
 
