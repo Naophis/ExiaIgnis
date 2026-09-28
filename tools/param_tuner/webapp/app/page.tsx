@@ -10,6 +10,7 @@ import { ParamMatrixPanel } from "@/components/param-matrix-panel";
 import { ALL_SENTINEL, ProfilePanel } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { SensorCalibPanel } from "@/components/sensor-calib-panel";
 import { SlalomSimPanel } from "@/components/slalom-sim-panel";
 import { TestTemplatePanel } from "@/components/test-template-panel";
 import { YamlEditor } from "@/components/yaml-editor";
@@ -43,7 +44,7 @@ export default function Home() {
   const [sending, setSending] = useState<string | null>(null);
   const [am32Action, setAm32Action] = useState<Am32Action | null>(null);
 
-  const [rightTab, setRightTab] = useState<"console" | "plot">("console");
+  const [rightTab, setRightTab] = useState<"console" | "plot" | "calib">("console");
   const [flashing, setFlashing] = useState(false);
   const [plotAutoOpen, setPlotAutoOpen] = useState<{ file: string; nonce: number } | null>(null);
 
@@ -416,6 +417,14 @@ export default function Home() {
               >
                 プロット
               </Button>
+              <Button
+                size="sm"
+                variant={rightTab === "calib" ? "default" : "outline"}
+                onClick={() => setRightTab("calib")}
+                title="テストモード15の生値からセンサー距離換算(sensor.yaml gain)を求める"
+              >
+                センサ校正
+              </Button>
             </>
           ) : undefined
         }
@@ -522,6 +531,13 @@ export default function Home() {
               <div className={`min-h-0 flex-1 ${rightTab === "plot" ? "flex" : "hidden"}`}>
                 <LogPlotPanel autoOpen={plotAutoOpen} onAutoOpenHandled={() => setPlotAutoOpen(null)} />
               </div>
+              {/* 校正パネルは Space キーを記録に使うので、表示中だけマウントする
+                  (位置表は localStorage に残るのでタブを切り替えても消えない)。 */}
+              {rightTab === "calib" && (
+                <div className="flex min-h-0 flex-1">
+                  <SensorCalibPanel connected={status === "connected"} />
+                </div>
+              )}
             </div>
           )}
         </ResizablePanel>
