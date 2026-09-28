@@ -106,7 +106,7 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
   - **走行は必ずケーブルなし**(つないだままの走行は危険、とユーザーから強く指摘された)。人がするのは「ケーブルを抜く → 機体のボタン → スタート位置に置いて前に手をかざす → (機体が走って止まる) → ケーブルをつなぐ」だけ。ファームはケーブルがつながっている間は開始手順へ入らず、ログは走ったあと最初につながって 1 秒後に自動で送る(3 秒以上抜いて挿し直すと送り直す。UI は中身が同じスイープを二重に入れない)。ケーブルなしでは画面が見えないので、走れない理由(前壁が近い)は error 音で知らせる。
   - 進行状況の行: `sweep: ready (v= dist= d0= ctrl=)` / `unplug the cable` / `place` / `front wall too close` / `wave a hand` / `running` / `sending log (d0=)` / `dumped` / `cancelled`。UI の案内(`parseSweepStateLine`、`FW_STATE_TTL`)が読む。**ファームの文言を変えたら UI も合わせる。** 走行中はつながっていないので、実際に届くのは ready / unplug / sending / dumped。案内は `connected` prop(page.tsx の接続状態)と組み合わせて出す。
   - **壁制御は走行距離で決め打ち**(ユーザー指示): 走り出しから `sensor_sweep_wall_ctrl_dist`(100mm)だけ `sct=Straight`、残り 95mm は `sct=NONE`(前壁へ近づくと right45_d 等が前壁を見るため)。cells=2 なら前壁まで 137mm の所で切れる。前センサーの読みで切る既存の判定(`exist.front`)は校正中の係数に依るので使わない。`go_straight` を 2 本つなぐのでログの `dist` は 2 本目の頭で 0 に戻り、`parseSweepLog` が速度 × 時間で補ってつなぎ直す(実機ログを分割したもので誤差 0.01mm)。
-- **前壁スイープの距離の基準は迷路の寸法(2026-09-28、ユーザー案)**: 探索の走り出しと同じ `offset_start_dist_search`(15) + 90 × `sensor_sweep_cells`(2) = 195mm 走り、区画中央 = 前壁まで 42mm で止まる。スタート区画を含めて 3 区画の直線の突き当たりに前壁。開始位置の前壁距離 d0 = 195 + 42 = 237 をファームが知らせ、UI はスイープ行の `dist` に入れる(前壁距離 = d0 − 走行距離)。人が測る値も静止点も要らない。測りたい範囲(42〜138mm)に入る前に 1 区画ぶん壁制御で姿勢が整う。
+- **前壁スイープの距離の基準は迷路の寸法(2026-09-28、ユーザー案)**: hardware.yaml の `offset_start_dist_search`(17) + 90 × `sensor_sweep_cells`(2) = 197mm 走り、区画中央 = 前壁まで 42mm で止まる。スタート区画を含めて 3 区画の直線の突き当たりに前壁。走り出しのオフセットは共通のパラメータを参照し、スイープ専用の値は持たない(ユーザー指示。15 のとき 2mm 手前で止まり、ユーザーが 17 に直した)。開始位置の前壁距離 d0 = 197 + 42 = 239 をファームが知らせ、UI はスイープ行の `dist` に入れる(前壁距離 = d0 − 走行距離)。人が測る値も静止点も要らない。測りたい範囲(42〜138mm)に入る前に 1 区画ぶん壁制御で姿勢が整う。
   - 実機 2 本(`20260928_222909/222947`、このときは 85mm 走行・開始位置 147 と仮定)で、同じ生値の読みの差 0.2〜0.7mm、a の差 1% 以内(置き直しを含む再現性)。
   - **移動距離の精度**はそのまま距離の誤差になる(タイヤ径の誤差率 × 走行距離。0.5% なら 42mm 地点で約 1mm)。再現性には出ない系統誤差なので、止まった位置が実際に前壁から 42mm かをスペーサーで一度確かめる。前壁の静止点を記録してあれば、スイープ行のホバーに「静止点との差」を位置ごとに出す(近いほど大きければ走行距離、一定なら開始位置)。
   - 「静止点に合わせる」(詳細、既定オフ)は、開始位置を静止点から L90/R90 別々に求め直す(`estimateSweepD0`)。既存の静止点 csv は置き損じが数 mm ある(`f_48` と `f_54` の生値がほぼ同じ、far の 3 点は near と約 10mm 食い違う)ので、既定にしていない。
@@ -134,6 +134,17 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 - **編集**: 区画を対角線で 4 分割していちばん近い壁をトグル(拡張と同じ)。ドラッグは最初の壁で「置く/消す」と向き(横/縦)を決め、通った壁すべてに当てる(向きを固定しないと、格子線をなぞっても柱の近くで直交する壁を拾う)。1 ストロークで元に戻す 1 回。外周は触れない。Ctrl+Z / Ctrl+Shift+Z・Ctrl+Y / Ctrl+S はタブ表示中だけ拾う。編集中の内容を残すため、タブは隠すだけでマウントしたまま。
 - **送信**: 表示中の壁(未保存でも)を `/maze.txt` として送る。ファームが読むのは次に `run_main_mode()` へ入ったときの `read_maze_data()`。大きさが system.yaml の `maze_size` と違うと壁が全部ずれるので API で拒否する。
 - 機体から迷路を受信すると(`saved` の `type: "maze"`)一覧を取り直し、トーストのクリックでその迷路を開く。
+
+### 経路(2026-09-29〜)— `tools/path_sim` / `lib/path-sim.ts` / `lib/maze-path.ts` / `components/maze-path-panel.tsx`
+
+ツールバーの「経路」で、機体の最短走行(`MainTask::path_run()` の `exec_path_running()` より前)と同じ経路生成を回し、軌跡を迷路に重ね、`calc_goal_time()` の区間ごとの内訳(「区間」)と `load_slalom_param()` が読んだターンごとのパラメータ(「ターン設定」: 種別ごとに fast / normal / slow の 3 行、使ったファイル・v・rad・pow_n・time・front/back、経路で使わない種別は薄く)を右の表に出す。表の v 列の右の数字は直線の終わり = 次のターンに入る速度。**全マス既知(踏破済み)として扱う**(ユーザー指示。受信ログは下位 4bit しか持たないので、実機の探索途中の地図は再現しない)。
+
+- **経路生成はファームのソースそのもの**: `tools/path_sim/Makefile` が `src/search/logic.cpp`・`src/action/path_creator.cpp`・`src/action/trajectory_creator.cpp` をホストの g++ でビルドする(`pico/stdlib.h` は空のスタブ、`UserInterface::button_state*` は false を返すスタブ、JSON はファームと同じ ArduinoJson を `build/_deps` から)。`lib/path-sim.ts` が実行のたびに `make -s` を通すので、ファームのソースを変えれば次の計算から反映される(初回ビルド約 13 秒、以後は数 ms)。make と実行は 1 本ずつ(同時に make が走ると .o がぶつかる)。ファームを一度 cmake configure していないと ArduinoJson が無くてビルドできない。
+- **写しがあるのは MainTask のメンバー関数だけ**(`tools/path_sim/main.cpp`): `load_params`・`load_turn_param_profiles(false, 0)`・`exec_param_prof`・`load_slalom_param`/`load_slas`/`load_straight`・`run_main_mode` の lgc 初期化・`path_run` の経路部分。MainTask は Pico の周辺機能ごとでないと持ち出せないため。**これらを変えたら main.cpp も合わせる**(ファームには手を入れない方針で始めた。共通関数へ出せば写しは消せる)。
+- **入力**: プロファイルは機体へ送るときと同じ名前・同じ変換(`hardware.txt`・`t_1200.hf` など、yaml → JSON)。つまり**ローカルの yaml**で計算する(機体に未送信の変更も入る)。迷路はファームの並び `map[x + y * size]` に直して `| 0xf0`。ゴールは迷路タブに出しているもの(大会迷路はファイルのゴール)。出力は stdout に JSON、ファームの printf は stderr(実機のコンソールと同じ内容。パネル下の「ファームの出力」)。
+- **走行パラメータ**は `run_prf.yaml` の `exec_prof` をボタンで選ぶ。ボタンには**機体のモード選択の LED と同じ点灯パターン**(`select_mode()` の `lbit.byte = mode_num + 1` を 6 桁の 2 進で、左から b5 b4 b3 / b2 b1 b0。mode 0 = ○○○ ○○●、このシミュレータの 0 番 = mode 2 = ○○○ ○●●)と、**exec_prof の並び順(0 始まり)**の番号を出す(どちらもユーザー指定。mode_num をそのまま番号にしたら「イメージが合わない」と言われた)。左の 3 個の並びは `UserInterface::LED_bit` の配線(LED4 = b5、LED5 = b4、LED6 = b3)から読んだもの。点灯は実機と同じライトグリーン、消灯は暗い点。選択中も LED の色は変えず枠で示し、ボタンは同じ幅の格子に並べてパターンを縦にそろえる(小さい点・輪の消灯・選択時の色反転では「見づらい」と言われた)。プルダウンは操作が面倒と言われたのでボタン。「右: タイム比較」は `set_param_num(1〜5)` の候補を作り最短タイムを採用(機体で右を選んだとき)、「左: 単純」は `path_create` の経路そのまま。候補チップのクリックでその候補の経路を金の破線で重ねる。モードと左右は `localStorage`(`exia-maze-path-prefs-v1`)。迷路・ゴール・モードが変わるたびに 250ms 待って再計算する(壁を編集すると経路が引き直される)。
+- **軌跡の描き方**(`lib/maze-path.ts`): `path_s`/`path_t` から、変換規則(`path_create`→`convert_large_path`→`diagonalPath`)で決まる基準点を半区画グリッドで辿る。約束はファイル冒頭のコメント。要点: `path_s` は前のターンの出口の基準点から次のターンの入口の基準点までの半区画数で、実際の直線は s − 2。入口→出口のずれは Normal/Dia45/Dia90 がなし、Large が step(入)+step(出)、Orval が横へ 1 区画、Dia135 が軸方向 2 ステップ。弧は基準点の前後 1 ステップを 3 次ベジエでつなぐ(見た目だけで、実機の軌跡ではない)。**検証**: 受信ログ 23 本 + 大会迷路 12 本 × モード 4 通り × 左右で、描いた軌跡が壁を横切るのは 0 件、ゴール区画の中心で止まらないのも 0 件(全ターン種別で計 9,683 ターン)。Dia90 を最初「間に 1 区画」としていて壁を横切り、ここで誤りが分かった。変換規則を変えたら同じ検査をすること。
+- ターン番号は 3/4 = Orval(180°)、5/6 = Large(90°)(`TrajectoryCreator::get_turn_type`)。
 
 ## Flash — `lib/flash.ts`
 
@@ -174,5 +185,6 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 | `/api/logs/turn-exit` | GET | 複数ログの旋回出口集計(`limit=N` 直近N本 / `names=a.csv,b.csv`)。`lib/turn-exit.ts` をサーバー側で回し (ファイル名, mtime) でキャッシュ |
 | `/api/logs/open-folder` | POST | logs/フォルダをファイルマネージャで開く |
 | `/api/sensor-calib` | GET/POST | センサ校正: `gains`(現在値)/`dirs`/`load`、POST `save`(csv保存)/`apply`(sensor.yaml置換+任意で送信) |
+| `/api/maze/path` | GET/POST | 経路: GET はモードの選択肢(run_prf の exec_prof)、POST `{walls, goals, exec, direction}` で `tools/path_sim` を実行 |
 | `/api/maze` | GET/POST | 迷路: `list`(一覧 + system.yaml の goals/maze_size)/`read`、POST `save`(編集用を上書き)/`saveAs`(profile/hf/へ新規)/`send`(maze.txt へ送信) |
 | `/api/flash` | POST | `flash.sh`(picotool)実行。実行前にシリアル切断、完了後auto-connectを再有効化 |

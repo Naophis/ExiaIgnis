@@ -190,9 +190,9 @@ export function parseSweepStateLine(line: string): SweepFwLine | null {
 
 // スイープ開始位置の前壁距離の既定値。ファームが "sweep: ready (… d0=…)" で
 // 知らせる値を使うので、これは過去ログを手で取り込むときの初期値。
-// 探索の走り出しと同じ 15(offset_start_dist_search) + 90×2 区画 = 195mm 走って
-// 区画中央(前壁まで 42mm)で止まるので 195 + 42。
-export const SWEEP_DEFAULT_D0 = 237;
+// 17(hardware.yaml の offset_start_dist_search) + 90×2 区画 = 197mm 走って
+// 区画中央(前壁まで 42mm)で止まるので 197 + 42。
+export const SWEEP_DEFAULT_D0 = 239;
 // スイープで近づきたい距離(near の下端 42 の少し手前で止める)
 export const SWEEP_TARGET_END = 45;
 

@@ -8,7 +8,10 @@ import { Input } from "@/components/ui/input";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { MazePathPanel } from "@/components/maze-path-panel";
 import type { MazeContent, MazeFileInfo, MazeGroup } from "@/lib/maze";
+import { buildPathGeometry, pathD, type Pt } from "@/lib/maze-path";
+import { usePathSim } from "@/lib/use-path-sim";
 import {
   blankMaze,
   edgeKey,
@@ -41,6 +44,7 @@ const MARGIN_T = 0.3;
 const MARGIN_R = 0.3;
 const WALL_WIDTH = 0.12;
 const POST_SIZE = 0.16;
+const PATH_COLOR = "oklch(0.82 0.13 230)";
 
 interface MazeDoc {
   id: string | null; // null = 未保存の新規
@@ -92,6 +96,10 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   const [hover, setHover] = useState<{ cell: Cell; edge: Edge | null } | null>(null);
   const [saveAsName, setSaveAsName] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "send" | null>(null);
+  // 経路(MainTask::path_run() の経路生成を tools/path_sim で再現)
+  const [pathOn, setPathOn] = useState(false);
+  const [shownCandidate, setShownCandidate] = useState<number | null>(null);
+  const [hoverSeg, setHoverSeg] = useState<number | null>(null);
 
   const svgRef = useRef<SVGSVGElement>(null);
   // ドラッグ中の 1 ストローク: 最初の壁で決めた「置く/消す」と向き(横=N/縦=E)を、
@@ -100,6 +108,9 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
   const strokeRef = useRef<{ present: boolean; dir: "N" | "E"; visited: Set<string> } | null>(null);
 
   const size = doc?.size ?? 0;
+  const goals = doc?.goals ?? system.goals ?? [];
+  const goalSource = doc?.goals ? "ファイル" : system.goals ? "system.yaml" : null;
+  const pathSim = usePathSim(pathOn && doc !== null, walls, goals);
   const dirty = doc !== null && (savedWalls === null || walls.some((w, i) => w !== savedWalls[i]));
 
   const refreshFiles = useCallback(async () => {
@@ -368,9 +379,6 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
 
   // ===== 描画 =====
 
-  const goals = doc?.goals ?? system.goals ?? [];
-  const goalSource = doc?.goals ? "ファイル" : system.goals ? "system.yaml" : null;
-
   const paths = useMemo(() => {
     let wall = "";
     let mismatch = "";
@@ -416,9 +424,152 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
       : `M${hoverEdge.x + 1} ${size - hoverEdge.y}L${hoverEdge.x + 1} ${size - hoverEdge.y - 1}`;
   const hoverWouldRemove = hoverEdge ? edgeState(walls, size, hoverEdge) === "wall" : false;
 
+  const pathResult = pathOn ? pathSim.result : null;
+  const pathGeo = useMemo(
+    () => (pathResult?.ok && pathResult.path_s && pathResult.path_t ? buildPathGeometry(pathResult.path_s, pathResult.path_t) : null),
+    [pathResult],
+  );
+  const candGeo = useMemo(() => {
+    const c = pathResult?.candidates?.find((x) => x.type === shownCandidate && x.result);
+    return c ? buildPathGeometry(c.path_s, c.path_t) : null;
+  }, [pathResult, shownCandidate]);
+  const toScreen = (p: Pt): Pt => [p[0], size - p[1]];
+  const hoverTurn = hoverSeg !== null ? pathGeo?.turns.find((t) => t.index === hoverSeg) : undefined;
+
   const labelSize = size > 20 ? 0.42 : 0.5;
   const grouped = GROUP_ORDER.map((g) => ({ group: g, items: files.filter((f) => f.group === g) }));
   const hoverWall = hover ? walls[mazeIndex(size, hover.cell[0], hover.cell[1])] : 0;
+
+  const mazeView = (
+    <div className="h-full min-h-0 p-1">
+      {doc && size > 0 && (
+        <svg
+          ref={svgRef}
+          className="h-full w-full touch-none select-none"
+          viewBox={`${-MARGIN_L} ${-MARGIN_T} ${size + MARGIN_L + MARGIN_R} ${size + MARGIN_T + MARGIN_B}`}
+          style={{ cursor: hover?.edge ? "pointer" : "default" }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endStroke}
+          onPointerCancel={endStroke}
+          onPointerLeave={() => setHover(null)}
+        >
+          <rect x={0} y={0} width={size} height={size} fill="oklch(0.12 0.015 250)" />
+          {goals
+            .filter(([x, y]) => x >= 0 && y >= 0 && x < size && y < size)
+            .map(([x, y]) => (
+              <rect
+                key={`g${x},${y}`}
+                x={x}
+                y={size - y - 1}
+                width={1}
+                height={1}
+                fill="var(--primary)"
+                fillOpacity={0.28}
+              />
+            ))}
+          <rect x={0} y={size - 1} width={1} height={1} fill="var(--accent-gold)" fillOpacity={0.25} />
+          {hover && (
+            <rect
+              x={hover.cell[0]}
+              y={size - hover.cell[1] - 1}
+              width={1}
+              height={1}
+              fill="var(--foreground)"
+              fillOpacity={0.06}
+            />
+          )}
+          <path d={paths.grid} stroke="var(--border)" strokeWidth={0.03} fill="none" />
+          <path
+            d={paths.wall}
+            stroke="var(--chart-2)"
+            strokeWidth={WALL_WIDTH}
+            strokeLinecap="square"
+            fill="none"
+          />
+          <path
+            d={paths.mismatch}
+            stroke="var(--accent-gold)"
+            strokeWidth={WALL_WIDTH}
+            strokeDasharray="0.15 0.12"
+            fill="none"
+          />
+          <path d={posts} fill="var(--muted-foreground)" />
+          {pathGeo && (
+            <g pointerEvents="none" fill="none" strokeLinecap="round" strokeLinejoin="round">
+              <path
+                d={pathD(pathGeo, toScreen)}
+                stroke={PATH_COLOR}
+                strokeWidth={0.09}
+                strokeOpacity={candGeo ? 0.35 : 0.9}
+              />
+              {candGeo && (
+                <path
+                  d={pathD(candGeo, toScreen)}
+                  stroke="var(--accent-gold)"
+                  strokeWidth={0.09}
+                  strokeDasharray="0.25 0.12"
+                />
+              )}
+              {!candGeo &&
+                pathGeo.turns.map((t) => {
+                  const [x, y] = toScreen(t.at);
+                  return <circle key={t.index} cx={x} cy={y} r={0.1} fill={PATH_COLOR} />;
+                })}
+              {hoverSeg !== null && (
+                <path d={pathD(pathGeo, toScreen, hoverSeg)} stroke="var(--foreground)" strokeWidth={0.16} />
+              )}
+              {hoverTurn && (
+                <text
+                  x={toScreen(hoverTurn.at)[0] + 0.25}
+                  y={toScreen(hoverTurn.at)[1] - 0.25}
+                  fontSize={0.55}
+                  fill="var(--foreground)"
+                  stroke="oklch(0.12 0.015 250)"
+                  strokeWidth={0.12}
+                  paintOrder="stroke"
+                >
+                  {hoverTurn.index}: {hoverTurn.name} {hoverTurn.right ? "R" : "L"}
+                </text>
+              )}
+            </g>
+          )}
+          {hoverEdgePath && (
+            <path
+              d={hoverEdgePath}
+              stroke={hoverWouldRemove ? "var(--foreground)" : "var(--primary)"}
+              strokeOpacity={0.75}
+              strokeWidth={WALL_WIDTH * 1.6}
+              strokeLinecap="round"
+              fill="none"
+              pointerEvents="none"
+            />
+          )}
+          <text
+            x={0.5}
+            y={size - 0.5}
+            fontSize={0.45}
+            fill="var(--accent-gold)"
+            textAnchor="middle"
+            dominantBaseline="central"
+            pointerEvents="none"
+          >
+            S
+          </text>
+          {Array.from({ length: size }, (_, i) => (
+            <g key={i} fill="var(--muted-foreground)" fontSize={labelSize} pointerEvents="none">
+              <text x={i + 0.5} y={size + 0.55} textAnchor="middle" dominantBaseline="central">
+                {i}
+              </text>
+              <text x={-0.2} y={size - i - 0.5} textAnchor="end" dominantBaseline="central">
+                {i}
+              </text>
+            </g>
+          ))}
+        </svg>
+      )}
+    </div>
+  );
 
   return (
     <Card className="flex flex-1 flex-row overflow-hidden">
@@ -514,6 +665,17 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
               <div className="flex-1" />
               {doc && (
                 <>
+                  <Button
+                    size="xs"
+                    variant={pathOn ? "default" : "outline"}
+                    onClick={() => {
+                      setPathOn((v) => !v);
+                      setShownCandidate(null);
+                    }}
+                    title="機体の最短走行(MainTask::path_run)と同じ経路生成で経路とタイムを出す。全マス既知として扱う"
+                  >
+                    経路
+                  </Button>
                   <Button size="xs" variant="ghost" disabled={past.length === 0} onClick={undo} title="元に戻す (Ctrl+Z)">
                     戻す
                   </Button>
@@ -584,95 +746,36 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce, o
                 </>
               )}
             </div>
-            <div className="min-h-0 flex-1 p-1">
-              {doc && size > 0 && (
-                <svg
-                  ref={svgRef}
-                  className="h-full w-full touch-none select-none"
-                  viewBox={`${-MARGIN_L} ${-MARGIN_T} ${size + MARGIN_L + MARGIN_R} ${size + MARGIN_T + MARGIN_B}`}
-                  style={{ cursor: hover?.edge ? "pointer" : "default" }}
-                  onPointerDown={onPointerDown}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={endStroke}
-                  onPointerCancel={endStroke}
-                  onPointerLeave={() => setHover(null)}
-                >
-                  <rect x={0} y={0} width={size} height={size} fill="oklch(0.12 0.015 250)" />
-                  {goals
-                    .filter(([x, y]) => x >= 0 && y >= 0 && x < size && y < size)
-                    .map(([x, y]) => (
-                      <rect
-                        key={`g${x},${y}`}
-                        x={x}
-                        y={size - y - 1}
-                        width={1}
-                        height={1}
-                        fill="var(--primary)"
-                        fillOpacity={0.28}
-                      />
-                    ))}
-                  <rect x={0} y={size - 1} width={1} height={1} fill="var(--accent-gold)" fillOpacity={0.25} />
-                  {hover && (
-                    <rect
-                      x={hover.cell[0]}
-                      y={size - hover.cell[1] - 1}
-                      width={1}
-                      height={1}
-                      fill="var(--foreground)"
-                      fillOpacity={0.06}
-                    />
-                  )}
-                  <path d={paths.grid} stroke="var(--border)" strokeWidth={0.03} fill="none" />
-                  <path
-                    d={paths.wall}
-                    stroke="var(--chart-2)"
-                    strokeWidth={WALL_WIDTH}
-                    strokeLinecap="square"
-                    fill="none"
+            {pathOn && doc ? (
+              // 迷路は正方形で横が余るので、経路の表は右に置く(プロットタブの旋回表と同じ配置)。
+              <ResizablePanelGroup direction="horizontal" autoSaveId="param-console-maze-path" className="min-h-0 flex-1">
+                <ResizablePanel defaultSize={60} minSize={30} className="min-w-0">
+                  {mazeView}
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={40} minSize={20} className="min-w-0">
+                  <MazePathPanel
+                    options={pathSim.options}
+                    exec={pathSim.exec}
+                    onExecChange={pathSim.setExec}
+                    direction={pathSim.direction}
+                    onDirectionChange={(d) => {
+                      pathSim.setDirection(d);
+                      setShownCandidate(null);
+                    }}
+                    busy={pathSim.busy}
+                    result={pathResult}
+                    geometry={pathGeo}
+                    shownCandidate={shownCandidate}
+                    onShowCandidate={setShownCandidate}
+                    hoverSeg={hoverSeg}
+                    onHoverSeg={setHoverSeg}
                   />
-                  <path
-                    d={paths.mismatch}
-                    stroke="var(--accent-gold)"
-                    strokeWidth={WALL_WIDTH}
-                    strokeDasharray="0.15 0.12"
-                    fill="none"
-                  />
-                  <path d={posts} fill="var(--muted-foreground)" />
-                  {hoverEdgePath && (
-                    <path
-                      d={hoverEdgePath}
-                      stroke={hoverWouldRemove ? "var(--foreground)" : "var(--primary)"}
-                      strokeOpacity={0.75}
-                      strokeWidth={WALL_WIDTH * 1.6}
-                      strokeLinecap="round"
-                      fill="none"
-                      pointerEvents="none"
-                    />
-                  )}
-                  <text
-                    x={0.5}
-                    y={size - 0.5}
-                    fontSize={0.45}
-                    fill="var(--accent-gold)"
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    pointerEvents="none"
-                  >
-                    S
-                  </text>
-                  {Array.from({ length: size }, (_, i) => (
-                    <g key={i} fill="var(--muted-foreground)" fontSize={labelSize} pointerEvents="none">
-                      <text x={i + 0.5} y={size + 0.55} textAnchor="middle" dominantBaseline="central">
-                        {i}
-                      </text>
-                      <text x={-0.2} y={size - i - 0.5} textAnchor="end" dominantBaseline="central">
-                        {i}
-                      </text>
-                    </g>
-                  ))}
-                </svg>
-              )}
-            </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
+              <div className="min-h-0 flex-1">{mazeView}</div>
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
