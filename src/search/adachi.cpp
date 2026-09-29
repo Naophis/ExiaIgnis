@@ -324,83 +324,11 @@ Motion Adachi::exec(bool is_stepped, bool force_back) {
   return next_motion;
 }
 
-// サブゴール = 重みパターン 2 と 4 それぞれの「未知の壁は無いものとした最短経路」の上の未知区画
-// (2026-09-29)。
-//
-// 経路は覚えておき、その上に壁が見つかったときだけ、そのパターンの表を作り直す。探索で新しく
-// 分かるのは壁だけなので、覚えた経路は塞がれない限りそのまま使える(毎回作り直す場合と、探索の
-// 結果はほぼ同じ)。1 回の update() で作り直すのは SUBGOAL_REBUILD_LIMIT 枚まで。超えた
-// パターンは次の update() へ回し、それまでそのパターンのサブゴールは出さない。
-// サブゴールは毎回、覚えた経路から作り直す(前回までのものは持ち越さない)。
-//
-// 探索のシミュレーション(tools/path_sim の search_sim、迷路 21 本 × 走行モード 5 つ)では、
-// 従来(パターン 1 を毎回、持ち越しあり)に対して探索の総時間 4886 → 4820 s、探索後の地図で
-// 最短走行がタイム最小にならないケース 25 → 9 件。表を作り直すのは移動の 18 % だけ。
-// ただし迷路ごとの差が大きい(探索 −47〜+97 s。最短走行が速くなるのは 21 本中 4 本で、
-// 探索が伸びた迷路とは限らない)ので、既定にはしていない(subgoal_mode 1 で選ぶ)。
-// パターンの組は 31 通りを総当たりして選んだ(tools/path_sim/experiments/README.md の実験 5)。
-__attribute__((noinline, section(".time_critical.search")))
-void Adachi::update_subgoal_by_routes() {
-  subgoal_list.clear();
-  int rebuilt = 0;
-  for (int i = 0; i < SUBGOAL_ROUTE_NUM; i++) {
-    auto &r = subgoal_routes[i];
-    bool ok = r.valid;
-    if (ok) {
-      for (const auto e : r.route) {
-        if (lgc->existWall(MazeSolverBaseLgc::route_x(e),
-                           MazeSolverBaseLgc::route_y(e),
-                           MazeSolverBaseLgc::route_dir(e))) {
-          ok = false; // 経路の上に壁が見つかった
-          break;
-        }
-      }
-    }
-    if (!ok && rebuilt >= SUBGOAL_REBUILD_LIMIT) {
-      r.valid = false; // 次の update() で作り直す
-      continue;
-    }
-    if (!ok) {
-      rebuilt++;
-      subgoal_tmp.clear();
-      lgc->set_param_num(SUBGOAL_PATTERNS[i]);
-      lgc->set_param();
-      lgc->searchGoalPosition(true, subgoal_tmp);
-      r.route.assign(lgc->goal_route.begin(), lgc->goal_route.end());
-      r.valid = true;
-      cost_mode = SUBGOAL_PATTERNS[i];
-    }
-    for (const auto e : r.route) {
-      const int x = MazeSolverBaseLgc::route_x(e);
-      const int y = MazeSolverBaseLgc::route_y(e);
-      const Direction dir = MazeSolverBaseLgc::route_dir(e);
-      if (!lgc->is_unknown(x, y, dir))
-        continue;
-      int nx = x, ny = y;
-      if (dir == Direction::North)
-        ny++;
-      else if (dir == Direction::East)
-        nx++;
-      else if (dir == Direction::West)
-        nx--;
-      else if (dir == Direction::South)
-        ny--;
-      subgoal_list[nx + ny * lgc->maze_size] = 1;
-    }
-  }
-  lgc->set_param_num(1);
-  lgc->set_param();
-}
-
 void Adachi::update() {
   goal_step_check();
   if (goal_step && sm == SearchMode::ALL) {
     if (subgoal_list.contains(ego->x + ego->y * lgc->maze_size)) {
       subgoal_list.erase(ego->x + ego->y * lgc->maze_size);
-    }
-    if (subgoal_mode == 1) {
-      update_subgoal_by_routes();
-      return;
     }
     {
       lgc->set_param_num(1);

@@ -573,7 +573,6 @@ SearchResult SearchController::exec(param_set_t &p_set, SearchMode sm) {
   saved = false;
   int go_home_fix_cnt = 0;
   adachi->sm = sm;
-  adachi->subgoal_mode = param->search_subgoal_mode;
   bool timeup = false;
   bool state = true;
   int goal_state = 0;

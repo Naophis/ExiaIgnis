@@ -1227,10 +1227,6 @@ typedef struct {
   float wall_off_wait_dist_dia = 40;
   int search_log_enable = 0;
   int seach_timer = 60 * 3;
-  // 探索でゴールした後のサブゴールの選び方(Adachi::subgoal_mode)。
-  //   0: 重みパターン 1 の経路を毎回作り直す(従来。既定)
-  //   1: 重みパターン 2 と 4 の経路を覚えておき、壁で塞がれたときだけ作り直す
-  int search_subgoal_mode = 0;
   int test_log_enable = 0;
   int fast_log_enable = 0;
   float front_dist_offset_pivot_th = 0;

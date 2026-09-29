@@ -99,18 +99,6 @@ public:
 
   void append_goal(const int x, const int y);
 
-  // searchGoalPosition() が歩いた経路(スタートからゴールまで、区画と出ていく向き)。
-  // 1 要素 = x | y << 5 | 向き(Direction の値)<< 10。Adachi が「この経路の上に壁が
-  // 見つかるまで使い続ける」ために覚える。
-  std::vector<uint16_t> goal_route;
-  static uint16_t pack_route(int x, int y, Direction dir) {
-    return (uint16_t)(x | (y << 5) | (static_cast<int>(dir) << 10));
-  }
-  static int route_x(uint16_t e) { return e & 31; }
-  static int route_y(uint16_t e) { return (e >> 5) & 31; }
-  static Direction route_dir(uint16_t e) {
-    return static_cast<Direction>((e >> 10) & 15);
-  }
   unsigned int searchGoalPosition(const bool isSearch,
                                   vector<point_t> &pt_list);
 

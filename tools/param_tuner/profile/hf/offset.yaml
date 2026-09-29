@@ -63,7 +63,6 @@ front_dist_offset_dia_right45: 54
 front_dist_offset_dia_left45: 50
 
 seach_timer: 450 # 探索時間 450sec -> 7.5min
-search_subgoal_mode: 0 # ゴール後のサブゴールの選び方 0: 重みパターン1を毎回(従来) 1: 重みパターン2と4、経路が壁で塞がれたときだけ作り直す
 
 clear_dist_ragne_from: 22.5
 clear_dist_ragne_to: 50.0

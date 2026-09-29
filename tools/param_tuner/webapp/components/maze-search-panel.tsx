@@ -201,12 +201,6 @@ export function MazeSearchPanel({
             )}{" "}
             · 判断{" "}
             {steps.length} 回 · 上限 {result.search_timer} s
-            {result.subgoal_mode !== undefined && (
-              <span title="ゴール後のサブゴールの選び方(offset.yaml の search_subgoal_mode)。0 = 重みパターン 1 の経路を毎回作り直す(従来)、1 = 重みパターン 2 と 4 の経路を覚えておき、壁で塞がれたときだけ作り直す">
-                {" "}
-                · サブゴール {result.subgoal_mode === 1 ? "2+4" : result.subgoal_mode === 0 ? "1(従来)" : result.subgoal_mode}
-              </span>
-            )}
           </div>
           {result.params && (
             <div className="font-mono text-[11px] text-muted-foreground" title="run_main_mode() の mode_num == 0 と同じく load_slalom_param(0, 0, 0)">

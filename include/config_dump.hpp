@@ -526,7 +526,6 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["wall_off_wait_dist_dia"]   = src.wall_off_wait_dist_dia;
     dst["search_log_enable"]        = src.search_log_enable;
     dst["seach_timer"]              = src.seach_timer;
-    dst["search_subgoal_mode"]      = src.search_subgoal_mode;
     dst["test_log_enable"]          = src.test_log_enable;
     dst["fast_log_enable"]          = src.fast_log_enable;
     dst["front_dist_offset_pivot_th"] = src.front_dist_offset_pivot_th;

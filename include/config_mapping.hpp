@@ -834,7 +834,6 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "wall_off_wait_dist_dia", dst.wall_off_wait_dist_dia);
     from_json_field(src, "search_log_enable", dst.search_log_enable);
     from_json_field(src, "seach_timer", dst.seach_timer);
-    from_json_field(src, "search_subgoal_mode", dst.search_subgoal_mode);
     from_json_field(src, "test_log_enable", dst.test_log_enable);
     from_json_field(src, "fast_log_enable", dst.fast_log_enable);
     from_json_field(src, "front_dist_offset_pivot_th", dst.front_dist_offset_pivot_th);
