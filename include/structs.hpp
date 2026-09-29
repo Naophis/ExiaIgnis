@@ -439,7 +439,7 @@ typedef struct {
   float fifo_lead_extra_us = 0.0f; // mode 4 の追加の先読み [us](センサー内部の遅れを試す用)
   // 1 のとき、fifo_mode 1〜4 で選んだ w に「目標角加速度 × (FIFO を読んでから次の
   // planning tick までの時間)」を足す(2026-09-29)。planning はセンシングより
-  // 約 0.6〜0.8ms 後(ブートで変わる)に w を使うため。角度の積分には入れない。
+  // 600us 後(PlanningTask::kPhaseAfterSensingUs)に w を使うため。角度の積分には入れない。
   int fifo_plan_lead = 0;
 } gyro_param_t;
 

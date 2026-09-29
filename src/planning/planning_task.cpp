@@ -75,10 +75,18 @@ void PlanningTask::start_irq() {
   irq_set_enabled(TIMER0_IRQ_0, true);
   hw_set_bits(&timer_hw->inte, 1u << 0);
 
-  // sensing (alarm 1) の直後に start するため位相が重なる。
-  // sensing 自身の実行時間 (~350us) より後に発火するよう 600us 遅らせる。
-  next_alarm_ = timer_hw->timerawl + interval_us_ + 600;
+  // 最初の 1 回だけ自分で予約する。以後は SensingTask が毎 tick、自分の tick の
+  // kPhaseAfterSensingUs 後に schedule_tick() で予約し直す(最初の sensing tick で
+  // この予約も上書きされる)。
+  next_alarm_ = timer_hw->timerawl + interval_us_ + kPhaseAfterSensingUs;
   arm_alarm32_safe(0, next_alarm_);
+}
+
+// SensingTask の tick の入口(Core1)から呼ばれる。
+__attribute__((noinline, section(".time_critical.planning_tick")))
+void PlanningTask::schedule_tick(uint32_t target32) {
+  next_alarm_ = target32;
+  arm_alarm32_safe(0, target32);
 }
 
 __attribute__((noinline, section(".time_critical.planning_cmd")))
@@ -107,15 +115,12 @@ void PlanningTask::timer_irq_handler() {
 
   auto *self = s_instance.get();
 
-  // 次回アラームを絶対時刻で設定 (ドリフトなし)
-  self->next_alarm_ += self->interval_us_;
-  {
-    // now を使い回すことで余分な timerawl 読み出しを省く
-    const uint32_t now32 = (uint32_t)now;
-    if ((int32_t)(now32 - self->next_alarm_) > (int32_t)self->interval_us_)
-      self->next_alarm_ = now32 + self->interval_us_;
-  }
-  arm_alarm32_safe(0, self->next_alarm_);
+  // 次回のアラームはここでは設定しない。SensingTask が毎 tick、自分の tick の
+  // kPhaseAfterSensingUs 後に schedule_tick() で予約する(2026-09-29、位相固定)。
+  // 以前はここで「next += 1ms、1ms 以上遅れていたら 今 + 1ms」と自分で決めていたため、
+  // パラメータ送信のフラッシュ書き込みで Core1 が止まるたびに sensing と planning が
+  // それぞれ取り直され、位相が 590us と 815us の間で走行ごとに変わっていた
+  // (再開時は IRQ 番号の小さい planning が先に動き、sensing はその処理の後になる)。
 
   const uint32_t dt_us = self->prev_ts_ ? (uint32_t)(now - self->prev_ts_) : 0;
   self->prev_ts_ = now;

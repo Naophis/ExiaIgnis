@@ -71,13 +71,14 @@ ASM330LHH はジャイロを実 ODR（個体ごと、本機 3508.5Hz）で FIFO 
 
 - 使い方は `hardware.yaml` の `gyro_param.fifo_mode`。0 は従来の 1 点読みのまま（FIFO は計算してログに出すだけ）、1/2/3 は最新・直近 3 サンプル平均・tick 内平均を `w_raw` に使い、角度を Σw·T_odr で積分します。4 は直近 3 サンプル平均を、直近 `fifo_alpha_win` サンプルに当てた直線の傾き(角加速度)で 1.5 サンプル + `fifo_lead_extra_us` 先読みします（平均の遅れ 1 サンプル + 最新サンプルの古さの平均 0.5 サンプルを打ち消す）。
 - ログ列: `gyro_fifo_n`（-1/-2 は flush）、`w_snap`、`w_fifo_last/ma3/mean/pred`、`alpha_fifo`、`ang_fifo_diff`（FIFO 角度 − 1 点読み角度の累積 [deg]）、`gyro_odr_err`（MCU 時間で数えた ODR の FF 由来値からのずれ [%]）、オフライン検証用の生サンプル `gyro_raw0..3`（古い順、n 個まで有効）・`gyro_fifo_seq`（tick 通し番号）・`gyro_fifo_t`（読んだ MCU 時刻 [us] 下位 16bit）。
-- `gyro_param.fifo_plan_lead: 1` で、`fifo_mode` 1〜4 の w に「目標角加速度 × (FIFO を読んでから次の planning tick までの時間)」を足します。PlanningTask はセンシングより後(`start_irq` の +600us に起動の間隔が加わり、実測 約 0.6〜0.8ms、ブートで変わる)に w を使うため。時間は `PlanningTask::next_tick_us()` から毎回読みます。角度の積分(FIFO の和)には入れません。ログ列 `plan_age_us`(読んでから planning までの時間)・`w_plan_lead`(足した量)。
+- `gyro_param.fifo_plan_lead: 1` で、`fifo_mode` 1〜4 の w に「目標角加速度 × (FIFO を読んでから次の planning tick までの時間)」を足します。PlanningTask はセンシングの 600us 後に w を使うため(FIFO を読んでから約 590us)。時間は `PlanningTask::next_tick_us()` から毎回読みます。角度の積分(FIFO の和)には入れません。ログ列 `plan_age_us`(読んでから planning までの時間)・`w_plan_lead`(足した量)。
 - 1 点読み（9 バイト）は加速度の取得と比較用に残してあります。加速度はまだ FIFO に入れていません。
 
 ### PlanningTask IRQ 構造 (`src/planning/planning_task.cpp`)
 
 TIMER1 のハードウェアアラームを1本使用:
 - **Alarm 0** (`timer_irq_handler`): 1kHz 定周期。`tick(dt_us)` を呼び出し、`EgoEstimator → SensorProcessor → TrajectoryGenerator → ControlLaw` の順で実行。
+- **位相はセンシングの tick + 600us に固定**（`PlanningTask::kPhaseAfterSensingUs`、2026-09-29）。planning は自分で次回のアラームを決めず、SensingTask の `timer_b_irq_handler` が毎 tick の入口で `schedule_tick()` を呼んで予約する。以前は両方が自分で「1ms 以上遅れたら 今 + 1ms」と取り直していたため、パラメータ送信（`flash_safe_execute` で Core1 が止まる）のたびに位相が約 590us と 815us の間で変わっていた（再開時は IRQ 番号の小さい planning が先に動き、sensing はその処理の後になる）。ログ列 `plan_age_us`（FIFO を読んでから planning までの時間）で確認できる（固定後は約 590us）。
 - `send_command(shared_ptr<motion_tgt_val_t>)` で Core0 から目標値を投入（`__dmb()` で cross-core 安全）。
 
 PlanningTask は以下のサブシステムを内包:

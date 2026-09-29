@@ -993,7 +993,7 @@ gyro_param:
   fifo_alpha_win: 6       # mode 4 の角加速度を求めるサンプル数(2〜10)
   fifo_lead_extra_us: 0   # mode 4 の追加の先読み [us]
   # 1: fifo_mode 1〜4 の w に「目標角加速度 × (FIFO を読んでから次の planning tick までの
-  # 時間)」を足す。planning はセンシングの約 0.6〜0.8ms 後(ブートで変わる)に w を使うため。
+  # 時間)」を足す。planning はセンシングの 600us 後に w を使うため(FIFO を読んでから約 590us)。
   # 角度の積分には入れない。ログ列 plan_age_us / w_plan_lead で確認できる。
   fifo_plan_lead: 1
 

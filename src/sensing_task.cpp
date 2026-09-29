@@ -103,6 +103,10 @@ void SensingTask::timer_b_irq_handler() {
       self->next_alarm_a_ = now32 + self->interval_us_;
   }
   arm_alarm32_safe(1, self->next_alarm_a_);
+  // この tick の planning を kPhaseAfterSensingUs 後に予約する(位相固定)。
+  // センシングが取り直されても planning は必ずその後ろにそろう。
+  self->pt->schedule_tick(self->next_alarm_a_ - self->interval_us_ +
+                          PlanningTask::kPhaseAfterSensingUs);
 
   const auto &se = self->sensing_result;
   se->calc_time = (int16_t)(sense_start - self->start_time_z);
@@ -786,7 +790,7 @@ SensingTask::read_spi_sensors() {
     }
     const auto alpha = (tgt_val->ego_in.w - w_old) / dt;
     // planning が w を使う時刻まで目標角加速度で先読みする(fifo_plan_lead)。
-    // planning はセンシングより約 0.6〜0.8ms 後に動く。オフラインでは mode 4 +
+    // planning はセンシングの 600us 後に動く(位相固定)。オフラインでは mode 4 +
     // 目標角加速度 × この時間で、旋回の出入りの偏りが −1.8 → −0.08 rad/s、
     // 直進のノイズは増えなかった。角度は FIFO の和で積分するので影響しない
     // (fifo_mode 0 は w で積分するので適用しない)。
