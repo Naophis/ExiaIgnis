@@ -523,7 +523,7 @@ enable_kalman_gyro: 0
 enable_mpc: 0
 enable_kalman_encoder: 1
 # 車輪速度を planning が使う時刻まで先読みする(2026-09-29、sensing_task.cpp)。1ms の位置
-# 差分の速度は読んだ時刻の 0.5ms 前の値で、planning はそれを後で使う(今は約 80us 後)。1 のとき
+# 差分の速度は読んだ時刻の 0.5ms 前の値で、planning はそれを後で使う(今は約 80〜120us 後)。1 のとき
 # 制御・推定に渡す v_l/v_r に車輪ごとの目標加速度(並進 ± 目標角加速度 × tread/2) ×
 # (dt/2 + 読んでから次の planning tick までの時間) を足す。距離の積分は差分のまま。0 = 従来どおり。
 enc_v_lead: 1
@@ -976,8 +976,8 @@ kanayama_dia:
   windup: 0
   windup_deg: 0
 gyro_param:
-  gyro_w_gain_left: 0.0024585
-  gyro_w_gain_right: 0.0024585
+  gyro_w_gain_left: 0.0024565
+  gyro_w_gain_right: 0.0024565
   retry_min_th: 0
   retry_max_th: 3
   robust_th: 0.95

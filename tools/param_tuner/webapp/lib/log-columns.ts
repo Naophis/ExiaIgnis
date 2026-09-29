@@ -220,11 +220,15 @@ export const CHART_VIEWS: ChartView[] = [
     key: "wall_off_hf",
     title: "壁切れhf",
     charts: [
+      { title: "wo_left (S0..S3)", columns: ["wo_l0", "wo_l1", "wo_l2", "wo_l3"] },
+      { title: "wo_right (S0..S3)", columns: ["wo_r0", "wo_r1", "wo_r2", "wo_r3"] },
       { title: "side45 (1kHz)", columns: ["left45_d", "right45_d", "sen_dist_l45", "sen_dist_r45"] },
-      { title: "hf_edge_rel", columns: ["hf_edge_rel"] },
-      { title: "hf_cnt / hf_side", columns: ["hf_cnt", "hf_side"] },
+      { title: "wo_time_l [us]", columns: ["wo_tl0", "wo_tl1", "wo_tl2", "wo_tl3"] },
+      { title: "wo_time_r [us]", columns: ["wo_tr0", "wo_tr1", "wo_tr2", "wo_tr3"] },
+      { title: "wo_n", columns: ["wo_n"] },
       { title: "motion_state", columns: ["motion_state", "continuous_turn"] },
       { title: "dist / ideal_dist", columns: ["dist", "ideal_dist"] },
+      { title: "wo_seq / gyro_fifo_seq", columns: ["wo_seq", "gyro_fifo_seq"] },
     ],
   },
   {

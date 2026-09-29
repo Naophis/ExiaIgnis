@@ -233,6 +233,9 @@ void SensingTask::slot_s0(uint64_t tick_start) {
                    tv->motion_type == MotionType::WALL_OFF_DIA ||
                    tv->motion_type == MotionType::SENSING_DUMP ||
                    tv->motion_type == MotionType::SLA_BACK_STR);
+  seq_hf_ = led_on && (tv->motion_type == MotionType::WALL_OFF ||
+                       tv->motion_type == MotionType::WALL_OFF_DIA);
+  wo_work_ = wo_hf_t{};
 
   if (!led_on) {
     return; // S1 で finalize_sensing(false)
@@ -416,6 +419,7 @@ void SensingTask::led_seq_advance() {
 
   case LedStep::R45_1:
     se->led_sen_after.right45.raw = adc_read(); // LED1 single
+    wo_work_.tr[0] = (int16_t)(now - seq_sense_start_);
     if (seq_extended_) {
       gpio_put(R45_LED_PIN2, 1); // LED2 ON (LED1 still on)
       adc_select_input(1);
@@ -448,6 +452,7 @@ void SensingTask::led_seq_advance() {
 
   case LedStep::L45_1:
     se->led_sen_after.left45.raw = adc_read(); // LED1 single
+    wo_work_.tl[0] = (int16_t)(now - seq_sense_start_);
     if (seq_extended_) {
       gpio_put(L45_LED_PIN2, 1); // LED2 ON (LED1 still on)
       adc_select_input(2);
@@ -503,6 +508,8 @@ void SensingTask::finalize_sensing(bool led_on) {
         se->led_sen_after.left90.raw - se->led_sen_before.left90.raw, 0);
     se->led_sen.front.raw =
         (se->led_sen.left90.raw + se->led_sen.right90.raw) / 2;
+    wo_work_.l[0] = (int16_t)se->led_sen.left45.raw;
+    wo_work_.r[0] = (int16_t)se->led_sen.right45.raw;
   } else {
     se->led_sen.right90.raw = se->led_sen.right45.raw =
         se->led_sen.right45_2.raw = se->led_sen.right45_3.raw =
@@ -513,6 +520,15 @@ void SensingTask::finalize_sensing(bool led_on) {
 
   // battery.data は S3 でバッテリーを読んだ直後に計算する(read_enc_bat)
   se->calc_time2 = (uint32_t)(time_us_64() - seq_sense_start_);
+
+  // S1 の壁切れセンサーは 90 系を読み終えてから読む(2026-09-30)。45° を先に
+  // 読むと、その直後の 90° の生値が WALL_OFF 中だけ 0〜4 → 6〜14 に上がって
+  // いた(LED を消した直後の受光素子の尾か ADC の前の値が残る)。90 系の最後の
+  // LED を消してから LED の待ち時間の 2 倍空けて読む。
+  if (led_on && seq_hf_) {
+    busy_wait_us_32(2 * wait_us_single());
+    read_wo_extra(1);
+  }
 }
 
 // ============================================================
@@ -638,6 +654,7 @@ __attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::read_imu() {
   const auto &se = sensing_result;
   led_abort_if_busy();
+  read_wo_extra(2);
   gyro_timestamp_old = gyro_timestamp_now;
   accel_timestamp_old = accel_timestamp_now;
 
@@ -746,11 +763,12 @@ void SensingTask::read_imu() {
 }
 
 // S3: エンコーダー・バッテリー、車輪速度、距離・角度の積分。planning(tick + 720us)
-// の直前なので、エンコーダーは読んでから約 80us 後に使われる。
+// の直前なので、エンコーダーは読んでから約 80〜120us 後に使われる。
 __attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::read_enc_bat() {
   const auto &se = sensing_result;
   led_abort_if_busy();
+  read_wo_extra(3);
 
   // kf_v(中央フィルタ)と同じく目標加速度を使う。旧実装は
   // (今tickの目標速度 - 前tickの実測速度)/dt を"加速度"としてpredict()に
@@ -829,7 +847,7 @@ void SensingTask::read_enc_bat() {
 
   // 車輪速度を planning が使う時刻まで先読みする(param->enc_v_lead、2026-09-29)。
   // 1ms の位置差分で求めた速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、
-  // さらに planning はそれを後で使う(枠分け前は約 600〜800us 後、今は S3 の約 80us 後)
+  // さらに planning はそれを後で使う(枠分け前は約 600〜800us 後、今は約 80〜120us 後)
   // (PlanningTask::start_irq)。planning の時刻を基準にすると、加減速中は
   // 直進 −43mm/s、旋回の出入り −56mm/s 遅れていた(ログ 12 本 × 左右)。
   // 車輪ごとの目標加速度(並進 ± 目標角加速度 × tread/2) × (dt/2 + 読んでから
@@ -879,6 +897,39 @@ void SensingTask::read_enc_bat() {
 
   calc_vel(gyro_dt_, enc_l_dt, enc_r_dt);
   se->t_spi = (int16_t)(time_us_64() - seq_sense_start_);
+
+  // 壁切れセンサーの 1 tick 分(S0〜S3)をまとめて公開する。ログ(Core0)が途中の
+  // 状態を拾って別の tick のサンプルが 1 組に混ざらないように、ここで 1 回で写す。
+  wo_work_.n = seq_hf_ ? 4 : 1;
+  wo_work_.seq = se->gyro_fifo.seq;
+  se->wo = wo_work_;
+}
+
+// WALL_OFF / WALL_OFF_DIA 中、S1〜S3 の最初に左右の 45° LED1 を読む(約 40us)。
+// 枠の中に planning は来ないので、LED の安定待ちはその場で待つ。環境光も
+// その場で読んで差分にする。左右の LED を同時に点けないのは従来の読み方と同じ。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::read_wo_extra(int k) {
+  if (!seq_hf_) return;
+  const uint32_t wait = wait_us_single();
+
+  adc_select_input(2);
+  const int dark_l = adc_read();
+  gpio_put(L45_LED_PIN, 1);
+  busy_wait_us_32(wait);
+  const int lit_l = adc_read();
+  wo_work_.tl[k] = (int16_t)(time_us_64() - seq_sense_start_);
+  gpio_put(L45_LED_PIN, 0);
+  wo_work_.l[k] = (int16_t)MAX(lit_l - dark_l, 0);
+
+  adc_select_input(1);
+  const int dark_r = adc_read();
+  gpio_put(R45_LED_PIN, 1);
+  busy_wait_us_32(wait);
+  const int lit_r = adc_read();
+  wo_work_.tr[k] = (int16_t)(time_us_64() - seq_sense_start_);
+  gpio_put(R45_LED_PIN, 0);
+  wo_work_.r[k] = (int16_t)MAX(lit_r - dark_r, 0);
 }
 
 __attribute__((noinline, section(".time_critical.sensing.calc_vel")))

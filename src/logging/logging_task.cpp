@@ -415,6 +415,25 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.slot_late_us = sr->sched.slot_late_max_us;
   ld.pln_margin_us = sr->sched.pln_margin_us;
   ld.led_overrun = (int16_t)sr->sched.led_overrun_cnt;
+  // WALL_OFF 中の 45° LED1 の 4 サンプル(2026-09-30, structs.hpp wo_hf_t)
+  ld.wo_l0 = sr->wo.l[0];
+  ld.wo_l1 = sr->wo.l[1];
+  ld.wo_l2 = sr->wo.l[2];
+  ld.wo_l3 = sr->wo.l[3];
+  ld.wo_r0 = sr->wo.r[0];
+  ld.wo_r1 = sr->wo.r[1];
+  ld.wo_r2 = sr->wo.r[2];
+  ld.wo_r3 = sr->wo.r[3];
+  ld.wo_tl0 = sr->wo.tl[0];
+  ld.wo_tl1 = sr->wo.tl[1];
+  ld.wo_tl2 = sr->wo.tl[2];
+  ld.wo_tl3 = sr->wo.tl[3];
+  ld.wo_tr0 = sr->wo.tr[0];
+  ld.wo_tr1 = sr->wo.tr[1];
+  ld.wo_tr2 = sr->wo.tr[2];
+  ld.wo_tr3 = sr->wo.tr[3];
+  ld.wo_n = sr->wo.n;
+  ld.wo_seq = static_cast<int16_t>(sr->wo.seq);
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -655,6 +674,24 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "slot_late_us:int:%d\n", (int)sizeof(ls11.slot_late_us));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pln_margin_us:int:%d\n", (int)sizeof(ls11.pln_margin_us));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "led_overrun:int:%d\n", (int)sizeof(ls11.led_overrun));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_l0:int:%d\n", (int)sizeof(ls11.wo_l0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_l1:int:%d\n", (int)sizeof(ls11.wo_l1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_l2:int:%d\n", (int)sizeof(ls11.wo_l2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_l3:int:%d\n", (int)sizeof(ls11.wo_l3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_r0:int:%d\n", (int)sizeof(ls11.wo_r0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_r1:int:%d\n", (int)sizeof(ls11.wo_r1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_r2:int:%d\n", (int)sizeof(ls11.wo_r2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_r3:int:%d\n", (int)sizeof(ls11.wo_r3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tl0:int:%d\n", (int)sizeof(ls11.wo_tl0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tl1:int:%d\n", (int)sizeof(ls11.wo_tl1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tl2:int:%d\n", (int)sizeof(ls11.wo_tl2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tl3:int:%d\n", (int)sizeof(ls11.wo_tl3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tr0:int:%d\n", (int)sizeof(ls11.wo_tr0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tr1:int:%d\n", (int)sizeof(ls11.wo_tr1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tr2:int:%d\n", (int)sizeof(ls11.wo_tr2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tr3:int:%d\n", (int)sizeof(ls11.wo_tr3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_n:int:%d\n", (int)sizeof(ls11.wo_n));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_seq:int:%d\n", (int)sizeof(ls11.wo_seq));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -943,6 +980,24 @@ void LoggingTask::dump_csv() const {
     ls11.slot_late_us = e.slot_late_us;
     ls11.pln_margin_us = e.pln_margin_us;
     ls11.led_overrun = e.led_overrun;
+    ls11.wo_l0 = e.wo_l0;
+    ls11.wo_l1 = e.wo_l1;
+    ls11.wo_l2 = e.wo_l2;
+    ls11.wo_l3 = e.wo_l3;
+    ls11.wo_r0 = e.wo_r0;
+    ls11.wo_r1 = e.wo_r1;
+    ls11.wo_r2 = e.wo_r2;
+    ls11.wo_r3 = e.wo_r3;
+    ls11.wo_tl0 = e.wo_tl0;
+    ls11.wo_tl1 = e.wo_tl1;
+    ls11.wo_tl2 = e.wo_tl2;
+    ls11.wo_tl3 = e.wo_tl3;
+    ls11.wo_tr0 = e.wo_tr0;
+    ls11.wo_tr1 = e.wo_tr1;
+    ls11.wo_tr2 = e.wo_tr2;
+    ls11.wo_tr3 = e.wo_tr3;
+    ls11.wo_n = e.wo_n;
+    ls11.wo_seq = e.wo_seq;
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

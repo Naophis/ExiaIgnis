@@ -66,7 +66,9 @@ TIMER0 のハードウェアアラームを使用（alarm_pool オーバーヘ�
 | S0 | +0us | 45 系（環境光、R45・L45。WALL_OFF 等は LED1 / 両方 / LED2 の 3 通り） |
 | S1 | +220us | 90 系（環境光、R90・L90）→ 差分の計算（`finalize_sensing`） |
 | S2 | +440us | IMU（1 点読み + FIFO）と角速度（`read_imu`） |
-| S3 | +630us | エンコーダー・バッテリー、車輪速度、距離・角度の積分（`read_enc_bat`） |
+| S3 | +600us | エンコーダー・バッテリー、車輪速度、距離・角度の積分（`read_enc_bat`） |
+
+WALL_OFF / WALL_OFF_DIA 中は、左右の 45° LED1 も読む（`read_wo_extra`、環境光もその場で読んで差分、約 40us）。S2・S3 は枠の最初、S1 は 90 系を読み終えて LED の待ち時間の 2 倍空けてから（45° を先に読むと直後の 90° の生値が 0〜4 → 6〜14 に上がった。LED を消した直後の受光素子の尾か ADC の前の値が残るため。**別の LED の読みを続けるときは、間を空けて、読むたびに暗い値をその場で取ること**）。S0 の 45 系シーケンスの LED1 と合わせて 4 サンプル / tick。1 tick 分（値と読んだ時刻）を S3 の最後に `sensing_result->wo`（`wo_hf_t`）へまとめて写すので、ログや planning が見る 1 組の中で tick が混ざらない。ログ列は `wo_l0..3` / `wo_r0..3`（差分 raw）、`wo_tl0..3` / `wo_tr0..3`（tick 開始からの時刻 [us]）、`wo_n`（4 = WALL_OFF 中、1 = S0 の分だけ）、`wo_seq`（`gyro_fifo_seq` と同じ tick 番号）。
 | planning | +720us | 最大 247us（09-26〜29 のログ）→ 次の S0（+1000us）までに終わる |
 
 - **Alarm 1** (`timer_b_irq_handler`): 枠の予約と振り分け。各枠の入口で次の枠を予約する。S0 の予約時刻がその tick の基準（ドリフトなし）で、Core1 が止まって 1ms 以上遅れたときだけ今に取り直す。S0 で planning を基準 + `PlanningTask::kPhaseAfterSensingUs`(720us) に予約する。
@@ -425,7 +427,7 @@ self->data.gz_dt   = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z
 
 ### 車輪速度を planning の時刻まで先読みする (enc_v_lead)
 
-1ms の位置差分で求めた車輪速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、さらに PlanningTask はそれを後の tick で使います(枠分け前は約 600〜800us 後、枠分け後は S3 から約 80us 後)。枠分け前の planning の時刻を基準にすると、加減速中は直進 −43mm/s、旋回の出入り −56mm/s 遅れていました。`hardware.yaml` の `enc_v_lead: 1` で、制御と推定に渡す `ego.v_l/v_r` に「車輪ごとの目標加速度(`ego_in.accl` ± 目標角加速度 × `tire_tread`/2) × (dt/2 + 読んでから次の planning tick までの時間)」を足します(次の tick の時刻は `PlanningTask::next_tick_us()`)。偏りは +1〜4mm/s になり、目標加速度はノイズが無いので巡航中のノイズは増えません。
+1ms の位置差分で求めた車輪速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、さらに PlanningTask はそれを後の tick で使います(枠分け前は約 600〜800us 後、枠分け後は約 80〜120us 後)。枠分け前の planning の時刻を基準にすると、加減速中は直進 −43mm/s、旋回の出入り −56mm/s 遅れていました。`hardware.yaml` の `enc_v_lead: 1` で、制御と推定に渡す `ego.v_l/v_r` に「車輪ごとの目標加速度(`ego_in.accl` ± 目標角加速度 × `tire_tread`/2) × (dt/2 + 読んでから次の planning tick までの時間)」を足します(次の tick の時刻は `PlanningTask::next_tick_us()`)。偏りは +1〜4mm/s になり、目標加速度はノイズが無いので巡航中のノイズは増えません。
 
 - 同じ時刻のずれはジャイロにもあります(`fifo_mode` のどれも、読んだ時刻の値を約 588us 後に planning が使う)。オフラインでは mode 4 に目標角加速度 × 588us を足すと、旋回の出入りの偏りが −1.8 → −0.08 rad/s になりました(`gyro_param.fifo_plan_lead` として実装)。
 

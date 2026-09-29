@@ -41,17 +41,23 @@ private:
     //   S0 (+0us)  : 45 系(環境光、R45・L45)
     //   S1 (+220us): 90 系(環境光、R90・L90) → 差分の計算
     //   S2 (+440us): IMU(1 点読み + FIFO)と角速度
-    //   S3 (+630us): エンコーダー・バッテリー、速度、距離・角度の積分
+    //   S3 (+600us): エンコーダー・バッテリー、速度、距離・角度の積分
+    //   WALL_OFF / WALL_OFF_DIA 中は左右の 45° LED1 も読む(read_wo_extra、約 40us)。
+    //   S1 は 90 系を読み終えて LED の待ち時間の 2 倍空けてから(直後だと 90° の
+    //   読みが上がった)、S2・S3 は枠の最初。S0 の LED1 と合わせて 4 サンプル / tick。
     //   planning は +720us(PlanningTask::kPhaseAfterSensingUs)で、最大 247us
     //   (09-26〜29 のログ)なので次の S0(+1000us)までに終わる。
     // planning が動く時間帯にセンシングの処理を置かないので、同じ優先度のまま
     // 重ならない(受け渡しは今までどおり sensing_result を直接書く)。
     // ============================================================
-    static constexpr uint32_t kSlotOffsetUs[4] = {0, 220, 440, 630};
+    static constexpr uint32_t kSlotOffsetUs[4] = {0, 220, 440, 600};
     void slot_s0(uint64_t tick_start); // 45 系
     void slot_s1();                    // 90 系
     void read_imu();                   // S2
     void read_enc_bat();               // S3
+    void read_wo_extra(int k);         // S1(90 系のあと)・S2・S3: 左右の 45° LED1(WALL_OFF 中だけ)
+    bool     seq_hf_ = false;          // この tick で壁切れセンサーを 4 回読むか(S0 で決める)
+    wo_hf_t  wo_work_{};               // 1 tick 分を貯め、S3 の最後に sensing_result->wo へ写す
 
     std::shared_ptr<input_param_t> param;
     ASM330LHH gyro_;

@@ -48,7 +48,7 @@ public:
   uint32_t next_tick_us() const { return next_alarm_; }
 
   // planning の tick はセンシングの tick(S0)の kPhaseAfterSensingUs 後に置く。
-  // センシングは 1ms を S0〜S3(0/220/440/630us、sensing_task.hpp)に分けて読み、
+  // センシングは 1ms を S0〜S3(0/220/440/600us、sensing_task.hpp)に分けて読み、
   // planning は S3(エンコーダー)の直後から次の S0 までの 280us を使う(最大 247us)。
   // SensingTask が毎 tick の S0 で schedule_tick() を呼んで予約する(2026-09-29)。
   static constexpr uint32_t kPhaseAfterSensingUs = 720;

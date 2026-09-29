@@ -332,6 +332,19 @@ typedef struct {
   uint16_t t_read = 0;
 } gyro_fifo_out_t;
 
+// WALL_OFF / WALL_OFF_DIA 中の左右 45° LED1 の読み(2026-09-30、sensing_task.cpp)。
+// [0] は S0 の 45 系シーケンスの LED1(= led_sen.left45/right45)、[1]〜[3] は
+// S1〜S3 の各枠の最初に読んだもの(その場で環境光を読んで差分)。1 tick 分を
+// S3 の最後にまとめて写すので、1 組の中で tick が混ざらない。
+typedef struct {
+  int16_t n = 0;              // 有効なサンプル数(WALL_OFF 中は 4、それ以外は 1 = [0] だけ)
+  uint16_t seq = 0;           // この組の tick 番号(gyro_fifo.seq と同じ数え方)
+  int16_t l[4] = {0, 0, 0, 0};  // 左45 LED1 の差分 [raw]
+  int16_t r[4] = {0, 0, 0, 0};  // 右45 LED1 の差分 [raw]
+  int16_t tl[4] = {0, 0, 0, 0}; // 左を読んだ時刻 [us、tick(S0)の開始から]
+  int16_t tr[4] = {0, 0, 0, 0}; // 右を読んだ時刻 [us]
+} wo_hf_t;
+
 // センシングの枠と planning が重なっていないかの記録(2026-09-29、sensing_task.hpp の
 // kSlotOffsetUs)。重なると slot_late_max_us が増え、pln_margin_us が負になる。
 typedef struct {
@@ -362,6 +375,7 @@ typedef struct {
   pillar_trough_out_t pillar_r; // 右45°の柱谷検知
   gyro_fifo_out_t gyro_fifo;    // ジャイロ FIFO の読み出し結果(2026-09-29)
   sched_diag_t sched;           // センシングの枠と planning の重なりの記録(2026-09-29)
+  wo_hf_t wo;                   // WALL_OFF 中の 45° LED1 の 4 サンプル / tick(2026-09-30)
   int16_t calc_time;
   int16_t calc_time2;
   int16_t t_spi;     // sense_start からの累積 [us]: read_spi_sensors 終了
@@ -1388,7 +1402,7 @@ typedef struct {
   char enable_kalman_encoder = 0;
   // 車輪速度を planning が使う時刻まで先読みする(2026-09-29、sensing_task.cpp)。
   // 1ms の位置差分の速度は読んだ時刻の 0.5ms 前の値で、planning はそれを後で使う
-  // (今は S3 の約 80us 後)。1 のとき制御と推定に渡す v_l/v_r に「車輪ごとの目標加速度(並進 ±
+  // (今は約 80〜120us 後)。1 のとき制御と推定に渡す v_l/v_r に「車輪ごとの目標加速度(並進 ±
   // 目標角加速度 × tread/2) × (dt/2 + 読んでから次の planning tick までの時間)」を
   // 足す。距離の積分は差分のまま(ego.v_l_dist/v_r_dist)。0 = 従来どおり。
   char enc_v_lead = 0;
@@ -2180,6 +2194,24 @@ typedef struct {
   int16_t slot_late_us;   // センシングの枠の開始の遅れの最大 [us](structs.hpp sched_diag_t)
   int16_t pln_margin_us;  // planning 終了から次の S0 までの余裕 [us]
   int16_t led_overrun;    // LED シーケンス打ち切り回数(累計)
+  int16_t wo_l0;
+  int16_t wo_l1;
+  int16_t wo_l2;
+  int16_t wo_l3;
+  int16_t wo_r0;
+  int16_t wo_r1;
+  int16_t wo_r2;
+  int16_t wo_r3;
+  int16_t wo_tl0;
+  int16_t wo_tl1;
+  int16_t wo_tl2;
+  int16_t wo_tl3;
+  int16_t wo_tr0;
+  int16_t wo_tr1;
+  int16_t wo_tr2;
+  int16_t wo_tr3;
+  int16_t wo_n;
+  int16_t wo_seq;
 } log_data_t2;
 
 typedef struct {
@@ -2448,6 +2480,24 @@ typedef struct {
   int slot_late_us    = 175; // センシングの枠の開始の遅れの最大 [us](2026-09-29)
   int pln_margin_us   = 176; // planning 終了から次の S0 までの余裕 [us](負なら重なり)
   int led_overrun     = 177; // LED シーケンス打ち切り回数(累計)
+  int wo_l0           = 178; // WALL_OFF 中の左45 LED1 [raw]、0=S0 1〜3=S1〜S3(2026-09-30)
+  int wo_l1           = 179;
+  int wo_l2           = 180;
+  int wo_l3           = 181;
+  int wo_r0           = 182; // 右45 LED1 [raw]
+  int wo_r1           = 183;
+  int wo_r2           = 184;
+  int wo_r3           = 185;
+  int wo_tl0          = 186; // 左を読んだ時刻 [us、tick 開始から]
+  int wo_tl1          = 187;
+  int wo_tl2          = 188;
+  int wo_tl3          = 189;
+  int wo_tr0          = 190; // 右を読んだ時刻 [us]
+  int wo_tr1          = 191;
+  int wo_tr2          = 192;
+  int wo_tr3          = 193;
+  int wo_n            = 194; // 有効サンプル数(4=WALL_OFF 中)
+  int wo_seq          = 195; // この組の tick 番号(gyro_fifo_seq と同じ)
 } LogStruct11;
 
 #endif
