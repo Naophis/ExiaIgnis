@@ -333,7 +333,8 @@ void Adachi::update() {
     {
       lgc->set_param_num(1);
       lgc->set_param();
-      lgc->searchGoalPosition(true, subgoal_list);
+      // 結果は searchGoalPosition(true, …) と同じ。地図が前回から変わっていなければ表を作り直さない
+      lgc->searchGoalPositionReuse(subgoal_list);
       cost_mode = 3;
     }
     // if (subgoal_list.size() == 0) {

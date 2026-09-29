@@ -1,5 +1,6 @@
 
 #include "logic.hpp"
+int g_n_reuse = 0, g_n_rebuild = 0;
 #include <algorithm>
 
 // ---- 探索の表づくり(updateVectorMap)と歩数マップ(update_dist_map)用の表引き(2026-09-29)
@@ -1003,6 +1004,7 @@ unsigned int MazeSolverBaseLgc::searchGoalPositionReuse(
                      search_table.param_num == param_num &&
                      search_table.map == map && same_goal();
   if (!reuse) {
+    g_n_rebuild++;
     const unsigned int cnt = searchGoalPosition(true, subgoal_list);
     search_table.valid = true;
     search_table.serial = vector_map_serial;
@@ -1012,6 +1014,7 @@ unsigned int MazeSolverBaseLgc::searchGoalPositionReuse(
     return cnt;
   }
 
+  g_n_reuse++;
   age_subgoal(subgoal_list);
   // 表づくりで取り出される区画 = 壁のどれかが表に入った区画か、出口のあるゴール区画
   for (auto it = subgoal_list.begin(); it != subgoal_list.end();) {

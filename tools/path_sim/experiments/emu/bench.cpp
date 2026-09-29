@@ -1,8 +1,11 @@
 // 機体と同じ CPU 向けにビルドして、エミュレータ上で探索の計算を回す。
 // 状態は 0x21000000 に置いた snap.bin(ホストの探索シミュレータが update() の直前に残したもの)。
+//   (指定なし)  元の関数を呼ぶ        -DOPT / -DFAST  試作(opt.cpp / opt2.cpp)を呼ぶ
+//   -DFW         いまのファームの searchGoalPositionReuse() を呼ぶ(作り直すとき = 1、作り直さないとき = 3)
+// g_result[2] は結果(表・サブゴール・歩数マップ)のチェックサム。別々にビルドした ELF どうしを比べる用。
 #include "stdhdr.hpp"
 #define private public
-#include "include/search/adachi.hpp"
+#include "adachi.hpp" // -I の順で、変更前の写し(frozen2)かファームかが決まる
 #undef private
 #include <cstring>
 
@@ -23,6 +26,20 @@ void opt_update_dist_map(MazeSolverBaseLgc &l, int mode, bool search_mode);
 void fast_search_goal_position(MazeSolverBaseLgc &l, std::unordered_map<unsigned int, unsigned char> &subgoal_list);
 #endif
 
+static uint32_t g_hash = 2166136261u;
+static void hmix(uint32_t v) { g_hash = (g_hash ^ v) * 16777619u; }
+static void hmixf(float f) {
+  uint32_t v;
+  memcpy(&v, &f, 4);
+  hmix(v);
+}
+static void hash_sub(const std::unordered_map<unsigned int, unsigned char> &m) {
+  uint32_t sum = 0; // 並び順によらない
+  for (const auto &kv : m)
+    sum += (kv.first * 2654435761u) ^ (kv.second * 40503u + 1);
+  hmix((uint32_t)m.size());
+  hmix(sum);
+}
 static const uint8_t *P;
 static int rd32() {
   int v;
@@ -106,15 +123,31 @@ extern "C" int bench_main(int first, int count, int stride) {
     rsub = sub0;
     // ---- 1: update() の中身(表づくり + 経路の上の未知区画)
     ref->searchGoalPosition(true, rsub);
+#ifdef FW
+    lgc->search_table.valid = false; // 作り直すほう
+#endif
     bench_begin(1);
-#ifdef OPT
+#if defined(FW)
+    const unsigned int ret1 = lgc->searchGoalPositionReuse(sub);
+#elif defined(OPT)
     opt_search_goal_position(*lgc, sub);
 #else
     lgc->searchGoalPosition(true, sub);
 #endif
     bench_end(1);
+#ifdef FW
+    if (ret1 == 0)
+      mismatch += 1000; // 作り直していない
+#endif
     if (sub != rsub)
       mismatch++;
+    hash_sub(sub);
+    for (int i = 0; i < N * N; i++) {
+      const auto &a = lgc->vector_dist[i];
+      hmixf(a.n), hmixf(a.e), hmixf(a.w), hmixf(a.s);
+      hmix(a.N1 | (a.NE << 4) | (a.E1 << 8) | (a.SE << 12) | (a.S1 << 16) | (a.SW << 20) | (a.W1 << 24) | (a.NW << 28));
+      hmix(lgc->updateMap[i]);
+    }
     for (int i = 0; i < N * N; i++) {
       const auto &a = lgc->vector_dist[i];
       const auto &b = ref->vector_dist[i];
@@ -124,18 +157,27 @@ extern "C" int bench_main(int first, int count, int stride) {
         break;
       }
     }
-#ifdef FAST
     // ---- 3: 地図が前回と同じときの近道(表は作り直さない)。同じ状態でもう 1 回 update したのと比べる
     {
       auto s3 = sub, r3 = rsub;
       ref->searchGoalPosition(true, r3);
+#if defined(FW)
+      bench_begin(3);
+      const unsigned int ret3 = lgc->searchGoalPositionReuse(s3);
+      bench_end(3);
+      if (ret3 != 0)
+        mismatch += 1000; // 作り直してしまった
+      if (s3 != r3)
+        mismatch++;
+#elif defined(FAST)
       bench_begin(3);
       fast_search_goal_position(*lgc, s3);
       bench_end(3);
       if (s3 != r3)
         mismatch++;
-    }
 #endif
+      hash_sub(r3);
+    }
     // ---- 2: exec() の中の歩数マップ(サブゴールへ向かう)
     for (auto *l : {lgc.get(), ref.get()}) {
       l->set_goal_pos2(pts);
@@ -155,8 +197,11 @@ extern "C" int bench_main(int first, int count, int stride) {
         break;
       }
     }
+    for (int i = 0; i < N * N; i++)
+      hmix(lgc->dist[i]);
   }
   g_result[0] = done;
   g_result[1] = mismatch;
+  g_result[2] = (int)g_hash;
   return mismatch;
 }

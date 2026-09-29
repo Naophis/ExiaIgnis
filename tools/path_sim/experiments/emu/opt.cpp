@@ -7,7 +7,7 @@
 // 取り出す順番(priority_queue)と書き込む値は元と同じ。
 #include "stdhdr.hpp"
 #define private public
-#include "include/search/adachi.hpp"
+#include "adachi.hpp" // 変更前の写し(frozen2)
 #undef private
 
 namespace {

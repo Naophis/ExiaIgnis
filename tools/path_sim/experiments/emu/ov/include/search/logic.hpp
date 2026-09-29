@@ -72,9 +72,6 @@ public:
   unsigned int
   searchGoalPosition(const bool isSearch,
                      unordered_map<unsigned int, unsigned char> &subgoal_list);
-  // searchGoalPosition(true, …) と同じ結果。地図が前回から変わっていなければ表を作り直さない
-  unsigned int searchGoalPositionReuse(
-      unordered_map<unsigned int, unsigned char> &subgoal_list);
 
   bool candidate_end(const int x, const int y);
 
@@ -168,19 +165,6 @@ public:
   }
 
 private:
-  void walk_goal_route(unordered_map<unsigned int, unsigned char> &subgoal_list);
-  void age_subgoal(unordered_map<unsigned int, unsigned char> &subgoal_list);
-  // 表(vector_dist / updateMap)を作り直した回数。誰が作り直しても増える
-  unsigned int vector_map_serial = 0;
-  // searchGoalPositionReuse() が最後に表を作ったときの条件
-  struct {
-    bool valid = false;
-    unsigned int serial = 0;
-    int param_num = 0;
-    vector<unsigned char> map;
-    vector<point_t> goal;
-  } search_table;
-
   std::shared_ptr<ego_t> ego;
   unsigned int maze_list_size;
   unsigned int goal_list_size;

@@ -9,7 +9,7 @@
 // した配列へ差し替えた(比較するのは歩数だけなので、取り出す順番は変わらない)。
 #include "stdhdr.hpp"
 #define private public
-#include "include/search/adachi.hpp"
+#include "adachi.hpp" // 変更前の写し(frozen2)
 #undef private
 
 namespace {

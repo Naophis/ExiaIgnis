@@ -435,6 +435,7 @@ public:
   }
 };
 
+extern int g_n_reuse, g_n_rebuild;
 int main() {
   host::JsonOut jo;
   JsonDocument &out = jo.doc;
@@ -476,6 +477,8 @@ int main() {
   out["total_time"] = sim.now;
   out["finish_time"] = sim.finish_time;
   out["search_timer"] = sim.param_->seach_timer;
+  out["n_reuse"] = g_n_reuse;
+  out["n_rebuild"] = g_n_rebuild;
   const auto &s = sim.param_set.str_map[StraightType::Search];
   const auto &nt = sim.param_set.map[TurnType::Normal];
   JsonObject prm = out["params"].to<JsonObject>();

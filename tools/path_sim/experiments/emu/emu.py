@@ -67,7 +67,8 @@ def run(elf, snap, first=0, count=20, stride=10, prof=False):
     uc.reg_write(UC_ARM_REG_R0, first); uc.reg_write(UC_ARM_REG_R1, count); uc.reg_write(UC_ARM_REG_R2, stride)
     uc.reg_write(UC_ARM_REG_LR, 0x20B00001)
     uc.emu_start(addr["bench_main"] | 1, 0x20B00000)
-    done, mismatch = struct.unpack("<ii", uc.mem_read(a_res, 8))
+    done, mismatch, checksum = struct.unpack("<iiI", uc.mem_read(a_res, 12))
+    run.checksum = checksum  # 結果(表・サブゴール・歩数マップ)のチェックサム
     return windows, profile, done, mismatch
 
 if __name__ == "__main__":
