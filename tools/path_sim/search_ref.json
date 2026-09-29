@@ -1,0 +1,191 @@
+{
+ "32MM2008HX": {
+  "end_reason": "home",
+  "input": "cb74839d9b2ea38802f059d55f714476181e9b94",
+  "output": "345633e6dcf88d9b2d5cd7c430dc3cc78f67d682",
+  "steps": 790,
+  "total_time": 204.9504175
+ },
+ "32MM2009HX": {
+  "end_reason": "home",
+  "input": "5ee24ee7922725f274710cc621029eb919351b0f",
+  "output": "50c91a32feb32ad1ca4327eccb39745890262198",
+  "steps": 684,
+  "total_time": 174.5425377
+ },
+ "32MM2010HX": {
+  "end_reason": "home",
+  "input": "b1f63a3c50f33074d6af4ec662b5e3943674ce15",
+  "output": "177bb2ff91df1c35aae7dbcea9279a975a59c9df",
+  "steps": 1032,
+  "total_time": 301.1289112
+ },
+ "32MM2011HX": {
+  "end_reason": "home",
+  "input": "c58c97279defd5bb66f3a9a42b0e60b0b27323ce",
+  "output": "0a15f31a8ee04b456009b96bb01de11ca442ac68",
+  "steps": 952,
+  "total_time": 252.2533006
+ },
+ "32MM2012HX": {
+  "end_reason": "home",
+  "input": "8b9f14fca59fe740cb46f13b0f5a6c99c34e18cb",
+  "output": "be2df1647a867a94a3d6e9d22b8a742b787c1bbf",
+  "steps": 888,
+  "total_time": 212.2877166
+ },
+ "32MM2013HX": {
+  "end_reason": "home",
+  "input": "a13ede3219b4d8644010803b34ff3a1ab811c89b",
+  "output": "9c21009a8c9104adc16e99fc63f77610699fe43e",
+  "steps": 954,
+  "total_time": 235.4294069
+ },
+ "32MM2014HX": {
+  "end_reason": "home",
+  "input": "fea78086af957865405d7a09fb6df4875953ee94",
+  "output": "e44350cf46baad2220f4b19c4bcb276cdc56e520",
+  "steps": 1004,
+  "total_time": 248.3134866
+ },
+ "32MM2015HX": {
+  "end_reason": "home",
+  "input": "96e5ab5effb5d0049da0c8b003b2b48f3e9e5c5e",
+  "output": "47a125ca89d6ffe4b2f5f5898540ae296b8c5086",
+  "steps": 1090,
+  "total_time": 272.2716468
+ },
+ "32MM2016HX": {
+  "end_reason": "home",
+  "input": "fe4163d6cbbc31b92c92ebe2450fff390ddbc64f",
+  "output": "5a5902950dec256758529fd0db17f86bc617a71e",
+  "steps": 1158,
+  "total_time": 310.2611746
+ },
+ "32MM2017HX": {
+  "end_reason": "home",
+  "input": "bd3f5a7697825c1436e02876a4b2690426a45b84",
+  "output": "c039bc29c7bdf42ee0c203902a04a07f27c985cd",
+  "steps": 1148,
+  "total_time": 294.5290448
+ },
+ "32MM2018HX": {
+  "end_reason": "home",
+  "input": "435b2460944ccbdc5f3b67cd3206912dfd5b1c24",
+  "output": "89f5635999318d35f90bde85cc9abff03a24af50",
+  "steps": 1270,
+  "total_time": 307.3990233
+ },
+ "32MM2019HX": {
+  "end_reason": "home",
+  "input": "764d84a8f36a0ba177a350a57eaf72e4eb8f2a20",
+  "output": "b4ebd8a66a568a5791660109f8520c42ffb5e1e2",
+  "steps": 1322,
+  "total_time": 346.9295976
+ },
+ "32MM2021HX": {
+  "end_reason": "home",
+  "input": "ecb8f72330d06ce029e481e1e568170596018c2f",
+  "output": "11955361b71f211201e2e5144bf491a2cba9d123",
+  "steps": 1294,
+  "total_time": 304.9047438
+ },
+ "32MM2022HX": {
+  "end_reason": "home",
+  "input": "02064516e9f3084e8e3925d4fcc799f2b61d7545",
+  "output": "05ca10f3e944ec387739cab0bf59b437949e1c12",
+  "steps": 1090,
+  "total_time": 257.3314994
+ },
+ "32MM2023HX": {
+  "end_reason": "home",
+  "input": "950a9a13f976f6272b625da2a89b097f257c552b",
+  "output": "8b4cc01979cde8bf745de98e52830c83c538ae18",
+  "steps": 1220,
+  "total_time": 321.366308
+ },
+ "japan2010hef": {
+  "end_reason": "home",
+  "input": "b1f63a3c50f33074d6af4ec662b5e3943674ce15",
+  "output": "177bb2ff91df1c35aae7dbcea9279a975a59c9df",
+  "steps": 1032,
+  "total_time": 301.1289112
+ },
+ "japan2011hef": {
+  "end_reason": "home",
+  "input": "c58c97279defd5bb66f3a9a42b0e60b0b27323ce",
+  "output": "0a15f31a8ee04b456009b96bb01de11ca442ac68",
+  "steps": 952,
+  "total_time": 252.2533006
+ },
+ "japan2012hef": {
+  "end_reason": "home",
+  "input": "8b9f14fca59fe740cb46f13b0f5a6c99c34e18cb",
+  "output": "be2df1647a867a94a3d6e9d22b8a742b787c1bbf",
+  "steps": 888,
+  "total_time": 212.2877166
+ },
+ "japan2013hef": {
+  "end_reason": "home",
+  "input": "3afd542c082e569c020dfb31fac24743b353f2ef",
+  "output": "5ec20403dbe6187ed3974bc444adb7153d1e7dfe",
+  "steps": 1146,
+  "total_time": 282.1234791
+ },
+ "japan2014hef": {
+  "end_reason": "home",
+  "input": "fea78086af957865405d7a09fb6df4875953ee94",
+  "output": "e44350cf46baad2220f4b19c4bcb276cdc56e520",
+  "steps": 1004,
+  "total_time": 248.3134866
+ },
+ "japan2015hef": {
+  "end_reason": "home",
+  "input": "96e5ab5effb5d0049da0c8b003b2b48f3e9e5c5e",
+  "output": "47a125ca89d6ffe4b2f5f5898540ae296b8c5086",
+  "steps": 1090,
+  "total_time": 272.2716468
+ },
+ "japan2016hef": {
+  "end_reason": "home",
+  "input": "4fd9f208eaeb5f2b748b0a9b7da4e7a80b8f5e9e",
+  "output": "4caebb607a595752e945279d1a199ef65f2a3d84",
+  "steps": 1128,
+  "total_time": 300.5619055
+ },
+ "japan2017hef": {
+  "end_reason": "home",
+  "input": "8d97f87b4ff52af1c3b60aa64d9809f981fc4baa",
+  "output": "c039bc29c7bdf42ee0c203902a04a07f27c985cd",
+  "steps": 1148,
+  "total_time": 294.5290448
+ },
+ "japan2018hef": {
+  "end_reason": "home",
+  "input": "435b2460944ccbdc5f3b67cd3206912dfd5b1c24",
+  "output": "89f5635999318d35f90bde85cc9abff03a24af50",
+  "steps": 1270,
+  "total_time": 307.3990233
+ },
+ "japan2018hes": {
+  "end_reason": "home",
+  "input": "7cce4571788833d9a3a63a22637aa4a8f326d01f",
+  "output": "9cca3d53f6b6c4e35e79ed3a9f55c90a0fc51e0b",
+  "steps": 398,
+  "total_time": 119.2230346
+ },
+ "japan2019hef": {
+  "end_reason": "home",
+  "input": "764d84a8f36a0ba177a350a57eaf72e4eb8f2a20",
+  "output": "b4ebd8a66a568a5791660109f8520c42ffb5e1e2",
+  "steps": 1322,
+  "total_time": 346.9295976
+ },
+ "japan2019hes": {
+  "end_reason": "home",
+  "input": "a2ef6bd1f0c0d5bdbaa67c788838fa8be8813198",
+  "output": "6612f323e4df98521d023881e620c8f4cc9edf10",
+  "steps": 420,
+  "total_time": 109.5371365
+ }
+}

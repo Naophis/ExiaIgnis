@@ -19,6 +19,9 @@ int _write(int, const char *, int n) { return n; }
 void opt_search_goal_position(MazeSolverBaseLgc &l, std::unordered_map<unsigned int, unsigned char> &subgoal_list);
 void opt_update_dist_map(MazeSolverBaseLgc &l, int mode, bool search_mode);
 #endif
+#ifdef FAST
+void fast_search_goal_position(MazeSolverBaseLgc &l, std::unordered_map<unsigned int, unsigned char> &subgoal_list);
+#endif
 
 static const uint8_t *P;
 static int rd32() {
@@ -121,6 +124,18 @@ extern "C" int bench_main(int first, int count, int stride) {
         break;
       }
     }
+#ifdef FAST
+    // ---- 3: 地図が前回と同じときの近道(表は作り直さない)。同じ状態でもう 1 回 update したのと比べる
+    {
+      auto s3 = sub, r3 = rsub;
+      ref->searchGoalPosition(true, r3);
+      bench_begin(3);
+      fast_search_goal_position(*lgc, s3);
+      bench_end(3);
+      if (s3 != r3)
+        mismatch++;
+    }
+#endif
     // ---- 2: exec() の中の歩数マップ(サブゴールへ向かう)
     for (auto *l : {lgc.get(), ref.get()}) {
       l->set_goal_pos2(pts);

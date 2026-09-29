@@ -79,7 +79,7 @@ if __name__ == "__main__":
     w, p, done, mismatch = run(a.elf, a.snap, a.first, a.count, a.stride, a.prof)
     import statistics
     print(f"{a.elf} {a.snap}: {done} 状態  元の結果との不一致 {mismatch}")
-    for wid, label in ((1, "update() の中身(表づくり + 経路)"), (2, "exec() の歩数マップ")):
+    for wid, label in ((1, "update() の中身(表づくり + 経路)"), (3, "update() の中身(地図が前回と同じときの近道)"), (2, "exec() の歩数マップ")):
         v = w[wid]
         if not v: continue
         print(f"  {label}: 命令数 平均 {statistics.mean(v):,.0f} 最小 {min(v):,} 最大 {max(v):,}")
