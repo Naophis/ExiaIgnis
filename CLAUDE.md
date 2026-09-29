@@ -157,7 +157,15 @@ PlanningTask は以下のサブシステムを内包:
 `detect_next_direction()` で前進方向を最優先し、左右を `setNextDirection2()`（= 歩数が低い同値でも更新しない）で評価、後退は `enable_back` 条件下のみ。  
 `subgoal_list` に未踏マスをキャッシュし、ゴール到達後は帰還目的地を動的切り替えします。
 
-ゴール後(`SearchMode::ALL`)のサブゴールは `Adachi::update()` → `searchGoalPosition(true, …)` で、未知を壁なしとみなした重みパターン 1 の最短経路 1 本の上の未知区画。`update()` のたびに表を作り直し、見つけた未知区画を `subgoal_list` に足していく(古いものは `clear_vector_distmap()` が 45 回で期限切れにする)。
+ゴール後(`SearchMode::ALL`)のサブゴールは `Adachi::update()` → `searchGoalPositionReuse()` で、未知を壁なしとみなした重みパターン 1 の最短経路 1 本の上の未知区画。見つけた未知区画を `subgoal_list` に足していく(古いものは `age_subgoal()` が 45 回で期限切れにする)。
+
+`update()` まわりの計算は 2026-09-29 に、**結果を変えずに**軽くした(機体向けビルドの命令数。機体での時間は未計測):
+
+- 表づくり(`updateVectorMap(bool, subgoal_list)` / `clear_vector_distmap(subgoal_list)`)を書き直し: 137 万 → 62 万命令。区画の範囲確認と壁・既知の確認を進む先の区画ごとに 1 回にまとめ、向きごとの if の連鎖を表引き(`VECTOR_STEP`)にし、小さい関数(どれも noinline)の呼び出しをやめた。取り出す順番(`vq_list`)・書き込む値・書き込む順番は元と同じ。経路生成が使う `updateVectorMap(bool)` は元のまま。
+- 歩数マップ(`update_dist_map`)を書き直し: 11.2 万 → 1.9 万命令。
+- `searchGoalPositionReuse()`: 地図・ゴール・重みパターンが前回の表づくりから変わっておらず、ほかの誰も表を作り直していなければ(`vector_map_serial`)、表を作り直さずサブゴールの手入れ(期限切れ → 4 辺とも既知になった区画を外す → 経路の上の未知区画を足す)だけをやる: 5〜13 万命令。ゴール後の `update()` の 44 % がこれに当たる。`searchGoalPosition(true, …)` と同じ結果を返す。
+- RAM: コード +1.6 KB、地図の写し +1 KB。
+- **探索まわり(`logic.cpp` / `adachi.cpp`)を、結果を変えないつもりで直したら** `python3 tools/path_sim/check_search.py`(探索 1 本まるごとの出力が基準と同じか、27 迷路)を回す。基準は変更前のソース(`tools/path_sim/experiments/frozen2`)で取ったもので、走行パラメータも基準と一緒に保存してある。乱数の状態での比較は `experiments/emu/eq_test.py`、命令数は `experiments/emu/run.py`。
 
 サブゴールの選び方は 2026-09-29 に search_sim でいくつか比べたが、**ファームには入れていない**(探索中に動く部分は変えない、というユーザー判断。経緯と数字は `tools/path_sim/experiments/README.md` の実験 4・5):
 

@@ -23,8 +23,11 @@ emu/*.elf
 emu/snap_*.bin
 emu/snap_main.cpp
 emu/snap_sim
-emu/adachi_skip.cpp
-emu/skip_main.cpp
-emu/search_sim_fast
-emu/logic_noattr.cpp
 emu/*.o
+emu/ov/
+emu/logic_cnt.cpp
+emu/cnt_main.cpp
+emu/search_sim_old
+emu/search_sim_cnt
+emu/eq_old
+emu/eq_fw
