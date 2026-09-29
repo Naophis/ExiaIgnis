@@ -951,6 +951,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "enable_kalman_gyro", dst.enable_kalman_gyro);
     from_json_field(src, "enable_kalman_encoder", dst.enable_kalman_encoder);
     from_json_field(src, "enc_v_lead", dst.enc_v_lead);
+    from_json_field(src, "sla_start_align", dst.sla_start_align);
     from_json_field(src, "enable_mpc", dst.enable_mpc);
     from_json_field(src, "dia90_offset", dst.dia90_offset);
     from_json_nested(src, "kanayama", dst.kanayama);

@@ -91,6 +91,19 @@ TIMER1 のハードウェアアラームを1本使用:
 - **位相はセンシングの tick（S0）+ 720us に固定**（`PlanningTask::kPhaseAfterSensingUs`、2026-09-29。最初は +600us で固定し、枠分けで +720us にした）。planning は自分で次回のアラームを決めず、SensingTask の `timer_b_irq_handler` が毎 tick の入口で `schedule_tick()` を呼んで予約する。以前は両方が自分で「1ms 以上遅れたら 今 + 1ms」と取り直していたため、パラメータ送信（`flash_safe_execute` で Core1 が止まる）のたびに位相が約 590us と 815us の間で変わっていた（再開時は IRQ 番号の小さい planning が先に動き、sensing はその処理の後になる）。ログ列 `plan_age_us`（FIFO を読んでから planning までの時間）で確認できる（枠分け後は約 275us）。
 - `send_command(shared_ptr<motion_tgt_val_t>)` で Core0 から目標値を投入（`__dmb()` で cross-core 安全）。
 
+#### 旋回の始まりを tick の途中へ合わせる(`sla_start_align`、2026-09-30)
+
+従来は Core0 の `go_straight`(SLA_FRONT_STR)が目標位置 X を越えた tick で終わり、SLALOM の指令は次の planning の tick で効く。距離が進むのは 1ms に 1 回なので、越えた量(0〜1 tick、2200mm/s で 0〜2.2mm)がそのまま旋回位置のばらつきになっていた(±0.63mm)。Core0 を速く起こしても、指令が効くのは planning の 1kHz の tick だけなので消えない。
+
+`hardware.yaml` の `sla_start_align: 1` で、Core0 は X の 0.5 tick 手前で SLA_FRONT_STR を終え、X(`global_pos.dist`)を SLALOM の指令(`nmr.sla_start_x` / `sla_align`)に付けて送る。planning(`include/planning/sla_start_align.hpp`、`TrajectoryGenerator::generate_sla_aligned()`)は受け取った tick で tau = (global_pos.dist − X)/(v·dt) − 1.5 を求め、旋回の出力列(角速度・角度・FF・点列)を tick の途中まで遅らせて出す(隣り合う 2 tick の直線補間)。生成器の中身(カウンタ・積分)は影の状態で従来のまま進めるので、生成コード `gen_code_mpc` は触っていない。
+
+- tau の基準は従来の切り替えの平均と同じ位置なので、ターンの front/back はそのまま使える。
+- 最短走行の SLAROM_RUN の旋回だけ。探索の Normal と角度で決める SLALOM_RUN2 は従来どおり。
+- Core0 が 1 tick 遅れたとき(tau ≥ 0)は従来と同じ出力列、早すぎたとき(tau < −1)は直進を出して待つ(最大 3 tick)。
+- ホスト検証は `tests/sla_align_host/run.sh`(生成コードをそのまま使う)。large90 v2200 で旋回後の直線の横位置のばらつきが幅 2.18 → 0.013mm、平均の差 0.002mm。1 tick 遅れは従来と出力列が完全一致。
+- ログ列 `sla_tau`(決めたずれ [tick]、−1〜0 が正常、9 = 合わせていない旋回)・`sla_wait`(直進で待った tick 数)。
+- **`copy_tgt()` が生成器の出力から `ego_in` へ写す項目を変えたら `sla_state_fields()` も合わせる。**
+
 PlanningTask は以下のサブシステムを内包:
 
 | クラス | ファイル | 役割 |

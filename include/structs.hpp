@@ -357,6 +357,12 @@ typedef struct {
   int16_t tr[4] = {0, 0, 0, 0}; // 右を読んだ時刻 [us]
 } wo_hf_t;
 
+// 旋回の始まりを tick の途中へ合わせた結果(2026-09-30、planning/sla_start_align.hpp)。
+typedef struct {
+  float tau = 9.0f;  // 従来の切り替えの平均の位置からのずれ [tick](9 = 合わせていない旋回)
+  int16_t wait = 0;  // 直進で待った tick 数
+} sla_align_diag_t;
+
 // センシングの枠と planning が重なっていないかの記録(2026-09-29、sensing_task.hpp の
 // kSlotOffsetUs)。重なると slot_late_max_us が増え、pln_margin_us が負になる。
 typedef struct {
@@ -390,6 +396,7 @@ typedef struct {
   gyro_fifo_out_t gyro_fifo;    // ジャイロ FIFO の読み出し結果(2026-09-29)
   sched_diag_t sched;           // センシングの枠と planning の重なりの記録(2026-09-29)
   wo_hf_t wo;                   // WALL_OFF 中の 45° LED1 の 4 サンプル / tick(2026-09-30)
+  sla_align_diag_t sla_align;   // 旋回の始まりを tick の途中へ合わせた結果(2026-09-30)
   int16_t calc_time;
   int16_t calc_time2;
   int16_t t_spi;     // sense_start からの累積 [us]: read_spi_sensors 終了
@@ -1444,6 +1451,13 @@ typedef struct {
   // 目標角加速度 × tread/2) × (dt/2 + 読んでから次の planning tick までの時間)」を
   // 足す。距離の積分は差分のまま(ego.v_l_dist/v_r_dist)。0 = 従来どおり。
   char enc_v_lead = 0;
+  // 旋回(SLALOM)の始まりを tick の途中の位置へ合わせる(2026-09-30、
+  // planning/sla_start_align.hpp)。従来は SLA_FRONT_STR が目標を越えた tick の次に
+  // 旋回が始まり、越えた量(0〜1 tick)がそのまま旋回位置のばらつきになっていた。
+  // 1 のとき、Core0 が目標位置を付けて SLALOM を 0.5 tick 早めに送り、planning が
+  // 角速度の出力列を tick の途中まで遅らせて出す。平均の位置は従来と同じ。
+  // 最短走行の SLAROM_RUN の旋回だけ(探索の Normal と角度で決める SLALOM_RUN2 は従来どおり)。
+  char sla_start_align = 0;
   char enable_mpc = 0;
   float dia90_offset = 0;
   kanayama_t kanayama;
@@ -1659,6 +1673,10 @@ typedef struct {
   sys_id_t sys_id;
   volatile bool tgt_reset_req = false;
   volatile bool ego_reset_req = false;
+  // SLALOM の始まりを tick の途中へ合わせる(2026-09-30、sla_start_align.hpp)。
+  // sla_align のとき、global_pos.dist が sla_start_x に来た位置で旋回を始める。
+  volatile float sla_start_x = 0;
+  volatile bool sla_align = false;
 } new_motion_req_t;
 
 typedef struct {
@@ -2256,6 +2274,8 @@ typedef struct {
   real16_T edge_lag_r;
   real16_T edge_lvl_l;    // 最後の発火時の壁の距離 [mm]
   real16_T edge_lvl_r;
+  real16_T sla_tau;       // 旋回の始まりのずれ [tick](sla_align_diag_t、2026-09-30)
+  int16_t sla_wait;
 } log_data_t2;
 
 typedef struct {
@@ -2558,6 +2578,8 @@ typedef struct {
   float wo_dr1        = 207;
   float wo_dr2        = 208;
   float wo_dr3        = 209;
+  float sla_tau       = 210; // 旋回の始まりのずれ [tick](9 = 合わせていない、2026-09-30)
+  int sla_wait        = 211; // 直進で待った tick 数
 } LogStruct11;
 
 #endif

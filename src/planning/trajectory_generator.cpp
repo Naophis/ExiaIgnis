@@ -35,6 +35,15 @@ void TrajectoryGenerator::generate(float last_tgt_angle) {
     return;
   }
 
+  // 2026-09-30: 旋回の始まりを tick の途中へ合わせる(sla_start_align.hpp)。
+  // Core0 が X を付けて送った SLALOM(時間で決まる角速度の形、SLAROM_RUN)だけ。
+  if (sla_align_.armed() && tgt_val->motion_type == MotionType::SLALOM &&
+      tgt_val->motion_mode == static_cast<int>(RUN_MODE2::SLAROM_RUN)) {
+    tgt_val->ego_in.img_ang = tmp;
+    generate_sla_aligned(last_tgt_angle);
+    return;
+  }
+
   for (int i = 0; i < param->trj_length; i++) {
     int32_T index = i + 1;
     if (i == 0) {
@@ -62,6 +71,26 @@ void TrajectoryGenerator::generate(float last_tgt_angle) {
   // ideal_ang=45.0に対しang≈0)。copy_tgt()のimg_ang_z(=前tickのimg_ang)
   // 経由でimg_ang_sumにも毎tick -last_tgt_angle が混入していた。
   tgt_val->ego_in.img_ang = tmp;
+}
+
+__attribute__((noinline, section(".time_critical.trajectory")))
+void TrajectoryGenerator::generate_sla_aligned(float last_tgt_angle) {
+  // generate() の通常の経路と同じ手順で点列を作る(1 点目は ego の状態から、
+  // 2 点目以降は前の点から)。入力の状態と出力の補間は SlaStartAlign が持つ。
+  auto step = [this](const t_ego &in, int mode, t_ego *pts, int n) {
+    for (int i = 0; i < n; i++) {
+      int32_T index = i + 1;
+      mpc_tgt_calc.step(&tgt_val->tgt_in, (i == 0) ? &in : &pts[i - 1], mode,
+                        mpc_step, &pts[i], &dynamics, &index);
+    }
+  };
+  sla_align_.tick(tgt_val->ego_in, tgt_val->global_pos.dist, param->dt,
+                  last_tgt_angle, param->tire_tread,
+                  static_cast<int>(RUN_MODE2::ST_RUN), tgt_val->motion_mode,
+                  step, trajectory_points.data(), param->trj_length,
+                  mpc_next_ego);
+  se->sla_align.tau = sla_align_.tau0();
+  se->sla_align.wait = (int16_t)sla_align_.wait();
 }
 
 __attribute__((noinline, section(".time_critical.trajectory")))

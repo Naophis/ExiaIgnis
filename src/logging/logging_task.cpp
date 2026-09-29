@@ -441,6 +441,9 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.edge_lag_r = floatToHalf(sr->edge_r.lag);
   ld.edge_lvl_l = floatToHalf(sr->edge_l.level);
   ld.edge_lvl_r = floatToHalf(sr->edge_r.level);
+  // 旋回の始まりを tick の途中へ合わせた結果(2026-09-30)
+  ld.sla_tau = floatToHalf(sr->sla_align.tau);
+  ld.sla_wait = sr->sla_align.wait;
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -713,6 +716,8 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr1:float:%d\n", (int)sizeof(ls11.wo_dr1));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr2:float:%d\n", (int)sizeof(ls11.wo_dr2));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr3:float:%d\n", (int)sizeof(ls11.wo_dr3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "sla_tau:float:%d\n", (int)sizeof(ls11.sla_tau));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "sla_wait:int:%d\n", (int)sizeof(ls11.sla_wait));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -1048,6 +1053,8 @@ void LoggingTask::dump_csv() const {
       ls11.wo_dr2 = dr[2];
       ls11.wo_dr3 = dr[3];
     }
+    ls11.sla_tau = halfToFloat(e.sla_tau);
+    ls11.sla_wait = e.sla_wait;
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

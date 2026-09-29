@@ -314,6 +314,7 @@ export const CHART_VIEWS: ChartView[] = [
     charts: [
       { title: "dbg_off", columns: ["dbg_off_ang", "dbg_off_wgain", "dbg_off_kny"] },
       { title: "continuous_turn", columns: ["continuous_turn", "motion_state"] },
+      { title: "sla_align (tau / wait)", columns: ["sla_tau", "sla_wait"] },
       { title: "ang_sum", columns: ["ang_kf_sum", "img_ang_sum"] },
       { title: "wall_fit", columns: ["wfit_beta", "wfit_sig"] },
     ],

@@ -637,6 +637,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["enable_kalman_gyro"]       = (int)src.enable_kalman_gyro;
     dst["enable_kalman_encoder"]    = (int)src.enable_kalman_encoder;
     dst["enc_v_lead"]               = (int)src.enc_v_lead;
+    dst["sla_start_align"]          = (int)src.sla_start_align;
     dst["enable_mpc"]               = (int)src.enable_mpc;
     dst["dia90_offset"]             = src.dia90_offset;
     dst["kanayama"]                 = src.kanayama;

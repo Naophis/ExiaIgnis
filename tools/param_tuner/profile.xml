@@ -1134,7 +1134,7 @@
   <Tab containers="1" tab_name="debug_misc">
    <Container>
     <DockSplitter count="2" orientation="-" sizes="0.5;0.5">
-     <DockSplitter count="2" orientation="|" sizes="0.5;0.5">
+     <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
       <DockArea name="dbg_off">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-0.677686" left="0.000000" right="288.000000" top="0.448193"/>
@@ -1150,6 +1150,14 @@
         <limitY/>
         <curve color="#1f77b4" name="continuous_turn"/>
         <curve color="#d62728" name="motion_state"/>
+       </plot>
+      </DockArea>
+      <DockArea name="sla_align (tau / wait)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-3.000000" left="0.000000" right="288.000000" top="10.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="sla_tau"/>
+        <curve color="#d62728" name="sla_wait"/>
        </plot>
       </DockArea>
      </DockSplitter>

@@ -115,6 +115,13 @@ private:
   bool wall_off_recheck_ok(TurnDirection td);
   // wall_off(td, ...) に入るときの横 45° の距離(再チェックの基準、2026-09-30)
   float wall_off_ref_dist_ = 0.0f;
+  // 旋回の始まりを tick の途中へ合わせる(2026-09-30、hardware.yaml sla_start_align、
+  // planning/sla_start_align.hpp)。slalom() が req を立て、go_straight() が
+  // SLA_FRONT_STR を 0.5 tick 早めに終えたら、旋回を始める位置 x(global_pos.dist)を
+  // 記録して valid にする。slalom() が SLALOM の指令に付けて送り、どちらも下ろす。
+  bool sla_align_req_ = false;
+  bool sla_align_valid_ = false;
+  float sla_align_x_ = 0.0f;
 
   std::shared_ptr<UserInterface> ui;
   std::shared_ptr<sensing_result_entity_t> sensing_result;

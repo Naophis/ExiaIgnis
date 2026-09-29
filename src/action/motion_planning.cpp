@@ -123,6 +123,10 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   }
   tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
+  sla_align_valid_ = false;
+  const bool sla_align_end =
+      sla_align_req_ && p.motion_type == MotionType::SLA_FRONT_STR;
+
   pt->send_command(*tgt_val);
   // printf("[mp][go_straight]: sent command\n");
 
@@ -205,6 +209,17 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
     //       se->ego.v_c);
     // }
 
+    // 2026-09-30: 旋回の始まりを tick の途中へ合わせるとき(sla_start_align)は、
+    // 目標の 0.5 tick 手前で終えて、旋回を始める位置を SLALOM の指令に付ける
+    // (planning/sla_start_align.hpp)。目標を越えた tick で終える従来の判定だと、
+    // SLALOM が効く次の tick には 1〜2 tick 越えていて、遅らせる向きにしか合わせられない。
+    if (sla_align_end &&
+        std::abs(now_dist) + 0.5f * std::abs(tgt_val->ego_in.v) * dt >=
+            std::abs(p.dist)) {
+      sla_align_x_ = motion_start_dist + p.dist;
+      sla_align_valid_ = true;
+      break;
+    }
     if (std ::abs(now_dist) >= std::abs(p.dist)) {
       break;
     }
@@ -623,6 +638,12 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
   const auto se = get_sensing_entity();
   float orval_offset = 0;
 
+  // 2026-09-30: 旋回の始まりを tick の途中へ合わせる(sla_start_align)。最短走行の
+  // 旋回だけ(探索の Normal は従来どおり)。go_straight(ps_front) が位置を記録する。
+  sla_align_req_ = param->sla_start_align != 0 && !search_mode &&
+                   sp.type != TurnType::Normal;
+  sla_align_valid_ = false;
+
   ps_front.search_str_wide_ctrl_l = false;
   ps_front.search_str_wide_ctrl_r = false;
   ps_back.search_str_wide_ctrl_l  = false;
@@ -1014,7 +1035,15 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
 
   tgt_val->nmr.ang = (td == TurnDirection::Left) ? sp.ref_ang : -sp.ref_ang;
 
+  // 直前のモーションが 0.5 tick 早めに終えた SLA_FRONT_STR のときだけ、旋回を
+  // 始める位置を付ける(角度で決める SLALOM_RUN2 は対象外)。
+  tgt_val->nmr.sla_align = sla_align_req_ && sla_align_valid_ &&
+                           tgt_val->nmr.motion_mode == RUN_MODE2::SLAROM_RUN;
+  tgt_val->nmr.sla_start_x = sla_align_x_;
   pt->send_command(*tgt_val);
+  tgt_val->nmr.sla_align = false;
+  sla_align_req_ = false;
+  sla_align_valid_ = false;
   // wait_tick();
   if (search_mode) {
     adachi->update();
@@ -1810,6 +1839,7 @@ bool MotionPlanning::wall_off(TurnDirection td, param_straight_t &ps_front) {
   const auto se = get_sensing_entity();
   wall_off_ref_dist_ = (td == TurnDirection::Right) ? se->ego.right45_dist
                                                     : se->ego.left45_dist;
+  sla_align_valid_ = false;
   return wall_off_controller->execute_wall_off(td, ps_front);
 }
 

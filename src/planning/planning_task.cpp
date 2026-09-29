@@ -514,6 +514,20 @@ void PlanningTask::cp_request() {
     tgt_val->ego_in.v = receive_req->nmr.v_max;
   }
 
+  // 2026-09-30: 旋回の始まりを tick の途中の位置へ合わせる(sla_start_align.hpp)。
+  // Core0 が旋回を始める位置(global_pos.dist)を付けて送った SLALOM だけ。
+  if (receive_req->nmr.motion_type == MotionType::SLALOM) {
+    se->sla_align.tau = 9.0f; // 合わせる旋回は generate() が上書きする
+    se->sla_align.wait = 0;
+  }
+  if (receive_req->nmr.motion_type == MotionType::SLALOM &&
+      receive_req->nmr.sla_align &&
+      receive_req->nmr.motion_mode == RUN_MODE2::SLAROM_RUN) {
+    trj_.arm_sla_align(receive_req->nmr.sla_start_x);
+  } else {
+    trj_.disarm_sla_align();
+  }
+
   if (receive_req->nmr.motion_type == MotionType::STRAIGHT) {
     // if (se->sen.r45.sensor_dist == 0 || se->sen.r45.sensor_dist == 180) {
     //   se->sen.r45.sensor_dist = param->sen_ref_p.normal.ref.right45;

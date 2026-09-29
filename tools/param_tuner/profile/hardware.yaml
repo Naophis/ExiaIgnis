@@ -527,6 +527,13 @@ enable_kalman_encoder: 1
 # 制御・推定に渡す v_l/v_r に車輪ごとの目標加速度(並進 ± 目標角加速度 × tread/2) ×
 # (dt/2 + 読んでから次の planning tick までの時間) を足す。距離の積分は差分のまま。0 = 従来どおり。
 enc_v_lead: 1
+# 旋回(SLALOM)の始まりを tick の途中の位置へ合わせる(2026-09-30、planning/sla_start_align.hpp)。
+# 従来は SLA_FRONT_STR が目標を越えた tick の次に旋回が始まり、越えた量(0〜1 tick、2200mm/s で
+# 0〜2.2mm)がそのまま旋回位置のばらつきになっていた。1 のとき Core0 が目標位置を付けて SLALOM を
+# 0.5 tick 早めに送り、planning が角速度の出力列を tick の途中まで遅らせて出す。平均の位置は従来と
+# 同じなので front/back はそのまま。最短走行の旋回だけ(探索の Normal は従来どおり)。ログ列 sla_tau
+# (決めたずれ [tick]、−1〜0 が正常、9 = 合わせていない旋回)・sla_wait(直進で待った tick 数)。
+sla_start_align: 1
 
 # motor_pid_gain_limitter: 
 #   mode: 0
