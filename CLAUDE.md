@@ -71,6 +71,7 @@ ASM330LHH はジャイロを実 ODR（個体ごと、本機 3508.5Hz）で FIFO 
 
 - 使い方は `hardware.yaml` の `gyro_param.fifo_mode`。0 は従来の 1 点読みのまま（FIFO は計算してログに出すだけ）、1/2/3 は最新・直近 3 サンプル平均・tick 内平均を `w_raw` に使い、角度を Σw·T_odr で積分します。4 は直近 3 サンプル平均を、直近 `fifo_alpha_win` サンプルに当てた直線の傾き(角加速度)で 1.5 サンプル + `fifo_lead_extra_us` 先読みします（平均の遅れ 1 サンプル + 最新サンプルの古さの平均 0.5 サンプルを打ち消す）。
 - ログ列: `gyro_fifo_n`（-1/-2 は flush）、`w_snap`、`w_fifo_last/ma3/mean/pred`、`alpha_fifo`、`ang_fifo_diff`（FIFO 角度 − 1 点読み角度の累積 [deg]）、`gyro_odr_err`（MCU 時間で数えた ODR の FF 由来値からのずれ [%]）、オフライン検証用の生サンプル `gyro_raw0..3`（古い順、n 個まで有効）・`gyro_fifo_seq`（tick 通し番号）・`gyro_fifo_t`（読んだ MCU 時刻 [us] 下位 16bit）。
+- `gyro_param.fifo_plan_lead: 1` で、`fifo_mode` 1〜4 の w に「目標角加速度 × (FIFO を読んでから次の planning tick までの時間)」を足します。PlanningTask はセンシングより後(`start_irq` の +600us に起動の間隔が加わり、実測 約 0.6〜0.8ms、ブートで変わる)に w を使うため。時間は `PlanningTask::next_tick_us()` から毎回読みます。角度の積分(FIFO の和)には入れません。ログ列 `plan_age_us`(読んでから planning までの時間)・`w_plan_lead`(足した量)。
 - 1 点読み（9 バイト）は加速度の取得と比較用に残してあります。加速度はまだ FIFO に入れていません。
 
 ### PlanningTask IRQ 構造 (`src/planning/planning_task.cpp`)
@@ -417,7 +418,7 @@ self->data.gz_dt   = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z
 
 1ms の位置差分で求めた車輪速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、さらに PlanningTask はセンシングより約 600us 後の tick でそれを使います(`PlanningTask::start_irq` の +600us)。planning の時刻を基準にすると、加減速中は直進 −43mm/s、旋回の出入り −56mm/s 遅れていました。`hardware.yaml` の `enc_v_lead: 1` で、制御と推定に渡す `ego.v_l/v_r` に「車輪ごとの目標加速度(`ego_in.accl` ± 目標角加速度 × `tire_tread`/2) × (dt/2 + 読んでから次の planning tick までの時間)」を足します(次の tick の時刻は `PlanningTask::next_tick_us()`)。偏りは +1〜4mm/s になり、目標加速度はノイズが無いので巡航中のノイズは増えません。
 
-- 同じ時刻のずれはジャイロにもあります(`fifo_mode` のどれも、読んだ時刻の値を約 588us 後に planning が使う)。オフラインでは mode 4 に目標角加速度 × 588us を足すと、旋回の出入りの偏りが −1.8 → −0.08 rad/s になりました(未実装)。
+- 同じ時刻のずれはジャイロにもあります(`fifo_mode` のどれも、読んだ時刻の値を約 588us 後に planning が使う)。オフラインでは mode 4 に目標角加速度 × 588us を足すと、旋回の出入りの偏りが −1.8 → −0.08 rad/s になりました(`gyro_param.fifo_plan_lead` として実装)。
 
 - 距離(`ego_in.dist` / `global_pos.dist`)は位置の差分そのもの `ego.v_l_dist/v_r_dist` で積分し、先読みは入れません(入れると加減速のたびに速度変化 × dt/2 ずれる)。エンコーダー読み取り失敗の判定も `v_*_dist` で行います。
 - `kim` の位置推定は `v_kf × dt` を積分しているので、先読みした速度が KF を通って入ります(加減速のたびに最大で速度変化 × 0.5ms、速度が戻れば消える)。

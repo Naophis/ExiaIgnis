@@ -63,6 +63,7 @@ inline void convertToJson(const gyro_param_t& src, JsonVariant dst) {
     dst["fifo_mode"]         = src.fifo_mode;
     dst["fifo_alpha_win"]    = src.fifo_alpha_win;
     dst["fifo_lead_extra_us"] = src.fifo_lead_extra_us;
+    dst["fifo_plan_lead"]    = src.fifo_plan_lead;
 }
 
 inline void convertToJson(const accel_param_t& src, JsonVariant dst) {

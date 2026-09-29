@@ -726,13 +726,8 @@ SensingTask::read_spi_sensors() {
     const float alpha_tgt = (tgt_val->ego_in.w - w_old) / dt;
     const float a_l = tgt_val->ego_in.accl - alpha_tgt * tread * 0.5f;
     const float a_r = tgt_val->ego_in.accl + alpha_tgt * tread * 0.5f;
-    const uint32_t next_plan = pt->next_tick_us();
-    auto age_s = [next_plan](uint64_t t_read) {
-      const int32_t us = (int32_t)(next_plan - (uint32_t)t_read);
-      return (float)MIN(MAX(us, 0), 1000) * 1e-6f;
-    };
-    lead_l = a_l * (enc_l_dt * 0.5f + age_s(enc_l_timestamp_now));
-    lead_r = a_r * (enc_r_dt * 0.5f + age_s(enc_r_timestamp_now));
+    lead_l = a_l * (enc_l_dt * 0.5f + plan_age_s(enc_l_timestamp_now));
+    lead_r = a_r * (enc_r_dt * 0.5f + plan_age_s(enc_r_timestamp_now));
   }
 
   if (enc_r_dt > 0) {
@@ -790,6 +785,19 @@ SensingTask::read_spi_sensors() {
       }
     }
     const auto alpha = (tgt_val->ego_in.w - w_old) / dt;
+    // planning が w を使う時刻まで目標角加速度で先読みする(fifo_plan_lead)。
+    // planning はセンシングより約 0.6〜0.8ms 後に動く。オフラインでは mode 4 +
+    // 目標角加速度 × この時間で、旋回の出入りの偏りが −1.8 → −0.08 rad/s、
+    // 直進のノイズは増えなかった。角度は FIFO の和で積分するので影響しない
+    // (fifo_mode 0 は w で積分するので適用しない)。
+    const float age = plan_age_s(gyro_fifo_t_read_);
+    se->gyro_fifo.plan_age_us = (int16_t)(age * 1e6f);
+    se->gyro_fifo.plan_lead = 0.0f;
+    if (param->gyro_param.fifo_plan_lead && param->gyro_param.fifo_mode != 0 &&
+        gyro_fifo_ang_valid_) {
+      se->gyro_fifo.plan_lead = alpha * age;
+      se->ego.w_raw += se->gyro_fifo.plan_lead;
+    }
     pt->ego.kf_w.predict(alpha);
     const float tread = param->tire_tread;
     const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
@@ -842,6 +850,12 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   tgt_val->global_pos.ang += d_ang;
 
   w_old = tgt_val->ego_in.w;
+}
+
+__attribute__((noinline, section(".time_critical.sensing.plan_age_s")))
+float SensingTask::plan_age_s(uint64_t t_read) const {
+  const int32_t us = (int32_t)(pt->next_tick_us() - (uint32_t)t_read);
+  return (float)MIN(MAX(us, 0), 1000) * 1e-6f;
 }
 
 __attribute__((noinline, section(".time_critical.sensing.gyro_raw_to_w")))

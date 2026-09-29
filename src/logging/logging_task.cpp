@@ -410,6 +410,8 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.gyro_fifo_t = static_cast<int16_t>(sr->gyro_fifo.t_read);
   ld.w_fifo_pred = floatToHalf(sr->gyro_fifo.w_pred);
   ld.alpha_fifo = floatToHalf(sr->gyro_fifo.alpha);
+  ld.plan_age_us = sr->gyro_fifo.plan_age_us;
+  ld.w_plan_lead = floatToHalf(sr->gyro_fifo.plan_lead);
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -645,6 +647,8 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "gyro_fifo_t:int:%d\n", (int)sizeof(ls11.gyro_fifo_t));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_fifo_pred:float:%d\n", (int)sizeof(ls11.w_fifo_pred));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "alpha_fifo:float:%d\n", (int)sizeof(ls11.alpha_fifo));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "plan_age_us:int:%d\n", (int)sizeof(ls11.plan_age_us));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_plan_lead:float:%d\n", (int)sizeof(ls11.w_plan_lead));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -928,6 +932,8 @@ void LoggingTask::dump_csv() const {
     ls11.gyro_fifo_t = e.gyro_fifo_t;
     ls11.w_fifo_pred = halfToFloat(e.w_fifo_pred);
     ls11.alpha_fifo = halfToFloat(e.alpha_fifo);
+    ls11.plan_age_us = e.plan_age_us;
+    ls11.w_plan_lead = halfToFloat(e.w_plan_lead);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

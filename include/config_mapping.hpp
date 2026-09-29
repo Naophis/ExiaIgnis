@@ -183,6 +183,7 @@ inline void convertFromJson(JsonVariantConst src, gyro_param_t& dst) {
     from_json_field(src, "fifo_mode", dst.fifo_mode);
     from_json_field(src, "fifo_alpha_win", dst.fifo_alpha_win);
     from_json_field(src, "fifo_lead_extra_us", dst.fifo_lead_extra_us);
+    from_json_field(src, "fifo_plan_lead", dst.fifo_plan_lead);
 }
 
 /**

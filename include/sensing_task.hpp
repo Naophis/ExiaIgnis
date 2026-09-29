@@ -95,6 +95,9 @@ private:
     void  read_gyro_fifo();                           // SPI(mode 3 のまま Phase A の直後)
     void  update_gyro_fifo(float w_snap, float gyro_dt); // 生値 → w / 角度増分
     float gyro_raw_to_w(float raw) const;             // バイアスを引いて左右別ゲイン
+    // t_read に読んだ値を planning が使うまでの時間 [s](次の planning tick の
+    // アラーム時刻 − t_read、0〜1000us にクランプ)。位相はブートで変わる
+    float plan_age_s(uint64_t t_read) const;
     float w_old = 0;
     int64_t gyro_timestamp_old = 0;
     int64_t gyro_timestamp_now = 0;

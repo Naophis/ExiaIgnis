@@ -310,6 +310,8 @@ typedef struct {
 // (個体ごと、本機 3508.5Hz)の全サンプルを取る。w の単位は rad/s。
 typedef struct {
   int16_t n = 0;        // この tick に読んだサンプル数。-1: 溜まりすぎ/あふれで flush、-2: タグ不一致で flush
+  int16_t plan_age_us = 0; // FIFO を読んでから次の planning tick までの時間 [us](位相の確認用)
+  float plan_lead = 0;  // fifo_plan_lead で w に足した量 [rad/s]
   float w_snap = 0;     // 従来の 1 点読み(fifo_mode に関係なく常に入る)
   float w_last = 0;     // FIFO の最新サンプル
   float w_ma3 = 0;      // FIFO の直近 3 サンプルの移動平均
@@ -435,6 +437,10 @@ typedef struct {
   int fifo_mode = 0;
   int fifo_alpha_win = 6;         // 角加速度を求めるサンプル数(2〜10)
   float fifo_lead_extra_us = 0.0f; // mode 4 の追加の先読み [us](センサー内部の遅れを試す用)
+  // 1 のとき、fifo_mode 1〜4 で選んだ w に「目標角加速度 × (FIFO を読んでから次の
+  // planning tick までの時間)」を足す(2026-09-29)。planning はセンシングより
+  // 約 0.6〜0.8ms 後(ブートで変わる)に w を使うため。角度の積分には入れない。
+  int fifo_plan_lead = 0;
 } gyro_param_t;
 
 typedef struct {
@@ -2160,6 +2166,8 @@ typedef struct {
   int16_t gyro_fifo_t;    // FIFO を読んだ MCU 時刻 [us] 下位 16bit
   real16_T w_fifo_pred;   // fifo_mode 4 の先読み値 [rad/s]
   real16_T alpha_fifo;    // FIFO サンプルから求めた角加速度 [rad/s^2]
+  int16_t plan_age_us;    // FIFO を読んでから次の planning tick までの時間 [us]
+  real16_T w_plan_lead;   // fifo_plan_lead で w に足した量 [rad/s]
 } log_data_t2;
 
 typedef struct {
@@ -2423,6 +2431,8 @@ typedef struct {
   int gyro_fifo_t     = 170; // FIFO を読んだ MCU 時刻 [us](16bit で一周)
   float w_fifo_pred   = 171; // fifo_mode 4 の先読み値 [rad/s]
   float alpha_fifo    = 172; // FIFO サンプルから求めた角加速度 [rad/s^2]
+  int plan_age_us     = 173; // FIFO を読んでから次の planning tick までの時間 [us](2026-09-29)
+  float w_plan_lead   = 174; // fifo_plan_lead で w に足した量 [rad/s]
 } LogStruct11;
 
 #endif
