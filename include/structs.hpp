@@ -332,6 +332,14 @@ typedef struct {
   uint16_t t_read = 0;
 } gyro_fifo_out_t;
 
+// センシングの枠と planning が重なっていないかの記録(2026-09-29、sensing_task.hpp の
+// kSlotOffsetUs)。重なると slot_late_max_us が増え、pln_margin_us が負になる。
+typedef struct {
+  int16_t slot_late_max_us = 0; // 前の tick の S0〜S3 の開始が予約より遅れた最大 [us]
+  int16_t pln_margin_us = 0;    // planning が終わってから次の S0 の予約までの余裕 [us]
+  uint16_t led_overrun_cnt = 0; // LED シーケンスが次の枠まで残って打ち切った回数(累計)
+} sched_diag_t;
+
 typedef struct {
   led_sensor_t led_sen;
   led_sensor_t led_sen_after;
@@ -353,6 +361,7 @@ typedef struct {
   pillar_trough_out_t pillar_l; // 左45°の柱谷検知(2026-09-23)
   pillar_trough_out_t pillar_r; // 右45°の柱谷検知
   gyro_fifo_out_t gyro_fifo;    // ジャイロ FIFO の読み出し結果(2026-09-29)
+  sched_diag_t sched;           // センシングの枠と planning の重なりの記録(2026-09-29)
   int16_t calc_time;
   int16_t calc_time2;
   int16_t t_spi;     // sense_start からの累積 [us]: read_spi_sensors 終了
@@ -439,7 +448,7 @@ typedef struct {
   float fifo_lead_extra_us = 0.0f; // mode 4 の追加の先読み [us](センサー内部の遅れを試す用)
   // 1 のとき、fifo_mode 1〜4 で選んだ w に「目標角加速度 × (FIFO を読んでから次の
   // planning tick までの時間)」を足す(2026-09-29)。planning はセンシングより
-  // 600us 後(PlanningTask::kPhaseAfterSensingUs)に w を使うため。角度の積分には入れない。
+  // 後(IMU を読んでから約 275us 後)に w を使うため。角度の積分には入れない。
   int fifo_plan_lead = 0;
 } gyro_param_t;
 
@@ -1378,8 +1387,8 @@ typedef struct {
   char enable_kalman_gyro = 0;
   char enable_kalman_encoder = 0;
   // 車輪速度を planning が使う時刻まで先読みする(2026-09-29、sensing_task.cpp)。
-  // 1ms の位置差分の速度は読んだ時刻の 0.5ms 前の値で、planning はそれを約 600us
-  // 後に使う。1 のとき制御と推定に渡す v_l/v_r に「車輪ごとの目標加速度(並進 ±
+  // 1ms の位置差分の速度は読んだ時刻の 0.5ms 前の値で、planning はそれを後で使う
+  // (今は S3 の約 80us 後)。1 のとき制御と推定に渡す v_l/v_r に「車輪ごとの目標加速度(並進 ±
   // 目標角加速度 × tread/2) × (dt/2 + 読んでから次の planning tick までの時間)」を
   // 足す。距離の積分は差分のまま(ego.v_l_dist/v_r_dist)。0 = 従来どおり。
   char enc_v_lead = 0;
@@ -2168,6 +2177,9 @@ typedef struct {
   real16_T alpha_fifo;    // FIFO サンプルから求めた角加速度 [rad/s^2]
   int16_t plan_age_us;    // FIFO を読んでから次の planning tick までの時間 [us]
   real16_T w_plan_lead;   // fifo_plan_lead で w に足した量 [rad/s]
+  int16_t slot_late_us;   // センシングの枠の開始の遅れの最大 [us](structs.hpp sched_diag_t)
+  int16_t pln_margin_us;  // planning 終了から次の S0 までの余裕 [us]
+  int16_t led_overrun;    // LED シーケンス打ち切り回数(累計)
 } log_data_t2;
 
 typedef struct {
@@ -2433,6 +2445,9 @@ typedef struct {
   float alpha_fifo    = 172; // FIFO サンプルから求めた角加速度 [rad/s^2]
   int plan_age_us     = 173; // FIFO を読んでから次の planning tick までの時間 [us](2026-09-29)
   float w_plan_lead   = 174; // fifo_plan_lead で w に足した量 [rad/s]
+  int slot_late_us    = 175; // センシングの枠の開始の遅れの最大 [us](2026-09-29)
+  int pln_margin_us   = 176; // planning 終了から次の S0 までの余裕 [us](負なら重なり)
+  int led_overrun     = 177; // LED シーケンス打ち切り回数(累計)
 } LogStruct11;
 
 #endif

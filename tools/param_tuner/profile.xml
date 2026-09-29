@@ -598,7 +598,7 @@
   </Tab>
   <Tab containers="1" tab_name="wall_off">
    <Container>
-    <DockSplitter count="3" orientation="-" sizes="0.3336;0.3328;0.3336">
+    <DockSplitter count="4" orientation="-" sizes="0.25;0.25;0.25;0.25">
      <DockSplitter count="3" orientation="|" sizes="0.332277;0.335446;0.332277">
       <DockArea name="left45_d_diff">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
@@ -685,6 +685,31 @@
         <range bottom="-116.818374" left="-34.619531" right="184.338281" top="24.703139"/>
         <limitY/>
         <curve color="#1f77b4" curve_x="x" curve_y="y" name="[x;y]"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
+      <DockArea name="pillar_btm">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="40.000000" left="0.000000" right="288.000000" top="185.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="pillar_btm_l"/>
+        <curve color="#d62728" name="pillar_btm_r"/>
+       </plot>
+      </DockArea>
+      <DockArea name="pillar_lag">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-2.000000" left="0.000000" right="288.000000" top="32.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="pillar_lag_l"/>
+        <curve color="#d62728" name="pillar_lag_r"/>
+       </plot>
+      </DockArea>
+      <DockArea name="pillar_st">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-1.000000" left="0.000000" right="288.000000" top="35.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="pillar_st"/>
        </plot>
       </DockArea>
      </DockSplitter>
@@ -887,6 +912,88 @@
     </DockSplitter>
    </Container>
   </Tab>
+  <Tab containers="1" tab_name="gyro_fifo">
+   <Container>
+    <DockSplitter count="4" orientation="-" sizes="0.25;0.25;0.25;0.25">
+     <DockSplitter count="2" orientation="|" sizes="0.5000;0.5000">
+      <DockArea name="w_compare">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-5.000000" left="0.000000" right="288.000000" top="51.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="ideal_w"/>
+        <curve color="#d62728" name="w_lp"/>
+        <curve color="#1ac938" name="w_snap"/>
+        <curve color="#ff7f0e" name="w_fifo_last"/>
+        <curve color="#f14cc1" name="w_fifo_ma3"/>
+        <curve color="#9467bd" name="w_fifo_mean"/>
+        <curve color="#17becf" name="w_fifo_pred"/>
+       </plot>
+      </DockArea>
+      <DockArea name="alpha (target / fifo)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-7500.000000" left="0.000000" right="288.000000" top="7500.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="alpha"/>
+        <curve color="#d62728" name="alpha_fifo"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="2" orientation="|" sizes="0.5000;0.5000">
+      <DockArea name="plan_lead">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-2.000000" left="0.000000" right="288.000000" top="2.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="w_plan_lead"/>
+       </plot>
+      </DockArea>
+      <DockArea name="plan_age_us">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="0.000000" left="0.000000" right="288.000000" top="1000.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="plan_age_us"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="2" orientation="|" sizes="0.5000;0.5000">
+      <DockArea name="fifo_n / odr_err">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-3.000000" left="0.000000" right="288.000000" top="9.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="gyro_fifo_n"/>
+        <curve color="#d62728" name="gyro_odr_err"/>
+       </plot>
+      </DockArea>
+      <DockArea name="ang_fifo_diff">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-2.000000" left="0.000000" right="288.000000" top="2.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="ang_fifo_diff"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="2" orientation="|" sizes="0.5000;0.5000">
+      <DockArea name="gyro_raw">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-2000.000000" left="0.000000" right="288.000000" top="21000.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="gyro_raw0"/>
+        <curve color="#d62728" name="gyro_raw1"/>
+        <curve color="#1ac938" name="gyro_raw2"/>
+        <curve color="#ff7f0e" name="gyro_raw3"/>
+       </plot>
+      </DockArea>
+      <DockArea name="fifo_seq / t">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-33000.000000" left="0.000000" right="288.000000" top="33000.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="gyro_fifo_seq"/>
+        <curve color="#d62728" name="gyro_fifo_t"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
   <Tab containers="1" tab_name="encoder">
    <Container>
     <DockSplitter count="2" orientation="-" sizes="0.5004;0.4996">
@@ -939,7 +1046,7 @@
   </Tab>
   <Tab containers="1" tab_name="calc_time">
    <Container>
-    <DockSplitter count="1" orientation="-" sizes="1">
+    <DockSplitter count="2" orientation="-" sizes="0.5;0.5">
      <DockSplitter count="2" orientation="|" sizes="0.5;0.5">
       <DockArea name="planning">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
@@ -975,6 +1082,35 @@
        </plot>
       </DockArea>
      </DockSplitter>
+     <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
+      <DockArea name="schedule (slot_late / pln_margin / plan_age)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-20.000000" left="0.000000" right="288.000000" top="400.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="slot_late_us"/>
+        <curve color="#d62728" name="pln_margin_us"/>
+        <curve color="#1ac938" name="plan_age_us"/>
+       </plot>
+      </DockArea>
+      <DockArea name="dither">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-10.000000" left="0.000000" right="288.000000" top="1600.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="dither_consumed"/>
+        <curve color="#d62728" name="dither_lead"/>
+        <curve color="#1ac938" name="dither_late"/>
+        <curve color="#ff7f0e" name="dither_cc"/>
+        <curve color="#f14cc1" name="dither_backlog"/>
+       </plot>
+      </DockArea>
+      <DockArea name="led_overrun">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-10.000000" left="0.000000" right="288.000000" top="1000.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="led_overrun"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
     </DockSplitter>
    </Container>
   </Tab>
@@ -1000,7 +1136,7 @@
        </plot>
       </DockArea>
      </DockSplitter>
-     <DockSplitter count="2" orientation="|" sizes="0.5;0.5">
+     <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
       <DockArea name="ang_sum">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-184.471686" left="0.000000" right="288.000000" top="5.668051"/>
@@ -1015,6 +1151,14 @@
         <limitY/>
         <curve color="#1f77b4" name="index"/>
         <curve color="#d62728" name="timestamp"/>
+       </plot>
+      </DockArea>
+      <DockArea name="wall_fit">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-1.000000" left="0.000000" right="288.000000" top="2.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="wfit_beta"/>
+        <curve color="#d62728" name="wfit_sig"/>
        </plot>
       </DockArea>
      </DockSplitter>

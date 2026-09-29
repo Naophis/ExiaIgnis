@@ -83,41 +83,89 @@ std::shared_ptr<sensing_result_entity_t> SensingTask::get_sensing_entity() {
 // alarm_pool を介さないため dispatch overhead なし (~12 cycle = 0.08us)
 // ============================================================
 
-// alarm 1: 1kHz 定周期 + センサー読み取りシーケンス
+// alarm 1: 枠の予約と振り分け。1ms を S0〜S3 の 4 枠に分け、各枠の入口で
+// 次の枠を予約してから、その枠の処理をする(sensing_task.hpp の kSlotOffsetUs)。
 __attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::timer_b_irq_handler() {
   // ハンドラ入口で即計測 — 以後の処理による可変遅延を period 計測に含めない
-  const uint64_t sense_start = time_us_64();
+  const uint64_t now64 = time_us_64();
   timer_hw->intr = 1u << 1;
   // arm_alarm32_safe()がINTFで強制発火させた場合に備えクリア(未使用時は無害)
   hw_clear_bits(&timer_hw->intf, 1u << 1);
 
   auto *self = s_instance.get();
+  const uint32_t now32 = (uint32_t)now64;
+  const uint8_t slot = self->slot_;
+  // 予約より遅れて入った分(planning や LED の IRQ と重なると増える)
+  const int32_t late = (int32_t)(now32 - self->next_alarm_a_);
 
-  // 次回アラームを絶対時刻で設定 (ドリフトなし)
-  self->next_alarm_a_ += self->interval_us_;
-  {
-    // sense_start を使い回すことで余分な time_us_64() 呼び出しを省く
-    const uint32_t now32 = (uint32_t)sense_start;
-    if ((int32_t)(now32 - self->next_alarm_a_) > (int32_t)self->interval_us_)
-      self->next_alarm_a_ = now32 + self->interval_us_;
+  if (slot == 0) {
+    // tick の基準時刻 = この S0 の予約時刻(ドリフトなし)。Core1 が止まって
+    // 1ms 以上遅れたときだけ今に取り直す。planning はこの基準の
+    // kPhaseAfterSensingUs 後に予約するので、取り直してもそろう。
+    uint32_t base = self->next_alarm_a_;
+    if (late > (int32_t)self->interval_us_)
+      base = now32;
+    self->tick_base_ = base;
+    self->pt->schedule_tick(base + PlanningTask::kPhaseAfterSensingUs);
+    self->sensing_result->sched.slot_late_max_us =
+        (int16_t)MIN(self->slot_late_max_, 32767);
+    self->slot_late_max_ = MAX(late, 0);
+  } else if (late > self->slot_late_max_) {
+    self->slot_late_max_ = late;
   }
+
+  // 次の枠を予約する
+  const uint8_t next = (slot + 1) & 3;
+  self->slot_ = next;
+  self->next_alarm_a_ =
+      self->tick_base_ + (next == 0 ? self->interval_us_ : kSlotOffsetUs[next]);
   arm_alarm32_safe(1, self->next_alarm_a_);
-  // この tick の planning を kPhaseAfterSensingUs 後に予約する(位相固定)。
-  // センシングが取り直されても planning は必ずその後ろにそろう。
-  self->pt->schedule_tick(self->next_alarm_a_ - self->interval_us_ +
-                          PlanningTask::kPhaseAfterSensingUs);
 
-  const auto &se = self->sensing_result;
-  se->calc_time = (int16_t)(sense_start - self->start_time_z);
-  self->start_time_z = sense_start;
-  self->prev_timestamp_ = sense_start;
+  switch (slot) {
+  case 0:
+    self->slot_s0(now64);
+    break;
+  case 1:
+    self->slot_s1();
+    break;
+  case 2:
+    self->read_imu();
+    break;
+  default:
+    self->read_enc_bat();
+    break;
+  }
+}
 
-  self->read_spi_sensors();
-  se->t_spi = (int16_t)(time_us_64() - sense_start);
+// 前の枠の LED シーケンスが次の枠まで残っていたら(本来は起きない)、LED を
+// 消して打ち切り、回数を数える。alarm 2 も解除する(ARMED に 1 を書くと解除)。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::led_abort_if_busy() {
+  if (!led_busy_) return;
+  timer_hw->armed = 1u << 2;
+  timer_hw->intr = 1u << 2;
+  gpio_put(R90_LED_PIN, 0);
+  gpio_put(L90_LED_PIN, 0);
+  gpio_put(R45_LED_PIN, 0);
+  gpio_put(R45_LED_PIN2, 0);
+  gpio_put(L45_LED_PIN, 0);
+  gpio_put(L45_LED_PIN2, 0);
+  led_busy_ = false;
+  sensing_result->sched.led_overrun_cnt++;
+}
 
-  const auto &tv = self->tgt_val;
-  const bool search_mode = self->pt->get_search_mode();
+// S0: tick の始まり。LED の点け方を決め、45 系を読む。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::slot_s0(uint64_t tick_start) {
+  const auto &se = sensing_result;
+  led_abort_if_busy();
+  se->calc_time = (int16_t)(tick_start - start_time_z);
+  start_time_z = tick_start;
+  prev_timestamp_ = tick_start;
+
+  const auto &tv = tgt_val;
+  const bool search_mode = pt->get_search_mode();
 
   // LED点灯条件フラグを決定
   bool r90 = true, l90 = true, r45 = true, l45 = true;
@@ -164,23 +212,32 @@ void SensingTask::timer_b_irq_handler() {
     r45 = l45 = true;
   }
 
-  // 1. ambient ADC (LED消灯) — skip_sensing で R90/L90 と R45/L45 を交互に取得
-  self->skip_sensing_ = !self->skip_sensing_;
-  const bool skip_sensing = self->skip_sensing_;
-  if (skip_sensing) {
-    if (r90) {
-      adc_select_input(0);
-      se->led_sen_before.right90.raw = adc_read();
-    } else {
-      se->led_sen_before.right90.raw = 0;
-    }
-    if (l90) {
-      adc_select_input(3);
-      se->led_sen_before.left90.raw = adc_read();
-    } else {
-      se->led_sen_before.left90.raw = 0;
-    }
-  } else {
+  bool led_on = true;
+  if (tv->motion_type == MotionType::PIVOT) {
+    led_on = false;
+  }
+  if (tv->motion_type == MotionType::SLALOM) {
+    led_on = true;
+  }
+
+  // ambient は R90/L90 と R45/L45 を tick ごとに交互に取る(45 系は S0、90 系は S1)
+  skip_sensing_ = !skip_sensing_;
+
+  seq_sense_start_ = tick_start;
+  seq_r90_ = r90;
+  seq_l90_ = l90;
+  seq_r45_ = r45;
+  seq_l45_ = l45;
+  seq_led_on_ = led_on;
+  seq_extended_ = (tv->motion_type == MotionType::WALL_OFF ||
+                   tv->motion_type == MotionType::WALL_OFF_DIA ||
+                   tv->motion_type == MotionType::SENSING_DUMP ||
+                   tv->motion_type == MotionType::SLA_BACK_STR);
+
+  if (!led_on) {
+    return; // S1 で finalize_sensing(false)
+  }
+  if (!skip_sensing_) {
     if (r45) {
       adc_select_input(1);
       se->led_sen_before.right45.raw = adc_read();
@@ -198,36 +255,34 @@ void SensingTask::timer_b_irq_handler() {
       se->led_sen_before.left45.raw = 0;
     }
   }
-  se->t_ambient = (int16_t)(time_us_64() - sense_start);
+  se->t_ambient = (int16_t)(time_us_64() - tick_start);
+  led_seq_start_45();
+}
 
-  // 2. LED点灯 + ADC取得 (alarm 2 駆動の非同期ステートマシンに委譲)
-  //    busy_wait_us_32()でスピンする代わりに、ここでは最初の
-  //    ステップだけ着手してISRをreturnする。続きはled_seq_advance()
-  //    (led_seq_irq_handler経由)が担う。led_on==falseの場合は元々waitが
-  //    一切発生しない処理だったので、そのまま同期的にfinalizeする。
-  bool led_on = true;
-  if (tv->motion_type == MotionType::PIVOT) {
-    led_on = false;
-  }
-  if (tv->motion_type == MotionType::SLALOM) {
-    led_on = true;
-  }
-
-  self->seq_sense_start_ = sense_start;
-  self->seq_r90_ = r90;
-  self->seq_l90_ = l90;
-  self->seq_r45_ = r45;
-  self->seq_l45_ = l45;
-  self->seq_extended_ = (tv->motion_type == MotionType::WALL_OFF ||
-                        tv->motion_type == MotionType::WALL_OFF_DIA ||
-                        tv->motion_type == MotionType::SENSING_DUMP ||
-                        tv->motion_type == MotionType::SLA_BACK_STR);
-
-  if (!led_on) {
-    self->finalize_sensing(false);
+// S1: 90 系を読み、終わったら差分を計算する。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::slot_s1() {
+  const auto &se = sensing_result;
+  led_abort_if_busy();
+  if (!seq_led_on_) {
+    finalize_sensing(false);
     return;
   }
-  self->led_seq_start();
+  if (skip_sensing_) {
+    if (seq_r90_) {
+      adc_select_input(0);
+      se->led_sen_before.right90.raw = adc_read();
+    } else {
+      se->led_sen_before.right90.raw = 0;
+    }
+    if (seq_l90_) {
+      adc_select_input(3);
+      se->led_sen_before.left90.raw = adc_read();
+    } else {
+      se->led_sen_before.left90.raw = 0;
+    }
+  }
+  led_seq_start_90();
 }
 
 // ============================================================
@@ -259,6 +314,7 @@ bool SensingTask::try_start_r90() {
   gpio_put(R90_LED_PIN, 1);
   adc_select_input(0);
   led_step_ = LedStep::R90;
+  led_busy_ = true;
   timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
   return true;
 }
@@ -272,6 +328,7 @@ bool SensingTask::try_start_l90() {
   gpio_put(L90_LED_PIN, 1);
   adc_select_input(3);
   led_step_ = LedStep::L90;
+  led_busy_ = true;
   timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
   return true;
 }
@@ -287,6 +344,7 @@ bool SensingTask::try_start_r45() {
   adc_select_input(1);
   gpio_put(R45_LED_PIN, 1); // LED1 ON
   led_step_ = LedStep::R45_1;
+  led_busy_ = true;
   timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
   return true;
 }
@@ -302,23 +360,33 @@ bool SensingTask::try_start_l45() {
   adc_select_input(2);
   gpio_put(L45_LED_PIN, 1); // LED1 ON
   led_step_ = LedStep::L45_1;
+  led_busy_ = true;
   timer_hw->alarm[2] = (uint32_t)time_us_64() + wait_us_single();
   return true;
 }
 
-// ambient読み取り後、timer_b_irq_handlerから呼ばれる初回エントリ。
-// r90→l90→r45→l45の順で該当する最初のステップを開始する。
-// 該当ステップが1つもなければ(全フラグfalse)待たずにfinalizeする。
+// S0 の 45 系: R45 → L45。該当ステップが無ければ待たずに終わる。
 __attribute__((noinline, section(".time_critical.sensing_irq")))
-void SensingTask::led_seq_start() {
+void SensingTask::led_seq_start_45() {
+  if (try_start_r45()) return;
+  sensing_result->t_r45 = (int16_t)(time_us_64() - seq_sense_start_);
+  if (try_start_l45()) return;
+  led_seq_end_45();
+}
+
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::led_seq_end_45() {
+  sensing_result->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
+  led_busy_ = false;
+}
+
+// S1 の 90 系: R90 → L90 → finalize_sensing(45 系は S0 で読み終えている)。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::led_seq_start_90() {
   if (try_start_r90()) return;
   sensing_result->t_r90 = (int16_t)(time_us_64() - seq_sense_start_);
   if (try_start_l90()) return;
   sensing_result->t_l90 = (int16_t)(time_us_64() - seq_sense_start_);
-  if (try_start_r45()) return;
-  sensing_result->t_r45 = (int16_t)(time_us_64() - seq_sense_start_);
-  if (try_start_l45()) return;
-  sensing_result->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
   finalize_sensing(true);
 }
 
@@ -336,10 +404,6 @@ void SensingTask::led_seq_advance() {
     se->t_r90 = (int16_t)(now - seq_sense_start_);
     if (try_start_l90()) return;
     se->t_l90 = (int16_t)(time_us_64() - seq_sense_start_);
-    if (try_start_r45()) return;
-    se->t_r45 = (int16_t)(time_us_64() - seq_sense_start_);
-    if (try_start_l45()) return;
-    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
     finalize_sensing(true);
     return;
 
@@ -347,10 +411,6 @@ void SensingTask::led_seq_advance() {
     se->led_sen_after.left90.raw = adc_read();
     gpio_put(L90_LED_PIN, 0);
     se->t_l90 = (int16_t)(now - seq_sense_start_);
-    if (try_start_r45()) return;
-    se->t_r45 = (int16_t)(time_us_64() - seq_sense_start_);
-    if (try_start_l45()) return;
-    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
     finalize_sensing(true);
     return;
 
@@ -367,8 +427,7 @@ void SensingTask::led_seq_advance() {
     se->led_sen_after.right45_2.raw = se->led_sen_after.right45_3.raw = 0;
     se->t_r45 = (int16_t)(now - seq_sense_start_);
     if (try_start_l45()) return;
-    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
-    finalize_sensing(true);
+    led_seq_end_45();
     return;
 
   case LedStep::R45_2:
@@ -384,8 +443,7 @@ void SensingTask::led_seq_advance() {
     gpio_put(R45_LED_PIN2, 0);
     se->t_r45 = (int16_t)(now - seq_sense_start_);
     if (try_start_l45()) return;
-    se->t_l45 = (int16_t)(time_us_64() - seq_sense_start_);
-    finalize_sensing(true);
+    led_seq_end_45();
     return;
 
   case LedStep::L45_1:
@@ -399,8 +457,7 @@ void SensingTask::led_seq_advance() {
     }
     gpio_put(L45_LED_PIN, 0);
     se->led_sen_after.left45_2.raw = se->led_sen_after.left45_3.raw = 0;
-    se->t_l45 = (int16_t)(now - seq_sense_start_);
-    finalize_sensing(true);
+    led_seq_end_45();
     return;
 
   case LedStep::L45_2:
@@ -414,8 +471,7 @@ void SensingTask::led_seq_advance() {
   case LedStep::L45_3:
     se->led_sen_after.left45_3.raw = adc_read(); // LED2 single
     gpio_put(L45_LED_PIN2, 0);
-    se->t_l45 = (int16_t)(now - seq_sense_start_);
-    finalize_sensing(true);
+    led_seq_end_45();
     return;
   }
 }
@@ -425,6 +481,7 @@ void SensingTask::led_seq_advance() {
 __attribute__((noinline, section(".time_critical.sensing_irq")))
 void SensingTask::finalize_sensing(bool led_on) {
   const auto &se = sensing_result;
+  led_busy_ = false;
 
   // diff 計算 (負になる場合は 0 にクランプ)
   if (led_on) {
@@ -454,8 +511,7 @@ void SensingTask::finalize_sensing(bool led_on) {
                     se->led_sen.front.raw = 0;
   }
 
-  // se->battery.raw = self->battery_.read();
-  se->battery.data = param->battery_gain * 4 * se->battery.raw / 4096;
+  // battery.data は S3 でバッテリーを読んだ直後に計算する(read_enc_bat)
   se->calc_time2 = (uint32_t)(time_us_64() - seq_sense_start_);
 }
 
@@ -577,37 +633,19 @@ void SensingTask::init_dma() {
   channel_config_set_write_increment(&dma_cfg_rx_bat_, false);
 }
 
-__attribute__((noinline, section(".time_critical.sensing_irq"))) void
-SensingTask::read_spi_sensors() {
+// S2: IMU(1 点読み + FIFO)と角速度。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::read_imu() {
   const auto &se = sensing_result;
-
-  // kf_v(中央フィルタ)と同じく目標加速度を使う。旧実装は
-  // (今tickの目標速度 - 前tickの実測速度)/dt を"加速度"としてpredict()に
-  // 渡していたため、目標と実測が乖離するほど巨大な誤値になるバグがあった
-  // (FFのみ・目標400/実測650のテストでkf_v_l/kf_v_rがv_c/v_l/v_rから
-  // 乖離して負値まで発散する形で発覚、2026-08-22)。
-  const auto accl_l = tgt_val->ego_in.accl;
-  const auto accl_r = tgt_val->ego_in.accl;
-
-  const float tire = param->tire;
-  const float tread = param->tire_tread;
-
-  se->ego.v_l_old = se->ego.v_l;
-  se->ego.v_r_old = se->ego.v_r;
-  se->encoder.left_old = se->encoder.left;
-  se->encoder.right_old = se->encoder.right;
+  led_abort_if_busy();
   gyro_timestamp_old = gyro_timestamp_now;
   accel_timestamp_old = accel_timestamp_now;
-  enc_r_timestamp_old = enc_r_timestamp_now;
-  enc_l_timestamp_old = enc_l_timestamp_now;
-
-  const uint64_t spi_t0 = time_us_64();
 
   // ================================================================
   // Phase A: ジャイロ DMA (SPI1, mode3)
   // ================================================================
 
-  // SPI1 を mode3 (CPOL=1, CPHA=1) に切り替え; 前回は bat が mode0 で終了
+  // SPI1 を mode3 (CPOL=1, CPHA=1) に切り替え; 直前の SPI は S3 の bat(mode0)
   spi_set_format_safe(GYRO_SPI, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
   busy_wait_us_32(2);  // SCK settling after mode0→mode3 switch
 
@@ -630,7 +668,7 @@ SensingTask::read_spi_sensors() {
 
   // Phase A2: ジャイロ FIFO (mode3 のまま)。1 点読みは加速度と比較用に残す
   read_gyro_fifo();
-  se->t_gyro = (int16_t)(time_us_64() - spi_t0);
+  se->t_gyro = (int16_t)(time_us_64() - seq_sense_start_);
   int16_t gyro = static_cast<int16_t>(
       static_cast<uint16_t>(gyro_dma_rx_[2]) << 8 | gyro_dma_rx_[1]);
   se->accel_x.raw = static_cast<int16_t>(
@@ -648,22 +686,105 @@ SensingTask::read_spi_sensors() {
   se->accel_z.data = se->accel_z.raw * kAccelMmS2PerLsb;
   se->ego.accel_x_raw = se->accel_x.data;
 
+
+  gyro_dt_ = (float)(gyro_timestamp_now - gyro_timestamp_old) / 1000000;
+  pt->ego.kf_w.dt = gyro_dt_;
+
+  gyro_fifo_ang_valid_ = false;
+  if (gyro_dt_ > 0) {
+    se->gyro.raw = se->gyro.data = gyro;
+    se->ego.w_raw = gyro_raw_to_w(gyro);
+    update_gyro_fifo(se->ego.w_raw, gyro_dt_);
+    if (gyro_fifo_ang_valid_) {
+      switch (param->gyro_param.fifo_mode) {
+      case 1:
+        se->ego.w_raw = se->gyro_fifo.w_last;
+        break;
+      case 2:
+        se->ego.w_raw = se->gyro_fifo.w_ma3;
+        break;
+      case 3:
+        se->ego.w_raw = se->gyro_fifo.w_mean;
+        break;
+      case 4:
+        se->ego.w_raw = se->gyro_fifo.w_pred;
+        break;
+      default:
+        break;
+      }
+    }
+    const auto alpha = (tgt_val->ego_in.w - w_old) / dt;
+    // planning が w を使う時刻まで目標角加速度で先読みする(fifo_plan_lead)。
+    // planning はこの S2 の約 275us 後に動く(tick + 720us)。オフラインでは mode 4 +
+    // 目標角加速度 × この時間で、旋回の出入りの偏りが −1.8 → −0.08 rad/s、
+    // 直進のノイズは増えなかった。角度は FIFO の和で積分するので影響しない
+    // (fifo_mode 0 は w で積分するので適用しない)。
+    const float age = plan_age_s(gyro_fifo_t_read_);
+    se->gyro_fifo.plan_age_us = (int16_t)(age * 1e6f);
+    se->gyro_fifo.plan_lead = 0.0f;
+    if (param->gyro_param.fifo_plan_lead && param->gyro_param.fifo_mode != 0 &&
+        gyro_fifo_ang_valid_) {
+      se->gyro_fifo.plan_lead = alpha * age;
+      se->ego.w_raw += se->gyro_fifo.plan_lead;
+    }
+    pt->ego.kf_w.predict(alpha);
+    const float tread = param->tire_tread;
+    const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
+    pt->ego.kf_w.update(se->ego.w_raw);
+  }
+  if (param->enable_kalman_gyro == 1) {
+    se->ego.w_raw = se->ego.w_kf = pt->ego.kf_w.get_state();
+    // se->ego.w_raw2 = se->ego.w_kf2 = pt->ego.kf_w2.get_state();
+  } else if (param->enable_kalman_gyro == 2) {
+    se->ego.w_kf = se->ego.w_raw;
+    // se->ego.w_kf2 = se->ego.w_raw;
+  } else {
+    se->ego.w_kf = pt->ego.kf_w.get_state();
+    // se->ego.w_kf2 = pt->ego.kf_w2.get_state();
+  }
+
+}
+
+// S3: エンコーダー・バッテリー、車輪速度、距離・角度の積分。planning(tick + 720us)
+// の直前なので、エンコーダーは読んでから約 80us 後に使われる。
+__attribute__((noinline, section(".time_critical.sensing_irq")))
+void SensingTask::read_enc_bat() {
+  const auto &se = sensing_result;
+  led_abort_if_busy();
+
+  // kf_v(中央フィルタ)と同じく目標加速度を使う。旧実装は
+  // (今tickの目標速度 - 前tickの実測速度)/dt を"加速度"としてpredict()に
+  // 渡していたため、目標と実測が乖離するほど巨大な誤値になるバグがあった
+  // (FFのみ・目標400/実測650のテストでkf_v_l/kf_v_rがv_c/v_l/v_rから
+  // 乖離して負値まで発散する形で発覚、2026-08-22)。
+  const auto accl_l = tgt_val->ego_in.accl;
+  const auto accl_r = tgt_val->ego_in.accl;
+
+  const float tread = param->tire_tread;
+
+  se->ego.v_l_old = se->ego.v_l;
+  se->ego.v_r_old = se->ego.v_r;
+  se->encoder.left_old = se->encoder.left;
+  se->encoder.right_old = se->encoder.right;
+  enc_r_timestamp_old = enc_r_timestamp_now;
+  enc_l_timestamp_old = enc_l_timestamp_now;
+
   // ================================================================
   // Phase B: 左エンコーダ CPU → 右エンコーダ CPU (SPI1, mode1)
   // ================================================================
 
-  // mode3 → mode1 (CPOL=0, CPHA=1) に切り替え
+  // mode3(S2 のジャイロ)→ mode1 (CPOL=0, CPHA=1) に切り替え
   spi_set_format_safe(GYRO_SPI, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
   busy_wait_us_32(2);  // SCK settling after mode3→mode1 switch
 
   enc_l_timestamp_now = time_us_64();
   auto enc_l = enc_l_.read_angle();
-  se->t_encl = (int16_t)(time_us_64() - spi_t0);
+  se->t_encl = (int16_t)(time_us_64() - seq_sense_start_);
 
   // 左エンコーダと同一 mode1 のまま右エンコーダを読む
   enc_r_timestamp_now = time_us_64();
   auto enc_r = enc_r_.read_angle();
-  se->t_encr = (int16_t)(time_us_64() - spi_t0);
+  se->t_encr = (int16_t)(time_us_64() - seq_sense_start_);
 
   // ================================================================
   // Phase C: バッテリ DMA (SPI1, mode0, 16-bit)
@@ -682,22 +803,13 @@ SensingTask::read_spi_sensors() {
   dma_channel_wait_for_finish_blocking(dma_rx_bat_);
   gpio_put(BATTERY_CS_PIN, 1);
   se->battery.raw = (bat_dma_rx_ >> 2) & 0x0FFF;
-  se->t_bat = (int16_t)(time_us_64() - spi_t0);
+  se->t_bat = (int16_t)(time_us_64() - seq_sense_start_);
+  se->battery.data = param->battery_gain * 4 * se->battery.raw / 4096;
 
-  float gyro_dt = (float)(gyro_timestamp_now - gyro_timestamp_old) / 1000000;
+
   float enc_r_dt = (float)(enc_r_timestamp_now - enc_r_timestamp_old) / 1000000;
   float enc_l_dt = (float)(enc_l_timestamp_now - enc_l_timestamp_old) / 1000000;
 
-  // if (se->ego.v_l > 100) {
-  //   printf("v_l: %.1f v_r: %.1f,vc: %.1f x_dt: %.1f dist: %.1f\n",
-  //   se->ego.v_l,
-  //          se->ego.v_r, se->ego.v_c, se->ego.v_c * dt, tgt_val->ego_in.dist);
-  //   printf("gyro: %d (dt: %.3f s), enc_r: %d (dt: %.3f s), enc_l: %d (dt: % "
-  //          ".3fs)\n ",
-  //          gyro, gyro_dt, enc_r, enc_r_dt, enc_l, enc_l_dt);
-  // }
-
-  pt->ego.kf_w.dt = gyro_dt;
   pt->ego.kf_v_r.dt = enc_r_dt;
   pt->ego.kf_v_l.dt = enc_l_dt;
 
@@ -717,7 +829,7 @@ SensingTask::read_spi_sensors() {
 
   // 車輪速度を planning が使う時刻まで先読みする(param->enc_v_lead、2026-09-29)。
   // 1ms の位置差分で求めた速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、
-  // さらに planning はセンシングより約 600us 後の tick でそれを使う
+  // さらに planning はそれを後で使う(枠分け前は約 600〜800us 後、今は S3 の約 80us 後)
   // (PlanningTask::start_irq)。planning の時刻を基準にすると、加減速中は
   // 直進 −43mm/s、旋回の出入り −56mm/s 遅れていた(ログ 12 本 × 左右)。
   // 車輪ごとの目標加速度(並進 ± 目標角加速度 × tread/2) × (dt/2 + 読んでから
@@ -764,61 +876,9 @@ SensingTask::read_spi_sensors() {
       pt->ego.kf_v_l.update(se->ego.v_l);
     }
   }
-  // printf("enc_l: %d m/s, enc_r: %d \n", enc_l, enc_r);
-  gyro_fifo_ang_valid_ = false;
-  if (gyro_dt > 0) {
-    se->gyro.raw = se->gyro.data = gyro;
-    se->ego.w_raw = gyro_raw_to_w(gyro);
-    update_gyro_fifo(se->ego.w_raw, gyro_dt);
-    if (gyro_fifo_ang_valid_) {
-      switch (param->gyro_param.fifo_mode) {
-      case 1:
-        se->ego.w_raw = se->gyro_fifo.w_last;
-        break;
-      case 2:
-        se->ego.w_raw = se->gyro_fifo.w_ma3;
-        break;
-      case 3:
-        se->ego.w_raw = se->gyro_fifo.w_mean;
-        break;
-      case 4:
-        se->ego.w_raw = se->gyro_fifo.w_pred;
-        break;
-      default:
-        break;
-      }
-    }
-    const auto alpha = (tgt_val->ego_in.w - w_old) / dt;
-    // planning が w を使う時刻まで目標角加速度で先読みする(fifo_plan_lead)。
-    // planning はセンシングの 600us 後に動く(位相固定)。オフラインでは mode 4 +
-    // 目標角加速度 × この時間で、旋回の出入りの偏りが −1.8 → −0.08 rad/s、
-    // 直進のノイズは増えなかった。角度は FIFO の和で積分するので影響しない
-    // (fifo_mode 0 は w で積分するので適用しない)。
-    const float age = plan_age_s(gyro_fifo_t_read_);
-    se->gyro_fifo.plan_age_us = (int16_t)(age * 1e6f);
-    se->gyro_fifo.plan_lead = 0.0f;
-    if (param->gyro_param.fifo_plan_lead && param->gyro_param.fifo_mode != 0 &&
-        gyro_fifo_ang_valid_) {
-      se->gyro_fifo.plan_lead = alpha * age;
-      se->ego.w_raw += se->gyro_fifo.plan_lead;
-    }
-    pt->ego.kf_w.predict(alpha);
-    const float tread = param->tire_tread;
-    const float w_enc = -(se->ego.v_r - se->ego.v_l) / tread;
-    pt->ego.kf_w.update(se->ego.w_raw);
-  }
-  if (param->enable_kalman_gyro == 1) {
-    se->ego.w_raw = se->ego.w_kf = pt->ego.kf_w.get_state();
-    // se->ego.w_raw2 = se->ego.w_kf2 = pt->ego.kf_w2.get_state();
-  } else if (param->enable_kalman_gyro == 2) {
-    se->ego.w_kf = se->ego.w_raw;
-    // se->ego.w_kf2 = se->ego.w_raw;
-  } else {
-    se->ego.w_kf = pt->ego.kf_w.get_state();
-    // se->ego.w_kf2 = pt->ego.kf_w2.get_state();
-  }
 
-  calc_vel(gyro_dt, enc_l_dt, enc_r_dt);
+  calc_vel(gyro_dt_, enc_l_dt, enc_r_dt);
+  se->t_spi = (int16_t)(time_us_64() - seq_sense_start_);
 }
 
 __attribute__((noinline, section(".time_critical.sensing.calc_vel")))

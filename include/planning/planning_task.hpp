@@ -47,10 +47,11 @@ public:
   // 読んだ値を planning が使う時刻まで先読みするのに使う(同じ Core1 から読む)。
   uint32_t next_tick_us() const { return next_alarm_; }
 
-  // planning の tick はセンシングの tick の kPhaseAfterSensingUs 後に置く(センシングの
-  // LED 読み取り、約 350us が終わってから動くため)。SensingTask が毎 tick の入口で
-  // schedule_tick() を呼んで予約する(2026-09-29、位相固定)。
-  static constexpr uint32_t kPhaseAfterSensingUs = 600;
+  // planning の tick はセンシングの tick(S0)の kPhaseAfterSensingUs 後に置く。
+  // センシングは 1ms を S0〜S3(0/220/440/630us、sensing_task.hpp)に分けて読み、
+  // planning は S3(エンコーダー)の直後から次の S0 までの 280us を使う(最大 247us)。
+  // SensingTask が毎 tick の S0 で schedule_tick() を呼んで予約する(2026-09-29)。
+  static constexpr uint32_t kPhaseAfterSensingUs = 720;
   void schedule_tick(uint32_t target32);
 
   // ---- tick 同期 (Core0 から呼ぶ) ----

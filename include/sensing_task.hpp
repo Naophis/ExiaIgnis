@@ -36,7 +36,22 @@ private:
     SensingTask() = default;
 
     void run();
-    void read_spi_sensors();
+    // ============================================================
+    // 1ms を 4 つの枠に分けて読む(2026-09-29)。枠の開始はアラーム 1 で予約する。
+    //   S0 (+0us)  : 45 系(環境光、R45・L45)
+    //   S1 (+220us): 90 系(環境光、R90・L90) → 差分の計算
+    //   S2 (+440us): IMU(1 点読み + FIFO)と角速度
+    //   S3 (+630us): エンコーダー・バッテリー、速度、距離・角度の積分
+    //   planning は +720us(PlanningTask::kPhaseAfterSensingUs)で、最大 247us
+    //   (09-26〜29 のログ)なので次の S0(+1000us)までに終わる。
+    // planning が動く時間帯にセンシングの処理を置かないので、同じ優先度のまま
+    // 重ならない(受け渡しは今までどおり sensing_result を直接書く)。
+    // ============================================================
+    static constexpr uint32_t kSlotOffsetUs[4] = {0, 220, 440, 630};
+    void slot_s0(uint64_t tick_start); // 45 系
+    void slot_s1();                    // 90 系
+    void read_imu();                   // S2
+    void read_enc_bat();               // S3
 
     std::shared_ptr<input_param_t> param;
     ASM330LHH gyro_;
@@ -96,7 +111,7 @@ private:
     void  update_gyro_fifo(float w_snap, float gyro_dt); // 生値 → w / 角度増分
     float gyro_raw_to_w(float raw) const;             // バイアスを引いて左右別ゲイン
     // t_read に読んだ値を planning が使うまでの時間 [s](次の planning tick の
-    // アラーム時刻 − t_read、0〜1000us にクランプ)。planning はセンシングの 600us 後
+    // アラーム時刻 − t_read、0〜1000us にクランプ)。planning は tick + 720us
     float plan_age_s(uint64_t t_read) const;
     float w_old = 0;
     int64_t gyro_timestamp_old = 0;
@@ -110,7 +125,7 @@ private:
     int64_t enc_l_timestamp_old = 0;
     int64_t enc_l_timestamp_now = 0;
 
-    static void timer_b_irq_handler();  // alarm 1: 1kHz 定周期 + センサー読み取り
+    static void timer_b_irq_handler();  // alarm 1: 枠の予約と振り分け(S0〜S3)
     void calc_vel(float gyro_dt, float enc_l_dt, float enc_r_dt);
 
     // ============================================================
@@ -122,8 +137,11 @@ private:
     // ============================================================
     enum class LedStep : uint8_t { R90, L90, R45_1, R45_2, R45_3, L45_1, L45_2, L45_3 };
     static void led_seq_irq_handler();  // alarm 2: LEDシーケンスの非同期継続
-    void led_seq_start();               // ambient読み取り後、最初のステップを開始
+    void led_seq_start_45();            // S0: R45 → L45
+    void led_seq_start_90();            // S1: R90 → L90 → finalize_sensing
+    void led_seq_end_45();              // 45 系のシーケンス終了
     void led_seq_advance();             // alarm 2 発火時: 直前ステップの読み取り+次の準備
+    void led_abort_if_busy();           // 前の枠の LED が残っていたら消して打ち切る(重なりの検知)
     void finalize_sensing(bool led_on); // diff計算・battery計算・calc_time2 (元timer_b_irq_handler末尾)
 
     // try_start_*: 該当フラグがtrueならLED ON+ADCチャンネル選択+アラームセットして
@@ -150,7 +168,13 @@ private:
     uint32_t interval_us_   = 1000;  // サンプリング周期
 
     bool     skip_sensing_ = false;  // R90/L90とR45/L45のambient ADCを交互取得
-    uint32_t next_alarm_a_ = 0;
+    uint32_t next_alarm_a_ = 0;       // 次の枠の予約時刻
+    uint8_t  slot_ = 0;               // 次に動く枠(0〜3)
+    uint32_t tick_base_ = 0;          // この tick の S0 の予約時刻
+    bool     led_busy_ = false;       // LED シーケンスの途中(alarm 2 待ち)
+    bool     seq_led_on_ = true;      // この tick で LED を点けるか(S0 で決め S1 で使う)
+    float    gyro_dt_ = 0.0f;         // S2 で求め S3 の角度積分で使う
+    int32_t  slot_late_max_ = 0;      // この tick の枠の開始の遅れの最大 [us]
     uint64_t prev_timestamp_ = 0;
     uint64_t start_time_z = 0;
 

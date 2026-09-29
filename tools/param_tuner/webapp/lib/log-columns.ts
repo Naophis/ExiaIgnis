@@ -211,6 +211,9 @@ export const CHART_VIEWS: ChartView[] = [
       { title: "w_ref", columns: ["ideal_w", "w_lp"] },
       { title: "duty_sen", columns: ["duty_sen"] },
       { title: "motion_state", columns: ["motion_state", "continuous_turn"] },
+      { title: "pillar_btm", columns: ["pillar_btm_l", "pillar_btm_r"] },
+      { title: "pillar_lag", columns: ["pillar_lag_l", "pillar_lag_r"] },
+      { title: "pillar_st", columns: ["pillar_st"] },
     ],
   },
   {
@@ -234,6 +237,23 @@ export const CHART_VIEWS: ChartView[] = [
       { title: "accel_y_cmp", columns: ["accel_y", "accel_y_corr"] },
       { title: "accel_z_cmp", columns: ["accel_z", "accel_z_corr"] },
       { title: "motion_ref", columns: ["motion_state", "w_lp"] },
+    ],
+  },
+  {
+    key: "gyro_fifo",
+    title: "ジャイロFIFO",
+    charts: [
+      {
+        title: "w_compare",
+        columns: ["ideal_w", "w_lp", "w_snap", "w_fifo_last", "w_fifo_ma3", "w_fifo_mean", "w_fifo_pred"],
+      },
+      { title: "alpha (target / fifo)", columns: ["alpha", "alpha_fifo"] },
+      { title: "plan_lead", columns: ["w_plan_lead"] },
+      { title: "plan_age_us", columns: ["plan_age_us"] },
+      { title: "fifo_n / odr_err", columns: ["gyro_fifo_n", "gyro_odr_err"] },
+      { title: "ang_fifo_diff", columns: ["ang_fifo_diff"] },
+      { title: "gyro_raw", columns: ["gyro_raw0", "gyro_raw1", "gyro_raw2", "gyro_raw3"] },
+      { title: "fifo_seq / t", columns: ["gyro_fifo_seq", "gyro_fifo_t"] },
     ],
   },
   {
@@ -267,7 +287,12 @@ export const CHART_VIEWS: ChartView[] = [
         ],
       },
       { title: "sensing", columns: ["sen_calc_time", "sen_calc_time2", "motion_state*100"] },
-      { title: "dither", columns: ["dither_consumed", "dither_lead", "dither_late", "dither_backlog"] },
+      {
+        title: "schedule (slot_late / pln_margin / plan_age)",
+        columns: ["slot_late_us", "pln_margin_us", "plan_age_us"],
+      },
+      { title: "dither", columns: ["dither_consumed", "dither_lead", "dither_late", "dither_cc", "dither_backlog"] },
+      { title: "led_overrun", columns: ["led_overrun"] },
     ],
   },
   {

@@ -59,11 +59,19 @@ cd build && cmake .. -DCMAKE_BUILD_TYPE=Release
 
 ### SensingTask IRQ 構造 (`src/sensing_task.cpp`)
 
-TIMER0 のハードウェアアラームを2本使用（alarm_pool オーバーヘッドなし）:
-- **Alarm 2** (`timer_a_irq_handler`): `interval_us_` 周期（デフォルト1kHz）の定周期タイマー。Alarm 1 を即座にスケジュール。
-- **Alarm 1** (`timer_b_irq_handler`): センサー読み取りシーケンス全体（ADC LED → diff 計算 → ジャイロ/エンコーダ/バッテリ + タイムスタンプ）。
+TIMER0 のハードウェアアラームを使用（alarm_pool オーバーヘッドなし）。1ms を 4 つの枠に分けて読みます（2026-09-29、`SensingTask::kSlotOffsetUs`）:
 
-ドリフト防止のため絶対時刻方式を採用: `next_alarm_a_ += interval_us_`
+| 枠 | 時刻（tick 基準） | 中身 |
+|----|------|------|
+| S0 | +0us | 45 系（環境光、R45・L45。WALL_OFF 等は LED1 / 両方 / LED2 の 3 通り） |
+| S1 | +220us | 90 系（環境光、R90・L90）→ 差分の計算（`finalize_sensing`） |
+| S2 | +440us | IMU（1 点読み + FIFO）と角速度（`read_imu`） |
+| S3 | +630us | エンコーダー・バッテリー、車輪速度、距離・角度の積分（`read_enc_bat`） |
+| planning | +720us | 最大 247us（09-26〜29 のログ）→ 次の S0（+1000us）までに終わる |
+
+- **Alarm 1** (`timer_b_irq_handler`): 枠の予約と振り分け。各枠の入口で次の枠を予約する。S0 の予約時刻がその tick の基準（ドリフトなし）で、Core1 が止まって 1ms 以上遅れたときだけ今に取り直す。S0 で planning を基準 + `PlanningTask::kPhaseAfterSensingUs`(720us) に予約する。
+- **Alarm 2** (`led_seq_irq_handler`): LED 点灯シーケンスの非同期継続（LED ON → 待ち → ADC）。45 系（S0）と 90 系（S1）の 2 本。
+- planning が動く時間帯（+720〜+1000us）にセンシングの処理を置かないので、同じ優先度のまま重ならない（受け渡しは今までどおり `sensing_result` を直接書く）。重なりの確認はログ列 `slot_late_us`（枠の開始の遅れの最大）・`pln_margin_us`（planning 終了から次の S0 までの余裕、負なら重なり）・`led_overrun`（LED シーケンスが次の枠まで残って打ち切った回数）。**枠の中身や時刻を変えるときは、planning の時間帯（最大 247us + 余裕）にかからないことを確かめること。**
 
 #### ジャイロ FIFO（`read_gyro_fifo()` / `update_gyro_fifo()`）
 
@@ -71,14 +79,14 @@ ASM330LHH はジャイロを実 ODR（個体ごと、本機 3508.5Hz）で FIFO 
 
 - 使い方は `hardware.yaml` の `gyro_param.fifo_mode`。0 は従来の 1 点読みのまま（FIFO は計算してログに出すだけ）、1/2/3 は最新・直近 3 サンプル平均・tick 内平均を `w_raw` に使い、角度を Σw·T_odr で積分します。4 は直近 3 サンプル平均を、直近 `fifo_alpha_win` サンプルに当てた直線の傾き(角加速度)で 1.5 サンプル + `fifo_lead_extra_us` 先読みします（平均の遅れ 1 サンプル + 最新サンプルの古さの平均 0.5 サンプルを打ち消す）。
 - ログ列: `gyro_fifo_n`（-1/-2 は flush）、`w_snap`、`w_fifo_last/ma3/mean/pred`、`alpha_fifo`、`ang_fifo_diff`（FIFO 角度 − 1 点読み角度の累積 [deg]）、`gyro_odr_err`（MCU 時間で数えた ODR の FF 由来値からのずれ [%]）、オフライン検証用の生サンプル `gyro_raw0..3`（古い順、n 個まで有効）・`gyro_fifo_seq`（tick 通し番号）・`gyro_fifo_t`（読んだ MCU 時刻 [us] 下位 16bit）。
-- `gyro_param.fifo_plan_lead: 1` で、`fifo_mode` 1〜4 の w に「目標角加速度 × (FIFO を読んでから次の planning tick までの時間)」を足します。PlanningTask はセンシングの 600us 後に w を使うため(FIFO を読んでから約 590us)。時間は `PlanningTask::next_tick_us()` から毎回読みます。角度の積分(FIFO の和)には入れません。ログ列 `plan_age_us`(読んでから planning までの時間)・`w_plan_lead`(足した量)。
+- `gyro_param.fifo_plan_lead: 1` で、`fifo_mode` 1〜4 の w に「目標角加速度 × (FIFO を読んでから次の planning tick までの時間)」を足します。PlanningTask は S2（IMU）の約 275us 後に w を使うため。時間は `PlanningTask::next_tick_us()` から毎回読みます。角度の積分(FIFO の和)には入れません。ログ列 `plan_age_us`(読んでから planning までの時間)・`w_plan_lead`(足した量)。
 - 1 点読み（9 バイト）は加速度の取得と比較用に残してあります。加速度はまだ FIFO に入れていません。
 
 ### PlanningTask IRQ 構造 (`src/planning/planning_task.cpp`)
 
 TIMER1 のハードウェアアラームを1本使用:
 - **Alarm 0** (`timer_irq_handler`): 1kHz 定周期。`tick(dt_us)` を呼び出し、`EgoEstimator → SensorProcessor → TrajectoryGenerator → ControlLaw` の順で実行。
-- **位相はセンシングの tick + 600us に固定**（`PlanningTask::kPhaseAfterSensingUs`、2026-09-29）。planning は自分で次回のアラームを決めず、SensingTask の `timer_b_irq_handler` が毎 tick の入口で `schedule_tick()` を呼んで予約する。以前は両方が自分で「1ms 以上遅れたら 今 + 1ms」と取り直していたため、パラメータ送信（`flash_safe_execute` で Core1 が止まる）のたびに位相が約 590us と 815us の間で変わっていた（再開時は IRQ 番号の小さい planning が先に動き、sensing はその処理の後になる）。ログ列 `plan_age_us`（FIFO を読んでから planning までの時間）で確認できる（固定後は約 590us）。
+- **位相はセンシングの tick（S0）+ 720us に固定**（`PlanningTask::kPhaseAfterSensingUs`、2026-09-29。最初は +600us で固定し、枠分けで +720us にした）。planning は自分で次回のアラームを決めず、SensingTask の `timer_b_irq_handler` が毎 tick の入口で `schedule_tick()` を呼んで予約する。以前は両方が自分で「1ms 以上遅れたら 今 + 1ms」と取り直していたため、パラメータ送信（`flash_safe_execute` で Core1 が止まる）のたびに位相が約 590us と 815us の間で変わっていた（再開時は IRQ 番号の小さい planning が先に動き、sensing はその処理の後になる）。ログ列 `plan_age_us`（FIFO を読んでから planning までの時間）で確認できる（枠分け後は約 275us）。
 - `send_command(shared_ptr<motion_tgt_val_t>)` で Core0 から目標値を投入（`__dmb()` で cross-core 安全）。
 
 PlanningTask は以下のサブシステムを内包:
@@ -417,7 +425,7 @@ self->data.gz_dt   = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z
 
 ### 車輪速度を planning の時刻まで先読みする (enc_v_lead)
 
-1ms の位置差分で求めた車輪速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、さらに PlanningTask はセンシングより約 600us 後の tick でそれを使います(`PlanningTask::start_irq` の +600us)。planning の時刻を基準にすると、加減速中は直進 −43mm/s、旋回の出入り −56mm/s 遅れていました。`hardware.yaml` の `enc_v_lead: 1` で、制御と推定に渡す `ego.v_l/v_r` に「車輪ごとの目標加速度(`ego_in.accl` ± 目標角加速度 × `tire_tread`/2) × (dt/2 + 読んでから次の planning tick までの時間)」を足します(次の tick の時刻は `PlanningTask::next_tick_us()`)。偏りは +1〜4mm/s になり、目標加速度はノイズが無いので巡航中のノイズは増えません。
+1ms の位置差分で求めた車輪速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、さらに PlanningTask はそれを後の tick で使います(枠分け前は約 600〜800us 後、枠分け後は S3 から約 80us 後)。枠分け前の planning の時刻を基準にすると、加減速中は直進 −43mm/s、旋回の出入り −56mm/s 遅れていました。`hardware.yaml` の `enc_v_lead: 1` で、制御と推定に渡す `ego.v_l/v_r` に「車輪ごとの目標加速度(`ego_in.accl` ± 目標角加速度 × `tire_tread`/2) × (dt/2 + 読んでから次の planning tick までの時間)」を足します(次の tick の時刻は `PlanningTask::next_tick_us()`)。偏りは +1〜4mm/s になり、目標加速度はノイズが無いので巡航中のノイズは増えません。
 
 - 同じ時刻のずれはジャイロにもあります(`fifo_mode` のどれも、読んだ時刻の値を約 588us 後に planning が使う)。オフラインでは mode 4 に目標角加速度 × 588us を足すと、旋回の出入りの偏りが −1.8 → −0.08 rad/s になりました(`gyro_param.fifo_plan_lead` として実装)。
 

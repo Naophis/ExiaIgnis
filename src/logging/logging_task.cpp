@@ -412,6 +412,9 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.alpha_fifo = floatToHalf(sr->gyro_fifo.alpha);
   ld.plan_age_us = sr->gyro_fifo.plan_age_us;
   ld.w_plan_lead = floatToHalf(sr->gyro_fifo.plan_lead);
+  ld.slot_late_us = sr->sched.slot_late_max_us;
+  ld.pln_margin_us = sr->sched.pln_margin_us;
+  ld.led_overrun = (int16_t)sr->sched.led_overrun_cnt;
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -649,6 +652,9 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "alpha_fifo:float:%d\n", (int)sizeof(ls11.alpha_fifo));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "plan_age_us:int:%d\n", (int)sizeof(ls11.plan_age_us));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "w_plan_lead:float:%d\n", (int)sizeof(ls11.w_plan_lead));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "slot_late_us:int:%d\n", (int)sizeof(ls11.slot_late_us));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pln_margin_us:int:%d\n", (int)sizeof(ls11.pln_margin_us));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "led_overrun:int:%d\n", (int)sizeof(ls11.led_overrun));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -934,6 +940,9 @@ void LoggingTask::dump_csv() const {
     ls11.alpha_fifo = halfToFloat(e.alpha_fifo);
     ls11.plan_age_us = e.plan_age_us;
     ls11.w_plan_lead = halfToFloat(e.w_plan_lead);
+    ls11.slot_late_us = e.slot_late_us;
+    ls11.pln_margin_us = e.pln_margin_us;
+    ls11.led_overrun = e.led_overrun;
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

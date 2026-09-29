@@ -133,6 +133,11 @@ void PlanningTask::timer_irq_handler() {
   // 書き換える)。
 
   self->tick(dt_us);
+  // 次の S0(= この tick の予約 + 1ms − kPhaseAfterSensingUs)までの余裕。負なら
+  // センシングの枠と重なった(sched_diag_t)。
+  self->sensing_result->sched.pln_margin_us = (int16_t)(int32_t)(
+      self->next_alarm_ + (self->interval_us_ - kPhaseAfterSensingUs) -
+      (uint32_t)time_us_64());
   sem_release(&self->tick_sem_);
 }
 
