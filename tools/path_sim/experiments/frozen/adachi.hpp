@@ -28,19 +28,13 @@ public:
   bool is_goal(int x, int y);
   void reset_goal() {
     goaled = false;
-    for (auto &r : subgoal_routes) // 前の探索で覚えた経路を持ち越さない
-      r.valid = false;
+    subgoal_fallback_done = false; // 前の探索の終わり(サブゴールが空)を持ち越さない
   }
   void goal_step_check();
   bool goal_step = false;
   void clear_goal() { goal_step = false; }
   void update();
   unordered_map<unsigned int, unsigned char> subgoal_list;
-
-  // ゴール後(SearchMode::ALL)のサブゴールの選び方。offset.yaml の search_subgoal_mode。
-  //   0: 重みパターン 1 の経路を毎回作り直し、経路の上の未知区画を足していく(従来。既定)
-  //   1: 重みパターン 2 と 4 の経路を覚えておき、経路の上に壁が見つかったときだけ作り直す
-  int subgoal_mode = 0;
 
   vector<point_t> pt_list;
   std::shared_ptr<MazeSolverBaseLgc> lgc;
@@ -62,19 +56,9 @@ private:
   int limit = 256;
   int limit2 = 25;
   int cost_mode = 0;
-
-  // subgoal_mode 1 用。重みパターンごとに覚えた経路(lgc->goal_route の写し)
-  static constexpr int SUBGOAL_ROUTE_NUM = 2;
-  static constexpr int SUBGOAL_PATTERNS[SUBGOAL_ROUTE_NUM] = {2, 4};
-  // update() 1 回で作り直す表の数の上限(1 回の移動あたりの計算を、従来の 1 枚より増やさない)
-  static constexpr int SUBGOAL_REBUILD_LIMIT = 1;
-  struct subgoal_route_t {
-    bool valid = false;
-    std::vector<uint16_t> route;
-  };
-  subgoal_route_t subgoal_routes[SUBGOAL_ROUTE_NUM];
-  unordered_map<unsigned int, unsigned char> subgoal_tmp;
-  void update_subgoal_by_routes();
+  // update() でサブゴールが空になったときに、他の重みパターンでも探し直したか。
+  // サブゴールがまた現れたら false に戻す(空のあいだ毎区画くり返さないため)。
+  bool subgoal_fallback_done = false;
 
   point_t next_goal_pt;
 

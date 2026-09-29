@@ -164,6 +164,115 @@ void MainTask::run_main_mode() {
   }
 }
 
+// ============================================================
+// 最短走行の経路づくり(path_run() / sim_run_time() 共用)
+// ============================================================
+
+// path_create() の経路そのまま(重みパターンは lgc に入っているもの)
+__attribute__((noinline, section(".time_critical.main")))
+bool MainTask::create_simple_path() {
+  pc->other_route_map.clear();
+  const bool res = pc->path_create(false);
+  if (!res) {
+    return false;
+  }
+  pc->convert_large_path(true);
+  pc->diagonalPath(true, true);
+  return true;
+}
+
+// タイム最小の経路探索(TimePathPlanner、2026-09-29)。calc_goal_time() と同じ計算を重みに
+// した最短経路なので、重みパターンの比較より速く、作れる経路の中で最小のタイムになる。
+// false = 使えなかった(経路なし・メモリ不足・上限超え・ボタンで中断)。
+__attribute__((noinline, section(".time_critical.main")))
+bool MainTask::create_fast_path_by_time(bool &aborted) {
+  TimePathPlanner planner;
+  const auto t0 = time_us_64();
+  const auto res = planner.solve(*pc, param_set);
+  const auto us = time_us_64() - t0;
+  const auto &st = planner.stats;
+  aborted = res == TimePathPlanner::Result::Aborted;
+  printf("[time_path] %s  %0.3f s  calc %d ms  nodes %d/%d  heap %d  edges %d  "
+         "seg %d  mem %d KB  free %d KB\n",
+         TimePathPlanner::result_str(res), st.time, (int)(us / 1000), st.nodes,
+         st.node_cap, st.heap_max, st.edges, st.seg_cached,
+         st.mem_bytes / 1024, st.free_bytes / 1024);
+  if (res != TimePathPlanner::Result::Ok) {
+    return false;
+  }
+  pc->convert_large_path(true);
+  pc->diagonalPath(true, true);
+  return true;
+}
+
+// 従来の方法: 重みパターン 1〜5 それぞれで経路を作り、分岐を 1 つずつ変えた候補の中から
+// calc_goal_time() が最短のものを使う。タイム最小の経路探索が使えなかったときの予備。
+__attribute__((noinline, section(".time_critical.main")))
+bool MainTask::create_fast_path_by_pattern(bool verbose) {
+  for (int i = 1; i <= 5; i++) {
+    lgc->set_param_num(i);
+    pc->other_route_map.clear();
+    const bool res = pc->path_create(false);
+    if (verbose) {
+      printf("other route size = %d\n", pc->other_route_map.size());
+    }
+    if (!res) {
+      return false;
+    }
+    pc->convert_large_path(true);
+    pc->diagonalPath(true, true);
+    if (i == 0) {
+      pc->path_s2.clear();
+      pc->path_t2.clear();
+      pc->path_s2.reserve(pc->path_s.size());
+      pc->path_t2.reserve(pc->path_t.size());
+      for (int i = 0; i < pc->path_t.size(); i++) {
+        pc->path_s2.push_back(pc->path_s[i]);
+        pc->path_t2.push_back(pc->path_t[i]);
+      }
+    }
+    path_set_t p;
+    p.type = i;
+    p.time = 10000;
+    pc->timebase_path_create(false, param_set, p);
+    pc->path_set_map.push(p);
+  }
+
+  // 先頭に最適な経路を持ってくる
+  const auto top_p = pc->path_set_map.top();
+  // clear map
+  while (!pc->path_set_map.empty()) {
+    pc->path_set_map.pop();
+  }
+  if (top_p.result) { //成功
+    pc->path_s.clear();
+    pc->path_t.clear();
+    pc->path_s.reserve(top_p.path_s.size());
+    pc->path_t.reserve(top_p.path_t.size());
+    for (int i = 0; i < top_p.path_s.size(); i++) {
+      pc->path_s.push_back(top_p.path_s[i]);
+      pc->path_t.push_back(top_p.path_t[i]);
+    }
+    return true;
+  }
+  //失敗
+  return create_simple_path();
+}
+
+__attribute__((noinline, section(".time_critical.main")))
+bool MainTask::create_fast_path(bool verbose) {
+  bool aborted = false;
+  if (create_fast_path_by_time(aborted)) {
+    return true;
+  }
+  if (aborted) {
+    // ボタンで止めた: 重い計算へは戻らず、単純な経路にする
+    lgc->set_param_num(1);
+    return create_simple_path();
+  }
+  return create_fast_path_by_pattern(verbose);
+}
+
 __attribute__((noinline, section(".time_critical.main")))
 void MainTask::path_run(int idx, int idx2, int idx3) {
   planning_->set_mode_select(false);
@@ -173,65 +282,10 @@ void MainTask::path_run(int idx, int idx2, int idx3) {
   if (sys_.circuit_mode == 0) {
     const auto rorl = ui_->select_direction();
     if (rorl == TurnDirection::Right) {
-      //速度ベース経路導出
-      for (int i = 1; i <= 5; i++) {
-        lgc->set_param_num(i);
-        pc->other_route_map.clear();
-        const bool res = pc->path_create(false);
-        printf("other route size = %d\n", pc->other_route_map.size());
-        if (!res) {
-          ui_->error();
-          return;
-        }
-        pc->convert_large_path(true);
-        pc->diagonalPath(true, true);
-        if (i == 0) {
-          pc->path_s2.clear();
-          pc->path_t2.clear();
-          pc->path_s2.reserve(pc->path_s.size());
-          pc->path_t2.reserve(pc->path_t.size());
-          for (int i = 0; i < pc->path_t.size(); i++) {
-            pc->path_s2.push_back(pc->path_s[i]);
-            pc->path_t2.push_back(pc->path_t[i]);
-          }
-        }
-        path_set_t p;
-        p.type = i;
-        p.time = 10000;
-        pc->timebase_path_create(false, param_set, p);
-        pc->path_set_map.push(p);
-      }
-
-      // 先頭に最適な経路を持ってくる
-      const auto top_p = pc->path_set_map.top();
-      if (top_p.result) { //成功
-        pc->path_s.clear();
-        pc->path_t.clear();
-        pc->path_s.reserve(top_p.path_s.size());
-        pc->path_t.reserve(top_p.path_t.size());
-        for (int i = 0; i < top_p.path_s.size(); i++) {
-          pc->path_s.push_back(top_p.path_s[i]);
-          pc->path_t.push_back(top_p.path_t[i]);
-        }
-        // clear map
-        while (!pc->path_set_map.empty()) {
-          auto p2 = pc->path_set_map.top();
-          // printf("type: %d, time: %f, turn: %d\n", p2.type, p2.time,
-          //        p2.path_t.size());
-          p2.path_s.clear();
-          p2.path_t.clear();
-          pc->path_set_map.pop();
-        }
-
-      } else { //失敗
-        pc->other_route_map.clear();
-        const bool res = pc->path_create(false);
-        if (!res) {
-          ui_->error();
-          return;
-        }
-        pc->convert_large_path(true);
-        pc->diagonalPath(true, true);
+      // タイム最小の経路(だめなら従来の重みパターン 1〜5 の比較へ戻る)
+      if (!create_fast_path(true)) {
+        ui_->error();
+        return;
       }
     } else {
       pc->other_route_map.clear();
@@ -352,60 +406,9 @@ void MainTask::sim_run_time(int mode_num, int idx, int idx2, int idx3,
     printf("  - Dia90: %0.2f\n", param_set.map_slow[TurnType::Dia90].v);
   }
 
-  for (int i = 1; i <= 5; i++) {
-    lgc->set_param_num(i);
-    pc->other_route_map.clear();
-    const bool res = pc->path_create(false);
-    if (dump_all) {
-      printf("other route size = %d\n", pc->other_route_map.size());
-    }
-    if (!res) {
-      ui_->error();
-      return;
-    }
-    pc->convert_large_path(true);
-    pc->diagonalPath(true, true);
-    if (i == 0) {
-      pc->path_s2.clear();
-      pc->path_t2.clear();
-      for (int i = 0; i < pc->path_t.size(); i++) {
-        pc->path_s2.push_back(pc->path_s[i]);
-        pc->path_t2.push_back(pc->path_t[i]);
-      }
-    }
-    path_set_t p;
-    p.type = i;
-    p.time = 10000;
-    pc->timebase_path_create(false, param_set, p);
-    pc->path_set_map.push(p);
-  }
-
-  // 先頭に最適な経路を持ってくる
-  const auto top_p = pc->path_set_map.top();
-  if (top_p.result) { //成功
-    pc->path_s.clear();
-    pc->path_t.clear();
-    for (int i = 0; i < top_p.path_s.size(); i++) {
-      pc->path_s.push_back(top_p.path_s[i]);
-      pc->path_t.push_back(top_p.path_t[i]);
-    }
-    // clear map
-    while (!pc->path_set_map.empty()) {
-      auto p2 = pc->path_set_map.top();
-      p2.path_s.clear();
-      p2.path_t.clear();
-      pc->path_set_map.pop();
-    }
-
-  } else { //失敗
-    pc->other_route_map.clear();
-    const bool res = pc->path_create(false);
-    if (!res) {
-      ui_->error();
-      return;
-    }
-    pc->convert_large_path(true);
-    pc->diagonalPath(true, true);
+  if (!create_fast_path(dump_all)) {
+    ui_->error();
+    return;
   }
   if (pc->path_s.size() == 0) {
     pc->other_route_map.clear();

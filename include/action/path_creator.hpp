@@ -17,6 +17,14 @@ constexpr int L = 2;
 constexpr unsigned int vector_max_step_val = 180 * 1024;
 constexpr float MAX = vector_max_step_val;
 
+// calc_segment_time() の結果(区間 1 個 = 直線 + ターン)
+struct segment_time_t {
+  float str_time = 0;        // 直線の時間
+  float turn_time = 0;       // ターンの時間
+  float v_now = 0;           // 区間を終えたときの速度(次の区間の入口)
+  bool has_straight = false; // 直線を計算したか(長さ 0 で最初の区間でもないときは false)
+};
+
 class PathCreator {
 private:
   int get_dist_val(int x, int y);
@@ -103,6 +111,12 @@ public:
   void print_path2();
 
   float calc_goal_time(param_set_t &p_set, bool debug = false);
+  // 区間 1 個ぶんのタイム。calc_goal_time() と TimePathPlanner が同じものを使う。
+  segment_time_t calc_segment_time(param_set_t &p_set, bool first, bool dia,
+                                   float s, int tcode, float v_now,
+                                   bool exist_next, float next_s,
+                                   int next_tcode, planning_time_t &tmp_time,
+                                   bool debug = false);
   // 呼ぶ前に、同じ重みパターン(lgc->set_param_num)で path_create() しておくこと。
   // 候補の評価ではそのとき作った近似コストの表を使い回す。
   float timebase_path_create(bool is_search, param_set_t &p_set, path_set_t &p);

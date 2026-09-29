@@ -265,7 +265,6 @@ public:
 
     int back_cnt = 0;
     adachi->sm = SearchMode::ALL;
-    adachi->subgoal_mode = param_->search_subgoal_mode;
     while (true) {
       if ((int)steps.size() > STEP_LIMIT) {
         end_reason = "step_limit";
@@ -328,9 +327,6 @@ int main() {
 
   SearchSim sim;
   sim.load_params();
-  // subgoal_mode: offset の search_subgoal_mode を上書きする(比較・確認用)
-  if (!in["subgoal_mode"].isNull())
-    sim.param_->search_subgoal_mode = in["subgoal_mode"].as<int>();
   sim.load_turn_param_profiles();
 
   std::vector<uint8_t> truth;
@@ -363,7 +359,6 @@ int main() {
   out["total_time"] = sim.now;
   out["finish_time"] = sim.finish_time;
   out["search_timer"] = sim.param_->seach_timer;
-  out["subgoal_mode"] = sim.param_->search_subgoal_mode;
   const auto &s = sim.param_set.str_map[StraightType::Search];
   const auto &nt = sim.param_set.map[TurnType::Normal];
   JsonObject prm = out["params"].to<JsonObject>();

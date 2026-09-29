@@ -274,11 +274,16 @@ void PathCreator::convert_large_path(bool b1) {
       path_s[1] -= 1;
       path_t[0] = (unsigned char)5;
     }
+    // 2026-09-29: 終端は 255 で 0 は入らないので、0 を探すと配列の先(他のメモリ)まで読み、
+    // そこの値しだいで配列の外へ書いていた。配列の中だけを見る。
     i = 0;
-    while (path_t[i] != 0) {
+    while (i < (int)path_t.size() && path_t[i] != 0) {
       i++;
     }
     finish = i;
+    if (finish >= (int)path_s.size() || finish >= (int)path_t.size()) {
+      return;
+    }
     if (finish >= 1) {
       if (path_s[finish] == 2 && path_s[finish - 1] > 2 &&
           (path_t[finish - 1] == 1 || path_t[finish - 1] == 2)) {
@@ -343,20 +348,31 @@ void PathCreator::diagonalPath(bool isFull, bool a1) {
 
   bool _virtual = !a1;
   bool flag = false;
-  while (path_t[i] != 0) {
+  // 2026-09-29: 配列の先を読まない(終端は 255 なので、0 を探すと配列の外まで進んでいた)。
+  // 配列の外は「終端の先 = 0」として扱う。配列の中の結果は変わらない。
+  const int t_size = (int)path_t.size();
+  const int s_size = (int)path_s.size();
+  // 読むときは T() / S() を通す(書くときは path_t[] / path_s[] のまま)
+  const auto T = [&](int k) -> int {
+    return (k >= 0 && k < t_size) ? path_t[k] : 0;
+  };
+  const auto S = [&](int k) -> float {
+    return (k >= 0 && k < s_size) ? path_s[k] : 0;
+  };
+  while (T(i) != 0) {
     check = 0;
     if (_virtual) {
       a1 = false;
-      if (path_s[i] > 2) {
+      if (S(i) > 2) {
         flag = true;
       }
       if (flag) {
         for (m = i + 1;; m++) {
-          if (path_s[m] > 2) {
+          if (S(m) > 2) {
             a1 = true;
             break;
           }
-          if (path_t[m] == 0) {
+          if (T(m) == 0) {
             a1 = false;
             break;
           }
@@ -364,24 +380,24 @@ void PathCreator::diagonalPath(bool isFull, bool a1) {
       }
     }
 
-    if (path_t[i] == R && (a1 ? true : path_s[i] > 2)) {
+    if (T(i) == R && (a1 ? true : S(i) > 2)) {
       dir = R;
-      for (j = i + 1; path_t[j] != dir; j++) {
-        if (path_t[j] == R && path_s[j] == 2) {
+      for (j = i + 1; T(j) != dir; j++) {
+        if (T(j) == R && S(j) == 2) {
           dir = R;
-        } else if (path_t[j] == L && path_s[j] == 2) {
+        } else if (T(j) == L && S(j) == 2) {
           dir = L;
         } else {
           break;
         }
         check++;
       }
-    } else if (path_t[i] == L && (a1 ? true : path_s[i] > 2)) {
+    } else if (T(i) == L && (a1 ? true : S(i) > 2)) {
       dir = L;
-      for (j = i + 1; path_t[j] != dir; j++) {
-        if (path_t[j] == R && path_s[j] == 2) {
+      for (j = i + 1; T(j) != dir; j++) {
+        if (T(j) == R && S(j) == 2) {
           dir = R;
-        } else if (path_t[j] == L && path_s[j] == 2) {
+        } else if (T(j) == L && S(j) == 2) {
           dir = L;
         } else {
           break;
@@ -391,56 +407,55 @@ void PathCreator::diagonalPath(bool isFull, bool a1) {
     }
     if (check != 0) {
       j -= 1;
-      if ((i != 0 && path_s[i] == 2 && path_t[i] == path_t[i - 1] &&
-           path_s[i - 1] > 2)) {
-        if (path_t[i] == R) {
+      if ((i != 0 && S(i) == 2 && T(i) == T(i - 1) && S(i - 1) > 2)) {
+        if (T(i) == R) {
           path_t[i - 1] = (unsigned char)9;
           check3 = true;
-        } else if (path_t[i] == L) {
+        } else if (T(i) == L) {
           path_t[i - 1] = (unsigned char)10;
           check3 = true;
         }
-        if (j != 0 && path_s[j + 2] > 2 && path_t[j] == path_t[j + 1]) {
-          if (path_t[j] == R) {
+        if (j != 0 && S(j + 2) > 2 && T(j) == T(j + 1)) {
+          if (T(j) == R) {
             path_t[j + 1] = (unsigned char)9;
             check2 = true;
-          } else if (path_t[j] == L) {
+          } else if (T(j) == L) {
             path_t[j + 1] = (unsigned char)10;
             check2 = true;
           }
           path_s[j + 1] = check + 1;
         } else {
-          if (path_t[j] == R) {
+          if (T(j) == R) {
             path_t[j] = (unsigned char)7;
-          } else if (path_t[j] == L) {
+          } else if (T(j) == L) {
             path_t[j] = (unsigned char)8;
           }
           path_s[j] = check + 1;
         }
       } else {
         int memory = 0;
-        if (path_t[i] == R) {
+        if (T(i) == R) {
           path_t[i] = (unsigned char)7;
           memory = R;
-        } else if (path_t[i] == L) {
+        } else if (T(i) == L) {
           path_t[i] = (unsigned char)8;
           memory = L;
         }
-        if (j != 0 && path_s[j + 2] > 2 && path_t[j] == path_t[j + 1]) {
-          if (path_t[j] == R) {
+        if (j != 0 && S(j + 2) > 2 && T(j) == T(j + 1)) {
+          if (T(j) == R) {
             path_t[j + 1] = (unsigned char)9;
             check2 = true;
-          } else if (path_t[j] == L) {
+          } else if (T(j) == L) {
             path_t[j + 1] = (unsigned char)10;
             check2 = true;
           }
           path_s[j + 1] = check + 1;
         } else {
           if (!a1) {
-            if (path_s[j + 1] > 2) {
-              if (path_t[j] == R) {
+            if (S(j + 1) > 2) {
+              if (T(j) == R) {
                 path_t[j] = (unsigned char)7;
-              } else if (path_t[j] == L) {
+              } else if (T(j) == L) {
                 path_t[j] = (unsigned char)8;
               }
               path_s[j] = check + 1;
@@ -453,9 +468,9 @@ void PathCreator::diagonalPath(bool isFull, bool a1) {
               continue;
             }
           } else {
-            if (path_t[j] == R) {
+            if (T(j) == R) {
               path_t[j] = (unsigned char)7;
-            } else if (path_t[j] == L) {
+            } else if (T(j) == L) {
               path_t[j] = (unsigned char)8;
             }
             path_s[j] = check + 1;
@@ -482,12 +497,12 @@ void PathCreator::diagonalPath(bool isFull, bool a1) {
   }
   i = 0;
 
-  while (path_t[i] != 0) {
-    if (path_t[i] == 7 && path_t[i + 1] == 7 && path_s[i + 1] == 2) {
+  while (T(i) != 0) {
+    if (T(i) == 7 && T(i + 1) == 7 && S(i + 1) == 2) {
       path_t[i] = (unsigned char)11;
       path_t[i + 1] = (unsigned char)254;
     }
-    if (path_t[i] == 8 && path_t[i + 1] == 8 && path_s[i + 1] == 2) {
+    if (T(i) == 8 && T(i + 1) == 8 && S(i + 1) == 2) {
       path_t[i] = (unsigned char)12;
       path_t[i + 1] = (unsigned char)254;
     }
@@ -495,17 +510,17 @@ void PathCreator::diagonalPath(bool isFull, bool a1) {
   }
   i = 0;
   diaMode = false;
-  while (path_t[i] != 0) {
+  while (T(i) != 0) {
     if (!diaMode) {
-      if (path_t[i] == 7 || path_t[i] == 8 || path_t[i] == 9 ||
-          path_t[i] == 10) {
+      if (T(i) == 7 || T(i) == 8 || T(i) == 9 || T(i) == 10) {
         path_s[i] -= 1;
         diaMode = true;
       }
     } else if (diaMode) {
-      if (path_t[i] == 7 || path_t[i] == 8 || path_t[i] == 9 ||
-          path_t[i] == 10) {
-        path_s[i + 1] -= 1;
+      if (T(i) == 7 || T(i) == 8 || T(i) == 9 || T(i) == 10) {
+        if (i + 1 < s_size) {
+          path_s[i + 1] -= 1;
+        }
         diaMode = false;
       }
     }
@@ -724,20 +739,132 @@ void PathCreator::checkOtherRoot(int x, int y, Direction now_dir, float now) {
   }
 }
 
+// 区間 1 個(i 番目の直線 + i 番目のターン)のタイム。calc_goal_time() の 1 周ぶんで、
+// TimePathPlanner(タイム最小の経路探索)も辺の重みとしてこれを呼ぶ。速度や加速度の選び方を
+// 変えるときはここだけ直せば、見積もりと経路探索の両方に入る。
+//   first       経路の最初の区間(スタートからの直線)
+//   dia         この区間の直線が斜めか
+//   s, tcode    path_s[i], path_t[i](変換後)
+//   v_now       区間の入口の速度
+//   exist_next  次の区間があるか。next_s / next_tcode = path_s[i + 1], path_t[i + 1]
+//   tmp_time    直線の内訳(v_start / v_max / v_end / dist)を入れる
+__attribute__((noinline, section(".time_critical.path_creator")))
+segment_time_t PathCreator::calc_segment_time(param_set_t &p_set, bool first,
+                                              bool dia, float s, int tcode,
+                                              float v_now, bool exist_next,
+                                              float next_s, int next_tcode,
+                                              planning_time_t &tmp_time,
+                                              bool debug) {
+  segment_time_t res;
+  const float cell_size = p_set.cell_size;
+  const float dist = !dia ? (0.5 * s - 1) * p_set.cell_size
+                          : (0.5 * s - 1) * p_set.cell_size * ROOT2;
+  const auto turn_dir = tc.get_turn_dir(tcode);
+  const auto turn_type = tc.get_turn_type(tcode, dia);
+  bool start_turn = false;
+  bool fast_turn_mode = false;
+  tmp_time.dist = dist;
+  tmp_time.v_start = v_now;
+  tmp_time.v_max = v_now;
+  tmp_time.v_end = v_now;
+  tmp_time.lap_time = 0;
+  tmp_time.total_time = 0;
+  // 最初の区間で直線が無い(スタート直後にターン)ときだけ遅いターン
+  const bool fast_mode = !first || dist > 0;
+
+  const auto st = !dia ? StraightType::FastRun : StraightType::FastRunDia;
+  ps.v_max = p_set.str_map[st].v_max;
+  ps.v_end = fast_mode ? p_set.map[turn_type].v : p_set.map_slow[turn_type].v;
+  ps.accl = p_set.str_map[st].accl;
+  ps.decel = p_set.str_map[st].decel;
+  if ((dist > 0) || first) {
+
+    ps.dist = dist;
+
+    if (exist_next) {
+      float next_dist = 0.5 * next_s - 1;
+      auto next_turn_type = tc.get_turn_type(next_tcode);
+      if (next_dist > 0 && (next_turn_type == TurnType::Orval ||
+                            next_turn_type == TurnType::Large)) {
+        ps.v_end = p_set.map_fast[turn_type].v;
+        fast_turn_mode = true;
+      }
+    }
+
+    tmp_time.v_max = ps.v_max;
+    tmp_time.v_end = ps.v_end;
+
+    if (first) {
+      if (dist == 0) {
+        start_turn = true;
+      }
+      ps.dist += p_set.start_offset;
+      auto tmp_v2 = 2 * ps.accl * ps.dist;
+      if (ps.v_end * ps.v_end > tmp_v2) {
+        ps.accl = (ps.v_end * ps.v_end) / (2 * ps.dist) + 1000;
+        ps.decel = -ps.accl;
+      }
+    }
+    if (turn_type == TurnType::Finish) {
+      ps.dist -= p_set.cell_size / 2;
+      if (p_set.suction) {
+        ps.v_end = 3500;
+      } else {
+        ps.v_end = p_set.map[TurnType::Large].v;
+      }
+    }
+    res.str_time = go_straight_dummy(v_now, ps.v_max, ps.v_end, ps.accl,
+                                     ps.decel, ps.dist, tmp_time, debug);
+    res.has_straight = true;
+    v_now = ps.v_end;
+    if (turn_type == TurnType::Finish) {
+      res.v_now = v_now;
+      return res;
+    }
+  }
+  if (!((turn_type == TurnType::None) || (turn_type == TurnType::Finish))) {
+    float dist3 = 0;
+    if (exist_next) {
+      dist3 = 0.5 * next_s * cell_size;
+    }
+
+    if (fast_turn_mode) {
+      res.turn_time = slalom_dummy(turn_type, turn_dir, p_set.map_fast);
+    } else if (start_turn) {
+      res.turn_time = slalom_dummy(turn_type, turn_dir, p_set.map_slow);
+    } else {
+      res.turn_time = slalom_dummy(turn_type, turn_dir, p_set.map);
+    }
+
+    if (first && start_turn) {
+      auto next_turn_type = tc.get_turn_type(next_tcode);
+      ps.v_end = p_set.map[next_turn_type].v;
+      v_now = ps.v_end;
+    } else if (dist3 == 0) {
+      auto next_turn_type = tc.get_turn_type(next_tcode);
+      ps.v_end       = p_set.map[next_turn_type].v;
+      tmp_time.v_end = ps.v_end;
+      tmp_time.v_max = ps.v_end;
+    } else if (dist == 0) {
+      auto turn_type = tc.get_turn_type(tcode);
+      ps.v_end       = p_set.map[turn_type].v;
+      tmp_time.v_end = ps.v_end;
+      tmp_time.v_max = ps.v_end;
+    }
+    v_now = ps.v_end;
+  }
+  res.v_now = v_now;
+  return res;
+}
+
 __attribute__((noinline, section(".time_critical.path_creator")))
 float PathCreator::calc_goal_time(param_set_t &p_set, bool debug) {
   if (debug) {
     printf("calc_goal_time start\n");
   }
-  bool fast_mode = false;
-  bool start_turn = false;
   bool dia = false;
-  bool fast_turn_mode = false;
-  float cell_size = p_set.cell_size;
   float v_now = 0;
   float time = 0;
-  float tmp_str_time = 0;
-  float tmp_turn_time = 0;
   Direction ego_dir = Direction::North;
   planning_time_t tmp_time;
   path_time_s.clear();
@@ -746,129 +873,42 @@ float PathCreator::calc_goal_time(param_set_t &p_set, bool debug) {
   float lap_time = 0;
   auto path_size = path_s.size();
   for (int i = 0; i < (int)path_t.size(); i++) {
-    float dist = !dia ? (0.5 * path_s[i] - 1) * p_set.cell_size
-                      : (0.5 * path_s[i] - 1) * p_set.cell_size * ROOT2;
     auto turn_dir = tc.get_turn_dir(path_t[i]);
     auto turn_type = tc.get_turn_type(path_t[i], dia);
-    start_turn = false;
-    fast_turn_mode = false;
     lap_time = 0;
-    tmp_time.dist = dist;
-    tmp_time.v_start = v_now;
-    tmp_time.v_max = v_now;
-    tmp_time.v_end = v_now;
-    tmp_time.lap_time = 0;
-    tmp_time.total_time = 0;
-    if (dist > 0) {
-      fast_mode = true;
-    }
-    tmp_str_time = 0;
-    tmp_turn_time = 0;
 
-    auto st = !dia ? StraightType::FastRun : StraightType::FastRunDia;
-    ps.v_max = p_set.str_map[st].v_max;
-    ps.v_end = fast_mode ? p_set.map[turn_type].v : p_set.map_slow[turn_type].v;
-    ps.accl = p_set.str_map[st].accl;
-    ps.decel = p_set.str_map[st].decel;
-    if ((dist > 0) || i == 0) {
+    const bool exist_next_idx = (i + 1) < (int)path_size;
+    const float next_s = exist_next_idx ? path_s[i + 1] : 0;
+    const int next_tcode = (i + 1) < (int)path_t.size() ? path_t[i + 1] : 0;
+    const auto seg =
+        calc_segment_time(p_set, i == 0, dia, path_s[i], path_t[i], v_now,
+                          exist_next_idx, next_s, next_tcode, tmp_time, debug);
 
-      ps.dist = dist;
-
-      bool exist_next_idx = (i + 1) < (int)path_size;
-      if (exist_next_idx) {
-        float next_dist = 0.5 * path_s[i + 1] - 1;
-        auto next_turn_type = tc.get_turn_type(path_t[i + 1]);
-        if (next_dist > 0 && (next_turn_type == TurnType::Orval ||
-                              next_turn_type == TurnType::Large)) {
-          ps.v_end = p_set.map_fast[turn_type].v;
-          fast_turn_mode = true;
-        }
-      }
-
-      tmp_time.v_max = ps.v_max;
-      tmp_time.v_end = ps.v_end;
-
-      if (i == 0) {
-        if (dist == 0) {
-          start_turn = true;
-        }
-        ps.dist += p_set.start_offset;
-        auto tmp_v2 = 2 * ps.accl * ps.dist;
-        if (ps.v_end * ps.v_end > tmp_v2) {
-          ps.accl = (ps.v_end * ps.v_end) / (2 * ps.dist) + 1000;
-          ps.decel = -ps.accl;
-        }
-      }
-      if (turn_type == TurnType::Finish) {
-        ps.dist -= p_set.cell_size / 2;
-        if (p_set.suction) {
-          ps.v_end = 3500;
-        } else {
-          ps.v_end = p_set.map[TurnType::Large].v;
-        }
-      }
-      tmp_str_time = go_straight_dummy(v_now, ps.v_max, ps.v_end, ps.accl,
-                                       ps.decel, ps.dist, tmp_time, debug);
-
-      time += tmp_str_time;
-      lap_time += tmp_str_time;
+    if (seg.has_straight) {
+      time += seg.str_time;
+      lap_time += seg.str_time;
       if (time > 100) {
         break;
       }
-      v_now = ps.v_end;
-      if (turn_type == TurnType::Finish) {
-        break;
-      }
     }
+    v_now = seg.v_now;
     if (!((turn_type == TurnType::None) || (turn_type == TurnType::Finish))) {
-      auto st = !dia ? StraightType::FastRun : StraightType::FastRunDia;
-      bool exist_next_idx = (i + 1) < (int)path_size;
-      float dist3 = 0;
-      float dist4 = 0;
-      if (exist_next_idx) {
-        dist3 = 0.5 * path_s[i + 1] * cell_size;
-        dist4 = 0.5 * path_s[i + 1] - 1;
-      }
-
-      if (fast_turn_mode) {
-        tmp_turn_time = slalom_dummy(turn_type, turn_dir, p_set.map_fast);
-      } else if (start_turn) {
-        tmp_turn_time = slalom_dummy(turn_type, turn_dir, p_set.map_slow);
-      } else {
-        tmp_turn_time = slalom_dummy(turn_type, turn_dir, p_set.map);
-      }
-
-      if (i == 0 && start_turn) {
-        auto next_turn_type = tc.get_turn_type(path_t[i + 1]);
-        ps.v_end = p_set.map[next_turn_type].v;
-        v_now = ps.v_end;
-      } else if (dist3 == 0) {
-        auto next_turn_type = tc.get_turn_type(path_t[i + 1]);
-        ps.v_end       = p_set.map[next_turn_type].v;
-        tmp_time.v_end = ps.v_end;
-        tmp_time.v_max = ps.v_end;
-      } else if (dist == 0) {
-        auto turn_type = tc.get_turn_type(path_t[i]);
-        ps.v_end       = p_set.map[turn_type].v;
-        tmp_time.v_end = ps.v_end;
-        tmp_time.v_max = ps.v_end;
-      }
-      v_now = ps.v_end;
-
-      time += tmp_turn_time;
-      lap_time += tmp_str_time;
+      time += seg.turn_time;
+      lap_time += seg.str_time;
       ego_dir = tc.get_next_dir(ego_dir, turn_type, turn_dir);
       dia =
           (ego_dir == Direction::NorthEast || ego_dir == Direction::NorthWest ||
            ego_dir == Direction::SouthEast || ego_dir == Direction::SouthWest);
     }
 
-    path_time_s.push_back(tmp_str_time);
-    path_time_t.push_back(tmp_turn_time);
+    // 2026-09-29: 最後の直線(最後のターン〜ゴール)もここを通して合計に入れる。以前は
+    // Finish の直線を time に足した直後に break しており、返す値(最後に積んだ区間の
+    // total_time)に入っていなかった(大会迷路 21 本で平均 45 ms、最大 514 ms 短く出ていた)。
+    path_time_s.push_back(seg.str_time);
+    path_time_t.push_back(seg.turn_time);
     tmp_time.total_time = time;
     tmp_time.lap_time = lap_time;
     path_time_total.push_back(tmp_time);
-    fast_mode = true;
 
     if (turn_type == TurnType::None) {
       break;

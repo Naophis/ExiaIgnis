@@ -4,13 +4,15 @@
 import os, subprocess, sys
 R = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
 H = os.path.dirname(os.path.abspath(__file__))
+# 探索まわり(adachi / logic / search_main)は検討時点の写し(../frozen)を使う。ファームはその後変わっている
+FZ = os.path.join(os.path.dirname(H), "frozen")
 os.makedirs(f"{H}/inc", exist_ok=True)
 os.makedirs(f"{H}/obj", exist_ok=True)
 def rep(s, old, new, cnt=1):
     assert s.count(old) >= 1, old
     return s.replace(old, new, cnt)
 # --- logic.hpp: 外から値を入れるパターン
-s = open(f"{R}/include/search/logic.hpp").read()
+s = open(f"{FZ}/logic.hpp").read()
 s = rep(s, "  void set_param() {\n", """  void set_param() {
     if (param_num >= 100) { // 実験用
       const float *v = g_vp_table[param_num - 100];
@@ -22,8 +24,11 @@ s = rep(s, "  void set_param() {\n", """  void set_param() {
 """)
 s = rep(s, "class MazeSolverBaseLgc", "extern float g_vp_table[512][6];\nclass MazeSolverBaseLgc")
 open(f"{H}/inc/logic.hpp", "w").write(s)
+open(f"{H}/logic_fz.cpp", "w").write(open(f"{FZ}/logic.cpp").read())
+# adachi.hpp は隣の logic.hpp を読むので、写しを inc に置く
+open(f"{H}/inc/adachi.hpp", "w").write(open(f"{FZ}/adachi.hpp").read())
 # --- adachi.cpp: サブゴールの重みパターンを外から
-s = open(f"{R}/src/search/adachi.cpp").read()
+s = open(f"{FZ}/adachi.cpp").read()
 s = rep(s, '#include "adachi.hpp"', '#include "adachi.hpp"\n#include <vector>\nint g_sub_primary = 1;\nstd::vector<int> g_sub_fallbacks = {4, 3, 2};\nint g_sub_fallback_used = 0;\n')
 s = rep(s, """      lgc->set_param_num(1);
       lgc->set_param();
@@ -45,7 +50,8 @@ s = rep(s, """        lgc->set_param_num(1);
     } else {""")
 open(f"{H}/adachi_px.cpp", "w").write(s)
 # --- search_main.cpp
-s = open(f"{R}/tools/path_sim/search_main.cpp").read()
+s = open(f"{FZ}/search_main.cpp").read()
+s = rep(s, '#include "include/search/adachi.hpp"', '#include "adachi.hpp"')
 s = rep(s, "int main() {", """float g_vp_table[512][6];
 extern int g_sub_primary;
 extern std::vector<int> g_sub_fallbacks;
@@ -84,7 +90,7 @@ PS = f"{R}/tools/path_sim"
 INC = f"-I{H}/inc -I{PS}/stub -I{PS} -I{R} -I{R}/include -I{R}/include/search -I{R}/include/action -I{AJ}"
 FLAGS = f"-std=gnu++20 -O2 -w {INC}"
 units = {
-    "logic": f"{R}/src/search/logic.cpp", "adachi": f"{H}/adachi_px.cpp",
+    "logic": f"{H}/logic_fz.cpp", "adachi": f"{H}/adachi_px.cpp",
     "path_creator": f"{R}/src/action/path_creator.cpp", "trajectory_creator": f"{R}/src/action/trajectory_creator.cpp",
     "host_common": f"{PS}/host_common.cpp", "px_path": f"{H}/px_path.cpp", "px_search": f"{H}/px_search.cpp",
 }

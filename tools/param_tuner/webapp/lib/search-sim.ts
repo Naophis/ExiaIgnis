@@ -28,6 +28,7 @@ export interface SearchSimResult {
   goal_by?: "enter" | "known" | "none"; // known = 入らずに到達扱い(残り 1 区画の 4 辺が既知)
   finish_time?: number;
   search_timer?: number; // seach_timer s
+  subgoal_mode?: number; // offset.yaml の search_subgoal_mode(0 = 重みパターン 1 を毎回 / 1 = 重みパターン 2 と 4)
   params?: {
     search_v: number;
     search_accl: number;

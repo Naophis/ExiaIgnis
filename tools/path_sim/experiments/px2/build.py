@@ -5,6 +5,8 @@
 import os, subprocess, sys
 R = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
 H = os.path.dirname(os.path.abspath(__file__))
+# 探索まわり(adachi / logic / search_main)は検討時点の写し(../frozen)を使う。ファームはその後変わっている
+FZ = os.path.join(os.path.dirname(H), "frozen")
 os.makedirs(f"{H}/inc", exist_ok=True)
 os.makedirs(f"{H}/obj", exist_ok=True)
 PX = os.path.join(os.path.dirname(H), "px")
@@ -13,7 +15,7 @@ def rep(s, old, new, cnt=1, n_expect=None):
     assert c >= 1, old
     if n_expect is not None: assert c == n_expect, (c, old)
     return s.replace(old, new, cnt if n_expect is None else c)
-s = open(f"{R}/include/search/logic.hpp").read()
+s = open(f"{FZ}/logic.hpp").read()
 s = rep(s, "  void set_param() {\n", """  void set_param() {
     if (param_num >= 100) { // 実験用
       const float *v = g_vp_table[param_num - 100];
@@ -31,8 +33,8 @@ s = rep(s, "  int param_num = 1;", "  int param_num = 1;\n  float tabS[16];\n  f
 open(f"{H}/inc/logic.hpp", "w").write(s)
 # adachi.hpp は隣の logic.hpp を読むので、写しを inc に置いて書き換えた logic.hpp を読ませる
 # (元のままだと、この翻訳単位だけ元のクラス配置で set_param() を展開し、重みが切り替わらない)
-open(f"{H}/inc/adachi.hpp", "w").write(open(f"{R}/include/search/adachi.hpp").read())
-s = open(f"{R}/src/search/logic.cpp").read()
+open(f"{H}/inc/adachi.hpp", "w").write(open(f"{FZ}/adachi.hpp").read())
+s = open(f"{FZ}/logic.cpp").read()
 old_s = """          if (v >= 2) {
             tmp += St3;
           } else if (v == 1) {
@@ -117,6 +119,39 @@ pop_new = """    Direction dir = now_pos.dir;
       continue;
 """
 s = rep(s, pop_old, pop_new, n_expect=2)
+s = rep(s, '#include "logic.hpp"', '#include "logic.hpp"\n#include <vector>\nstd::vector<int> g_sgp_path;')
+s = rep(s, """  unsigned int cnt = updateVectorMap(isSearch, subgoal_list);
+  while (true) {""", """  unsigned int cnt = updateVectorMap(isSearch, subgoal_list);
+  g_sgp_path.clear();
+  g_sgp_path.push_back(0 | (0 << 8) | ((int)Direction::North << 16)); // (0,0) → (0,1)
+  while (true) {""")
+s = rep(s, """    if (next_dir == Direction::North)
+      y++;
+    else if (next_dir == Direction::East)
+      x++;
+    else if (next_dir == Direction::West)
+      x--;
+    else if (next_dir == Direction::South)
+      y--;
+
+    if (next_dir == Direction::Undefined)
+      break;
+  }
+  // pt_list.erase""", """    if (next_dir != Direction::Undefined)
+      g_sgp_path.push_back(x | (y << 8) | ((int)next_dir << 16));
+    if (next_dir == Direction::North)
+      y++;
+    else if (next_dir == Direction::East)
+      x++;
+    else if (next_dir == Direction::West)
+      x--;
+    else if (next_dir == Direction::South)
+      y--;
+
+    if (next_dir == Direction::Undefined)
+      break;
+  }
+  // pt_list.erase""")
 open(f"{H}/logic_px2.cpp", "w").write(s)
 # adachi / search / path は px のものを 32 列の表に合わせて使う
 s = open(f"{PX}/adachi_px.cpp").read()
@@ -127,7 +162,36 @@ s = rep(s, """    {
       lgc->set_param();
       lgc->searchGoalPosition(true, subgoal_list);
       cost_mode = 3;
-    }""", """    if (g_sub_dp == 2) {
+    }""", """    if (g_sub_dp == 8) {
+      // 重みパターン g_sub_multi をどれも毎回作り、経路の上の未知区画を合わせる。
+      // g_sub_keep = 0 なら前回までのサブゴールは持ち越さない
+      UpdTimer2 t2;
+      if (g_sub_keep) {
+        // ファームと同じく持ち越す(古いものは searchGoalPosition の中で期限切れになる)
+        for (const int pn : g_sub_multi) {
+          lgc->set_param_num(pn);
+          lgc->set_param();
+          lgc->searchGoalPosition(true, subgoal_list);
+        }
+        lgc->set_param_num(g_sub_primary);
+        lgc->set_param();
+        return;
+      }
+      std::unordered_map<unsigned int, unsigned char> all;
+      for (const int pn : g_sub_multi) {
+        std::unordered_map<unsigned int, unsigned char> tmp;
+        lgc->set_param_num(pn);
+        lgc->set_param();
+        lgc->searchGoalPosition(true, tmp);
+        for (const auto &kv : tmp)
+          all[kv.first] = kv.second;
+      }
+      subgoal_list = all;
+      lgc->set_param_num(g_sub_primary);
+      lgc->set_param();
+      return;
+    }
+    if (g_sub_dp == 2 || g_sub_dp == 6 || g_sub_dp == 9) {
       subgoal_list.clear();
       g_dp_subgoals(subgoal_list);
       g_dp_calls++;
@@ -171,7 +235,7 @@ s = rep(s, """  if (goaled) {
     if (subgoal_list.size() == 0) {""")
 s = rep(s, "        if (g_sub_dp == 1) {", "        if (g_sub_dp == 1 || g_sub_dp == 3) {")
 # update() にかかった時間(PC 上)
-s = rep(s, "int g_dp_calls = 0;", "int g_dp_calls = 0;\n#include <chrono>\ndouble g_update_ms = 0;\nint g_update_calls = 0;\nstruct UpdTimer { std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now(); ~UpdTimer() { g_update_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(); g_update_calls++; } };")
+s = rep(s, "int g_dp_calls = 0;", "int g_dp_calls = 0;\nstd::vector<int> g_sub_multi = {1};\nint g_sub_keep = 0;\ndouble g_multi_ms = 0;\nint g_multi_calls = 0;\n#include <chrono>\nstruct UpdTimer2 { std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now(); ~UpdTimer2() { g_multi_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(); g_multi_calls++; } };\ndouble g_update_ms = 0;\nint g_update_calls = 0;\nstruct UpdTimer { std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now(); ~UpdTimer() { g_update_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(); g_update_calls++; } };")
 s = rep(s, "  if (goal_step && sm == SearchMode::ALL) {\n    if (subgoal_list.contains", "  if (goal_step && sm == SearchMode::ALL) {\n    UpdTimer upd_timer;\n    if (subgoal_list.contains")
 open(f"{H}/adachi_px.cpp", "w").write(s)
 for f in ["px_path.cpp", "px_search.cpp"]:
@@ -179,7 +243,7 @@ for f in ["px_path.cpp", "px_search.cpp"]:
     s = rep(s, "float g_vp_table[512][6];", "float g_vp_table[512][32];\nint g_relax = 0;")
     s = rep(s, '  if (in["vp_table"].is<JsonArrayConst>()) {', '  g_relax = in["relax"] | 0;\n  if (in["vp_table"].is<JsonArrayConst>()) {')
     if f == "px_search.cpp":
-        s = rep(s, '#include "include/search/adachi.hpp"', '#include "adachi.hpp"')
+        s = s.replace('#include "include/search/adachi.hpp"', '#include "adachi.hpp"')  # px 側で済んでいれば何もしない
         s = rep(s, '#include "include/action/path_creator.hpp"', '#define private public\n#include "include/action/path_creator.hpp"\n#undef private\n#include <chrono>\n#include <map>\n#include <queue>\n#include <unordered_map>')
         s = rep(s, "extern int g_sub_fallback_used;", """extern int g_sub_fallback_used;
 extern int g_sub_dp;
@@ -213,11 +277,27 @@ static void dp_subgoals(std::unordered_map<unsigned int, unsigned char> &list) {
     }
   }
   g_dp_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-}""")
+}
+#include "search_hooks.hpp"
+""")
         s = rep(s, "  sim.run(goals);\n", """  g_dp_astar = in["dp_astar"] | 1;
   g_dp_weight = in["dp_weight"] | 1.0f;
   g_sub_dp = in["sub_dp"] | 0;
-  g_dp_subgoals = dp_subgoals;
+  g_dp_subgoals = g_sub_dp == 6 ? lazy_subgoals : g_sub_dp == 9 ? pattern_lazy : dp_subgoals;
+  g_lag = in["dp_lag"] | 0.0;
+  g_cap = in["dp_cap"] | 0;
+  if (in["sub_multi"].is<JsonArrayConst>()) {
+    g_sub_multi.clear();
+    for (JsonVariantConst v : in["sub_multi"].as<JsonArrayConst>())
+      g_sub_multi.push_back(v.as<int>());
+  }
+  g_sub_keep = in["sub_keep"] | 0;
+  g_p_limit = in["p_limit"] | 0;
+  g_w0 = in["dp_w0"] | 1.0f;
+  g_collapse = in["dp_collapse"] | false;
+  g_verify = in["dp_verify"] | false;
+  g_verify_cap = in["dp_verify_cap"] | 0;
+  g_now = &sim.now;
   g_goals0 = goals;
   g_lgc0 = sim.lgc.get();
   g_pc0 = &sim.pc;
@@ -237,7 +317,8 @@ static void dp_subgoals(std::unordered_map<unsigned int, unsigned char> &list) {
   }
   sim.run(goals);
 """)
-        s = rep(s, "extern int g_dp_calls;", "extern int g_dp_calls;\nextern double g_update_ms;\nextern int g_update_calls;")
+        s = rep(s, "extern int g_dp_calls;", "extern int g_dp_calls;\nextern double g_update_ms;\nextern int g_update_calls;\nextern std::vector<int> g_sub_multi;\nextern int g_sub_keep;\nextern double g_multi_ms;\nextern int g_multi_calls;")
+        s = rep(s, '  out["n_steps"] = (int)sim.steps.size();', '  out["n_steps"] = (int)sim.steps.size();\n  out["multi_ms"] = g_multi_ms;\n  out["multi_calls"] = g_multi_calls;')
         s = rep(s, '  out["n_steps"] = (int)sim.steps.size();', '  out["n_steps"] = (int)sim.steps.size();\n  out["update_ms"] = g_update_ms;\n  out["update_calls"] = g_update_calls;')
         # 止まっている間だけ確かめる版: 超信地(後退の後)と、スタートへ戻ったとき
         s = rep(s, """    adachi->update();
@@ -251,6 +332,13 @@ static void dp_subgoals(std::unordered_map<unsigned int, unsigned char> &list) {
         end_reason = "home";
         break;
       }""", """      if (adachi->goal_step && ego->x == 0 && ego->y == 0) {
+        if (g_sub_dp == 6 && g_resorties < 20) {
+          if (h_at_home(adachi->subgoal_list)) {
+            g_resorties++;
+            g_home_times.push_back(now);
+            continue; // スタートから出直す
+          }
+        }
         if ((g_sub_dp == 4 || g_sub_dp == 5) && g_resorties < 8) {
           dp_subgoals(adachi->subgoal_list);
           g_dp_calls++;
@@ -263,9 +351,10 @@ static void dp_subgoals(std::unordered_map<unsigned int, unsigned char> &list) {
         end_reason = "home";
         break;
       }""")
-        s = rep(s, "bool UserInterface::button_state_hold() { return false; }", "bool UserInterface::button_state_hold() { return false; }\nextern int g_sub_dp;\nextern int g_dp_calls;\nstatic void dp_subgoals(std::unordered_map<unsigned int, unsigned char> &list);\nstatic int g_dp_astar = 1;\nstatic float g_dp_weight = 1.0f;\nstatic std::vector<std::vector<double>> g_dp_log;\nstatic int g_resorties = 0;\nstatic std::vector<double> g_home_times;")
+        s = rep(s, "bool UserInterface::button_state_hold() { return false; }", "bool UserInterface::button_state_hold() { return false; }\nextern int g_sub_dp;\nextern int g_dp_calls;\nstatic void dp_subgoals(std::unordered_map<unsigned int, unsigned char> &list);\nstatic bool h_at_home(std::unordered_map<unsigned int, unsigned char> &list);\nstatic int g_dp_astar = 1;\nstatic float g_dp_weight = 1.0f;\nstatic std::vector<std::vector<double>> g_dp_log;\nstatic int g_resorties = 0;\nstatic std::vector<double> g_home_times;")
         s = rep(s, '  out["n_steps"] = (int)sim.steps.size();', '  out["n_steps"] = (int)sim.steps.size();\n  out["resorties"] = g_resorties;\n  if (!g_home_times.empty()) out["first_home"] = g_home_times[0];')
         s = rep(s, '  out["n_steps"] = (int)sim.steps.size();', '  out["n_steps"] = (int)sim.steps.size();\n  { JsonArray a = out["dp_log"].to<JsonArray>(); for (const auto &r : g_dp_log) { JsonArray b = a.add<JsonArray>(); for (double v : r) b.add(v); } }')
+        s = rep(s, '  out["n_steps"] = (int)sim.steps.size();', '  out["n_steps"] = (int)sim.steps.size();\n  out["recompute"] = g_recompute;\n  out["cap_hit"] = g_cap_hit;\n  out["unproven_end"] = g_unproven_end;\n  out["wait_home"] = g_wait_home;\n  out["p_recompute"] = g_p_recompute;\n  out["p_ms"] = g_p_ms;\n  out["p_calls"] = g_p_calls;\n  out["p_check_ms"] = g_p_check_ms;\n  { JsonArray a = out["p_hist"].to<JsonArray>(); for (int k = 0; k < 8; k++) a.add(g_p_hist[k]); }\n  { JsonArray a = out["v_log"].to<JsonArray>(); for (const auto &r : g_v_log) { JsonArray b = a.add<JsonArray>(); for (double v : r) b.add(v); } }\n  { JsonArray a = out["h_log"].to<JsonArray>(); for (const auto &r : g_h_log) { JsonArray b = a.add<JsonArray>(); for (double v : r) b.add(v); } }')
         s = rep(s, '  out["fallback_used"] = g_sub_fallback_used;', '  out["fallback_used"] = g_sub_fallback_used;\n  out["dp_calls"] = g_dp_calls;\n  out["dp_ms"] = g_dp_ms;')
     open(f"{H}/{f}", "w").write(s)
 # path_creator: 分岐候補の幅と繰り返し回数を外から

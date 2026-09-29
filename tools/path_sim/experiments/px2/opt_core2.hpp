@@ -17,6 +17,11 @@ struct Ctx {
   bool count_final = true;
   bool astar = false;  // 残り時間の下限を使う
   float weight = 1.0f; // 下限に掛ける倍率(1 より大きいと厳密でなくなる)
+  float upper = 1e30f; // これ以上のタイムの経路は要らない(既知だけの最小タイム等)
+  int node_cap = 0;    // 節点の上限(0 = なし)。超えたら Result::overflow
+  // 節点を「位置・向き・直進か斜めか」だけにまとめる(速度と約束は、その節点へいちばん速く着いた
+  // 経路のものを使う。速いターンは使わない)。節点が数分の 1 になるが、厳密ではなくなる
+  bool collapse = false;
 };
 static Ctx C;
 static TrajectoryCreator TCR;
@@ -124,6 +129,7 @@ struct Node {
   uint16_t run; // prev からの直進 / 斜めの数
   uint8_t prim; // prev からの区間の終わりのターン(tcode)
   uint8_t done;
+  uint8_t v;    // collapse のとき: いちばん速く着いた経路の速度
 };
 static std::vector<Node> nodes;
 static std::vector<int32_t> table; // ハッシュ表(開番地)
@@ -144,12 +150,17 @@ static inline int kkind(uint32_t k) { return (k >> 12) & 3; }
 static inline int kv(uint32_t k) { return (k >> 14) & 15; }
 static inline int kb(uint32_t k) { return (k >> 18) & 3; }
 static inline int knt(uint32_t k) { return (k >> 20) & 255; }
+static bool g_overflow = false;
 static int find_node(uint32_t key) {
   uint32_t h = (key * 2654435761u) & table_mask;
   while (true) {
     const int32_t id = table[h];
     if (id < 0) {
-      nodes.push_back(Node{key, 1e30f, 1e30f, -1, 0, 0, 0});
+      if (C.node_cap > 0 && (int)nodes.size() >= C.node_cap) {
+        g_overflow = true;
+        return -1;
+      }
+      nodes.push_back(Node{key, 1e30f, 1e30f, -1, 0, 0, 0, 0});
       table[h] = (int32_t)nodes.size() - 1;
       return (int)nodes.size() - 1;
     }
@@ -230,7 +241,7 @@ static int best_run, best_prim;
 
 static inline bool is_LO(int tcode) { return tcode >= 3 && tcode <= 6; }
 static inline bool meets(uint32_t key, int s, int tcode) {
-  if (kkind(key) == 3)
+  if (kkind(key) == 3 || C.collapse)
     return true;
   const int b = kb(key);
   if (b != 2) {
@@ -243,10 +254,16 @@ static inline bool meets(uint32_t key, int s, int tcode) {
 }
 static inline void relax(int from, float cost, int run, int prim, const Pos &p, int kind, int v, int b, int nt) {
   n_edges++;
-  const int id = find_node(make_key(p.x, p.y, p.d, kind, v, b, nt));
+  // 残りを最短で行っても、もう分かっている経路(best_goal)より遅いなら要らない
+  if (cost + (C.astar ? hcell[p.x + p.y * N] : 0) >= best_goal)
+    return;
+  const int id = find_node(C.collapse ? make_key(p.x, p.y, p.d, kind, 0, 0, 0) : make_key(p.x, p.y, p.d, kind, v, b, nt));
+  if (id < 0)
+    return;
   Node &n = nodes[id];
   if (cost < n.cost) {
     n.cost = cost;
+    n.v = (uint8_t)v;
     n.prev = from;
     n.run = (uint16_t)run;
     n.prim = (uint8_t)prim;
@@ -268,8 +285,13 @@ static void emit(int from, bool first, bool dia, int s, int tcode, int run, cons
   const float base = nodes[from].cost;
   if (!meets(key, s, tcode))
     return;
-  const int vin = kv(key);
+  const int vin = C.collapse ? nodes[from].v : kv(key);
   const bool start_turn = first && s == 2;
+  if (C.collapse) {
+    const Seg o = seg(first, dia, s, tcode, vin, false, 5);
+    relax(from, base + o.time, run, tcode, land, land_kind, o.v, 2, 0);
+    return;
+  }
   const bool looks_ahead = s > 2 || first;
   static const int NEXT_ALL[] = {3, 4, 5, 6, 7, 8, 9, 10, 255};
   static const int NEXT_DIA[] = {7, 8, 9, 10, 11, 12};
@@ -297,7 +319,7 @@ static void emit_final_turn(int from, bool first, bool dia, int s, int tcode, in
   const uint32_t key = nodes[from].key;
   if (!meets(key, s, tcode))
     return;
-  const Seg o = seg(first, dia, s, tcode, kv(key), false, 255);
+  const Seg o = seg(first, dia, s, tcode, C.collapse ? nodes[from].v : kv(key), false, 255);
   float t = nodes[from].cost + o.time;
   if (C.count_final)
     t += seg(false, false, 3, 255, o.v, false, 255).time;
@@ -348,7 +370,7 @@ static void expand(int id) {
         const int fcnt = f + 1;
         const int s = first ? 3 + 2 * fcnt + 2 : 2 + 2 * fcnt + 2 - 1;
         if (meets(key, s, 255)) {
-          const Seg o = seg(first, false, s, 255, kv(key), false, 255);
+          const Seg o = seg(first, false, s, 255, C.collapse ? nodes[id].v : kv(key), false, 255);
           finish(id, nodes[id].cost + (C.count_final ? o.time : 0), fcnt, 255);
         }
         break;
@@ -437,6 +459,7 @@ struct Result {
   int n_nodes = 0;
   long n_edge = 0, n_exp = 0;
   int heap_max = 0;
+  bool overflow = false;
   long seg_filled = 0;
   int n_speeds = 0;
 };
@@ -455,11 +478,28 @@ static Result solve(const std::vector<point_t> &goals, int maze_size) {
     is_goal[g.x + g.y * N] = 1;
   build_open();
   if (C.astar) {
-    // 1 区画(または斜めの半区画 2 つ = 1 区画ぶんの歩数)を最高速で抜ける時間が下限
+    // 素の動き 1 個(区画を 1 つ進む)に最低かかる時間。直線は最高速で抜ける時間。ターンは
+    // 前後の直線を 1 区画ぶん取るので、ターンの時間 / (使う動きの数 + 1) も下限に入れる。
     auto &p = *C.ps;
     const float vs = p.str_map[StraightType::FastRun].v_max;
     const float vd = p.str_map[StraightType::FastRunDia].v_max;
-    const float per = std::min(p.cell_size / vs, p.cell_size * ROOT2 / 2 / vd);
+    float per = std::min(p.cell_size / vs, p.cell_size * ROOT2 / 2 / vd);
+    const auto turn_min = [&](TurnType t, int moves) {
+      for (auto *m : {&p.map, &p.map_fast}) {
+        for (auto dir : {TurnDirection::Right, TurnDirection::Left}) {
+          const float tt = C.pc->slalom_dummy(t, dir, *m);
+          if (tt > 0)
+            per = std::min(per, tt / (moves + 1));
+        }
+      }
+    };
+    turn_min(TurnType::Large, 1);
+    turn_min(TurnType::Orval, 2);
+    turn_min(TurnType::Dia45, 1);
+    turn_min(TurnType::Dia135, 2);
+    turn_min(TurnType::Dia45_2, 1);
+    turn_min(TurnType::Dia135_2, 2);
+    turn_min(TurnType::Dia90, 2);
     build_h(per);
   }
   nodes.clear();
@@ -470,9 +510,10 @@ static Result solve(const std::vector<point_t> &goals, int maze_size) {
     std::fill(table.begin(), table.end(), -1);
   }
   heap.clear();
-  best_goal = 1e30f;
+  best_goal = C.upper;
   best_prev = -1;
   n_edges = n_expand = 0;
+  g_overflow = false;
   const int st = find_node(make_key(0, 1, 0, 3, 0, 0, 0));
   nodes[st].cost = 0;
   heap_push(0, st);
@@ -487,13 +528,16 @@ static Result solve(const std::vector<point_t> &goals, int maze_size) {
     if (e.pri >= best_goal)
       break;
     expand(e.id);
+    if (g_overflow)
+      break;
   }
+  r.overflow = g_overflow;
   r.n_nodes = (int)nodes.size();
   r.n_edge = n_edges;
   r.n_exp = n_expand;
   r.seg_filled = n_seg_filled;
   r.n_speeds = (int)vlist.size();
-  if (best_prev < 0)
+  if (best_prev < 0 || g_overflow)
     return r;
   r.found = true;
   r.time = best_goal;

@@ -121,7 +121,7 @@ int main() {
   if (in["opt"] | true) {
     const int impl = in["impl"] | 1;
     const int reps = in["reps"] | 1;
-    tp::C = tp::Ctx{sim.lgc.get(), sim.pc.get(), &sim.param_set, (bool)(in["search"] | false), g_count_final, (bool)(in["astar"] | false), in["weight"] | 1.0f};
+    tp::C = tp::Ctx{sim.lgc.get(), sim.pc.get(), &sim.param_set, (bool)(in["search"] | false), g_count_final, (bool)(in["astar"] | false), in["weight"] | 1.0f, in["upper"] | 1e30f, in["node_cap"] | 0, (bool)(in["collapse"] | false)};
     double cold_ms = 0;
     if (impl == 2) {
       const auto tc0 = std::chrono::steady_clock::now();

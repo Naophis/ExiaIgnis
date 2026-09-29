@@ -157,7 +157,19 @@ PlanningTask は以下のサブシステムを内包:
 `detect_next_direction()` で前進方向を最優先し、左右を `setNextDirection2()`（= 歩数が低い同値でも更新しない）で評価、後退は `enable_back` 条件下のみ。  
 `subgoal_list` に未踏マスをキャッシュし、ゴール到達後は帰還目的地を動的切り替えします。
 
-ゴール後(`SearchMode::ALL`)のサブゴールは `Adachi::update()` → `searchGoalPosition(true, …)` で、未知を壁なしとみなした重みパターン 1 の最短経路 1 本の上の未知区画。最短走行は 5 パターン + 時間比較で経路を選ぶので、パターン 1 だけだと最短走行が使う区間を見に行かないことがある(japan2025_final で +75 ms)。サブゴールが空になった瞬間に 1 度だけ、パターン 4 → 3 → 2 でも探し直す(`subgoal_fallback_done`、2026-09-29 に旧コードのコメントアウトを解禁。旧コードは空のあいだ毎回回して帰り道の区画ごとに最大 +60 ms だった)。search_sim の 16 迷路で探索時間 +6 %、最短に届かない迷路 3 → 1 本。
+ゴール後(`SearchMode::ALL`)のサブゴールは `Adachi::update()` が選ぶ。選び方は `offset.yaml` の `search_subgoal_mode`(`Adachi::subgoal_mode`、既定 0):
+
+- **1(2026-09-29 追加。選べるが既定ではない)**: 重みパターン 2 と 4 それぞれの「未知の壁は無いものとした最短経路」(`searchGoalPosition(true, …)` が歩いた経路 = `lgc->goal_route`)を覚えておき、その上の未知区画をサブゴールにする(`Adachi::update_subgoal_by_routes()`)。表を作り直すのは、覚えた経路の上に壁が見つかったときだけ。探索で新しく分かるのは壁だけなので、塞がれない限り経路はそのまま使える。1 回の `update()` で作り直すのは 1 枚まで(`SUBGOAL_REBUILD_LIMIT`。超えたパターンは次の `update()` へ回し、それまでサブゴールを出さない)。サブゴールは毎回、覚えた経路から作り直す(持ち越さない)。
+- **0(従来。既定)**: 重みパターン 1 の経路を `update()` のたびに作り直し、経路の上の未知区画を `subgoal_list` に足していく(古いものは `clear_vector_distmap()` が 45 回で期限切れにする)。
+
+search_sim(迷路 21 本 × 走行モード 5 つ)での比較。取りこぼし = 探索後の地図で作った最短走行が、全区画既知のときより遅いケース:
+
+| 選び方 | 探索の総時間 | 取りこぼし | 表の作り直し |
+|---|---|---|---|
+| 0: パターン 1 を毎回 | 4886 s | 25 / 105(1742 ms) | 毎回 1 枚 |
+| 1: パターン 2 + 4、塞がれたときだけ | 4820 s | 9 / 105(175 ms) | 移動の 82 % は 0 枚、18 % は 1 枚 |
+
+合計では 1 のほうが良いが、迷路ごとの差が大きい: 探索は −47〜+97 s(短い 12 本 / 長い 8 本)、最短走行が速くなるのは 21 本中 4 本(平均 133 ms)で 1 本は 30 ms 遅くなり、探索が伸びた迷路で速くなるとは限らない(2016 年は +97 s で改善なし)。リターンが小さく実機でも未確認なので、既定は 0 のままにした(ユーザー判断)。パターンの組は 31 通りを総当たりして選んだ(取りこぼしは 8 件が下限)。一時入れていた「パターン 1 が尽きたら 4 → 3 → 2 で探し直す」予備は、探索が 5244 s に伸びて取りこぼし 15 件だったので外した。検討の経緯は `tools/path_sim/experiments/README.md` の実験 4・5。確認は `python3 tools/path_sim/check_search_subgoal.py`(両方のモードで、実験の結果と迷路ごとに一致するか)。**実機では未確認。**
 
 ホスト版: `tools/path_sim` の search_sim(Param Console の迷路タブの「探索」)が `adachi.cpp` / `logic.cpp` をそのまま PC でビルドして探索を再現する。`SearchController::exec()` の探索ループ・`judge_wall`・`pivot()` の手順と `run_main_mode()` の mode_num == 0 の準備は `tools/path_sim/search_main.cpp` に写しがあるので、**それらを変えたら search_main.cpp も合わせる**。
 
@@ -168,6 +180,7 @@ PlanningTask は以下のサブシステムを内包:
 | クラス | ファイル | 役割 |
 |--------|---------|------|
 | `PathCreator` | `include/action/path_creator.hpp`, `src/action/path_creator.cpp` | ベクター距離マップから `path_s` / `path_t` 配列を生成 |
+| `TimePathPlanner` | `include/action/time_path_planner.hpp`, `src/action/time_path_planner.cpp` | タイム最小の経路探索(最短走行の経路生成の本体) |
 | `MotionPlanning` | `include/action/motion_planning.hpp`, `src/action/motion_planning.cpp` | 直進・ピボット・スラロームの実行オーケストレーション |
 | `TrajectoryCreator` | `include/action/trajectory_creator.hpp`, `src/action/trajectory_creator.cpp` | `path_t` 値 → TurnType / TurnDirection 変換ヘルパー |
 | `WallOffController` | `include/action/wall_off_controller.hpp`, `src/action/wall_off_controller.cpp` | 壁補正制御ロジック |
@@ -200,7 +213,24 @@ PlanningTask は以下のサブシステムを内包:
 
 壁なし開始の `WALL_OFF` では注視側 45° LED1 が「下降→谷底→急上昇」の谷を見せる。`PillarTroughDetector` は Core1 の `SensorProcessor::update_pillar_trough()` で左右 2 本を毎 tick 更新し(旋回・超信地・停止中は再アーム)、結果を `sensing_result->pillar_l/r` に公開する。切れ目の判定は**走行距離で正規化した 2 階微分(曲率)が `curv_th` 以上を `curv_n` tick 連続**で行う。首振れや姿勢ドリフトは読みをほぼ直線に動かすので 2 階微分では符号が交互に振れるだけになり、1 階微分では紛らわしい緩い上昇を弾ける。1 階微分ルールと `far_th` 到達は保険として残してある。Core0 の `WallOffController::take_pillar_trough()` が exist=false の経路で最優先に拾い、発火位置ではなく谷底位置でアンカーして `ps_front.dist += pillar_str − (現在位置 − 谷底位置)` とする。パラメータは `offset.yaml` の `wall_off_pillar_*`。従来の絶対しきい値経路と 25mm 通過の安全網(`detect_pass_through_case2`)は残してある。ホスト検証は `tests/pillar_trough_host/run.sh`(CSV ログを渡すと全行再生)。
 
-#### PathCreator の経路最適化
+#### タイム最小の経路探索 (`TimePathPlanner`、2026-09-29)
+
+最短走行(`path_run()` で右を選んだとき)と `sim_run_time()` の経路は `MainTask::create_fast_path()` が作る。まず `TimePathPlanner::solve()` を使い、使えなかったときだけ下の「PathCreator の経路最適化」(重みパターン 1〜5 の比較)へ戻る。ボタンで中断したときは単純な経路(`path_create()` そのまま)。
+
+- 経路を「直線 + ターン」の区間の列として、区間を辺にした最短経路問題を解く。辺の重みは `PathCreator::calc_segment_time()` = `calc_goal_time()` の 1 区間ぶんそのものなので、求めた経路の `calc_goal_time()` が、作れる経路の中で最小になる。重みパターンも分岐の総当たりも使わない。
+- 節点は「ターンを終えた位置・向き・直進か斜めか・そのときの速度・次の区間への約束」。約束は `calc_segment_time()` の先読み(ターンの前後に直線があり、次が Large / Orval なら速いターン `map_fast`)を辺の重みへ入れるためのもの。
+- 辺の作り方は `convert_large_path()` / `diagonalPath()` の規則の写し(ターン 1 個 = Large、同じ向き 2 個 = Orval、交互に続く組 = 斜めで入口・出口は Dia45 か Dia135、途中の同じ向き 2 個 = Dia90)。同じ向き 3 個(その場で 270° 回る形)は扱わない。**変換の規則を変えたらここも合わせる。**
+- 出力は `path_create()` と同じ素の経路(`pc->path_s` / `path_t` / `path_size`)。呼んだ側が `convert_large_path()` / `diagonalPath()` を続けるので、走行側は変わらない。
+- メモリは `solve()` の間だけ確保する。節点の上限は空きメモリ(ヒープの上端から続いている分 − 24 KB)から 1024〜8192 の 2 の累乗で決め、1 個あたり 20 バイト + 固定 17 KB(上限 4096 で約 97 KB)。足りない・あふれたときは `NoMemory` / `Overflow` を返して従来の方法へ戻る。大会迷路 27 本 × 5 モードの実績は節点最大 3333〜3601、ヒープ最大 546、覚えた区間最大 960。
+- 実行するとコンソールに `[time_path] ok 3.419 s calc 35 ms nodes 2046/4096 heap 441 edges 11189 seg 738 mem 97 KB free 140 KB` の形で出る。`ok` 以外(`no memory` / `overflow` 等)なら従来の方法で作っている。
+- ホストでの確認は `python3 tools/path_sim/check_time_path.py`(求めた経路を変換と `calc_goal_time()` に通して同じタイムになるか、従来の方法より遅くならないか。`--cap 4096` で機体の上限を模す)。検討の経緯と数字は `tools/path_sim/experiments/README.md`。
+- 結果: 105 ケースで従来より速い経路が 11 件(最大 77 ms)、遅い経路は 0 件。計算は PC 上で 1 件 2 ms 前後(従来は 120〜280 ms)。**実機での計算時間・空きメモリは未計測。**
+
+`calc_goal_time()` は `calc_segment_time()` を区間ごとに呼んで積み上げる形にしてある(速度・加速度の選び方は `calc_segment_time()` だけを直せば、見積もりと経路探索の両方に入る)。あわせて**最後の直線(最後のターン〜ゴール)も合計に入れた**(以前は Finish の直線を足した直後に break しており、返す値に入っていなかった。21 迷路で平均 45 ms、最大 514 ms 短く出ていた)。
+
+`convert_large_path()` / `diagonalPath()` の `while (path_t[i] != 0)` は、終端が 255 で 0 が入らないため配列の先(他のメモリ)まで読み、値しだいで配列の外へ書いていた(ホストの AddressSanitizer で検出。ときどき異常終了する原因)。配列の中だけを見る形に直した(配列の中の結果は変わらない。105 ケースで変更前と一致)。
+
+#### PathCreator の経路最適化(従来の方法。いまは予備)
 
 `timebase_path_create()` では `other_route_map` に候補分岐マスを記録し、`exec_param` の1〜5パターンで `path_create_with_change()` を試して最短タイムの経路を `path_set_map` (priority_queue) から取得します。
 
@@ -210,7 +240,7 @@ PlanningTask は以下のサブシステムを内包:
 
 `go_straight_dummy()`(`calc_goal_time` の直線を 1 ms 刻みで積み上げる)は、無限ループ対策のボタン確認を計算上 5 ms(ループ 5 回)ごとにしている(以前は毎回で、1 回の path_run で数千万回 GPIO を読んでいた)。加えて、速度が 0 以下のまま距離が残ったら、ボタンを待たずに失敗(ボタンと同じ 10000)を返す(パラメータの抜けで速度 0 だと人が押すまで止まらなかった。path_sim で確認)。どちらも正常な計算の結果は変わらない(57 件と探索 3 本で一致)。
 
-ホスト版: `tools/path_sim`(Param Console の迷路タブの「経路」)が `logic.cpp` / `path_creator.cpp` / `trajectory_creator.cpp` をそのまま PC でビルドして使う。MainTask の読込関数(`load_slalom_param` ほか)は `tools/path_sim/host_common.hpp`、`path_run()` の経路部分は `tools/path_sim/main.cpp` に写しがあるので、**それらを変えたら main.cpp も合わせる**(詳細は `tools/param_tuner/webapp/CLAUDE.md` の「経路」)。
+ホスト版: `tools/path_sim`(Param Console の迷路タブの「経路」)が `logic.cpp` / `path_creator.cpp` / `time_path_planner.cpp` / `trajectory_creator.cpp` をそのまま PC でビルドして使う。MainTask の読込関数(`load_slalom_param` ほか)は `tools/path_sim/host_common.hpp`、`path_run()` の経路部分と `create_fast_path()` ほかは `tools/path_sim/main.cpp` に写しがあるので、**それらを変えたら main.cpp も合わせる**(詳細は `tools/param_tuner/webapp/CLAUDE.md` の「経路」)。
 
 ### 吸引 ESC（ESCape32 / DShot）
 

@@ -3,6 +3,7 @@
 #include "logging/logging_task.hpp"
 #include "planning/planning_task.hpp"
 #include "action/motion_planning.hpp"
+#include "action/time_path_planner.hpp"
 #include "search/logic.hpp"
 #include "search/search_controller.hpp"
 
@@ -120,6 +121,12 @@ private:
   int select_run_mode(int max_mode);
   int select_mode();
   void path_run(int idx, int idx2, int idx3);
+  // 最短走行の経路を pc->path_s / path_t に作る(変換後)。path_run() / sim_run_time() 共用。
+  // false = 経路を作れない(呼んだ側は ui_->error() して中断)
+  bool create_fast_path(bool verbose);
+  bool create_fast_path_by_time(bool &aborted);
+  bool create_fast_path_by_pattern(bool verbose);
+  bool create_simple_path();
   void sim_run_time_all();
   void sim_run_time(int mode_num, int idx, int idx2, int idx3,
                     bool dump_all);
