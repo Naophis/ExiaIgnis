@@ -24,6 +24,7 @@ CXXFLAGS := -std=gnu++20 -O2 -MMD -MP $(INCLUDES)
 FW_SRCS := $(ROOT)/src/search/logic.cpp \
            $(ROOT)/src/search/adachi.cpp \
            $(ROOT)/src/action/path_creator.cpp \
+           $(ROOT)/src/action/time_path_planner.cpp \
            $(ROOT)/src/action/trajectory_creator.cpp
 FW_OBJS := $(patsubst $(ROOT)/src/%.cpp,$(BUILD)/fw/%.o,$(FW_SRCS))
 COMMON_OBJS := $(BUILD)/host_common.o

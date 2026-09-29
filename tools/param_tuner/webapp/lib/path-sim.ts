@@ -63,8 +63,23 @@ export interface PathSimResult {
   suction?: number;
   cell_size?: number;
   start_offset?: number;
-  selected_type?: number; // -1 = 候補がすべて失敗して単純な経路 / left
-  candidates?: PathCandidate[];
+  // 経路を作った方法。time = タイム最小の経路探索 / patterns = 重みパターン 1〜5 の比較(予備)/
+  // simple = path_create の経路そのまま
+  method_used?: "time" | "patterns" | "simple";
+  // タイム最小の経路探索(TimePathPlanner)の結果。result が ok 以外なら予備へ戻っている
+  planner?: {
+    result: string;
+    time: number;
+    ms: number; // 計算時間(PC 上)
+    nodes: number;
+    node_cap: number;
+    heap_max: number;
+    edges: number;
+    seg_cached: number;
+    mem_bytes: number;
+  };
+  selected_type?: number; // -1 = 候補がすべて失敗して単純な経路 / left / タイム最小の経路探索
+  candidates?: PathCandidate[]; // 重みパターンの比較をしたときだけ
   path_s?: number[];
   path_t?: number[];
   segments?: PathSegment[];

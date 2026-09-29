@@ -6,6 +6,8 @@
 // (読込関数は host_common.hpp の MainTaskCopy)。写し元を変えたらここも合わせること:
 //   run_main_mode() の lgc 初期化 + read_maze_data()  src/main/main_task_run*.cpp
 //   path_run() の exec_path_running() より前      src/main/main_task_run.cpp
+//   create_fast_path() / create_fast_path_by_time() / create_fast_path_by_pattern() /
+//   create_simple_path()                           src/main/main_task_run.cpp
 //
 // 入力(stdin、JSON 1 個):
 //   files     LittleFS と同じ名前 → 中身の JSON 文字列("hardware.txt", "t_1200.hf" …)。
@@ -13,8 +15,11 @@
 //   map       ファームの並び map[x + y * n] の 1 バイト(/maze.txt と同じ)。n < maze_size なら
 //             左下に置いて外側を壁で埋める
 //   exec      run_prf の exec_prof の番号(メインモードの mode_num - 2)
-//   direction "right" = タイムで候補を比べる / "left" = 単純な経路
+//   direction "right" = タイム最小の経路 / "left" = 単純な経路
 //             (path_run の ui_->select_direction())
+//   method    "time"(省略時。機体と同じ: タイム最小の経路探索、使えなければ重みパターンの比較)/
+//             "patterns"(従来の重みパターン 1〜5 の比較だけ。比較・確認用)
+//   node_cap  タイム最小の経路探索の節点の上限(省略時 32768。機体は空きメモリから 1024〜8192)
 //   goals     省略時は system.txt の goals
 // 出力: stdout に結果の JSON 1 行。ファームの printf は stderr(実機のコンソールと同じ内容)。
 
@@ -23,6 +28,7 @@
 
 #include "host_common.hpp"
 #include "include/action/path_creator.hpp"
+#include "include/action/time_path_planner.hpp"
 #include "include/ui.hpp"
 
 
@@ -57,7 +63,15 @@ public:
       lgc->set_native_wall_data(i, map[i]);
   }
 
-  // path_run() が失敗で ui_->error() して return する経路は false。
+  // タイム最小の経路探索の結果(ファームは printf するだけ)
+  TimePathPlanner::Stats planner_stats;
+  std::string planner_result; // "" = 使っていない
+  double planner_ms = 0;
+  std::string method_used; // "time" / "patterns" / "simple"
+  bool use_time_path = true;
+  int node_cap = 0;
+
+  // create_simple_path()
   bool simple_path(const char *what) {
     pc->other_route_map.clear();
     if (!pc->path_create(false)) {
@@ -66,7 +80,86 @@ public:
     }
     pc->convert_large_path(true);
     pc->diagonalPath(true, true);
+    method_used = "simple";
     return true;
+  }
+
+  // create_fast_path_by_time()
+  bool fast_path_by_time(bool &aborted) {
+    TimePathPlanner planner;
+    planner.node_cap_request = node_cap;
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto res = planner.solve(*pc, param_set);
+    planner_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    planner_stats = planner.stats;
+    planner_result = TimePathPlanner::result_str(res);
+    const auto &st = planner.stats;
+    aborted = res == TimePathPlanner::Result::Aborted;
+    printf("[time_path] %s  %0.3f s  calc %d ms  nodes %d/%d  heap %d  edges %d  "
+           "seg %d  mem %d KB  free %d KB\n",
+           TimePathPlanner::result_str(res), st.time, (int)planner_ms, st.nodes,
+           st.node_cap, st.heap_max, st.edges, st.seg_cached,
+           st.mem_bytes / 1024, st.free_bytes / 1024);
+    if (res != TimePathPlanner::Result::Ok)
+      return false;
+    pc->convert_large_path(true);
+    pc->diagonalPath(true, true);
+    method_used = "time";
+    return true;
+  }
+
+  // create_fast_path_by_pattern()
+  bool fast_path_by_pattern() {
+    for (int i = 1; i <= 5; i++) {
+      const auto t_type = std::chrono::steady_clock::now();
+      lgc->set_param_num(i);
+      pc->other_route_map.clear();
+      const bool res = pc->path_create(false);
+      printf("other route size = %d\n", (int)pc->other_route_map.size());
+      if (!res) {
+        error = "path_create に失敗 (param_num=" + std::to_string(i) + ")";
+        return false;
+      }
+      pc->convert_large_path(true);
+      pc->diagonalPath(true, true);
+      // (ファームの `if (i == 0)` のブロックはループが 1 からなので通らない)
+      path_set_t p;
+      p.type = i;
+      p.time = 10000;
+      pc->timebase_path_create(false, param_set, p);
+      pc->path_set_map.push(p);
+      // 重みパターンごとの計算時間(PC 上。どのパターンに時間がかかっているかの目安)
+      type_ms[i] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_type).count();
+    }
+    // 先頭に最適な経路を持ってくる
+    const auto top_p = pc->path_set_map.top();
+    while (!pc->path_set_map.empty()) {
+      candidates.push_back(pc->path_set_map.top());
+      pc->path_set_map.pop();
+    }
+    if (top_p.result) { //成功
+      pc->path_s.assign(top_p.path_s.begin(), top_p.path_s.end());
+      pc->path_t.assign(top_p.path_t.begin(), top_p.path_t.end());
+      selected_type = top_p.type;
+      method_used = "patterns";
+      return true;
+    }
+    //失敗
+    return simple_path("候補がすべて失敗した後");
+  }
+
+  // create_fast_path()
+  bool fast_path() {
+    bool aborted = false;
+    if (use_time_path) {
+      if (fast_path_by_time(aborted))
+        return true;
+      if (aborted) {
+        lgc->set_param_num(1);
+        return simple_path("中断の後");
+      }
+    }
+    return fast_path_by_pattern();
   }
 
   bool path_run(int idx, int idx2, int idx3, bool right) {
@@ -78,42 +171,9 @@ public:
       return false;
     }
     if (right) {
-      //速度ベース経路導出
-      for (int i = 1; i <= 5; i++) {
-        const auto t_type = std::chrono::steady_clock::now();
-        lgc->set_param_num(i);
-        pc->other_route_map.clear();
-        const bool res = pc->path_create(false);
-        printf("other route size = %d\n", (int)pc->other_route_map.size());
-        if (!res) {
-          error = "path_create に失敗 (param_num=" + std::to_string(i) + ")";
-          return false;
-        }
-        pc->convert_large_path(true);
-        pc->diagonalPath(true, true);
-        // (ファームの `if (i == 0)` のブロックはループが 1 からなので通らない)
-        path_set_t p;
-        p.type = i;
-        p.time = 10000;
-        pc->timebase_path_create(false, param_set, p);
-        pc->path_set_map.push(p);
-        // 重みパターンごとの計算時間(PC 上。どのパターンに時間がかかっているかの目安)
-        type_ms[i] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_type).count();
-      }
-      // 先頭に最適な経路を持ってくる
-      const auto top_p = pc->path_set_map.top();
-      while (!pc->path_set_map.empty()) {
-        candidates.push_back(pc->path_set_map.top());
-        pc->path_set_map.pop();
-      }
-      if (top_p.result) { //成功
-        pc->path_s.assign(top_p.path_s.begin(), top_p.path_s.end());
-        pc->path_t.assign(top_p.path_t.begin(), top_p.path_t.end());
-        selected_type = top_p.type;
-      } else { //失敗
-        if (!simple_path("候補がすべて失敗した後"))
-          return false;
-      }
+      // タイム最小の経路(だめなら従来の重みパターン 1〜5 の比較へ戻る)
+      if (!fast_path())
+        return false;
     } else {
       if (!simple_path("left"))
         return false;
@@ -214,6 +274,8 @@ int main() {
 
   const int exec = in["exec"] | 0;
   const bool right = std::string(in["direction"] | "right") != "left";
+  sim.use_time_path = std::string(in["method"] | "time") != "patterns";
+  sim.node_cap = in["node_cap"] | 0;
   out["exec"]["index"] = exec;
   out["direction"] = right ? "right" : "left";
   if (exec < 0 || exec >= (int)sim.exec_param_list.size()) {
@@ -264,6 +326,19 @@ int main() {
   out["cell_size"] = sim.param_set.cell_size;
   out["start_offset"] = sim.param_set.start_offset;
   out["selected_type"] = sim.selected_type;
+  out["method_used"] = sim.method_used;
+  if (!sim.planner_result.empty()) {
+    JsonObject pl = out["planner"].to<JsonObject>();
+    pl["result"] = sim.planner_result;
+    pl["time"] = sim.planner_stats.time;
+    pl["ms"] = sim.planner_ms;
+    pl["nodes"] = sim.planner_stats.nodes;
+    pl["node_cap"] = sim.planner_stats.node_cap;
+    pl["heap_max"] = sim.planner_stats.heap_max;
+    pl["edges"] = sim.planner_stats.edges;
+    pl["seg_cached"] = sim.planner_stats.seg_cached;
+    pl["mem_bytes"] = sim.planner_stats.mem_bytes;
+  }
   JsonArray cands = out["candidates"].to<JsonArray>();
   for (const auto &c : sim.candidates) {
     JsonObject o = cands.add<JsonObject>();

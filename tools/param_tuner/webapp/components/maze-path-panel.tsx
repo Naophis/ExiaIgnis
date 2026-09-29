@@ -172,9 +172,9 @@ export function MazePathPanel({
             size="xs"
             variant={direction === "right" ? "default" : "outline"}
             onClick={() => onDirectionChange("right")}
-            title="機体で右を選んだとき: set_param_num 1〜5 で候補を作り、calc_goal_time が最短のものを使う"
+            title="機体で右を選んだとき: タイム最小の経路探索(calc_goal_time と同じ計算を重みにした最短経路)。使えないときだけ、重みパターン 1〜5 の候補の比較へ戻る"
           >
-            右: タイム比較
+            右: タイム最小
           </Button>
           <Button
             size="xs"
@@ -203,16 +203,35 @@ export function MazePathPanel({
         <div className="flex flex-col gap-0.5 px-1.5 pb-1">
           <div className="flex flex-wrap items-baseline gap-x-2">
             <span className="text-sm font-semibold">{result.goal_time?.toFixed(3)} s</span>
-            <span className="text-muted-foreground" title="PathCreator::calc_goal_time() の値(実機が走行前に出す仮想タイムと同じ計算)">
+            <span
+              className="text-muted-foreground"
+              title="PathCreator::calc_goal_time() の値(実機が走行前に出す仮想タイムと同じ計算)。最後の直線(最後のターン〜ゴール)を含む"
+            >
               ゴールタイム(見積もり)
             </span>
             <span className="text-muted-foreground">
               吸引 {result.suction} · ターン {geometry?.turns.length ?? 0}
             </span>
+            {direction === "right" && result.planner && result.method_used === "time" && (
+              <span
+                className="text-muted-foreground"
+                title={`タイム最小の経路探索(TimePathPlanner)。計算は PC 上の時間\n節点 ${result.planner.nodes} / 辺 ${result.planner.edges} / ヒープ最大 ${result.planner.heap_max} / 覚えた区間 ${result.planner.seg_cached}\n機体の節点の上限は空きメモリから 1024〜8192`}
+              >
+                探索 {result.planner.ms.toFixed(1)} ms · 節点 {result.planner.nodes}
+              </span>
+            )}
+            {direction === "right" && result.planner && result.method_used !== "time" && (
+              <span className="text-accent-gold" title="機体も同じ条件なら、従来の重みパターン 1〜5 の比較で経路を作る">
+                タイム最小の探索が使えず({result.planner.result})→ 従来の方法
+              </span>
+            )}
           </div>
           {direction === "right" && (result.candidates?.length ?? 0) > 0 && (
             <div className="flex flex-wrap items-center gap-1">
-              <span className="text-muted-foreground" title="set_param_num の番号と、その候補の calc_goal_time。クリックで迷路に重ねる">
+              <span
+                className="text-muted-foreground"
+                title="従来の方法で作った候補: set_param_num の番号と、その候補の calc_goal_time。クリックで迷路に重ねる"
+              >
                 候補
               </span>
               {result.candidates!.map((c) => {

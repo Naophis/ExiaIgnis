@@ -7,6 +7,11 @@
 迷路は `tools/param_tuner/maze_data`・`profile`・`maze_logs` から重複(壁の違い 3 枚以下)を除いた 21 本
 (`px/ds.py`)、走行モードは run_prf の 1 / 3 / 5 / 11 / 16(`px/ev.py` の `EXECS`)= 105 ケース。
 
+**その後(同日)**: ここの結果をもとに、ファームへ `TimePathPlanner`(`src/action/time_path_planner.cpp`)を入れ、
+`calc_goal_time()` に最後の直線を足した。このフォルダは検討時点の記録で、数字は変更前のファームに対するもの。
+いまのファームでは `calc_goal_time()` が最後の直線を含むので、`opt.py` の「ファームと同じ数え方」
+(`count_final: false`)の比較は合わなくなる。ファームの探索の確認は `../check_time_path.py` を使う。
+
 ## 使い方
 
 ```bash

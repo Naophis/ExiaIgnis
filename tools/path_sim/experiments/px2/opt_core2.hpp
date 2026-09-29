@@ -100,6 +100,7 @@ static Seg seg_raw(bool first, bool dia, int s, int tcode, int vin, bool FN, int
 static const int S_MAX = 80, V_MAX = 16;
 static Seg seg_tab[2][S_MAX][14][V_MAX][2];
 static bool seg_has[2][S_MAX][14][V_MAX][2];
+static long n_seg_filled = 0;
 static inline int tc_i(int tcode) { return tcode == 255 ? 13 : tcode; }
 static inline Seg seg(bool first, bool dia, int s, int tcode, int vin, bool FN, int next_tcode) {
   if (first)
@@ -109,6 +110,7 @@ static inline Seg seg(bool first, bool dia, int s, int tcode, int vin, bool FN, 
   if (!has) {
     e = seg_raw(false, dia, s, tcode, vin, FN, 255);
     has = true;
+    n_seg_filled++;
   }
   return e;
 }
@@ -435,12 +437,15 @@ struct Result {
   int n_nodes = 0;
   long n_edge = 0, n_exp = 0;
   int heap_max = 0;
+  long seg_filled = 0;
+  int n_speeds = 0;
 };
 static param_set_t *tab_ps = nullptr;
 static Result solve(const std::vector<point_t> &goals, int maze_size) {
   N = maze_size;
   if (tab_ps != C.ps) { // 走行パラメータが変わったら表を作り直す
     memset(seg_has, 0, sizeof(seg_has));
+    n_seg_filled = 0;
     vlist.clear();
     vidx_of(0.0f);
     tab_ps = C.ps;
@@ -486,6 +491,8 @@ static Result solve(const std::vector<point_t> &goals, int maze_size) {
   r.n_nodes = (int)nodes.size();
   r.n_edge = n_edges;
   r.n_exp = n_expand;
+  r.seg_filled = n_seg_filled;
+  r.n_speeds = (int)vlist.size();
   if (best_prev < 0)
     return r;
   r.found = true;

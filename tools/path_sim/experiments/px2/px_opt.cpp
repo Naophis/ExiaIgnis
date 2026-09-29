@@ -138,6 +138,8 @@ int main() {
         r2 = tp::solve(goals, sim.sys_.maze_size);
       r.found = r2.found; r.time = r2.time; r.moves = r2.moves; r.n_nodes = r2.n_nodes; r.n_edge = r2.n_edge;
       exp2 = r2.n_exp;
+      out["seg_filled"] = r2.seg_filled;
+      out["n_speeds"] = r2.n_speeds;
       heap2 = r2.heap_max;
     } else {
       r = opt_solve(goals, sim.sys_.maze_size);
