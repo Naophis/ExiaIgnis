@@ -9,7 +9,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { MazePathPanel } from "@/components/maze-path-panel";
-import { MazeSearchPanel } from "@/components/maze-search-panel";
+import { MazeSearchPanel, ROUTE_COLORS, ROUTE_PATTERNS } from "@/components/maze-search-panel";
 import type { MazeContent, MazeFileInfo, MazeGroup } from "@/lib/maze";
 import { buildPathGeometry, pathD, type Pt } from "@/lib/maze-path";
 import { usePathSim } from "@/lib/use-path-sim";
@@ -49,8 +49,10 @@ const MARGIN_R = 0.3;
 const WALL_WIDTH = 0.12;
 const POST_SIZE = 0.16;
 const PATH_COLOR = "oklch(0.82 0.13 230)";
-// 探索: 足立法が見ている候補の経路
-const ROUTE_COLOR = "oklch(0.74 0.19 330)";
+// 探索: 足立法が見ている候補の経路。1 = ファームが使う重みパターン、2〜4 = 比較用
+const ROUTE_COLOR = ROUTE_COLORS[1];
+// 重なった経路が見分けられるように、パターンごとに少しずらして描く
+const ROUTE_SHIFT: Record<number, number> = { 1: 0, 2: 0.13, 3: -0.13, 4: 0.26 };
 const ROUTE_STEP: Record<string, Pt> = { N: [0, 1], E: [1, 0], W: [-1, 0], S: [0, -1] };
 const ROUTE_FLAG: Record<string, number> = { N: 0x10, E: 0x20, W: 0x40, S: 0x80 };
 // Direction の値(N=1 / E=2 / W=4 / S=8)→ 区画単位の向き
@@ -179,8 +181,8 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
   const defaultSource = doc?.goals ? "ファイルのゴール" : autoGoal ? "自動検出" : "system.yaml";
   const pathSim = usePathSim(pathOn && doc !== null, walls, goals);
   const searchSim = useSearchSim(searchOn && doc !== null, walls, goals);
-  // 探索: 足立法が見ている候補の経路とサブゴールを重ねるか
-  const [showRoute, setShowRoute] = useState(true);
+  // 探索: 重ねる候補の経路(重みパターンの番号。1 = ファームが使うもの + サブゴール)
+  const [shownRoutes, setShownRoutes] = useState<number[]>([1]);
   const searchResult = searchOn && searchSim.result?.ok ? searchSim.result : null;
   const nSteps = searchResult?.steps?.length ?? 0;
   const step = nSteps === 0 ? 0 : stepRaw === null ? nSteps - 1 : Math.min(stepRaw, nSteps - 1);
@@ -628,24 +630,27 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
     const robot = `M${tip[0]} ${tip[1]}L${l[0]} ${l[1]}L${r[0]} ${r[1]}Z`;
     const next = step + 1 < nSteps ? at(steps[step + 1]) : null;
     // 候補の経路: 区画の中心をつなぐ。通る壁が未知の区間は別の線にする(そこがサブゴールの元)
-    let routeKnown = "";
-    let routeUnknown = "";
-    let routeUnknownCount = 0;
-    const route = searchSim.routes[step] ?? "";
-    let cx = 0;
-    let cy = 0;
-    for (const ch of route) {
-      const d = ROUTE_STEP[ch];
-      if (!d || cx < 0 || cy < 0 || cx >= size || cy >= size) break;
-      const unknown = (map[cx + cy * M] & ROUTE_FLAG[ch]) === 0;
-      const seg1 = `M${cx + 0.5} ${size - cy - 0.5}L${cx + d[0] + 0.5} ${size - (cy + d[1]) - 0.5}`;
-      if (unknown) {
-        routeUnknown += seg1;
-        routeUnknownCount++;
-      } else routeKnown += seg1;
-      cx += d[0];
-      cy += d[1];
-    }
+    const routeLines = ROUTE_PATTERNS.map((pn) => {
+      let known = "";
+      let unknown = "";
+      let unknownCount = 0;
+      const route = searchSim.routes[step]?.[pn] ?? "";
+      const o = ROUTE_SHIFT[pn] ?? 0;
+      let cx = 0;
+      let cy = 0;
+      for (const ch of route) {
+        const d = ROUTE_STEP[ch];
+        if (!d || cx < 0 || cy < 0 || cx >= size || cy >= size) break;
+        const seg1 = `M${cx + 0.5 + o} ${size - cy - 0.5 + o}L${cx + d[0] + 0.5 + o} ${size - (cy + d[1]) - 0.5 + o}`;
+        if ((map[cx + cy * M] & ROUTE_FLAG[ch]) === 0) {
+          unknown += seg1;
+          unknownCount++;
+        } else known += seg1;
+        cx += d[0];
+        cy += d[1];
+      }
+      return { pn, known, unknown, unknownCount, len: route.length };
+    });
     let subgoalCells = "";
     for (const i of searchSim.subgoals[step] ?? []) {
       const x = i % M;
@@ -660,10 +665,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
       robot,
       from: [rx, size - ry] as Pt,
       next: next ? ([next[0], size - next[1]] as Pt) : null,
-      routeKnown,
-      routeUnknown,
-      routeLen: route.length,
-      routeUnknownCount,
+      routeLines,
       subgoalCells,
     };
   }, [searchResult, searchSim.maps, searchSim.routes, searchSim.subgoals, step, nSteps, size]);
@@ -733,12 +735,20 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
             fill="none"
           />
           <path d={posts} fill="var(--muted-foreground)" />
-          {searchView && showRoute && (
+          {searchView && shownRoutes.length > 0 && (
             <g pointerEvents="none" strokeLinecap="round" strokeLinejoin="round" fill="none">
-              {/* 候補の経路: 既知の区間は実線、通る壁が未知の区間は太い破線 */}
-              <path d={searchView.routeKnown} stroke={ROUTE_COLOR} strokeOpacity={0.75} strokeWidth={0.1} />
-              <path d={searchView.routeUnknown} stroke={ROUTE_COLOR} strokeWidth={0.16} strokeDasharray="0.02 0.3" />
-              <path d={searchView.subgoalCells} fill={ROUTE_COLOR} fillOpacity={0.85} stroke="oklch(0.12 0.015 250)" strokeWidth={0.03} />
+              {/* 候補の経路: 既知の区間は実線、通る壁が未知の区間は太い点線。比較用(2〜4)は細く */}
+              {searchView.routeLines
+                .filter((r) => shownRoutes.includes(r.pn))
+                .map((r) => (
+                  <g key={r.pn} stroke={ROUTE_COLORS[r.pn]}>
+                    <path d={r.known} strokeOpacity={0.75} strokeWidth={r.pn === 1 ? 0.1 : 0.07} />
+                    <path d={r.unknown} strokeWidth={r.pn === 1 ? 0.16 : 0.12} strokeDasharray="0.02 0.3" />
+                  </g>
+                ))}
+              {shownRoutes.includes(1) && (
+                <path d={searchView.subgoalCells} fill={ROUTE_COLOR} fillOpacity={0.85} stroke="oklch(0.12 0.015 250)" strokeWidth={0.03} />
+              )}
             </g>
           )}
           {searchView && (
@@ -1080,10 +1090,9 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
                     onSpeed={setPlaySpeed}
                     knownCells={searchView?.knownCells ?? 0}
                     totalCells={size * size}
-                    showRoute={showRoute}
-                    onShowRoute={setShowRoute}
-                    routeLen={searchView?.routeLen ?? 0}
-                    routeUnknown={searchView?.routeUnknownCount ?? 0}
+                    shownRoutes={shownRoutes}
+                    onShownRoutes={setShownRoutes}
+                    routeInfo={searchView?.routeLines ?? []}
                   />
                 </ResizablePanel>
               </ResizablePanelGroup>

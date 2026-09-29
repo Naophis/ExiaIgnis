@@ -53,6 +53,8 @@ struct Step {
   // 足立法が見ている候補の経路と、サブゴールの区画(前の判断から変わったときだけ入れる)
   bool has_route = false;
   std::string route; // スタート (0,0) からの向きの列(N / E / S / W)。空 = 候補なし
+  // 比較用: 重みパターン 2〜4 ならどの経路を見るか(ファームは使わない)。変わったものだけ
+  std::vector<std::pair<int, std::string>> other_routes;
   bool has_subgoals = false;
   std::vector<int> subgoal_cells; // x + y * N
 };
@@ -75,6 +77,9 @@ public:
   std::vector<uint8_t> snapshot;
   // 画面に出す「候補の経路」(Adachi::update() が作った表から引いた経路)。update() のたびに取る
   std::string cur_route, sent_route;
+  // 比較用の重みパターン 2〜4 の経路(ファームのサブゴール選びはパターン 1 だけ)
+  static constexpr int OTHER_PATTERNS[3] = {2, 3, 4};
+  std::string cur_other[3], sent_other[3];
   std::vector<int> sent_subgoals;
   std::string end_reason;
   double finish_time = 0;
@@ -237,10 +242,8 @@ public:
   // 同じ歩き方の写しで、足立法がいま「未知の壁は無いものとして最短」と見ている経路を取る
   // (この上の未知区画がサブゴールになる)。ゴール前は表を作らないので空。
   // 写し元: MazeSolverBaseLgc::searchGoalPosition()(src/search/logic.cpp)
-  void capture_route() {
-    cur_route.clear();
-    if (!(adachi->goal_step && adachi->sm == SearchMode::ALL))
-      return;
+  // いま lgc にある表(vector_dist)を、searchGoalPosition() と同じ歩き方でたどる
+  std::string walk_route() {
     Direction next_dir = Direction::North;
     Direction now_dir = Direction::North;
     int x = 0, y = 1;
@@ -282,7 +285,30 @@ public:
       else
         break;
     }
-    cur_route = r;
+    return r;
+  }
+
+  void capture_route() {
+    cur_route.clear();
+    for (auto &r : cur_other)
+      r.clear();
+    if (!(adachi->goal_step && adachi->sm == SearchMode::ALL))
+      return;
+    cur_route = walk_route(); // ファームが update() で作った表(重みパターン 1)
+    // 比較用: ほかの重みパターンの表を作ってたどる。最後にパターン 1 の表を作り直して、
+    // lgc をファームが update() した直後と同じ状態へ戻す(次の update() が前の表を見るため)
+    std::unordered_map<unsigned int, unsigned char> tmp;
+    for (int i = 0; i < 3; i++) {
+      tmp.clear();
+      lgc->set_param_num(OTHER_PATTERNS[i]);
+      lgc->set_param();
+      lgc->searchGoalPosition(true, tmp);
+      cur_other[i] = walk_route();
+    }
+    tmp = adachi->subgoal_list;
+    lgc->set_param_num(1);
+    lgc->set_param();
+    lgc->searchGoalPosition(true, tmp);
   }
 
   void record(const ego_t &from, char motion) {
@@ -298,6 +324,12 @@ public:
       st.has_route = true;
       st.route = cur_route;
       sent_route = cur_route;
+    }
+    for (int i = 0; i < 3; i++) {
+      if (cur_other[i] != sent_other[i] || steps.empty()) {
+        st.other_routes.emplace_back(OTHER_PATTERNS[i], cur_other[i]);
+        sent_other[i] = cur_other[i];
+      }
     }
     std::vector<int> sg;
     for (const auto &kv : adachi->subgoal_list)
@@ -490,6 +522,11 @@ int main() {
     o["sg"] = st.subgoals;
     if (st.has_route)
       o["r"] = st.route;
+    if (!st.other_routes.empty()) {
+      JsonObject rp = o["rp"].to<JsonObject>();
+      for (const auto &[pn, r] : st.other_routes)
+        rp[std::to_string(pn)] = r;
+    }
     if (st.has_subgoals) {
       JsonArray sg = o["s"].to<JsonArray>();
       for (const int v : st.subgoal_cells)

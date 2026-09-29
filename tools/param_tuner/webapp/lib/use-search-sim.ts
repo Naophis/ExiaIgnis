@@ -53,14 +53,19 @@ export function useSearchSim(enabled: boolean, walls: number[], goals: Cell[]) {
   // 各ステップの候補の経路とサブゴール(変わったステップにだけ入っているので、前から引き継ぐ)
   const { routes, subgoals } = useMemo(() => {
     const steps = result?.ok ? (result.steps ?? []) : [];
-    const routes: string[] = [];
+    // routes[i][p] = ステップ i での重みパターン p の経路(1 = ファームが使うもの、2〜4 = 比較用)
+    const routes: Record<number, string>[] = [];
     const subgoals: number[][] = [];
-    let r = "";
+    let cur: Record<number, string> = { 1: "", 2: "", 3: "", 4: "" };
     let sg: number[] = [];
     for (const st of steps) {
-      if (st.r !== undefined) r = st.r;
+      if (st.r !== undefined || st.rp !== undefined) {
+        cur = { ...cur };
+        if (st.r !== undefined) cur[1] = st.r;
+        for (const [k, v] of Object.entries(st.rp ?? {})) cur[Number(k)] = v;
+      }
       if (st.s !== undefined) sg = st.s;
-      routes.push(r);
+      routes.push(cur);
       subgoals.push(sg);
     }
     return { routes, subgoals };

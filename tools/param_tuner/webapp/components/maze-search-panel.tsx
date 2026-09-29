@@ -34,6 +34,20 @@ const END_LABEL: Record<string, string> = {
 // Direction の値 → 矢印
 export const DIR_ARROW: Record<number, string> = { 1: "↑", 2: "→", 4: "←", 8: "↓" };
 const SPEEDS = [2, 5, 20, 60];
+// 候補の経路の重みパターン。1 = ファームがサブゴール選びに使うもの、2〜4 = 比較用
+export const ROUTE_PATTERNS = [1, 2, 3, 4];
+export const ROUTE_COLORS: Record<number, string> = {
+  1: "oklch(0.74 0.19 330)", // マゼンタ
+  2: "oklch(0.8 0.15 200)", // 水色
+  3: "oklch(0.82 0.16 95)", // 黄
+  4: "oklch(0.78 0.19 145)", // 緑
+};
+const ROUTE_LABEL: Record<number, string> = {
+  1: "直進 7:2:1(ファームが使う)",
+  2: "歩数(全部 1)",
+  3: "距離(直進・斜めとも続けても同じ)",
+  4: "直進 7:3:2",
+};
 
 export function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -52,10 +66,9 @@ interface Props {
   onSpeed: (v: number) => void;
   knownCells: number; // 現在のステップで 4 方向とも分かっている区画の数
   totalCells: number;
-  showRoute: boolean; // 候補の経路とサブゴールを迷路に重ねるか
-  onShowRoute: (v: boolean) => void;
-  routeLen: number; // 現在のステップの候補の経路の長さ(区画。0 = 候補なし)
-  routeUnknown: number; // そのうち、通る壁が未知の区間の数
+  shownRoutes: number[]; // 迷路に重ねる候補の経路(重みパターンの番号)
+  onShownRoutes: (v: number[]) => void;
+  routeInfo: { pn: number; len: number; unknownCount: number }[]; // 現在のステップの経路の長さと、通る壁が未知の区間の数
 }
 
 export function MazeSearchPanel({
@@ -69,10 +82,9 @@ export function MazeSearchPanel({
   onSpeed,
   knownCells,
   totalCells,
-  showRoute,
-  onShowRoute,
-  routeLen,
-  routeUnknown,
+  shownRoutes,
+  onShownRoutes,
+  routeInfo,
 }: Props) {
   const ok = result?.ok === true;
   const steps = useMemo(() => (ok ? (result.steps ?? []) : []), [ok, result]);
@@ -157,17 +169,30 @@ export function MazeSearchPanel({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => onShowRoute(!showRoute)}
+        <div
+          className="flex items-center gap-0.5"
           title={
-            "足立法がいま見ている候補の経路を重ねる(ゴール後)。未知の壁は無いものとした重みパターン 1 の最短経路で、この上の未知区画がサブゴールになる\n" +
-            "実線 = 既知の区間 / 点線 = 通る壁が未知の区間 / ◆ = サブゴール(前の経路から持ち越したものも含む)"
+            "候補の経路を重ねる(ゴール後)。未知の壁は無いものとした、重みパターンごとの最短経路\n" +
+            "実線 = 既知の区間 / 点線 = 通る壁が未知の区間 / ◆ = サブゴール(1 と一緒に出る。前の経路から持ち越したものも含む)\n" +
+            ROUTE_PATTERNS.map((pn) => `${pn}: ${ROUTE_LABEL[pn]}`).join("\n")
           }
-          className={`rounded border px-1 text-[10px] ${showRoute ? "border-[oklch(0.74_0.19_330)] text-[oklch(0.74_0.19_330)]" : "border-border text-muted-foreground hover:bg-muted"}`}
         >
-          候補
-        </button>
+          <span className="text-[10px] text-muted-foreground">候補</span>
+          {ROUTE_PATTERNS.map((pn) => {
+            const on = shownRoutes.includes(pn);
+            return (
+              <button
+                key={pn}
+                type="button"
+                onClick={() => onShownRoutes(on ? shownRoutes.filter((v) => v !== pn) : [...shownRoutes, pn])}
+                style={on ? { borderColor: ROUTE_COLORS[pn], color: ROUTE_COLORS[pn] } : undefined}
+                className={`rounded border px-1 font-mono text-[10px] ${on ? "" : "border-border text-muted-foreground hover:bg-muted"}`}
+              >
+                {pn}
+              </button>
+            );
+          })}
+        </div>
         {busy && <span className="text-muted-foreground">計算中…</span>}
       </div>
       {ok && steps.length > 0 && (
@@ -195,7 +220,15 @@ export function MazeSearchPanel({
           <span className="text-muted-foreground">
             {" "}
             · 既知 {knownCells}/{totalCells} 区画{cur.g ? ` · ゴール後(残りサブゴール ${cur.sg})` : ""}
-            {cur.g && routeLen > 0 ? ` · 候補 ${routeLen}(未知 ${routeUnknown})` : ""}
+            {cur.g &&
+              routeInfo
+                .filter((r) => shownRoutes.includes(r.pn) && r.len > 0)
+                .map((r) => (
+                  <span key={r.pn} style={{ color: ROUTE_COLORS[r.pn] }}>
+                    {" "}
+                    · 候補{r.pn} {r.len}(未知 {r.unknownCount})
+                  </span>
+                ))}
           </span>
         </div>
       )}
