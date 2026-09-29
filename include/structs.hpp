@@ -114,6 +114,10 @@ typedef struct {
   float v_l = 0;
   float v_r_old = 0;
   float v_l_old = 0;
+  // 位置の差分そのものの車輪速度(1ms の中央の値)。距離の積分に使う。
+  // enc_v_lead=0 なら v_r/v_l と同じ値。
+  float v_r_dist = 0;
+  float v_l_dist = 0;
   float v_c = 0;
   float filter_v = 0;
 
@@ -1367,6 +1371,12 @@ typedef struct {
   char torque_mode = 0;
   char enable_kalman_gyro = 0;
   char enable_kalman_encoder = 0;
+  // 車輪速度を planning が使う時刻まで先読みする(2026-09-29、sensing_task.cpp)。
+  // 1ms の位置差分の速度は読んだ時刻の 0.5ms 前の値で、planning はそれを約 600us
+  // 後に使う。1 のとき制御と推定に渡す v_l/v_r に「車輪ごとの目標加速度(並進 ±
+  // 目標角加速度 × tread/2) × (dt/2 + 読んでから次の planning tick までの時間)」を
+  // 足す。距離の積分は差分のまま(ego.v_l_dist/v_r_dist)。0 = 従来どおり。
+  char enc_v_lead = 0;
   char enable_mpc = 0;
   float dia90_offset = 0;
   kanayama_t kanayama;

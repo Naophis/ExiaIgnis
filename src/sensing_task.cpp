@@ -711,21 +711,46 @@ SensingTask::read_spi_sensors() {
   auto tmp_l_v =
       ABS(calc_enc_v(enc_l_c, se->encoder.left_old, pt->ego.kf_v_l.dt));
 
+  // 車輪速度を planning が使う時刻まで先読みする(param->enc_v_lead、2026-09-29)。
+  // 1ms の位置差分で求めた速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、
+  // さらに planning はセンシングより約 600us 後の tick でそれを使う
+  // (PlanningTask::start_irq)。planning の時刻を基準にすると、加減速中は
+  // 直進 −43mm/s、旋回の出入り −56mm/s 遅れていた(ログ 12 本 × 左右)。
+  // 車輪ごとの目標加速度(並進 ± 目標角加速度 × tread/2) × (dt/2 + 読んでから
+  // 次の planning tick までの時間) を足すと +1〜4mm/s。目標加速度はノイズが無い
+  // ので巡航中のノイズは増えない。この区間の目標加速度は、前回の planning tick が
+  // 出した値そのもの。距離の積分(v_*_dist)には入れない。
+  float lead_l = 0.0f;
+  float lead_r = 0.0f;
+  if (param->enc_v_lead) {
+    const float alpha_tgt = (tgt_val->ego_in.w - w_old) / dt;
+    const float a_l = tgt_val->ego_in.accl - alpha_tgt * tread * 0.5f;
+    const float a_r = tgt_val->ego_in.accl + alpha_tgt * tread * 0.5f;
+    const uint32_t next_plan = pt->next_tick_us();
+    auto age_s = [next_plan](uint64_t t_read) {
+      const int32_t us = (int32_t)(next_plan - (uint32_t)t_read);
+      return (float)MIN(MAX(us, 0), 1000) * 1e-6f;
+    };
+    lead_l = a_l * (enc_l_dt * 0.5f + age_s(enc_l_timestamp_now));
+    lead_r = a_r * (enc_r_dt * 0.5f + age_s(enc_r_timestamp_now));
+  }
+
   if (enc_r_dt > 0) {
     pt->ego.kf_v_r.dt = enc_r_dt;
     pt->ego.kf_v_r.predict(accl_r);
-    if (enc_r == 0 && ABS(ABS(tmp_r_v) - ABS(se->ego.v_r)) > 50) {
+    if (enc_r == 0 && ABS(ABS(tmp_r_v) - ABS(se->ego.v_r_dist)) > 50) {
       // エンコーダ取得失敗時更新中止
       enc_r_timestamp_now = enc_r_timestamp_old;
     } else if (enc_r >= 0) {
       se->encoder.right = enc_r_c;
       se->encoder.right_raw = enc_r;
-      se->ego.v_r =
+      se->ego.v_r_dist =
           -calc_enc_v(se->encoder.right, se->encoder.right_old, enc_r_dt);
+      se->ego.v_r = se->ego.v_r_dist + lead_r;
       pt->ego.kf_v_r.update(se->ego.v_r);
     }
   }
-  if (enc_l == 0 && ABS(ABS(tmp_l_v) - ABS(se->ego.v_l)) > 50) {
+  if (enc_l == 0 && ABS(ABS(tmp_l_v) - ABS(se->ego.v_l_dist)) > 50) {
     // エンコーダ取得失敗時更新中止
     enc_l_timestamp_now = enc_l_timestamp_old;
   } else if (enc_l_dt > 0) {
@@ -734,8 +759,9 @@ SensingTask::read_spi_sensors() {
     if (enc_l >= 0) {
       se->encoder.left = enc_l_c;
       se->encoder.left_raw = enc_l;
-      se->ego.v_l =
+      se->ego.v_l_dist =
           calc_enc_v(se->encoder.left, se->encoder.left_old, enc_l_dt);
+      se->ego.v_l = se->ego.v_l_dist + lead_l;
       pt->ego.kf_v_l.update(se->ego.v_l);
     }
   }
@@ -795,11 +821,14 @@ void SensingTask::calc_vel(float gyro_dt, float enc_r_dt, float enc_l_dt) {
   se->ego.rpm.right = 30.0 * se->ego.v_r / (m_PI * tire / 2);
   se->ego.rpm.left = 30.0 * se->ego.v_l / (m_PI * tire / 2);
 
+  // 距離は位置の差分そのもの(enc_v_lead の先読みを入れない値)で積分する。
+  // 先読みした速度で積分すると、加減速のたびに速度変化 × dt/2 だけずれる。
   const auto dt = (enc_l_dt + enc_r_dt) / 2;
-  tgt_val->ego_in.dist += se->ego.v_c * dt;
-  tgt_val->global_pos.dist += se->ego.v_c * dt;
+  const float v_c_dist = (se->ego.v_l_dist + se->ego.v_r_dist) / 2;
+  tgt_val->ego_in.dist += v_c_dist * dt;
+  tgt_val->global_pos.dist += v_c_dist * dt;
 
-  // fifo_mode 1〜3 で FIFO が有効な tick は、全サンプルの和 Σw·T_odr で積分する
+  // fifo_mode 1〜4 で FIFO が有効な tick は、全サンプルの和 Σw·T_odr で積分する
   // (T_odr は個体の実 ODR から)。それ以外は従来どおり w × MCU の読み取り間隔。
   float d_ang;
   if (param->enable_kalman_gyro == 1) {

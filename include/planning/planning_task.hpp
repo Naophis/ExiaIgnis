@@ -43,6 +43,10 @@ public:
   // IRQ 内で shared_ptr 操作が起きないため安全。
   void send_command(const motion_tgt_val_t &tgt);
 
+  // 次の planning tick のアラーム時刻 [us](timer の下位 32bit)。SensingTask が
+  // 読んだ値を planning が使う時刻まで先読みするのに使う(同じ Core1 から読む)。
+  uint32_t next_tick_us() const { return next_alarm_; }
+
   // ---- tick 同期 (Core0 から呼ぶ) ----
   void wait_tick();
   // タイムアウト付き wait (タイムアウトなら false)。ログドレイン用ポーリングに使う。

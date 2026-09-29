@@ -522,6 +522,11 @@ turn_duty_slew: 0.0
 enable_kalman_gyro: 0
 enable_mpc: 0
 enable_kalman_encoder: 1
+# 車輪速度を planning が使う時刻まで先読みする(2026-09-29、sensing_task.cpp)。1ms の位置
+# 差分の速度は読んだ時刻の 0.5ms 前の値で、planning はそれを約 600us 後に使う。1 のとき
+# 制御・推定に渡す v_l/v_r に車輪ごとの目標加速度(並進 ± 目標角加速度 × tread/2) ×
+# (dt/2 + 読んでから次の planning tick までの時間) を足す。距離の積分は差分のまま。0 = 従来どおり。
+enc_v_lead: 1
 
 # motor_pid_gain_limitter: 
 #   mode: 0

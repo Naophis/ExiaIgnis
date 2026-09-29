@@ -413,6 +413,16 @@ self->data.gz_dt   = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z
 - ログの `v_l_enc` / `v_r_enc` は補正前の生角度(`encoder.left_raw/right_raw`)なので、補正の有効/無効に関係なく校正し直せます。ファームの適用確認は `enc_lut_fit.py --check`。
 - 磁石・タイヤを付け直したら取り直してください。
 
+### 車輪速度を planning の時刻まで先読みする (enc_v_lead)
+
+1ms の位置差分で求めた車輪速度はその 1ms の中央(読んだ時刻の 0.5ms 前)の値で、さらに PlanningTask はセンシングより約 600us 後の tick でそれを使います(`PlanningTask::start_irq` の +600us)。planning の時刻を基準にすると、加減速中は直進 −43mm/s、旋回の出入り −56mm/s 遅れていました。`hardware.yaml` の `enc_v_lead: 1` で、制御と推定に渡す `ego.v_l/v_r` に「車輪ごとの目標加速度(`ego_in.accl` ± 目標角加速度 × `tire_tread`/2) × (dt/2 + 読んでから次の planning tick までの時間)」を足します(次の tick の時刻は `PlanningTask::next_tick_us()`)。偏りは +1〜4mm/s になり、目標加速度はノイズが無いので巡航中のノイズは増えません。
+
+- 同じ時刻のずれはジャイロにもあります(`fifo_mode` のどれも、読んだ時刻の値を約 588us 後に planning が使う)。オフラインでは mode 4 に目標角加速度 × 588us を足すと、旋回の出入りの偏りが −1.8 → −0.08 rad/s になりました(未実装)。
+
+- 距離(`ego_in.dist` / `global_pos.dist`)は位置の差分そのもの `ego.v_l_dist/v_r_dist` で積分し、先読みは入れません(入れると加減速のたびに速度変化 × dt/2 ずれる)。エンコーダー読み取り失敗の判定も `v_*_dist` で行います。
+- `kim` の位置推定は `v_kf × dt` を積分しているので、先読みした速度が KF を通って入ります(加減速のたびに最大で速度変化 × 0.5ms、速度が戻れば消える)。
+- ログの `v_l` / `v_r` は先読み後の値です。差分の速度は生角度 `v_l_enc` / `v_r_enc` から再計算できます。FIFO のワード数(3/4)でエンコーダーを読む時刻が約 6us 前後するので、オフラインで 1ms 固定で割ると約 12mm/s ずれます(ファームは実測 dt で割っている)。
+
 ## ユーティリティ（`include/utils/`）
 
 - **KalmanFilter** (`kalman_filter.hpp`): 1次元カルマンフィルタ。速度・角速度・角度・距離・バッテリ等で使用。
