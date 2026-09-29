@@ -17,6 +17,8 @@
 //   SearchController::exec / reset / judge_wall / go_straight_wrapper / slalom /
 //   front_wall_ctrl / pivot / finish            src/search/search_controller.cpp
 //   MotionPlanning::go_straight() の探索時の adachi->update()   src/action/motion_planning.cpp
+//   MazeSolverBaseLgc::searchGoalPosition() の経路のたどり方(capture_route、画面表示用)
+//                                                              src/search/logic.cpp
 //
 // 入力(stdin、JSON 1 個):
 //   files  LittleFS と同じ名前 → 中身の JSON 文字列(path_sim と同じ)
@@ -25,6 +27,7 @@
 //   goals  省略時は system.txt の goals
 // 出力: stdout に結果の JSON 1 行(steps と時間の内訳)。ファームの printf は stderr。
 
+#include <algorithm>
 #include <cmath>
 
 #include "host_common.hpp"
@@ -47,6 +50,11 @@ struct Step {
   bool goal = false;
   int subgoals = 0;
   std::vector<std::pair<int, int>> changes; // 前の判断からの lgc->map の変化 (idx, 値)
+  // 足立法が見ている候補の経路と、サブゴールの区画(前の判断から変わったときだけ入れる)
+  bool has_route = false;
+  std::string route; // スタート (0,0) からの向きの列(N / E / S / W)。空 = 候補なし
+  bool has_subgoals = false;
+  std::vector<int> subgoal_cells; // x + y * N
 };
 
 class SearchSim : public MainTaskCopy {
@@ -65,6 +73,9 @@ public:
 
   std::vector<Step> steps;
   std::vector<uint8_t> snapshot;
+  // 画面に出す「候補の経路」(Adachi::update() が作った表から引いた経路)。update() のたびに取る
+  std::string cur_route, sent_route;
+  std::vector<int> sent_subgoals;
   std::string end_reason;
   double finish_time = 0;
 
@@ -158,6 +169,7 @@ public:
     if (st == StraightType::FastRunDia)
       v_end = sm[StraightType::Search].v_max;
     adachi->update();
+    capture_route();
     straight(v_max, v_end, sm[st].accl, sm[st].decel, param_->cell);
   }
 
@@ -214,10 +226,63 @@ public:
     v = 0; // 後退して止まった
     sleep(10);
     adachi->update();
+    capture_route();
     sleep(5);
     const float d2 = back_enable ? param_->cell / 2 + param_->pivot_back_dist0 - param_->pivot_back_offset
                                  : param_->cell / 2 + param_->pivot_back_dist1;
     straight(s.v_max, s.v_max, s.accl, s.decel, d2);
+  }
+
+  // Adachi::update() の直後に呼ぶ。searchGoalPosition() が表(lgc の vector_dist)をたどるのと
+  // 同じ歩き方の写しで、足立法がいま「未知の壁は無いものとして最短」と見ている経路を取る
+  // (この上の未知区画がサブゴールになる)。ゴール前は表を作らないので空。
+  // 写し元: MazeSolverBaseLgc::searchGoalPosition()(src/search/logic.cpp)
+  void capture_route() {
+    cur_route.clear();
+    if (!(adachi->goal_step && adachi->sm == SearchMode::ALL))
+      return;
+    Direction next_dir = Direction::North;
+    Direction now_dir = Direction::North;
+    int x = 0, y = 1;
+    Direction dirLog[3] = {now_dir, now_dir, now_dir};
+    std::string r = "N"; // (0,0) → (0,1)
+    for (int guard = 0; guard < N * N; guard++) {
+      now_dir = next_dir;
+      dirLog[2] = dirLog[1];
+      dirLog[1] = dirLog[0];
+      dirLog[0] = now_dir;
+      next_dir = Direction::Undefined;
+      if (lgc->arrival_goal_position(x, y))
+        break;
+      float position = lgc->getDistVector(x, y, now_dir);
+      if (now_dir == Direction::North)
+        position = lgc->getDistVector(x, y, Direction::South);
+      else if (now_dir == Direction::East)
+        position = lgc->getDistVector(x, y, Direction::West);
+      else if (now_dir == Direction::West)
+        position = lgc->getDistVector(x, y, Direction::East);
+      else if (now_dir == Direction::South)
+        position = lgc->getDistVector(x, y, Direction::North);
+      lgc->setNextRootDirectionPathUnKnown(x, y, Direction::North, now_dir, next_dir, position);
+      lgc->setNextRootDirectionPathUnKnown(x, y, Direction::East, now_dir, next_dir, position);
+      lgc->setNextRootDirectionPathUnKnown(x, y, Direction::West, now_dir, next_dir, position);
+      lgc->setNextRootDirectionPathUnKnown(x, y, Direction::South, now_dir, next_dir, position);
+      if (dirLog[0] == dirLog[1] || dirLog[0] != dirLog[2])
+        lgc->priorityStraight2(x, y, now_dir, dirLog[0], position, next_dir);
+      else
+        lgc->priorityStraight2(x, y, now_dir, dirLog[1], position, next_dir);
+      if (next_dir == Direction::North)
+        y++, r += 'N';
+      else if (next_dir == Direction::East)
+        x++, r += 'E';
+      else if (next_dir == Direction::West)
+        x--, r += 'W';
+      else if (next_dir == Direction::South)
+        y--, r += 'S';
+      else
+        break;
+    }
+    cur_route = r;
   }
 
   void record(const ego_t &from, char motion) {
@@ -228,6 +293,21 @@ public:
     st.t0 = now;
     st.goal = adachi->goal_step;
     st.subgoals = (int)adachi->subgoal_list.size();
+    // この判断が使った候補の経路(直前の update() のもの)とサブゴール。変わったときだけ出す
+    if (cur_route != sent_route || steps.empty()) {
+      st.has_route = true;
+      st.route = cur_route;
+      sent_route = cur_route;
+    }
+    std::vector<int> sg;
+    for (const auto &kv : adachi->subgoal_list)
+      sg.push_back((int)kv.first);
+    std::sort(sg.begin(), sg.end());
+    if (sg != sent_subgoals || steps.empty()) {
+      st.has_subgoals = true;
+      st.subgoal_cells = sg;
+      sent_subgoals = sg;
+    }
     for (int i = 0; i < (int)lgc->map.size(); i++) {
       if (lgc->map[i] != snapshot[i]) {
         st.changes.emplace_back(i, lgc->map[i]);
@@ -408,6 +488,13 @@ int main() {
     o["t1"] = st.t1;
     o["g"] = st.goal;
     o["sg"] = st.subgoals;
+    if (st.has_route)
+      o["r"] = st.route;
+    if (st.has_subgoals) {
+      JsonArray sg = o["s"].to<JsonArray>();
+      for (const int v : st.subgoal_cells)
+        sg.add(v);
+    }
     JsonArray c = o["c"].to<JsonArray>();
     for (const auto &[i, val] : st.changes) {
       JsonArray pair = c.add<JsonArray>();

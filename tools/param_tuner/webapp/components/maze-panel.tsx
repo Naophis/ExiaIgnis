@@ -49,6 +49,10 @@ const MARGIN_R = 0.3;
 const WALL_WIDTH = 0.12;
 const POST_SIZE = 0.16;
 const PATH_COLOR = "oklch(0.82 0.13 230)";
+// 探索: 足立法が見ている候補の経路
+const ROUTE_COLOR = "oklch(0.74 0.19 330)";
+const ROUTE_STEP: Record<string, Pt> = { N: [0, 1], E: [1, 0], W: [-1, 0], S: [0, -1] };
+const ROUTE_FLAG: Record<string, number> = { N: 0x10, E: 0x20, W: 0x40, S: 0x80 };
 // Direction の値(N=1 / E=2 / W=4 / S=8)→ 区画単位の向き
 const DIR_VEC: Record<number, Pt> = { 1: [0, 1], 2: [1, 0], 4: [-1, 0], 8: [0, -1] };
 
@@ -175,6 +179,8 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
   const defaultSource = doc?.goals ? "ファイルのゴール" : autoGoal ? "自動検出" : "system.yaml";
   const pathSim = usePathSim(pathOn && doc !== null, walls, goals);
   const searchSim = useSearchSim(searchOn && doc !== null, walls, goals);
+  // 探索: 足立法が見ている候補の経路とサブゴールを重ねるか
+  const [showRoute, setShowRoute] = useState(true);
   const searchResult = searchOn && searchSim.result?.ok ? searchSim.result : null;
   const nSteps = searchResult?.steps?.length ?? 0;
   const step = nSteps === 0 ? 0 : stepRaw === null ? nSteps - 1 : Math.min(stepRaw, nSteps - 1);
@@ -621,8 +627,46 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
     const r: Pt = [rx - d[0] * 0.12 + d[1] * 0.2, size - (ry - d[1] * 0.12 - d[0] * 0.2)];
     const robot = `M${tip[0]} ${tip[1]}L${l[0]} ${l[1]}L${r[0]} ${r[1]}Z`;
     const next = step + 1 < nSteps ? at(steps[step + 1]) : null;
-    return { known, cells, knownCells, trail, robot, from: [rx, size - ry] as Pt, next: next ? ([next[0], size - next[1]] as Pt) : null };
-  }, [searchResult, searchSim.maps, step, nSteps, size]);
+    // 候補の経路: 区画の中心をつなぐ。通る壁が未知の区間は別の線にする(そこがサブゴールの元)
+    let routeKnown = "";
+    let routeUnknown = "";
+    let routeUnknownCount = 0;
+    const route = searchSim.routes[step] ?? "";
+    let cx = 0;
+    let cy = 0;
+    for (const ch of route) {
+      const d = ROUTE_STEP[ch];
+      if (!d || cx < 0 || cy < 0 || cx >= size || cy >= size) break;
+      const unknown = (map[cx + cy * M] & ROUTE_FLAG[ch]) === 0;
+      const seg1 = `M${cx + 0.5} ${size - cy - 0.5}L${cx + d[0] + 0.5} ${size - (cy + d[1]) - 0.5}`;
+      if (unknown) {
+        routeUnknown += seg1;
+        routeUnknownCount++;
+      } else routeKnown += seg1;
+      cx += d[0];
+      cy += d[1];
+    }
+    let subgoalCells = "";
+    for (const i of searchSim.subgoals[step] ?? []) {
+      const x = i % M;
+      const y = Math.floor(i / M);
+      if (x < size && y < size) subgoalCells += `M${x + 0.5} ${size - y - 0.78}l0.28 0.28l-0.28 0.28l-0.28 -0.28z`;
+    }
+    return {
+      known,
+      cells,
+      knownCells,
+      trail,
+      robot,
+      from: [rx, size - ry] as Pt,
+      next: next ? ([next[0], size - next[1]] as Pt) : null,
+      routeKnown,
+      routeUnknown,
+      routeLen: route.length,
+      routeUnknownCount,
+      subgoalCells,
+    };
+  }, [searchResult, searchSim.maps, searchSim.routes, searchSim.subgoals, step, nSteps, size]);
 
   const labelSize = size > 20 ? 0.42 : 0.5;
   const grouped = GROUP_ORDER.map((g) => ({ group: g, items: files.filter((f) => f.group === g) }));
@@ -689,6 +733,14 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
             fill="none"
           />
           <path d={posts} fill="var(--muted-foreground)" />
+          {searchView && showRoute && (
+            <g pointerEvents="none" strokeLinecap="round" strokeLinejoin="round" fill="none">
+              {/* 候補の経路: 既知の区間は実線、通る壁が未知の区間は太い破線 */}
+              <path d={searchView.routeKnown} stroke={ROUTE_COLOR} strokeOpacity={0.75} strokeWidth={0.1} />
+              <path d={searchView.routeUnknown} stroke={ROUTE_COLOR} strokeWidth={0.16} strokeDasharray="0.02 0.3" />
+              <path d={searchView.subgoalCells} fill={ROUTE_COLOR} fillOpacity={0.85} stroke="oklch(0.12 0.015 250)" strokeWidth={0.03} />
+            </g>
+          )}
           {searchView && (
             <g pointerEvents="none" strokeLinecap="round" strokeLinejoin="round">
               <path d={searchView.trail} fill="none" stroke={PATH_COLOR} strokeOpacity={0.55} strokeWidth={0.07} />
@@ -1028,6 +1080,10 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
                     onSpeed={setPlaySpeed}
                     knownCells={searchView?.knownCells ?? 0}
                     totalCells={size * size}
+                    showRoute={showRoute}
+                    onShowRoute={setShowRoute}
+                    routeLen={searchView?.routeLen ?? 0}
+                    routeUnknown={searchView?.routeUnknownCount ?? 0}
                   />
                 </ResizablePanel>
               </ResizablePanelGroup>

@@ -16,6 +16,10 @@ export interface SearchStep {
   g: boolean; // ゴール到達後か
   sg: number; // 残りのサブゴール数
   c: [number, number][]; // 前の判断からの地図の変化(ファームの並びの idx, 値)
+  // 足立法が見ている候補の経路(未知の壁は無いものとした最短経路。この上の未知区画がサブゴールになる)。
+  // スタート (0,0) からの向きの列(N / E / S / W)。前の判断から変わったときだけ入る。"" = 候補なし(ゴール前)
+  r?: string;
+  s?: number[]; // サブゴールの区画(x + y * maze_size)。前の判断から変わったときだけ入る
 }
 
 export interface SearchSimResult {

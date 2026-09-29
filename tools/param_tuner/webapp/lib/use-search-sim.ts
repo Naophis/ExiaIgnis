@@ -50,5 +50,21 @@ export function useSearchSim(enabled: boolean, walls: number[], goals: Cell[]) {
     return out;
   }, [result]);
 
-  return { result, busy, maps };
+  // 各ステップの候補の経路とサブゴール(変わったステップにだけ入っているので、前から引き継ぐ)
+  const { routes, subgoals } = useMemo(() => {
+    const steps = result?.ok ? (result.steps ?? []) : [];
+    const routes: string[] = [];
+    const subgoals: number[][] = [];
+    let r = "";
+    let sg: number[] = [];
+    for (const st of steps) {
+      if (st.r !== undefined) r = st.r;
+      if (st.s !== undefined) sg = st.s;
+      routes.push(r);
+      subgoals.push(sg);
+    }
+    return { routes, subgoals };
+  }, [result]);
+
+  return { result, busy, maps, routes, subgoals };
 }

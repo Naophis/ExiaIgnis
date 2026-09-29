@@ -18,3 +18,8 @@ px2/adachi_px.cpp
 px2/logic_px2.cpp
 px2/path_creator_px2.cpp
 px/logic_fz.cpp
+emu/pylib/
+emu/*.elf
+emu/snap_*.bin
+emu/snap_main.cpp
+emu/snap_sim

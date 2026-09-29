@@ -52,6 +52,10 @@ interface Props {
   onSpeed: (v: number) => void;
   knownCells: number; // 現在のステップで 4 方向とも分かっている区画の数
   totalCells: number;
+  showRoute: boolean; // 候補の経路とサブゴールを迷路に重ねるか
+  onShowRoute: (v: boolean) => void;
+  routeLen: number; // 現在のステップの候補の経路の長さ(区画。0 = 候補なし)
+  routeUnknown: number; // そのうち、通る壁が未知の区間の数
 }
 
 export function MazeSearchPanel({
@@ -65,6 +69,10 @@ export function MazeSearchPanel({
   onSpeed,
   knownCells,
   totalCells,
+  showRoute,
+  onShowRoute,
+  routeLen,
+  routeUnknown,
 }: Props) {
   const ok = result?.ok === true;
   const steps = useMemo(() => (ok ? (result.steps ?? []) : []), [ok, result]);
@@ -149,6 +157,17 @@ export function MazeSearchPanel({
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => onShowRoute(!showRoute)}
+          title={
+            "足立法がいま見ている候補の経路を重ねる(ゴール後)。未知の壁は無いものとした重みパターン 1 の最短経路で、この上の未知区画がサブゴールになる\n" +
+            "実線 = 既知の区間 / 点線 = 通る壁が未知の区間 / ◆ = サブゴール(前の経路から持ち越したものも含む)"
+          }
+          className={`rounded border px-1 text-[10px] ${showRoute ? "border-[oklch(0.74_0.19_330)] text-[oklch(0.74_0.19_330)]" : "border-border text-muted-foreground hover:bg-muted"}`}
+        >
+          候補
+        </button>
         {busy && <span className="text-muted-foreground">計算中…</span>}
       </div>
       {ok && steps.length > 0 && (
@@ -176,6 +195,7 @@ export function MazeSearchPanel({
           <span className="text-muted-foreground">
             {" "}
             · 既知 {knownCells}/{totalCells} 区画{cur.g ? ` · ゴール後(残りサブゴール ${cur.sg})` : ""}
+            {cur.g && routeLen > 0 ? ` · 候補 ${routeLen}(未知 ${routeUnknown})` : ""}
           </span>
         </div>
       )}
