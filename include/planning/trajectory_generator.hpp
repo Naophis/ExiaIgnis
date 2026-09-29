@@ -52,6 +52,7 @@ private:
   mpc_tgt_calcModelClass mpc_tgt_calc;
   std::vector<t_ego> trajectory_points;
   SlaStartAlign      sla_align_;
+  t_ego              raw_prev_{}; // 前の tick の生成器の出力そのもの(ControlLaw が書き換える前)
   void generate_sla_aligned(float last_tgt_angle);
 
   std::shared_ptr<sensing_result_entity_t> se;

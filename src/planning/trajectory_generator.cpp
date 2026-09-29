@@ -61,6 +61,7 @@ void TrajectoryGenerator::generate(float last_tgt_angle) {
     }
   }
   mpc_next_ego.img_ang -= last_tgt_angle;
+  raw_prev_ = mpc_next_ego; // 旋回の始まりを合わせるとき、旋回前の出力(FF 等)に使う
   // 2026-09-06: mpcへ渡すために足したlast_tgt_angleを元に戻す。従来はtmpを
   // 取っておきながら戻しておらず((void)tmp)、copy_tgt()でmpc_next_ego.img_ang
   // が代入されるまでの間ego_in.img_angが前セグメント基準のまま残っていた。
@@ -84,11 +85,12 @@ void TrajectoryGenerator::generate_sla_aligned(float last_tgt_angle) {
                         mpc_step, &pts[i], &dynamics, &index);
     }
   };
-  sla_align_.tick(tgt_val->ego_in, tgt_val->global_pos.dist, param->dt,
-                  last_tgt_angle, param->tire_tread,
+  sla_align_.tick(tgt_val->ego_in, raw_prev_, tgt_val->global_pos.dist,
+                  param->dt, last_tgt_angle, param->tire_tread,
                   static_cast<int>(RUN_MODE2::ST_RUN), tgt_val->motion_mode,
                   step, trajectory_points.data(), param->trj_length,
                   mpc_next_ego);
+  raw_prev_ = sla_align_.raw();
   se->sla_align.tau = sla_align_.tau0();
   se->sla_align.wait = (int16_t)sla_align_.wait();
 }

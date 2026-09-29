@@ -72,8 +72,25 @@ bool WallOffController::execute_wall_off(TurnDirection td,
   if (pt) pt->send_command(*tgt_val);
   wait_tick();
 
-  return (td == TurnDirection::Right) ? process_right_wall_off(ps_front)
-                                      : process_left_wall_off(ps_front);
+  ps_front.start_x_valid = false;
+  decision_gx_valid_ = false;
+  const bool ok = (td == TurnDirection::Right) ? process_right_wall_off(ps_front)
+                                               : process_left_wall_off(ps_front);
+  if (ok) {
+    set_front_start(ps_front);
+  }
+  return ok;
+}
+
+__attribute__((noinline, section(".time_critical.wall_off")))
+void WallOffController::set_front_start(param_straight_t &ps_front) {
+  // 2026-09-30: 次の直進(SLA_FRONT_STR)の距離を数え始める位置を、判定に使った
+  // 位置 + 1 tick 分の走行にする。従来は go_straight() が送信後の最初の tick で
+  // 読んだ位置(= 判定の次の tick の位置)を基準にしていたので平均は同じ。
+  // Core0 が tick を取りこぼしたときに 1 tick(2200mm/s で 2.2mm)ずれるのを防ぐ。
+  const float gx = decision_gx_valid_ ? decision_gx_ : tgt_val->global_pos.dist;
+  ps_front.start_x = gx + std::abs(tgt_val->ego_in.v) * param->dt;
+  ps_front.start_x_valid = true;
 }
 
 __attribute__((noinline, section(".time_critical.wall_off")))
@@ -363,7 +380,8 @@ bool WallOffController::take_pillar_trough(TurnDirection td,
     return false;
   }
   __dmb();
-  const float lag = tgt_val->global_pos.dist - pt.bottom_x;
+  const float gx = tgt_val->global_pos.dist;
+  const float lag = gx - pt.bottom_x;
   if (lag < 0.0f || lag > p_wall_off.pillar_stale_dist) {
     return false;
   }
@@ -373,6 +391,8 @@ bool WallOffController::take_pillar_trough(TurnDirection td,
   if (pt.bottom_x < wo_start_x - p_wall_off.pillar_prestart_dist) {
     return false;
   }
+  decision_gx_ = gx;
+  decision_gx_valid_ = true;
   const float c = (td == TurnDirection::Right) ? p_wall_off.pillar_str_r
                                                : p_wall_off.pillar_str_l;
   ps_front.dist += c - lag;
@@ -403,7 +423,8 @@ bool WallOffController::take_wall_edge(TurnDirection td,
   }
   __dmb();
   const float edge_x = eo.edge_x;
-  const float lag = tgt_val->global_pos.dist - edge_x;
+  const float gx = tgt_val->global_pos.dist;
+  const float lag = gx - edge_x;
   if (lag < 0.0f || lag > p_wall_off.edge_stale_dist) {
     return false;
   }
@@ -413,6 +434,8 @@ bool WallOffController::take_wall_edge(TurnDirection td,
     return false;
   }
   used = seq;
+  decision_gx_ = gx;
+  decision_gx_valid_ = true;
   const float c = right ? p_wall_off.edge_str_r : p_wall_off.edge_str_l;
   ps_front.dist += c - lag;
   ps_front.dist = MAX(ps_front.dist, 0.1);
@@ -461,9 +484,16 @@ bool WallOffController::execute_wall_off_dia(TurnDirection td,
   if (pt) pt->send_command(*tgt_val);
   wait_tick();
 
-  return (td == TurnDirection::Right)
-             ? process_right_wall_off_dia(ps_front, use_oppo_wall, exist_wall)
-             : process_left_wall_off_dia(ps_front, use_oppo_wall, exist_wall);
+  ps_front.start_x_valid = false;
+  decision_gx_valid_ = false;
+  const bool ok =
+      (td == TurnDirection::Right)
+          ? process_right_wall_off_dia(ps_front, use_oppo_wall, exist_wall)
+          : process_left_wall_off_dia(ps_front, use_oppo_wall, exist_wall);
+  if (ok) {
+    set_front_start(ps_front);
+  }
+  return ok;
 }
 
 __attribute__((noinline, section(".time_critical.wall_off")))

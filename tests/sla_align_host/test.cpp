@@ -24,7 +24,8 @@ struct Result { double exit_off; double end_ang; int ticks; };
 // shift: Core0 が SLALOM を送る tick のずれ(+1 = 1 tick 遅れ、−1 = 1 tick 早い)
 static Result run(const Turn &t, float u, int mode, std::vector<float> *w_out = nullptr,
                   int shift = 0, int *wait = nullptr, float *frac = nullptr,
-                  int force_recv = -1, int *recv_out = nullptr) {
+                  int force_recv = -1, int *recv_out = nullptr,
+                  std::vector<t_ego> *outs = nullptr) {
   mpc_tgt_calcModelClass mpc;
   mpc.initialize();
   t_dynamics dyn{};
@@ -53,11 +54,21 @@ static Result run(const Turn &t, float u, int mode, std::vector<float> *w_out = 
       mpc.step(&tgt, (i == 0) ? &in : &p[i - 1], m, 1, &p[i], &dyn, &index);
     }
   };
+  t_ego last_raw{};
   bool turning = false, done = false;
   int n_turn = 0;
   const int limit = (int)(time * 2 / kDt);
   for (int k = 0; k < 400; k++) {
     float w = 0.0f;
+    t_ego out_k{};
+    bool have_out = false;
+    if (!turning && !(recv >= 0 && k == recv)) {
+      // SLA_FRONT_STR: 直進を生成器で作る(FF も出る)
+      step(ego, 3, pts.data(), 1);
+      last_raw = pts[0];
+      sla_state_fields(ego, pts[0], kTread);
+      out_k = pts[0]; have_out = true;
+    }
     if (!turning && recv < 0) {
       // Core0 の go_straight の終了判定(s は tick k の位置)
       const bool end = (mode == 0) ? (s >= X) : (s + (0.5 - std::min(shift, 0)) * t.v * kDt >= X);
@@ -77,14 +88,16 @@ static Result run(const Turn &t, float u, int mode, std::vector<float> *w_out = 
         step(ego, 1, pts.data(), 1);
         out = pts[0];
       } else {
-        al.tick(ego, (float)s, kDt, 0.0f, kTread, 3, 1, step, pts.data(), 1, out);
+        al.tick(ego, last_raw, (float)s, kDt, 0.0f, kTread, 3, 1, step, pts.data(), 1, out);
       }
+      out_k = out; have_out = true;
       sla_state_fields(ego, out, kTread); // copy_tgt
       w = out.w;
       n_turn++;
       if (ego.sla_param.counter >= limit) { done = true; }
     }
     if (w_out) w_out->push_back(w);
+    if (outs && have_out) outs->push_back(out_k);
     // 1 tick 進める(中点の向きで)
     const double th_mid = th + 0.5 * w * kDt;
     x += t.v * kDt * std::cos(th_mid);
@@ -143,6 +156,39 @@ int main() {
     }
     std::printf("1 tick 遅れ: f = 1 が %d 件(全 20)、従来と出力列が完全一致 %d 件\n", total, same);
     if (total != 20 || same != total) fail++;
+  }
+  // 全項目(FF を含む): 新の出力 = 従来の出力列(同じ tick に受け取り)の O_{j-1} と O_j の f 補間
+  {
+    double worst = 0; const char *worst_name = "";
+    double ff_mid = 0;
+    for (int i = 0; i < 20; i++) {
+      const float u = (i + 0.5f) / 20;
+      std::vector<t_ego> o1, o0;
+      float f = -1; int R = -1;
+      run(turns[0], u, 1, nullptr, 0, nullptr, &f, -1, &R, &o1);
+      run(turns[0], u, 0, nullptr, 0, nullptr, nullptr, R, nullptr, &o0);
+      // o0/o1 は tick ごと(直進 → 旋回)。受け取りの tick のインデックスは R(k=0 から全 tick 出力)
+      for (size_t k = (size_t)R; k < o1.size() && k < o0.size(); k++) {
+        const t_ego &a = o0[k - 1], &b = o0[k], &c = o1[k];
+        auto chk = [&](const char *nm, float va, float vb, float vc) {
+          const double e = std::fabs((double)vc - ((double)va + ((double)vb - va) * f));
+          const double sc = std::fmax(1.0, std::fabs(vb));
+          if (e / sc > worst) { worst = e / sc; worst_name = nm; }
+        };
+        chk("w", a.w, b.w, c.w); chk("alpha", a.alpha, b.alpha, c.alpha); chk("alpha2", a.alpha2, b.alpha2, c.alpha2);
+        chk("img_ang", a.img_ang, b.img_ang, c.img_ang);
+        chk("ff_duty_front", a.ff_duty_front, b.ff_duty_front, c.ff_duty_front);
+        chk("ff_duty_roll", a.ff_duty_roll, b.ff_duty_roll, c.ff_duty_roll);
+        chk("ff_duty_rpm_r", a.ff_duty_rpm_r, b.ff_duty_rpm_r, c.ff_duty_rpm_r);
+        chk("ff_duty_rpm_l", a.ff_duty_rpm_l, b.ff_duty_rpm_l, c.ff_duty_rpm_l);
+        chk("ff_front_torque", a.ff_front_torque, b.ff_front_torque, c.ff_front_torque);
+        chk("ff_roll_torque", a.ff_roll_torque, b.ff_roll_torque, c.ff_roll_torque);
+        chk("ideal_px", a.ideal_px, b.ideal_px, c.ideal_px); chk("ideal_py", a.ideal_py, b.ideal_py, c.ideal_py);
+        if (i == 0 && k == (size_t)R + 20) ff_mid = b.ff_duty_rpm_r;
+      }
+    }
+    std::printf("全項目: 新 = 従来の出力列の補間 からの最大の差 %.2e(相対、%s)、旋回中の ff_duty_rpm_r = %.3f\n", worst, worst_name, ff_mid);
+    if (worst > 1e-4 || ff_mid == 0.0) fail++;
   }
   // Core0 が 1 tick 早い: 直進で 1 tick 待ってから合わせる
   {

@@ -1775,6 +1775,13 @@ typedef struct {
   volatile bool search_str_wide_ctrl_r = false;
   volatile bool search_str_wide_ctrl_l = false;
   volatile float dia90_offset = 0;
+  // 2026-09-30: 壁切れ(WallOffController)が決めた、この直進の距離を数え始める位置
+  // (global_pos.dist)。go_straight() は start_x_valid なら 1 回だけこれを基準にし、
+  // Core0 が次の tick で読んだ位置を基準にしない。壁切れの判定で読んだ位置 +
+  // 1 tick 分の走行(v·dt)で、従来の平均と同じ。Core0 が tick を取りこぼしても
+  // ずれない。
+  volatile float start_x = 0;
+  volatile bool start_x_valid = false;
 } param_straight_t;
 
 typedef struct {

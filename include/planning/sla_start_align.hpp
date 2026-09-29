@@ -116,12 +116,14 @@ public:
   }
 
   // 1 tick 分。step(in, mode, pts, n) は in から n 点を pts に作る(pts[0] が次の
-  // 状態、生成器の座標系 = img_ang に lta を足したもの)。out は次の状態(ego_in の
-  // 座標系)、pts は補間済みの点列(lta を足した座標系)で返す。
+  // 状態、生成器の座標系 = img_ang に lta を足したもの)。last_raw は前の tick の
+  // 生成器の出力そのもの(ego_in の座標系、ControlLaw が書き換える前)。out は次の
+  // 状態(ego_in の座標系)、pts は補間済みの点列(lta を足した座標系)で返す。
+  // raw() はこの tick の生成器の出力そのもの(次の tick の last_raw)。
   template <class Step>
-  void tick(const t_ego &ego_in, float gx, float dt, float lta, float tire_tread,
-            int straight_mode, int slalom_mode, Step &&step, t_ego *pts, int n,
-            t_ego &out) {
+  void tick(const t_ego &ego_in, const t_ego &last_raw, float gx, float dt,
+            float lta, float tire_tread, int straight_mode, int slalom_mode,
+            Step &&step, t_ego *pts, int n, t_ego &out) {
     if (!started_) {
       const float t = tau(gx, start_x_, ego_in.v, dt);
       tau0_ = t;
@@ -132,33 +134,42 @@ public:
         step(in, straight_mode, pts, n);
         out = pts[0];
         out.img_ang -= lta;
+        prev_ = out;
         return;
       }
       started_ = true;
       frac_ = std::clamp(t + 1.0f, 0.0f, 1.0f);
-      prev_ = ego_in; // O_{−1}: 旋回前の直進の状態(カウンタは受信時の 1)
+      // O_{−1}: 旋回前の直進の出力。FF・alpha2 などは前の tick の生成器の出力、
+      // copy_tgt() が写す項目(角度・距離・カウンタ等)は SLALOM の受信で付け直した
+      // 後の ego_in の値(img_dist・img_ang は受信で基準が変わる)。
+      prev_ = last_raw;
+      sla_state_fields(prev_, ego_in, tire_tread);
     }
     // 生成器の入力: ego_in のうち copy_tgt() が写す項目を影の状態(O_j)に戻したもの
-    t_ego in = ego_in; // O_j(ego_in の座標系)
+    t_ego in = ego_in;
     sla_state_fields(in, prev_, tire_tread);
-    t_ego in_g = in; // 生成器の座標系
-    in_g.img_ang += lta;
-    step(in_g, slalom_mode, pts, n);
-    // 影の状態を O_{j+1} へ進め、出力は O_j と O_{j+1} の間
-    prev_ = pts[0];
-    prev_.img_ang -= lta;
-    out = prev_;
-    sla_lerp_ego(out, in, frac_);
+    in.img_ang += lta; // 生成器の座標系
+    step(in, slalom_mode, pts, n);
+    // 出力は O_j(prev_、FF も含めた出力そのもの)と O_{j+1} の間。影を O_{j+1} へ進める
+    out = pts[0];
+    out.img_ang -= lta;
     if (frac_ < 1.0f) {
-      // 点列も 1 つ前の点との間へ(pts[−1] は入力、生成器の座標系)
-      t_ego before = in_g;
+      const t_ego raw = out;
+      sla_lerp_ego(out, prev_, frac_);
+      // 点列も 1 つ前の点との間へ(pts[−1] = O_j、生成器の座標系)
+      t_ego before = prev_;
+      before.img_ang += lta;
       for (int i = 0; i < n; i++) {
         const t_ego cur = pts[i];
         sla_lerp_ego(pts[i], before, frac_);
         before = cur;
       }
+      prev_ = raw;
+    } else {
+      prev_ = out;
     }
   }
+  const t_ego &raw() const { return prev_; }
 
 private:
   bool armed_ = false;

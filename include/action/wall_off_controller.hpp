@@ -96,6 +96,13 @@ private:
   bool legacy_wall_off_ok(TurnDirection td);
   uint16_t edge_seq_used_l_ = 0;
   uint16_t edge_seq_used_r_ = 0;
+  // 壁切れの判定に使った位置(global_pos.dist、2026-09-30)。take_wall_edge /
+  // take_pillar_trough は lag をこの値で計算して記録する。記録が無い経路は
+  // 判定から戻った直後に読む(Core0 の判定は S3 の距離の更新までに終わる)。
+  float decision_gx_ = 0.0f;
+  bool decision_gx_valid_ = false;
+  // 壁切れの判定が終わったとき、次の直進の数え始め(ps_front.start_x)を決める。
+  void set_front_start(param_straight_t &ps_front);
   bool process_right_wall_off_dia(param_straight_t &ps_front,
                                   bool &use_oppo_wall, bool &exist_wall);
   bool process_left_wall_off_dia(param_straight_t &ps_front,

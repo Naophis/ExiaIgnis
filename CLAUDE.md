@@ -102,6 +102,7 @@ TIMER1 のハードウェアアラームを1本使用:
 - Core0 が 1 tick 遅れたとき(tau ≥ 0)は従来と同じ出力列、早すぎたとき(tau < −1)は直進を出して待つ(最大 3 tick)。
 - ホスト検証は `tests/sla_align_host/run.sh`(生成コードをそのまま使う)。large90 v2200 で旋回後の直線の横位置のばらつきが幅 2.18 → 0.013mm、平均の差 0.002mm。1 tick 遅れは従来と出力列が完全一致。
 - ログ列 `sla_tau`(決めたずれ [tick]、−1〜0 が正常、9 = 合わせていない旋回)・`sla_wait`(直進で待った tick 数)。
+- 補間の起点は前の tick の**生成器の出力そのもの**(`raw_prev_`、FF・alpha2 を含む)。`ego_in` は FF を持たない(copy_tgt が写さない)ので起点にしてはいけない。最初の版はこれで旋回中の FF(逆起電力分 `ff_duty_rpm` を含む)が f 倍になっていた(20260930_020508〜020829 の 1 側、旋回終わりの角度が 3〜5° 変わった)。ホスト検証は全項目を「従来の出力列の補間」と比べる。
 - **`copy_tgt()` が生成器の出力から `ego_in` へ写す項目を変えたら `sla_state_fields()` も合わせる。**
 
 PlanningTask は以下のサブシステムを内包:
@@ -248,6 +249,7 @@ PlanningTask は以下のサブシステムを内包:
 - サンプルの位置は `global_pos.dist`(S3 でエンコーダーを読んだ時刻の位置)+ 速度 × (読んだ時刻 − エンコーダーの時刻)。距離は `sensor_gain.l45/r45`。前のサンプルから 0.25mm 未満のサンプルは捨てる(低速でバッファ 128 点が 32mm 以上を覚えるように)。
 - ホスト検証は `tests/wall_edge_host/`(Python 版と 713 件で最初の発火が一致。引数 `all` で全発火を出す)。ログ列 `edge_seq_l/r`・`edge_lag_l/r`・`edge_lvl_l/r`、`wo_dl0..3` / `wo_dr0..3`(wo の生値をダンプ時に距離にしたもの [mm]、無効は 0)。
 - 実機(20260930_011650〜011852、v≈2200): Core1 の計算は `pln_t_sensor` で直進 +12us・WALL_OFF 中 +25〜30us、WALL_OFF 中の `pln_margin_us` は最小 70us。発火 tick・基準位置・壁の距離はオフラインの再生と一致(差 0.04mm 以内)。
+- 壁切れのあとの直進(SLA_FRONT_STR)は、壁切れの判定で読んだ位置 + 1 tick 分の走行(`|ego_in.v|·dt`)から距離を数える(`param_straight_t::start_x`、`WallOffController::set_front_start()`、2026-09-30)。以前は `go_straight()` が送信後の最初の tick で読んだ位置を基準にしていて、平均は同じ(838 件で差 +0.025mm)だが、Core0 が tick を取りこぼすとその回だけ 1 tick(2.2mm)ずれた。`take_wall_edge` / `take_pillar_trough` は lag を計算した位置をそのまま使う。壁切れ → 旋回の始まりまでで tick の刻みが位置に入る所は、これと `sla_start_align` でなくなった。
 - あわせて `MotionPlanning::wall_off_recheck_ok()`(SLA_FRONT_STR の後の再確認)を、入るときに壁があったなら入るときの距離 + `wall_off_recheck_delta`(5mm)以上遠のいたことも求める形にした。
 
 #### タイム最小の経路探索 (`TimePathPlanner`、2026-09-29)

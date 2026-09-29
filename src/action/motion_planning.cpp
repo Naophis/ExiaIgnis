@@ -147,6 +147,14 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
     motion_start_latched = true;
     adachi->update();
   }
+  // 2026-09-30: 壁切れが数え始めの位置を決めていればそれを使う(1 回だけ)。
+  // 壁切れの判定の位置 + 1 tick で、cnt==1 で読む従来の基準と平均は同じだが、
+  // Core0 が tick を取りこぼしてもずれない(WallOffController::set_front_start)。
+  if (p.start_x_valid) {
+    motion_start_dist = p.start_x;
+    motion_start_latched = true;
+    p.start_x_valid = false;
+  }
 
   // if (p.motion_type == MotionType::PIVOT_PRE ||
   //     p.motion_type == MotionType::PIVOT_PRE2 ||
@@ -643,6 +651,7 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
   sla_align_req_ = param->sla_start_align != 0 && !search_mode &&
                    sp.type != TurnType::Normal;
   sla_align_valid_ = false;
+  ps_front.start_x_valid = false; // 壁切れが決めたときだけ使う
 
   ps_front.search_str_wide_ctrl_l = false;
   ps_front.search_str_wide_ctrl_r = false;
