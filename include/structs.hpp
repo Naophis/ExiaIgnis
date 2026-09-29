@@ -304,6 +304,18 @@ typedef struct {
   volatile int seq = 0;         // 発火ごとに +1
 } pillar_trough_out_t;
 
+// 壁の切れ目(壁あり → 急に遠のく)の形の検知の出力(2026-09-30、
+// include/planning/wall_edge_detector.hpp)。Core1 の SensorProcessor::update_wall_edge()
+// が発火のたびに更新し、Core0 の WallOffController::take_wall_edge() が読む。書き手は
+// edge_x 等を書いてから __dmb() → seq の順、読み手は seq を見てから __dmb() → 他。
+typedef struct {
+  volatile uint16_t seq = 0;    // 発火ごとに +1
+  volatile float edge_x = 0;    // 基準位置 = 壁の距離 + anchor_h を越えた点の global_pos.dist [mm]
+  volatile float fire_x = 0;    // 発火したサンプルの global_pos.dist [mm]
+  volatile float level = 0;     // そのときの壁の距離 [mm]
+  volatile float lag = 0;       // 今の位置 − 最後の基準位置 [mm](ログ用、毎 tick 更新)
+} wall_edge_out_t;
+
 // ジャイロ FIFO の読み出し結果(2026-09-29、sensing_task.cpp)。Core1 の
 // SensingTask が毎 tick 書き、ログ(Core0)が読む。1kHz で 1 点読みすると
 // 約 1.19kHz の振動が 195/313Hz に折り返して見えていたため、実 ODR
@@ -373,6 +385,8 @@ typedef struct {
   sen_dist_log_t sen_dist_log;
   pillar_trough_out_t pillar_l; // 左45°の柱谷検知(2026-09-23)
   pillar_trough_out_t pillar_r; // 右45°の柱谷検知
+  wall_edge_out_t edge_l;       // 左45°の壁の切れ目の検知(2026-09-30)
+  wall_edge_out_t edge_r;       // 右45°の壁の切れ目の検知
   gyro_fifo_out_t gyro_fifo;    // ジャイロ FIFO の読み出し結果(2026-09-29)
   sched_diag_t sched;           // センシングの枠と planning の重なりの記録(2026-09-29)
   wo_hf_t wo;                   // WALL_OFF 中の 45° LED1 の 4 サンプル / tick(2026-09-30)
@@ -641,6 +655,11 @@ typedef struct {
   // exist_delta_l/r)自体には一切手を加えない。
   float wall_off_recheck_dist_l = 60.0f;
   float wall_off_recheck_dist_r = 60.0f;
+  // 再チェックの増分(2026-09-30)。WALL_OFF に入るとき壁があった(横 45° の距離 <
+  // wall_off_exist_wall_th)なら、SLA_FRONT_STR の終わりにそこから delta 以上
+  // 遠のいていないと誤検知とみなす。絶対値 recheck_dist と両方満たしたら OK。
+  float wall_off_recheck_delta_l = 5.0f;
+  float wall_off_recheck_delta_r = 5.0f;
 
 
   // 2026-09-23: 柱の谷(下に凸)検知(include/planning/pillar_trough_detector.hpp)。
@@ -669,6 +688,25 @@ typedef struct {
   int   pillar_vertex_interp = 1; // 谷底を放物線の頂点でサブtick補正(効果は未検証、detector のコメント参照)
   float pillar_str_l = 2.5f;    // [mm] 谷底基準の補正距離(左)。要再測定
   float pillar_str_r = 1.0f;    // [mm] 同(右)
+  // 2026-09-30: 壁ありで始まる WALL_OFF の壁の切れ目を、1 tick に 4 回読む 45° LED1
+  // (sensing_result->wo)の形で検知する(include/planning/wall_edge_detector.hpp)。
+  // edge_enable=0 は検知してログに出すだけ(旋回位置は従来の detect_wall_off)。
+  // 1 は WallOffController が基準位置でアンカーする(ps_front.dist += edge_str − lag)。
+  int   edge_enable = 0;
+  float edge_win_far = 16.0f;
+  float edge_win_near = 4.0f;
+  float edge_level_max = 60.0f;
+  float edge_depth = 4.0f;
+  float edge_span = 10.0f;
+  float edge_band = 1.0f;
+  float edge_noise_back = 1.0f;
+  float edge_anchor_h = 3.0f;
+  int   edge_min_run = 2;
+  float edge_stale_dist = 30.0f;    // [mm] 基準位置がこれより古ければ使わない
+  float edge_prestart_dist = 10.0f; // [mm] WALL_OFF 開始よりこれ以上前の発火は使わない
+  float edge_fallback_dist = 60.0f; // [mm] 見逃しの保険: 45° がここまで遠のいたら従来の判定でも抜ける
+  float edge_str_l = -4.3f;         // [mm] 基準位置からの補正距離(左)。従来の旋回位置に合わせた初期値
+  float edge_str_r = -1.8f;         // [mm] 同(右)
 
 } wall_off_hold_dist_t;
 
@@ -2212,6 +2250,12 @@ typedef struct {
   int16_t wo_tr3;
   int16_t wo_n;
   int16_t wo_seq;
+  int16_t edge_seq_l;     // 壁の切れ目の検知の発火回数(左)(2026-09-30, wall_edge_out_t)
+  int16_t edge_seq_r;
+  real16_T edge_lag_l;    // 今の位置 − 最後の基準位置 [mm]
+  real16_T edge_lag_r;
+  real16_T edge_lvl_l;    // 最後の発火時の壁の距離 [mm]
+  real16_T edge_lvl_r;
 } log_data_t2;
 
 typedef struct {
@@ -2498,6 +2542,22 @@ typedef struct {
   int wo_tr3          = 193;
   int wo_n            = 194; // 有効サンプル数(4=WALL_OFF 中)
   int wo_seq          = 195; // この組の tick 番号(gyro_fifo_seq と同じ)
+  int edge_seq_l      = 196; // 壁の切れ目の検知の発火回数(2026-09-30)
+  int edge_seq_r      = 197;
+  float edge_lag_l    = 198; // 今の位置 − 最後の基準位置 [mm]
+  float edge_lag_r    = 199;
+  float edge_lvl_l    = 200; // 最後の発火時の壁の距離 [mm]
+  float edge_lvl_r    = 201;
+  // wo_l0..3 / wo_r0..3 を距離にしたもの [mm](ダンプ時に sensor_gain.l45/r45 で換算、
+  // 範囲外・無効は 0。壁の切れ目の検知が見ている値、2026-09-30)
+  float wo_dl0        = 202;
+  float wo_dl1        = 203;
+  float wo_dl2        = 204;
+  float wo_dl3        = 205;
+  float wo_dr0        = 206;
+  float wo_dr1        = 207;
+  float wo_dr2        = 208;
+  float wo_dr3        = 209;
 } LogStruct11;
 
 #endif

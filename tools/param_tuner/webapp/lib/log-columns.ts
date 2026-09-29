@@ -220,15 +220,24 @@ export const CHART_VIEWS: ChartView[] = [
     key: "wall_off_hf",
     title: "壁切れhf",
     charts: [
-      { title: "wo_left (S0..S3)", columns: ["wo_l0", "wo_l1", "wo_l2", "wo_l3"] },
-      { title: "wo_right (S0..S3)", columns: ["wo_r0", "wo_r1", "wo_r2", "wo_r3"] },
-      { title: "side45 (1kHz)", columns: ["left45_d", "right45_d", "sen_dist_l45", "sen_dist_r45"] },
-      { title: "wo_time_l [us]", columns: ["wo_tl0", "wo_tl1", "wo_tl2", "wo_tl3"] },
-      { title: "wo_time_r [us]", columns: ["wo_tr0", "wo_tr1", "wo_tr2", "wo_tr3"] },
-      { title: "wo_n", columns: ["wo_n"] },
+      {
+        title: "wo_dist_l (mm)",
+        columns: ["wo_dl0", "wo_dl1", "wo_dl2", "wo_dl3", "left45_d", "sen_dist_l45", "edge_lvl_l"],
+      },
+      {
+        title: "wo_dist_r (mm)",
+        columns: ["wo_dr0", "wo_dr1", "wo_dr2", "wo_dr3", "right45_d", "sen_dist_r45", "edge_lvl_r"],
+      },
+      { title: "edge_lag (mm)", columns: ["edge_lag_l", "edge_lag_r"] },
+      { title: "wo_raw_l (S0..S3)", columns: ["wo_l0", "wo_l1", "wo_l2", "wo_l3"] },
+      { title: "wo_raw_r (S0..S3)", columns: ["wo_r0", "wo_r1", "wo_r2", "wo_r3"] },
+      { title: "edge_seq / wo_n", columns: ["edge_seq_l", "edge_seq_r", "wo_n"] },
       { title: "motion_state", columns: ["motion_state", "continuous_turn"] },
       { title: "dist / ideal_dist", columns: ["dist", "ideal_dist"] },
-      { title: "wo_seq / gyro_fifo_seq", columns: ["wo_seq", "gyro_fifo_seq"] },
+      {
+        title: "wo_time (us)",
+        columns: ["wo_tl0", "wo_tl1", "wo_tl2", "wo_tl3", "wo_tr0", "wo_tr1", "wo_tr2", "wo_tr3"],
+      },
     ],
   },
   {

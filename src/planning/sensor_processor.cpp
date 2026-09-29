@@ -161,6 +161,7 @@ void SensorProcessor::calc_dist() {
 
   calc_dist_diff();
   update_pillar_trough();
+  update_wall_edge();
 }
 
 __attribute__((noinline, section(".time_critical.sensor_processor")))
@@ -392,4 +393,65 @@ void SensorProcessor::update_pillar_trough() {
   };
   publish(pillar_r_, se->pillar_r);
   publish(pillar_l_, se->pillar_l);
+}
+
+__attribute__((noinline, section(".time_critical.sensor_processor")))
+void SensorProcessor::update_wall_edge() {
+  const auto &pp = param->wall_off_dist;
+  const float x_now = tgt_val->global_pos.dist;
+  const auto mt = tgt_val->motion_type;
+  // 再アームする区間は柱の谷の検知(update_pillar_trough)と同じ。直線中も追跡して
+  // おくのは、WALL_OFF の開始直後に壁の距離(過去 16〜4mm の中央値)が要るため。
+  const bool rearm =
+      (mt == MotionType::SLALOM || mt == MotionType::PIVOT ||
+       mt == MotionType::PIVOT_PRE || mt == MotionType::PIVOT_PRE2 ||
+       mt == MotionType::PIVOT_AFTER || mt == MotionType::PIVOT_OFFSET ||
+       mt == MotionType::NONE || mt == MotionType::READY ||
+       mt == MotionType::FRONT_CTRL);
+
+  // se->wo は S3(read_enc_bat の終わり)で 1 tick 分まとめて写される。同じ Core1 の
+  // 中なので途中の状態は見えない。同じ組を 2 回入れないよう seq で確かめる。
+  const int wo_seq = se->wo.seq;
+  if (rearm) {
+    edge_l_.arm();
+    edge_r_.arm();
+  } else if (wo_seq != edge_wo_seq_) {
+    const int n = std::clamp((int)se->wo.n, 0, 4);
+    // サンプルの位置: global_pos.dist はエンコーダーを読んだ時刻(S3)の位置なので、
+    // 読んだ時刻の差 × 速度で各サンプルの時刻へ戻す(速度は距離の積分と同じ
+    // 先読みなしの値)。時刻はどれも tick(S0)の開始からの us。
+    const float v = 0.5f * (se->ego.v_l_dist + se->ego.v_r_dist); // [mm/s]
+    const float t_enc = 0.5f * ((float)se->t_encl + (float)se->t_encr);
+    float xl[4], dl[4], xr[4], dr[4];
+    for (int q = 0; q < n; q++) {
+      xl[q] = x_now + v * ((float)se->wo.tl[q] - t_enc) * 1e-6f;
+      xr[q] = x_now + v * ((float)se->wo.tr[q] - t_enc) * 1e-6f;
+      dl[q] = calc_sensor_val((float)se->wo.l[q], param->sensor_gain.l45.a,
+                              param->sensor_gain.l45.b);
+      dr[q] = calc_sensor_val((float)se->wo.r[q], param->sensor_gain.r45.a,
+                              param->sensor_gain.r45.b);
+    }
+    WallEdgeParams p;
+    p.win_far = pp.edge_win_far;
+    p.win_near = pp.edge_win_near;
+    p.level_max = pp.edge_level_max;
+    p.depth = pp.edge_depth;
+    p.span = pp.edge_span;
+    p.band = pp.edge_band;
+    p.noise_back = pp.edge_noise_back;
+    p.anchor_h = pp.edge_anchor_h;
+    p.min_run = pp.edge_min_run;
+    auto publish = [](const WallEdgeDetector &d, wall_edge_out_t &o) {
+      o.edge_x = d.edge_x();
+      o.fire_x = d.fire_x();
+      o.level = d.level();
+      __dmb();
+      o.seq = d.seq();
+    };
+    if (edge_l_.update(xl, dl, n, p)) publish(edge_l_, se->edge_l);
+    if (edge_r_.update(xr, dr, n, p)) publish(edge_r_, se->edge_r);
+  }
+  edge_wo_seq_ = wo_seq;
+  se->edge_l.lag = x_now - edge_l_.edge_x();
+  se->edge_r.lag = x_now - edge_r_.edge_x();
 }

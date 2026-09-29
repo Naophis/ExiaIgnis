@@ -149,7 +149,11 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
     tmp_dist_after = tgt_val->global_pos.dist;
 
     if (exist) {
-      if (strategy.detect_wall_off(exist)) {
+      if (take_wall_edge(TurnDirection::Right, ps_front, tmp_dist_before)) {
+        return true;
+      }
+      if (legacy_wall_off_ok(TurnDirection::Right) &&
+          strategy.detect_wall_off(exist)) {
         ps_front.dist += p_wall_off.right_str_exist;
         ps_front.dist = MAX(ps_front.dist, 0.1);
         return true;
@@ -251,7 +255,11 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
     tmp_dist_after = tgt_val->global_pos.dist;
 
     if (exist) {
-      if (strategy.detect_wall_off(exist)) {
+      if (take_wall_edge(TurnDirection::Left, ps_front, tmp_dist_before)) {
+        return true;
+      }
+      if (legacy_wall_off_ok(TurnDirection::Left) &&
+          strategy.detect_wall_off(exist)) {
         ps_front.dist += p_wall_off.left_str_exist;
         ps_front.dist = MAX(ps_front.dist, 0.1);
         return true;
@@ -370,6 +378,57 @@ bool WallOffController::take_pillar_trough(TurnDirection td,
   ps_front.dist += c - lag;
   ps_front.dist = MAX(ps_front.dist, 0.1);
   return true;
+}
+
+__attribute__((noinline, section(".time_critical.wall_off")))
+bool WallOffController::take_wall_edge(TurnDirection td,
+                                       param_straight_t &ps_front,
+                                       float wo_start_x) {
+  // 2026-09-30: 壁の切れ目の形の検知(include/planning/wall_edge_detector.hpp)。
+  // Core1 が 1 tick 4 サンプルの 45° の読みで「壁の距離 + depth まで span 以内に
+  // 遠のいた」を確認して seq を進める。ここでは発火位置でなく基準位置
+  // (壁の距離 + anchor_h を越えた点、edge_x)でアンカーし、発火までの遅れを
+  // 残距離から差し引く(柱の谷の take_pillar_trough と同じ形)。
+  const auto &p_wall_off = get_wall_off_param();
+  if (!p_wall_off.edge_enable) {
+    return false;
+  }
+  const auto se = get_sensing_entity();
+  const bool right = (td == TurnDirection::Right);
+  const wall_edge_out_t &eo = right ? se->edge_r : se->edge_l;
+  uint16_t &used = right ? edge_seq_used_r_ : edge_seq_used_l_;
+  const uint16_t seq = eo.seq;
+  if (seq == used) {
+    return false;
+  }
+  __dmb();
+  const float edge_x = eo.edge_x;
+  const float lag = tgt_val->global_pos.dist - edge_x;
+  if (lag < 0.0f || lag > p_wall_off.edge_stale_dist) {
+    return false;
+  }
+  // 直線中も検知しているので、WALL_OFF 開始より edge_prestart_dist 以上前の
+  // 切れ目(前の区画の壁の終わりなど)は使わない。
+  if (edge_x < wo_start_x - p_wall_off.edge_prestart_dist) {
+    return false;
+  }
+  used = seq;
+  const float c = right ? p_wall_off.edge_str_r : p_wall_off.edge_str_l;
+  ps_front.dist += c - lag;
+  ps_front.dist = MAX(ps_front.dist, 0.1);
+  return true;
+}
+
+__attribute__((noinline, section(".time_critical.wall_off")))
+bool WallOffController::legacy_wall_off_ok(TurnDirection td) {
+  const auto &p_wall_off = get_wall_off_param();
+  if (!p_wall_off.edge_enable) {
+    return true;
+  }
+  const auto se = get_sensing_entity();
+  const float d = (td == TurnDirection::Right) ? se->ego.right45_dist
+                                               : se->ego.left45_dist;
+  return d >= p_wall_off.edge_fallback_dist;
 }
 
 __attribute__((noinline, section(".time_critical.wall_off")))

@@ -2,6 +2,7 @@
 
 #include "planning/astraea_types.hpp"
 #include "planning/pillar_trough_detector.hpp"
+#include "planning/wall_edge_detector.hpp"
 #include "structs.hpp"
 #include <memory>
 #include <vector>
@@ -40,5 +41,12 @@ private:
   PillarTroughDetector pillar_r_;
   float pillar_x_prev_ = 0.0f;
   bool  pillar_x_valid_ = false;
+  // 壁の切れ目の形の検知(2026-09-30)。calc_dist() の末尾で毎 tick 呼び、
+  // 1 tick に 4 回読む 45° LED1(se->wo)を距離にして WallEdgeDetector へ入れ、
+  // 結果を se->edge_l/r に公開する。
+  void  update_wall_edge();
+  WallEdgeDetector edge_l_;
+  WallEdgeDetector edge_r_;
+  int   edge_wo_seq_ = -1;
   float calc_sensor_val(float data, float a, float b);
 };

@@ -227,6 +227,16 @@ PlanningTask は以下のサブシステムを内包:
 
 壁なし開始の `WALL_OFF` では注視側 45° LED1 が「下降→谷底→急上昇」の谷を見せる。`PillarTroughDetector` は Core1 の `SensorProcessor::update_pillar_trough()` で左右 2 本を毎 tick 更新し(旋回・超信地・停止中は再アーム)、結果を `sensing_result->pillar_l/r` に公開する。切れ目の判定は**走行距離で正規化した 2 階微分(曲率)が `curv_th` 以上を `curv_n` tick 連続**で行う。首振れや姿勢ドリフトは読みをほぼ直線に動かすので 2 階微分では符号が交互に振れるだけになり、1 階微分では紛らわしい緩い上昇を弾ける。1 階微分ルールと `far_th` 到達は保険として残してある。Core0 の `WallOffController::take_pillar_trough()` が exist=false の経路で最優先に拾い、発火位置ではなく谷底位置でアンカーして `ps_front.dist += pillar_str − (現在位置 − 谷底位置)` とする。パラメータは `offset.yaml` の `wall_off_pillar_*`。従来の絶対しきい値経路と 25mm 通過の安全網(`detect_pass_through_case2`)は残してある。ホスト検証は `tests/pillar_trough_host/run.sh`(CSV ログを渡すと全行再生)。
 
+#### 壁ありで始まる WALL_OFF の壁の切れ目の形の検知 (`include/planning/wall_edge_detector.hpp`、2026-09-30)
+
+従来の判定(`detect_wall_off`)は「45° が絶対しきい値 `noexist_th`(49mm)を越えて増えている」で、壁ありの普段の距離(46〜49mm)との余裕が 1〜3mm しかなく、壁から少し離れて走ったり暗い壁だったりすると壁が続いているのに発火した。`WallEdgeDetector` は 1 tick 4 サンプル(`sensing_result->wo`)で形を見る: 壁の距離 = 過去 [x−16, x−4]mm の中央値(60mm 以上は壁なし)、発火 = そこから +4mm 以上まで 10mm 以内に遠のいた、基準位置 = +3mm を越えた点(補間)。Core1 の `SensorProcessor::update_wall_edge()` が毎 tick 更新して `sensing_result->edge_l/r` に公開し(再アームは柱の谷と同じ区間)、Core0 の `WallOffController::take_wall_edge()` が exist=true の第二段階で拾って `ps_front.dist += edge_str − (現在位置 − 基準位置)` とする。一度使った発火は使わない。発火後は発火位置から `win_far` 進むまで発火しない(履歴を消して再アームすると、上昇の途中の読みで壁の距離を出し直して同じ上昇で 2 回発火した)。
+
+- `offset.yaml` の `wall_off_edge_*`。`edge_enable` 0 = 検知してログに出すだけ、1 = 旋回位置に使う(従来の判定は 45° が `edge_fallback_dist` = 60mm を越えたときだけの保険)。
+- サンプルの位置は `global_pos.dist`(S3 でエンコーダーを読んだ時刻の位置)+ 速度 × (読んだ時刻 − エンコーダーの時刻)。距離は `sensor_gain.l45/r45`。前のサンプルから 0.25mm 未満のサンプルは捨てる(低速でバッファ 128 点が 32mm 以上を覚えるように)。
+- ホスト検証は `tests/wall_edge_host/`(Python 版と 713 件で最初の発火が一致。引数 `all` で全発火を出す)。ログ列 `edge_seq_l/r`・`edge_lag_l/r`・`edge_lvl_l/r`、`wo_dl0..3` / `wo_dr0..3`(wo の生値をダンプ時に距離にしたもの [mm]、無効は 0)。
+- 実機(20260930_011650〜011852、v≈2200): Core1 の計算は `pln_t_sensor` で直進 +12us・WALL_OFF 中 +25〜30us、WALL_OFF 中の `pln_margin_us` は最小 70us。発火 tick・基準位置・壁の距離はオフラインの再生と一致(差 0.04mm 以内)。
+- あわせて `MotionPlanning::wall_off_recheck_ok()`(SLA_FRONT_STR の後の再確認)を、入るときに壁があったなら入るときの距離 + `wall_off_recheck_delta`(5mm)以上遠のいたことも求める形にした。
+
 #### タイム最小の経路探索 (`TimePathPlanner`、2026-09-29)
 
 最短走行(`path_run()` で右を選んだとき)と `sim_run_time()` の経路は `MainTask::create_fast_path()` が作る。まず `TimePathPlanner::solve()` を使い、使えなかったときだけ下の「PathCreator の経路最適化」(重みパターン 1〜5 の比較)へ戻る。ボタンで中断したときは単純な経路(`path_create()` そのまま)。

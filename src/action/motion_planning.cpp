@@ -1807,6 +1807,9 @@ MotionResult MotionPlanning::wall_off(param_straight_t &p, bool dia) {
 
 __attribute__((noinline, section(".time_critical.motion_planning")))
 bool MotionPlanning::wall_off(TurnDirection td, param_straight_t &ps_front) {
+  const auto se = get_sensing_entity();
+  wall_off_ref_dist_ = (td == TurnDirection::Right) ? se->ego.right45_dist
+                                                    : se->ego.left45_dist;
   return wall_off_controller->execute_wall_off(td, ps_front);
 }
 
@@ -1820,12 +1823,25 @@ bool MotionPlanning::wall_off_dia(TurnDirection td, param_straight_t &ps_front,
 // 2026-09-09: wall_off()確定後、SLA_FRONT_STR走行完了時点でこの関数がfalseを
 // 返した場合、slalom()側でwall_off()をやり直す(検出タイミング自体は変えず、
 // 後付けの再確認のみ)。
+// 2026-09-30: 絶対値(recheck_dist、49mm)だけだと、壁から少し離れて走っている
+// ときの壁ありの距離(48〜49mm)と区別できず、誤検知でも通っていた
+// (20260930_002609: 入るとき 46.6 → 終わり 49.05mm で OK)。入るときに壁が
+// あったなら、そこから recheck_delta 以上遠のいたことも求める。過去ログ 933 組で、
+// 本物の壁切れの終わりの距離は中央値 90mm(ほとんど 60mm 以上か読めない)。
 __attribute__((noinline, section(".time_critical.motion_planning")))
 bool MotionPlanning::wall_off_recheck_ok(TurnDirection td) {
   const auto se = get_sensing_entity();
-  return (td == TurnDirection::Right)
-             ? se->ego.right45_dist >= param->wall_off_dist.wall_off_recheck_dist_r
-             : se->ego.left45_dist >= param->wall_off_dist.wall_off_recheck_dist_l;
+  const auto &w = param->wall_off_dist;
+  const bool right = (td == TurnDirection::Right);
+  const float d = right ? se->ego.right45_dist : se->ego.left45_dist;
+  const float abs_th = right ? w.wall_off_recheck_dist_r : w.wall_off_recheck_dist_l;
+  const float delta = right ? w.wall_off_recheck_delta_r : w.wall_off_recheck_delta_l;
+  const float exist_th = right ? w.wall_off_exist_wall_th_r : w.wall_off_exist_wall_th_l;
+  if (d < abs_th) {
+    return false;
+  }
+  const bool had_wall = wall_off_ref_dist_ > 0.0f && wall_off_ref_dist_ < exist_th;
+  return !had_wall || d >= wall_off_ref_dist_ + delta;
 }
 
 __attribute__((noinline, section(".time_critical.motion_planning")))

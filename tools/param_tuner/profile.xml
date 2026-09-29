@@ -720,7 +720,43 @@
    <Container>
     <DockSplitter count="3" orientation="-" sizes="0.3336;0.3328;0.3336">
      <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
-      <DockArea name="wo_left (S0..S3)">
+      <DockArea name="wo_dist_l (mm)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-4.500000" left="0.000000" right="288.000000" top="184.500000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="wo_dl0"/>
+        <curve color="#d62728" name="wo_dl1"/>
+        <curve color="#1ac938" name="wo_dl2"/>
+        <curve color="#ff7f0e" name="wo_dl3"/>
+        <curve color="#f14cc1" name="left45_d"/>
+        <curve color="#9467bd" name="sen_dist_l45"/>
+        <curve color="#17becf" name="edge_lvl_l"/>
+       </plot>
+      </DockArea>
+      <DockArea name="wo_dist_r (mm)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-4.500000" left="0.000000" right="288.000000" top="184.500000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="wo_dr0"/>
+        <curve color="#d62728" name="wo_dr1"/>
+        <curve color="#1ac938" name="wo_dr2"/>
+        <curve color="#ff7f0e" name="wo_dr3"/>
+        <curve color="#f14cc1" name="right45_d"/>
+        <curve color="#9467bd" name="sen_dist_r45"/>
+        <curve color="#17becf" name="edge_lvl_r"/>
+       </plot>
+      </DockArea>
+      <DockArea name="edge_lag (mm)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-5.000000" left="0.000000" right="288.000000" top="200.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="edge_lag_l"/>
+        <curve color="#d62728" name="edge_lag_r"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
+      <DockArea name="wo_raw_l (S0..S3)">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-20.000000" left="0.000000" right="288.000000" top="600.000000"/>
         <limitY/>
@@ -730,7 +766,7 @@
         <curve color="#ff7f0e" name="wo_l3"/>
        </plot>
       </DockArea>
-      <DockArea name="wo_right (S0..S3)">
+      <DockArea name="wo_raw_r (S0..S3)">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
         <range bottom="-20.000000" left="0.000000" right="288.000000" top="600.000000"/>
         <limitY/>
@@ -740,43 +776,13 @@
         <curve color="#ff7f0e" name="wo_r3"/>
        </plot>
       </DockArea>
-      <DockArea name="side45 (1kHz)">
+      <DockArea name="edge_seq / wo_n">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
-        <range bottom="-4.500000" left="0.000000" right="288.000000" top="184.500000"/>
+        <range bottom="-0.500000" left="0.000000" right="288.000000" top="40.000000"/>
         <limitY/>
-        <curve color="#1f77b4" name="left45_d"/>
-        <curve color="#d62728" name="right45_d"/>
-        <curve color="#1ac938" name="sen_dist_l45"/>
-        <curve color="#ff7f0e" name="sen_dist_r45"/>
-       </plot>
-      </DockArea>
-     </DockSplitter>
-     <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
-      <DockArea name="wo_time_l [us]">
-       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
-        <range bottom="-20.000000" left="0.000000" right="288.000000" top="1000.000000"/>
-        <limitY/>
-        <curve color="#1f77b4" name="wo_tl0"/>
-        <curve color="#d62728" name="wo_tl1"/>
-        <curve color="#1ac938" name="wo_tl2"/>
-        <curve color="#ff7f0e" name="wo_tl3"/>
-       </plot>
-      </DockArea>
-      <DockArea name="wo_time_r [us]">
-       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
-        <range bottom="-20.000000" left="0.000000" right="288.000000" top="1000.000000"/>
-        <limitY/>
-        <curve color="#1f77b4" name="wo_tr0"/>
-        <curve color="#d62728" name="wo_tr1"/>
-        <curve color="#1ac938" name="wo_tr2"/>
-        <curve color="#ff7f0e" name="wo_tr3"/>
-       </plot>
-      </DockArea>
-      <DockArea name="wo_n">
-       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
-        <range bottom="-0.500000" left="0.000000" right="288.000000" top="4.500000"/>
-        <limitY/>
-        <curve color="#1f77b4" name="wo_n"/>
+        <curve color="#1f77b4" name="edge_seq_l"/>
+        <curve color="#d62728" name="edge_seq_r"/>
+        <curve color="#1ac938" name="wo_n"/>
        </plot>
       </DockArea>
      </DockSplitter>
@@ -797,12 +803,18 @@
         <curve color="#d62728" name="ideal_dist"/>
        </plot>
       </DockArea>
-      <DockArea name="wo_seq / gyro_fifo_seq">
+      <DockArea name="wo_time (us)">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
-        <range bottom="-33000.000000" left="0.000000" right="288.000000" top="33000.000000"/>
+        <range bottom="-20.000000" left="0.000000" right="288.000000" top="1000.000000"/>
         <limitY/>
-        <curve color="#1f77b4" name="wo_seq"/>
-        <curve color="#d62728" name="gyro_fifo_seq"/>
+        <curve color="#1f77b4" name="wo_tl0"/>
+        <curve color="#d62728" name="wo_tl1"/>
+        <curve color="#1ac938" name="wo_tl2"/>
+        <curve color="#ff7f0e" name="wo_tl3"/>
+        <curve color="#f14cc1" name="wo_tr0"/>
+        <curve color="#9467bd" name="wo_tr1"/>
+        <curve color="#17becf" name="wo_tr2"/>
+        <curve color="#bcbd22" name="wo_tr3"/>
        </plot>
       </DockArea>
      </DockSplitter>

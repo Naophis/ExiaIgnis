@@ -236,6 +236,45 @@ wall_off_hold_div_th_r3: 0.01 #p_wall_off.div_th_r3
 # ことを実測ログで確認済み。
 wall_off_recheck_dist_l: 49.0
 wall_off_recheck_dist_r: 49.0
+# 2026-09-30: 上の絶対値だけだと、壁から少し離れて走っているときの壁ありの距離
+# (48〜49mm)と区別できず、誤検知でも通っていた(20260930_002609: 入るとき 46.6 →
+# 終わり 49.05mm で通過)。WALL_OFF に入るとき壁があった(< wall_off_exist_wall_th)
+# なら、そこから delta 以上遠のいたことも求める。誤検知の実例は +0.7 / +2.4mm、
+# WALL_OFF 開始時の寄りは最大 +2.6mm。過去ログ 933 組で 5mm にすると、今 OK の
+# 組のうち 8 組(どれも入るとき 45〜52mm → 終わり 49〜56mm でほとんど遠のいて
+# いない)がやり直しに変わる。本物の壁切れの終わりは中央値 90mm。
+wall_off_recheck_delta_l: 5.0
+wall_off_recheck_delta_r: 5.0
+
+# 2026-09-30: 壁ありで始まる WALL_OFF の壁の切れ目を、1 tick に 4 回読む 45° LED1
+# (ログ列 wo_*)の形で検知する(include/planning/wall_edge_detector.hpp)。
+#   壁の距離 = 少し前の区間 [x−win_far, x−win_near] の中央値(level_max 以上なら壁なし)。
+#   発火 = 壁の距離 + depth 以上まで、壁の距離 + band を越えてから span mm 以内に
+#          min_run サンプル以上かけて遠のき、途中で noise_back 以上戻っていない。
+#   基準位置 = 壁の距離 + anchor_h を越えた点。旋回位置はここから決める
+#          (ps_front.dist += edge_str − (今の位置 − 基準位置))。
+# edge_enable: 0 = 検知してログに出すだけ(旋回は従来の判定)、1 = 旋回位置に使う。
+# 1 のときの従来の判定は、45° が edge_fallback_dist まで遠のいたときだけ(見逃しの保険)。
+# edge_str_l/r の初期値は、過去ログ(09-29 の同じコースの反復)で基準位置が従来の
+# 検知位置より 左 +4.35 / 右 +0.83mm 先に出たので、従来と同じ旋回位置になる換算値
+# (wall_off_hold_dist_str_*_exist − その差)。左右差は壁との距離の違い(左 46 / 右 48.5mm
+# で従来の 49mm しきい値までの余裕が違う)なので、有効化後に n≥4 で合わせ直すこと。
+# ログ列 edge_seq_l/r(発火回数)・edge_lag_l/r(今の位置 − 基準位置)・edge_lvl_l/r。
+wall_off_edge_enable: 1
+wall_off_edge_win_far: 16.0
+wall_off_edge_win_near: 4.0
+wall_off_edge_level_max: 60.0
+wall_off_edge_depth: 4.0
+wall_off_edge_span: 10.0
+wall_off_edge_band: 1.0
+wall_off_edge_noise_back: 1.0
+wall_off_edge_anchor_h: 3.0
+wall_off_edge_min_run: 2
+wall_off_edge_stale_dist: 30.0
+wall_off_edge_prestart_dist: 10.0
+wall_off_edge_fallback_dist: 60.0
+wall_off_edge_str_l: -4.3
+wall_off_edge_str_r: -1.8
 
 wall_off_noexist_diff_l: 0.5
 wall_off_noexist_diff_r: 0.5

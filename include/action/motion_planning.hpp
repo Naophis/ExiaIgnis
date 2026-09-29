@@ -113,6 +113,8 @@ private:
   // wall_off_controller.cpp側の検出タイミング自体には影響しない後付けの
   // 再確認のみ。
   bool wall_off_recheck_ok(TurnDirection td);
+  // wall_off(td, ...) に入るときの横 45° の距離(再チェックの基準、2026-09-30)
+  float wall_off_ref_dist_ = 0.0f;
 
   std::shared_ptr<UserInterface> ui;
   std::shared_ptr<sensing_result_entity_t> sensing_result;

@@ -434,6 +434,13 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.wo_tr3 = sr->wo.tr[3];
   ld.wo_n = sr->wo.n;
   ld.wo_seq = static_cast<int16_t>(sr->wo.seq);
+  // 壁の切れ目の形の検知(2026-09-30, structs.hpp wall_edge_out_t)
+  ld.edge_seq_l = static_cast<int16_t>(sr->edge_l.seq);
+  ld.edge_seq_r = static_cast<int16_t>(sr->edge_r.seq);
+  ld.edge_lag_l = floatToHalf(sr->edge_l.lag);
+  ld.edge_lag_r = floatToHalf(sr->edge_r.lag);
+  ld.edge_lvl_l = floatToHalf(sr->edge_l.level);
+  ld.edge_lvl_r = floatToHalf(sr->edge_r.level);
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -692,6 +699,20 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_tr3:int:%d\n", (int)sizeof(ls11.wo_tr3));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_n:int:%d\n", (int)sizeof(ls11.wo_n));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_seq:int:%d\n", (int)sizeof(ls11.wo_seq));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "edge_seq_l:int:%d\n", (int)sizeof(ls11.edge_seq_l));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "edge_seq_r:int:%d\n", (int)sizeof(ls11.edge_seq_r));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "edge_lag_l:float:%d\n", (int)sizeof(ls11.edge_lag_l));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "edge_lag_r:float:%d\n", (int)sizeof(ls11.edge_lag_r));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "edge_lvl_l:float:%d\n", (int)sizeof(ls11.edge_lvl_l));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "edge_lvl_r:float:%d\n", (int)sizeof(ls11.edge_lvl_r));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dl0:float:%d\n", (int)sizeof(ls11.wo_dl0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dl1:float:%d\n", (int)sizeof(ls11.wo_dl1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dl2:float:%d\n", (int)sizeof(ls11.wo_dl2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dl3:float:%d\n", (int)sizeof(ls11.wo_dl3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr0:float:%d\n", (int)sizeof(ls11.wo_dr0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr1:float:%d\n", (int)sizeof(ls11.wo_dr1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr2:float:%d\n", (int)sizeof(ls11.wo_dr2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr3:float:%d\n", (int)sizeof(ls11.wo_dr3));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -998,6 +1019,35 @@ void LoggingTask::dump_csv() const {
     ls11.wo_tr3 = e.wo_tr3;
     ls11.wo_n = e.wo_n;
     ls11.wo_seq = e.wo_seq;
+    ls11.edge_seq_l = e.edge_seq_l;
+    ls11.edge_seq_r = e.edge_seq_r;
+    ls11.edge_lag_l = halfToFloat(e.edge_lag_l);
+    ls11.edge_lag_r = halfToFloat(e.edge_lag_r);
+    ls11.edge_lvl_l = halfToFloat(e.edge_lvl_l);
+    ls11.edge_lvl_r = halfToFloat(e.edge_lvl_r);
+    {
+      // wo の 4 サンプルを距離に(有効なのは wo_n 個、残りは 0)
+      const int16_t wl[4] = {e.wo_l0, e.wo_l1, e.wo_l2, e.wo_l3};
+      const int16_t wr[4] = {e.wo_r0, e.wo_r1, e.wo_r2, e.wo_r3};
+      float dl[4], dr[4];
+      for (int q = 0; q < 4; q++) {
+        const bool ok = q < e.wo_n;
+        dl[q] = ok ? calc_sensor(wl[q], param->sensor_gain.l45.a,
+                                 param->sensor_gain.l45.b, e.motion_type)
+                   : 0.0f;
+        dr[q] = ok ? calc_sensor(wr[q], param->sensor_gain.r45.a,
+                                 param->sensor_gain.r45.b, e.motion_type)
+                   : 0.0f;
+      }
+      ls11.wo_dl0 = dl[0];
+      ls11.wo_dl1 = dl[1];
+      ls11.wo_dl2 = dl[2];
+      ls11.wo_dl3 = dl[3];
+      ls11.wo_dr0 = dr[0];
+      ls11.wo_dr1 = dr[1];
+      ls11.wo_dr2 = dr[2];
+      ls11.wo_dr3 = dr[3];
+    }
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

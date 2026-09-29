@@ -86,6 +86,16 @@ private:
   // 拾えたら true。
   bool take_pillar_trough(TurnDirection td, param_straight_t &ps_front,
                           float wo_start_x);
+  // 壁の切れ目の形の検知(wall_edge_detector.hpp)の結果を拾って ps_front.dist を
+  // 基準位置で決める(2026-09-30)。壁ありで始まる(exist=true)経路の第二段階で呼ぶ。
+  // 一度使った発火(seq)は使わない(再チェックで wall_off() をやり直したとき用)。
+  bool take_wall_edge(TurnDirection td, param_straight_t &ps_front,
+                      float wo_start_x);
+  // 従来の判定(detect_wall_off)を使ってよいか。edge_enable のときは、45° が
+  // edge_fallback_dist まで遠のいてから(形の検知の見逃しの保険)。
+  bool legacy_wall_off_ok(TurnDirection td);
+  uint16_t edge_seq_used_l_ = 0;
+  uint16_t edge_seq_used_r_ = 0;
   bool process_right_wall_off_dia(param_straight_t &ps_front,
                                   bool &use_oppo_wall, bool &exist_wall);
   bool process_left_wall_off_dia(param_straight_t &ps_front,
