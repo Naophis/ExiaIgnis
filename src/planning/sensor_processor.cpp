@@ -162,6 +162,7 @@ void SensorProcessor::calc_dist() {
   calc_dist_diff();
   update_pillar_trough();
   update_wall_edge();
+  update_dia_post_edge();
 }
 
 __attribute__((noinline, section(".time_critical.sensor_processor")))
@@ -496,4 +497,46 @@ void SensorProcessor::update_wall_edge() {
   };
   refine(pillar_l_, edge_l_, se->pillar_l, pillar_hf_seq_l_, (float)se->wo.tl[0]);
   refine(pillar_r_, edge_r_, se->pillar_r, pillar_hf_seq_r_, (float)se->wo.tr[0]);
+}
+
+__attribute__((noinline, section(".time_critical.sensor_processor")))
+void SensorProcessor::update_dia_post_edge() {
+  const float x_now = tgt_val->global_pos.dist;
+  const auto mt = tgt_val->motion_type;
+  // 再アームする区間は壁の切れ目の検知(update_wall_edge)と同じ。旋回を抜けたら
+  // 斜めかどうかによらず追う(直交の直線では左右の縁の間隔が 0 か 90mm 前後になり、
+  // 63.64 ± tol に入らないので組はできない。実走 11 本のホスト再生で斜めの外は 0 組)。
+  const bool rearm =
+      (mt == MotionType::SLALOM || mt == MotionType::PIVOT ||
+       mt == MotionType::PIVOT_PRE || mt == MotionType::PIVOT_PRE2 ||
+       mt == MotionType::PIVOT_AFTER || mt == MotionType::PIVOT_OFFSET ||
+       mt == MotionType::NONE || mt == MotionType::READY ||
+       mt == MotionType::FRONT_CTRL);
+  const int wo_seq = se->wo.seq;
+  if (rearm) {
+    dia_post_.arm();
+    se->dia_post.n_pairs = 0;
+    se->dia_post.eps = 0;
+  } else if (wo_seq != dia_post_wo_seq_ && se->wo.n >= 1) {
+    // S0 の読み(wo.l/r[0])だけを使う。オフラインで確かめたのはログの left45 /
+    // right45 列 = wo_l0 / wo_r0 で、S1〜S3 は同じ位置でも読みが違う(S0 が低い)。
+    // 位置は読んだ時刻へ戻す(update_wall_edge と同じ)。左右で読んだ時刻が違う分も入る。
+    const float v = 0.5f * (se->ego.v_l_dist + se->ego.v_r_dist); // [mm/s]
+    const float t_enc = 0.5f * ((float)se->t_encl + (float)se->t_encr);
+    const float xl = x_now + v * ((float)se->wo.tl[0] - t_enc) * 1e-6f;
+    const float xr = x_now + v * ((float)se->wo.tr[0] - t_enc) * 1e-6f;
+    const DiaPostEdgeParams p;
+    bool paired = dia_post_.update(DiaPostEdgeDetector::LEFT, xl, (float)se->wo.l[0], p);
+    paired |= dia_post_.update(DiaPostEdgeDetector::RIGHT, xr, (float)se->wo.r[0], p);
+    if (paired) {
+      se->dia_post.delta = dia_post_.delta();
+      se->dia_post.pos = dia_post_.pos();
+      se->dia_post.eps = dia_post_.eps_deg();
+      se->dia_post.n_pairs = dia_post_.n_pairs();
+      __dmb();
+      se->dia_post.seq = dia_post_.seq();
+    }
+  }
+  dia_post_wo_seq_ = wo_seq;
+  se->dia_post.lag = x_now - se->dia_post.pos;
 }

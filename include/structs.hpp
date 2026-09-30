@@ -324,6 +324,19 @@ typedef struct {
   volatile float lag = 0;       // 今の位置 − 最後の基準位置 [mm](ログ用、毎 tick 更新)
 } wall_edge_out_t;
 
+// 斜めの柱の立ち下がりから出した横位置(2026-10-01、include/planning/dia_post_edge_detector.hpp)。
+// Core1 の SensorProcessor::update_dia_post_edge() が左右の組ができるたびに更新する。
+// 書き手は delta 等を書いてから __dmb() → seq の順、読み手は seq を見てから __dmb() → 他。
+// まだログに出すだけで、制御には使っていない。
+typedef struct {
+  volatile uint16_t seq = 0;  // 組ができるたびに +1
+  volatile float delta = 0;   // 横位置 [mm](+ は右。左右センサーの取り付け差 k0 は引いていない)
+  volatile float pos = 0;     // 組の位置(2 つの縁の中点の global_pos.dist)[mm]
+  volatile float eps = 0;     // 最後の 2 組から出した向き [deg](+ は右向き。組が 2 つ未満なら 0)
+  volatile int n_pairs = 0;   // 再アーム(旋回・停止)してからの組の数
+  volatile float lag = 0;     // 今の位置 − pos [mm](ログ用、毎 tick 更新)
+} dia_post_out_t;
+
 // ジャイロ FIFO の読み出し結果(2026-09-29、sensing_task.cpp)。Core1 の
 // SensingTask が毎 tick 書き、ログ(Core0)が読む。1kHz で 1 点読みすると
 // 約 1.19kHz の振動が 195/313Hz に折り返して見えていたため、実 ODR
@@ -407,6 +420,7 @@ typedef struct {
   pillar_trough_out_t pillar_r; // 右45°の柱谷検知
   wall_edge_out_t edge_l;       // 左45°の壁の切れ目の検知(2026-09-30)
   wall_edge_out_t edge_r;       // 右45°の壁の切れ目の検知
+  dia_post_out_t dia_post;      // 斜めの柱の立ち下がりから出した横位置(2026-10-01)
   gyro_fifo_out_t gyro_fifo;    // ジャイロ FIFO の読み出し結果(2026-09-29)
   sched_diag_t sched;           // センシングの枠と planning の重なりの記録(2026-09-29)
   wo_hf_t wo;                   // WALL_OFF 中の 45° LED1 の 4 サンプル / tick(2026-09-30)
@@ -2345,6 +2359,10 @@ typedef struct {
   int16_t sla_wait;
   real16_T pillar_hf_lag_l; // 現在位置 − 細かいサンプルで求めた谷底 [mm](無ければ 0、失敗は −1)
   real16_T pillar_hf_lag_r;
+  int16_t dpe_seq;        // 斜めの柱の立ち下がりの組の数(2026-10-01, dia_post_out_t)
+  real16_T dpe_delta;     // 最後の組の横位置 [mm](+ は右)
+  real16_T dpe_eps;       // 最後の 2 組から出した向き [deg]
+  real16_T dpe_lag;       // 今の位置 − 最後の組の位置 [mm]
 } log_data_t2;
 
 typedef struct {
@@ -2659,6 +2677,10 @@ typedef struct {
   int wo_br1 = 219;
   int wo_br2 = 220;
   int wo_br3 = 221;
+  int dpe_seq = 222;     // 斜めの柱の立ち下がりの組の数(2026-10-01、16bit で一周)
+  float dpe_delta = 223; // 最後の組の横位置 [mm](+ は右、k0 は引いていない)
+  float dpe_eps = 224;   // 最後の 2 組から出した向き [deg](+ は右向き、組が 2 つ未満なら 0)
+  float dpe_lag = 225;   // 今の位置 − 最後の組の位置 [mm]
 } LogStruct11;
 
 #endif

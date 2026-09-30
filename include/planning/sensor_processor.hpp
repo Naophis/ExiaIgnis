@@ -1,6 +1,7 @@
 #pragma once
 
 #include "planning/astraea_types.hpp"
+#include "planning/dia_post_edge_detector.hpp"
 #include "planning/pillar_trough_detector.hpp"
 #include "planning/wall_edge_detector.hpp"
 #include "structs.hpp"
@@ -52,5 +53,10 @@ private:
   int   pillar_hf_seq_l_ = -1;
   int   pillar_hf_seq_r_ = -1;
   static constexpr float kPillarHfMaxShift = 3.0f; // [mm] 1 tick 1 点の谷底からのずれの上限
+  // 斜めの柱の立ち下がりから横位置を出す(2026-10-01)。calc_dist() の末尾で毎 tick 呼び、
+  // 45° LED1 の S0 の読み(se->wo.l/r[0])を入れて、結果を se->dia_post に公開する。
+  void  update_dia_post_edge();
+  DiaPostEdgeDetector dia_post_;
+  int   dia_post_wo_seq_ = -1;
   float calc_sensor_val(float data, float a, float b);
 };

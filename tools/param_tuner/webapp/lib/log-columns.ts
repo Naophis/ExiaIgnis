@@ -246,6 +246,20 @@ export const CHART_VIEWS: ChartView[] = [
     ],
   },
   {
+    // 斜めの柱の立ち下がりから出した横位置(2026-10-01、include/planning/dia_post_edge_detector.hpp)。
+    // 縁 = left45 / right45(S0 の生値)が 250 を上から下へ切った点。dpe_* は組ができた tick で更新。
+    key: "dia_post",
+    title: "斜め柱",
+    charts: [
+      { title: "left45 / right45 (raw)", columns: ["left45", "right45"] },
+      { title: "dpe_delta (mm, +右)", columns: ["dpe_delta"] },
+      { title: "dpe_eps (deg, +右向き) / ang", columns: ["dpe_eps", "ang"] },
+      { title: "dpe_lag (mm) / dpe_seq", columns: ["dpe_lag", "dpe_seq"] },
+      { title: "motion_state", columns: ["motion_state", "continuous_turn"] },
+      { title: "duty_sen / s_pid_p", columns: ["duty_sen", "s_pid_p"] },
+    ],
+  },
+  {
     key: "imu_accel",
     title: "IMU加速度",
     charts: [

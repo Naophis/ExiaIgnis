@@ -266,6 +266,19 @@ PlanningTask は以下のサブシステムを内包:
 - 壁切れのあとの直進(SLA_FRONT_STR)は、壁切れの判定で読んだ位置 + 1 tick 分の走行(`|ego_in.v|·dt`)から距離を数える(`param_straight_t::start_x`、`WallOffController::set_front_start()`、2026-09-30)。以前は `go_straight()` が送信後の最初の tick で読んだ位置を基準にしていて、平均は同じ(838 件で差 +0.025mm)だが、Core0 が tick を取りこぼすとその回だけ 1 tick(2.2mm)ずれた。`take_wall_edge` / `take_pillar_trough` は lag を計算した位置をそのまま使う。壁切れ → 旋回の始まりまでで tick の刻みが位置に入る所は、これと `sla_start_align` でなくなった。
 - あわせて `MotionPlanning::wall_off_recheck_ok()`(SLA_FRONT_STR の後の再確認)を、入るときに壁があったなら入るときの距離 + `wall_off_recheck_delta`(5mm)以上遠のいたことも求める形にした。
 
+#### 斜めの横位置: 柱の立ち下がり (`include/planning/dia_post_edge_detector.hpp`、2026-10-01)
+
+従来の斜め制御(`ControlLaw::check_sen_error_dia`、`sensor.yaml` の `dia.ref/exist`)は柱までの距離の読みを基準にしているが、同じ柱の読みが壁の有無で変わる(20260930_222045 / 222320: 45° で +5〜6mm、90° で +14〜35mm、左右とも同時に遠い)。さらに今の値では、発火すると誤差が必ず 5mm 以上(exist = ref − 5)・片側なら 2 倍・p 0.0975 で 0.54mm から ±3° に張り付く(09-20 の斜め制御ありで斜め区間の 56〜77%)うえ、`left_old/right_old` が次のモーションまで残る。
+
+`DiaPostEdgeDetector` は読みの大きさではなく、45° LED1(S0、`wo.l/r[0]` = ログの `left45` / `right45`)が柱を過ぎて**生値 250 を切る位置**を使う。柱は左右交互に 63.64mm ごと。右へ δ ずれると右の縁は +δ、左は −δ 動くので、隣り合う縁の間隔 g から δ(右 → 左: (63.64 − g)/2、左 → 右: (g − 63.64)/2)。旋回出口の前後のずれ・読んだ時刻・速度の遅れは左右に同じだけ入って消える。
+
+- Core1 の `SensorProcessor::update_dia_post_edge()` が毎 tick 左右 1 サンプルずつ入れ、組ができたら `sensing_result->dia_post`(`delta` / `pos` / `eps` / `n_pairs` / `seq`)に出す。再アームは壁の切れ目の検知と同じ区間(旋回・超信地・停止)。**まだログに出すだけで、制御には使っていない。** ログ列 `dpe_seq` / `dpe_delta`(+ は右)/ `dpe_eps`(最後の 2 組の向き、+ は右向き)/ `dpe_lag`。
+- 縁の条件: 手前 3 サンプル以上が 250 以上、250 を越えてからの山が 375 以上、同じ側は 127.28mm の整数倍 ± 15mm、組は直前の反対側の縁と 63.64 ± 15mm。固定しきい値は山谷の 50% や傾き最大の点より壁の有無に強い(壁ありでは左の縁の後ろに次の壁が約 120 raw 見える)。
+- オフライン: `tools/param_tuner/dia_post_edge.py`(ログごとに δ0・ε・残差・同じ側の間隔・壁の有無、`--summary`)。v400 の斜め 320mm で直線を引いた後の残差 0.1〜0.3mm、dia135 右の壁あり/なし各 7 本で δ の差 0.35mm(ばらつき 0.6〜0.9mm の中)。柱の並びから出る向き ε は dia45 `ang: 44.75` のとき +0.24 ± 0.07°(45 − 44.75 がそのまま出る)。
+- 左右センサーの取り付け差 k0 は引いていない。同じ旋回の左右を走らせて δ0 の平均から決める(dia45 左と dia135 右だけでは旋回の内外のずれと分けられない)。
+- 限界: 横位置は柱 2 本以上の斜めだけ(1 区画の斜めは柱 1 本で組ができない)。4000mm/s 超の加減速では走行距離が空転・ロックで狂い(同じ側の間隔 116〜132mm)、δ が ±3mm 狂う。
+- ホスト検証は `tests/dia_post_edge_host/run.sh diag|full <logs>`(diag: Python 版と一致するか、58 区間で差 0.0001mm。full: ログを丸ごと流して斜めの外で組ができないか、実走 11 本で 0 組)。**`dia_post_edge.py` と `dia_post_edge_detector.hpp` の縁の条件を変えたら両方そろえる。**
+
 #### タイム最小の経路探索 (`TimePathPlanner`、2026-09-29)
 
 最短走行(`path_run()` で右を選んだとき)と `sim_run_time()` の経路は `MainTask::create_fast_path()` が作る。まず `TimePathPlanner::solve()` を使い、使えなかったときだけ下の「PathCreator の経路最適化」(重みパターン 1〜5 の比較)へ戻る。ボタンで中断したときは単純な経路(`path_create()` そのまま)。

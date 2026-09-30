@@ -454,6 +454,11 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.sla_wait = sr->sla_align.wait;
   ld.pillar_hf_lag_l = floatToHalf(sr->pillar_l.lag_hf);
   ld.pillar_hf_lag_r = floatToHalf(sr->pillar_r.lag_hf);
+  // 斜めの柱の立ち下がりから出した横位置(2026-10-01, structs.hpp dia_post_out_t)
+  ld.dpe_seq = static_cast<int16_t>(sr->dia_post.seq);
+  ld.dpe_delta = floatToHalf(sr->dia_post.delta);
+  ld.dpe_eps = floatToHalf(sr->dia_post.eps);
+  ld.dpe_lag = floatToHalf(sr->dia_post.lag);
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -738,6 +743,10 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_br1:int:%d\n", (int)sizeof(ls11.wo_br1));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_br2:int:%d\n", (int)sizeof(ls11.wo_br2));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_br3:int:%d\n", (int)sizeof(ls11.wo_br3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_seq:int:%d\n", (int)sizeof(ls11.dpe_seq));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_delta:float:%d\n", (int)sizeof(ls11.dpe_delta));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_eps:float:%d\n", (int)sizeof(ls11.dpe_eps));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_lag:float:%d\n", (int)sizeof(ls11.dpe_lag));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -1085,6 +1094,10 @@ void LoggingTask::dump_csv() const {
     ls11.wo_br1 = e.wo_br1;
     ls11.wo_br2 = e.wo_br2;
     ls11.wo_br3 = e.wo_br3;
+    ls11.dpe_seq = e.dpe_seq;
+    ls11.dpe_delta = halfToFloat(e.dpe_delta);
+    ls11.dpe_eps = halfToFloat(e.dpe_eps);
+    ls11.dpe_lag = halfToFloat(e.dpe_lag);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));
