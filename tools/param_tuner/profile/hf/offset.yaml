@@ -370,13 +370,13 @@ wall_off_hold_dist_dia_r: 4.5
 dia_wall_off_ref_l: 24.0 #dia135
 dia_wall_off_ref_r: 24.0 #dia135
 #斜め壁切れ時のmax接近距離
-dia_wall_off_ref_l_wall: 31.5 #exist_wall
-dia_wall_off_ref_r_wall: 32.25 #exist_wall
-dia_wall_off_ref_l_piller: 37.75 #noexist_wall
-dia_wall_off_ref_r_piller: 36.75 #noexist_wall
+dia_wall_off_ref_l_wall: 33.0 #exist_wall
+dia_wall_off_ref_r_wall: 30.5 #exist_wall
+dia_wall_off_ref_l_piller: 40.0 #noexist_wall
+dia_wall_off_ref_r_piller: 38.25 #noexist_wall
 
-dia_wall_off_ref_l_wall2: 31.75 #exist_wall
-dia_wall_off_ref_r_wall2: 32.25 #exist_wall in suction run
+dia_wall_off_ref_l_wall2: 33.0 #exist_wall
+dia_wall_off_ref_r_wall2: 30.5 #exist_wall in suction run
 
 # 斜め壁切れ偏差
 wall_off_hold_div_th_dia_l: 0.250

@@ -65,23 +65,34 @@ normal2: #壁なし補正時
     right90: 100
     left90: 100
 dia: #midを参照
+  # 2026-10-01: 柱のピーク(一番近い読み)から決め直した。dia_post_ctrl.enable 0 のときの
+  # 斜め制御と、斜めの直進の加速の絞り(axel_degenerate_dia)に効く(enable 1 のときは
+  # どちらも柱の立ち下がりの横位置を使うので、ここは効かない)。
+  #   exist = 真ん中(柱の立ち下がりの横位置 |δ| < 1mm)を走っているときのピークの最小より
+  #           少し外(09-30〜10-01 の dia45 左 / dia135 右、v400 と 5600mm/s、壁あり/なし):
+  #           left90 最小 129.2(下位 5% 138.5)、right90 95.9(100.4)、left45 33.5(34.4)、
+  #           right45 30.8(31.8)。横に 1mm 寄ると 90° は 10〜12mm、45° は 1.3〜1.9mm 近く読む。
+  #   ref = exist(発火した瞬間の誤差が 0 から始まる)。以前は ref = exist + 5 で、発火した
+  #           瞬間に誤差 5mm(片側だと 2 倍で 10mm)になり、加速の絞りがすぐ効いた。
+  # 同じ 77 本に当てると、速い走行で発火 8.8 → 3.4%、加速中の加速の倍率 平均 0.88 → 1.00
+  # (一番悪い走行 0.44 → 0.96)。前の値: ref 34.0 / 31.5 / 145 / 112、exist 32.5 / 31.0 / 140 / 107。
   ref:
     # left45: 37.375
     # right45: 30.625
     # left45: -33.5 #斜め45度センサー制御条件 1 < val < this_parm
     # right45: -30.75 #斜め45度センサー制御条件  1 < val < this_parm
-    left45: 34.0 #斜め45度センサー制御条件 1 < val < this_parm
-    right45: 31.5 #斜め45度センサー制御条件  1 < val < this_parm
-    left90: 145 # mid
-    right90: 112    # mid
+    left45: 33.0 #斜め45度センサー制御条件 1 < val < this_parm
+    right45: 30.5 #斜め45度センサー制御条件  1 < val < this_parm
+    left90: 128 # mid
+    right90: 95    # mid
 
     kireme_l: 165 # dia front over th (not use)
     kireme_r: 160 # dia front over th (not use)
   exist:
-    left45: 32.5 #斜め制御横センサー制御条件
-    right45: 31.0 #斜め制御横センサー制御条件
-    left90: 140 # dia.ref.left90 -5
-    right90: 107 # dia.ref.right90 -5
+    left45: 33.0 #斜め制御横センサー制御条件
+    right45: 30.5 #斜め制御横センサー制御条件
+    left90: 128 # = dia.ref.left90
+    right90: 95 # = dia.ref.right90
     # left45: 3.5 #斜め制御横センサー制御条件
     # right45: 3.5 #斜め制御横センサー制御条件
     # left90: 36.0 # dia.ref.left90 -5
