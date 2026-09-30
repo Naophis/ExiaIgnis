@@ -290,6 +290,8 @@ inline void convertToJson(const dia_post_ctrl_t& src, JsonVariant dst) {
     dst["slew"]        = src.slew;
     dst["kappa"]       = src.kappa;
     dst["psi0_enable"] = src.psi0_enable;
+    dst["settle_handover"] = src.settle_handover;
+    dst["conf_accel"]  = src.conf_accel;
     dst["dr_max"]      = src.dr_max;
 }
 

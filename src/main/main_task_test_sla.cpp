@@ -266,7 +266,11 @@ void MainTask::test_sla() {
     ps.motion_type = MotionType::STRAIGHT;
     // ps.motion_type = MotionType::SLA_BACK_STR;
 
-    mp->set_hf_side(TurnDirection::None); // ターン後の直進は細かく読まない
+    if (ps.sct == SensorCtrlType::Dia && param_->dia_post_ctrl.enable) {
+      mp->set_hf_side_both(); // 斜め制御(柱の立ち下がり)の直進は左右とも細かく読む
+    } else {
+      mp->set_hf_side(TurnDirection::None); // ターン後の直進は細かく読まない
+    }
     mp->go_straight(ps);
     mp->set_hf_side_both();
     mp->wall_off_controller->continuous_turn_flag = false;

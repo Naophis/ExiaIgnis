@@ -89,9 +89,22 @@ ControlLaw::calc(bool motor_en, bool suction_en, bool search_mode,
     } else if (param_->axel_degenerate_dia_x.size() >= 2 &&
                tgt_val_->nmr.sct == SensorCtrlType::Dia) {
       SensingControlType type = SensingControlType::None;
-      diff = ABS(check_sen_error_dia(type));
-      if (diff == 0)
-        diff = diff_old;
+      if (param_->dia_post_ctrl.enable) {
+        // 2026-10-01: 斜め制御(dia_post_ctrl)が有効なときは、柱の立ち下がりから出した
+        // 今の横位置の推測 |dnow − k0| [mm] で加速を絞る。従来の check_sen_error_dia は
+        // sensor.yaml の dia.ref/exist(柱までの距離の読み)で出す誤差で、90° が 140mm を
+        // 切ると 5mm 以上 ×2 の誤差が立ち、直前の値を持ち続けるため、横にずれていなくても
+        // 加速が 0.23〜0.35 倍に絞られた(20261001_014719、4328mm/s 止まり)。
+        // 組がまだ無い・古すぎるときは 0(絞らない)。
+        const auto &dp = sensing_result_->dia_post;
+        diff = (dp.n_pairs >= 1 && dp.lag < param_->dia_post_ctrl.dr_max)
+                   ? ABS(dp.dnow - param_->dia_post_ctrl.k0)
+                   : 0.0f;
+      } else {
+        diff = ABS(check_sen_error_dia(type));
+        if (diff == 0)
+          diff = diff_old;
+      }
       axel_degenerate_gain =
           sensor_->interp1d(param_->axel_degenerate_dia_x,
                             param_->axel_degenerate_dia_y, diff, false);
@@ -1598,6 +1611,15 @@ bool ControlLaw::update_turn_ctx() {
                          mt == MotionType::WALL_OFF ||
                          mt == MotionType::WALL_OFF_DIA);
   if (!carry_mt || !param_->turn_settle.enable || !motor_en_) {
+    turn_settle_active_ = false;
+    return false;
+  }
+  // 斜め制御(dia_post_ctrl)の直進で、使える柱の組ができたら引き継ぎを終えて斜め制御へ
+  // 渡す(2026-10-01)。引き継ぎ中は斜め制御の目標を 0 に保つので、3300〜4000mm/s では
+  // 引き継ぎが 50 tick で時間切れになるまでの 170〜200mm、斜め制御が効かなかった
+  // (20261001_012610)。
+  if (param_->dia_post_ctrl.enable && param_->dia_post_ctrl.settle_handover &&
+      tgt_val_->nmr.sct == SensorCtrlType::Dia && sensing_result_->dia_post.n_pairs >= 1) {
     turn_settle_active_ = false;
     return false;
   }

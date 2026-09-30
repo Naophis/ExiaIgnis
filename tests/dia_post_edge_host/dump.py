@@ -65,28 +65,37 @@ def main():
                 L45 = np.concatenate([d.iloc[i0:i1 + 1]["left45"].values for _, i0, i1 in idx]).astype(float)
                 R45 = np.concatenate([d.iloc[i0:i1 + 1]["right45"].values for _, i0, i1 in idx]).astype(float)
                 psi = -np.radians(np.concatenate([d.iloc[i0:i1 + 1]["ang"].values for _, i0, i1 in idx]))
+                acl = np.concatenate([d.iloc[i0:i1 + 1]["accl"].values for _, i0, i1 in idx])
                 c = np.concatenate([[0.0], np.cumsum(0.5 * (psi[1:] + psi[:-1]) * np.diff(x))])
-                for xi, yl, yr, ci, pi in zip(x, L45, R45, c, psi):
-                    lines.append(f"{cid} 0 {xi:.4f} {int(yl)} {int(yr)} {ci:.6f} {pi:.7f}")
+                for xi, yl, yr, ci, pi, ai in zip(x, L45, R45, c, psi, acl):
+                    lines.append(f"{cid} 0 {xi:.4f} {int(yl)} {int(yr)} {ci:.6f} {pi:.7f} {ai:.1f}")
                 # Python 版の δ と ψ0(組の中点でのジャイロの向きの積分から)
                 R = T.gate_spacing(T.falling_edges(x, R45, 250))
                 L = T.gate_spacing(T.falling_edges(x, L45, 250))
                 ev = sorted([(p, "R") for p, _ in R] + [(p, "L") for p, _ in L])
+                # ファームは縁を採った tick(縁の直後のサンプル)の加速度を添える
+                acc_ev = [float(acl[np.searchsorted(x, p)]) if np.searchsorted(x, p) < len(acl) else float(acl[-1]) for p, _ in ev]
                 psi0 = 0.0
                 n = 0
                 prev = None
+                lsx, lsy = [], []
                 for i in range(1, len(ev)):
                     (pa, sa), (pb, sb) = ev[i - 1], ev[i]
                     if sa == sb or abs(pb - pa - T.PITCH) > 15:
                         continue
-                    gg = (pb - pa) / T.local_scale(ev, i)
+                    sc, used = T.local_scale_used(ev, i)
+                    if not T.confident(acc_ev, i, used):
+                        continue
+                    gg = (pb - pa) / sc
                     dd = (T.PITCH - gg) / 2 if sa == "R" else (gg - T.PITCH) / 2
                     pp = (pa + pb) / 2
                     cp = 0.5 * (np.interp(pa, x, c) + np.interp(pb, x, c))
                     da = dd - KAPPA * 0.5 * (np.interp(pa, x, psi) + np.interp(pb, x, psi))
-                    if prev is not None:
-                        n += 1
-                        psi0 += ((da - prev[0]) / (pp - prev[1]) - (cp - prev[2]) / (pp - prev[1]) - psi0) / n
+                    lsx.append(pp)
+                    lsy.append(da - cp)
+                    if len(lsx) >= 2:
+                        psi0 = np.polyfit(np.array(lsx) - lsx[0], np.array(lsy), 1)[0]
+                        n = len(lsx) - 1
                     prev = (da, pp, cp)
                     ref.append((cid, dd, pp, np.degrees(psi0), n))
         else:
@@ -102,12 +111,12 @@ def main():
                 prev = ms[i]
                 x = base + float(d["dist"].iloc[i])
                 lines.append(f"{name} {1 if ms[i] in REARM else 0} {x:.4f} {d['left45'].iloc[i]} "
-                             f"{d['right45'].iloc[i]} 0 {int(in_diag[i])}")
+                             f"{d['right45'].iloc[i]} 0 0 {d['accl'].iloc[i]:.1f} {int(in_diag[i])}")
     exe = "/tmp/dia_post_edge_host_test"
     args = [exe, str(KAPPA)] + (["pred"] if mode == "pred" else [])
     if mode == "pred":
         mode_run = "diag"
-    out = subprocess.run(args, input="\n".join(" ".join(l.split()[:7]) for l in lines) + "\n",
+    out = subprocess.run(args, input="\n".join(" ".join(l.split()[:8]) for l in lines) + "\n",
                          capture_output=True, text=True, check=True).stdout.split("\n")
     got = [o.split() for o in out if o.strip()]
     if mode == "pred":
@@ -155,7 +164,7 @@ def main():
         rows = [l.split() for l in lines]
         xs = {}
         for r in rows:
-            xs.setdefault(r[0], []).append((float(r[2]), int(r[6])))
+            xs.setdefault(r[0], []).append((float(r[2]), int(r[8])))
         n_in = n_out = 0
         for g in got:
             arr = xs[g[0]]

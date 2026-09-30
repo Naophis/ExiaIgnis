@@ -12,9 +12,12 @@
 //     右 → 左: δ = (kPitch − g)/2     左 → 右: δ = (g − kPitch)/2
 //   旋回の出口の前後のずれ・読んだ時刻の遅れ・速度の遅れは左右に同じだけ入って消える。
 //
-// 縁 = 生値が thr を上から下へ切った点(サンプル間を直線補間)。手前 n_above サンプル
-// 以上が thr 以上で、thr を越えてからの山が thr × peak_ratio 以上のものだけ(停止前の
-// 上昇中の 1 サンプルの落ち込みや弱い反射を弾く)。同じ側の縁は柱 2 本分(2·kPitch)の
+// 縁 = 生値が thr を上から下へ切った点(サンプル間を直線補間)。手前で thr 以上が
+// n_above サンプル以上か、2 サンプル以上で min_run mm 以上続き、thr を越えてからの山が
+// thr × peak_ratio 以上のものだけ(停止前の上昇中の 1 サンプルの落ち込みや弱い反射を弾く)。
+// 5000mm/s 近くでは壁のない柱の山(幅約 12mm)に 1 tick 5mm で 2 サンプルしか乗らず、
+// 頂点も取り逃がす(500〜800 が 314)ので、サンプル数ではなく長さで見る(20261001_010716、
+// 431 区間で組 563 → 579、遅い走行の残差は変わらず)。同じ側の縁は柱 2 本分(2·kPitch)の
 // 整数倍 ± tol、組にする反対側の縁は直前の縁で kPitch ± tol のときだけ。
 // 固定しきい値は、山と谷の間の 50% や傾きが最大の点より壁の有無に強かった(壁ありでは
 // 左の縁の後ろに次の壁が約 120 raw 見えていて、相対値や傾きがそれに引っ張られる)。
@@ -26,10 +29,13 @@
 // 横位置の定義(k0 = 左右センサーの取り付け差)はまだ引いていない。
 //
 // 向きのずれ ψ0(2026-10-01): 各サンプルにジャイロの向きの積分 c = ∫ψ_g ds [mm·rad]
-// (ψ_g = ジャイロで見た右向きの向き)を添えて入れる。組と組の間で
-//   ε = Δδ / Δpos(迷路基準の右向きの向き)、g = Δc / Δpos(同じ区間のジャイロの向きの平均)
-// から ψ0 = ε − g(ジャイロの向きの基準と迷路の向きのずれ、+ は右)を出し、組ごとの
-// 平均を持つ。今の横位置は、最後の組からジャイロ(と ψ0)で推測する(now_delta)。
+// (ψ_g = ジャイロで見た右向きの向き)を添えて入れる。組ごとの (δ − c) を位置に対して
+// 最小二乗で直線に当て、その傾きを ψ0(ジャイロの向きの基準と迷路の向きのずれ、+ は右)
+// とする。最初は隣り合う組の傾きの平均にしていたが、平均は両端の組だけで決まり、速い域の
+// 組のばらつき(0.5〜1mm)と減速に入った直後の組の +1.5mm で −0.15〜−0.41° に偏り、
+// 制御がその分右へ切り続けて 0 を越えて +1mm 行き過ぎた(5600mm/s、20261001_013435〜
+// 013543)。最小二乗なら同じ走行で −0.14〜+0.12°(制御なしの 5 本で −0.07〜+0.11°)。
+// 今の横位置は、最後の組からジャイロ(と ψ0)で推測する(now_delta)。
 // 向きを ±1.5° 動かした走行(09-20 の斜め制御あり 4 本)で、δ の変化とジャイロの
 // 向きの積分の係数は +0.68〜+1.51(平均 1.0、期待値 +1)。v400 で向きが ±0.1° しか
 // 動かない走行では、組ごとの δ のばらつき(0.22mm)の方が大きい。
@@ -52,11 +58,23 @@
 // 減速中 5〜9% 短く出る(4000mm/s・吸引あり、20261001_010257〜010544。同じ側の柱の
 // 間隔が本来の 127.28mm に対して 116〜135mm)。距離が s 倍だと、右 → 左の組と左 → 右の
 // 組で δ に ±(1 − s)·kPitch/2 の逆向きの誤差が出て交互に跳ねる(4000mm/s で ±2mm)。
-// 組を作るたびに、直近の左右の同じ側の間隔(新しい縁とその 2 つ前、1 つ前の縁とその
-// 2 つ前)の平均から s を出して、縁の間隔 g を g/s に直す(左右の平均なので横に動いた
-// 分は打ち消し合う)。4000mm/s で直線を引いた後の残差 2.6〜2.9 → 1.2〜1.6mm、721mm の
+// 組を作るたびに、直近の左右の同じ側の間隔(新しい縁とその 2 つ前 = s1、1 つ前の縁と
+// その 2 つ前 = s2)から s を出して、縁の間隔 g を g/s に直す。両方あるときは
+// s = 1.5·s1 − 0.5·s2(組の中点まで直線で先読み。s1 の区間の中心は組より半組前、s2 は
+// 1 組半前)。減速中は倍率が組ごとに 0.955 → 0.93 → 0.90 と変わり続け、平均だと半組遅れて
+// 減速に入った直後の組が約 +1.5mm ずれ、ψ0 を負へ偏らせていた。先読みで 5600mm/s の
+// 制御なしの走行の残差 0.29〜0.76 → 0.17〜0.41mm(加速中・減速中それぞれでは 0.1〜0.15mm)。4000mm/s で直線を引いた後の残差 2.6〜2.9 → 1.2〜1.6mm、721mm の
 // 直進 2.0 → 0.9mm、400mm/s でも 0.2 → 0.1mm 前後。組の前後の間隔を使った(後から見て
 // 一番良い)s でも 0.9〜1.0mm までなので、残りは縮みの見積もりの遅れではない。
+//
+// 使わない組(2026-10-01): 倍率が信用できない組は、縁の記録と倍率の計算は続けるが、
+// 横位置・ψ0・推測には使わず組として出さない。
+//   ・前に同じ側の間隔が無いまま(倍率 1)、|加速度| > conf_accel でできた組(最初の組)
+//   ・倍率を出した区間の縁の中で、加速度が +conf_accel 超と −conf_accel 未満の両方が
+//     ある組(加速 → 減速の切り替わり。倍率が 1 組の間に 1.04 → 0.95 と変わる)
+// 5600mm/s・721mm(加速 +3.8G / 減速 −4.9G)で最初の組と切り替わりの 3 組が外れ、
+// 残差 1.0〜1.3 → 0.7〜0.96mm。切り替わりの組を外さないと、どの走行も減速の始めに
+// +2〜4mm 跳ね、制御がそれを追った(20261001_012610 / 012628)。
 //
 // Pico SDK に依存しない純粋なクラス。Core1(SensorProcessor::update_dia_post_edge)が
 // 毎 tick 左右 1 サンプルずつ入れ、sensing_result_entity_t::dia_post に公開する。
@@ -66,11 +84,13 @@
 
 struct DiaPostEdgeParams {
   float thr = 250.0f;       // [raw] 縁とみなす生値
-  int n_above = 3;          // 縁の手前で thr 以上が続いたサンプル数の下限
-  float peak_ratio = 1.5f;  // thr を越えてからの山 / thr の下限
+  int n_above = 3;          // 縁の手前で thr 以上が続いたサンプル数(これ以上なら長さを問わない)
+  float min_run = 2.0f;     // [mm] 2 サンプル以上のときの thr 以上の区間の長さの下限
+  float peak_ratio = 1.2f;  // thr を越えてからの山 / thr の下限
   float tol = 15.0f;        // [mm] 柱の間隔からの許容
   float kappa = 0.0f;       // [mm/rad] 向きによる読みのずれ(δ_読み = δ_車軸 + κ·ψ)
   int scale_fix = 1;        // 1 = 直近の同じ側の間隔から走行距離の縮みを出して直す
+  float conf_accel = 4900.0f; // [mm/s^2] これを超える加減速のとき、倍率が信用できない組を使わない
 };
 
 class DiaPostEdgeDetector {
@@ -84,10 +104,13 @@ public:
     n_pairs_ = 0;
     n_hist_ = 0;
     scale_ = 1.0f;
+    n_skip_ = 0;
     eps_deg_ = 0.0f;
     n_psi_ = 0;
     psi0_ = 0.0f;
     c_pos_ = 0.0f;
+    ls_n_ = 0;
+    ls_x0_ = ls_sx_ = ls_sy_ = ls_sxx_ = ls_sxy_ = 0.0f;
   }
 
   // 1 サンプル入れる。x は読んだ時刻の位置 [mm](global_pos.dist 基準)、y は生値、
@@ -96,7 +119,9 @@ public:
   bool update(Side side, float x, float y, float c, float psi, const DiaPostEdgeParams &p) {
     SideState &s = s_[side];
     bool paired = false;
-    if (s.has_prev && s.prev_y >= p.thr && y < p.thr && s.above >= p.n_above &&
+    const bool long_enough =
+        s.above >= p.n_above || (s.above >= 2 && s.prev_x - s.first_x >= p.min_run);
+    if (s.has_prev && s.prev_y >= p.thr && y < p.thr && long_enough &&
         s.peak >= p.thr * p.peak_ratio) {
       const float f = (s.prev_y - p.thr) / (s.prev_y - y);
       const float e = s.prev_x + (x - s.prev_x) * f;
@@ -115,6 +140,7 @@ public:
       }
     }
     if (y >= p.thr) {
+      if (s.above == 0) s.first_x = x;
       s.above++;
       if (y > s.peak) s.peak = y;
     } else {
@@ -127,6 +153,19 @@ public:
     s.prev_c = c;
     s.prev_psi = psi;
     return paired;
+  }
+
+  // 今の目標の加速度 [mm/s^2]。縁に添えて、倍率が信用できない組を見分けるのに使う。
+  void set_accel(float a) { accel_ = a; }
+
+  // その側の縁の途中状態(直前のサンプル・thr 以上の区間)を捨てる。読み方(S0 だけ /
+  // S1〜S3)が変わったときに呼ぶ。S0 は同じ位置でも S1〜S3 より低く出るので、混ぜると
+  // 境目で thr をまたいだように見えることがある。採った縁の履歴は残す。
+  void reset_side(Side side) {
+    SideState &s = s_[side];
+    s.has_prev = false;
+    s.above = 0;
+    s.peak = 0.0f;
   }
 
   // 位置 x(ジャイロの向きの積分 c)での横位置の推測 [mm]。最後の組から、ジャイロで
@@ -147,6 +186,7 @@ public:
   float eps_deg() const { return eps_deg_; }
   float edge_x(Side side) const { return s_[side].edge_x; }
   float scale() const { return scale_; }      // 最後の組で使った走行距離の倍率(1 = 直していない)
+  int n_skip() const { return n_skip_; }      // 使わなかった組の数(arm してから)
   float psi0() const { return psi0_; }        // 向きのずれ ψ0 [rad](+ は右、組ごとの平均)
   int n_psi() const { return n_psi_; }        // ψ0 を出した回数(= 組の数 − 1)
 
@@ -158,6 +198,7 @@ private:
     float prev_c = 0.0f;
     float prev_psi = 0.0f;
     int above = 0;      // 今 thr 以上が続いているサンプル数
+    float first_x = 0.0f; // その区間の最初のサンプルの位置
     float peak = 0.0f;  // thr を越えてからの最大
     bool has_edge = false;
     float edge_x = 0.0f; // 最後に採った縁
@@ -173,31 +214,53 @@ private:
   // 採った縁の履歴(新しい順)。走行距離の縮みを出すのに使う。
   void push_hist(Side side, float e) {
     for (int i = 3; i > 0; i--) hist_[i] = hist_[i - 1];
-    hist_[0] = {e, side};
+    hist_[0] = {e, side, accel_};
     if (n_hist_ < 4) n_hist_++;
   }
   // 新しい縁 hist_[0] と 1 つ前 hist_[1] の組に使う走行距離の倍率。左右交互に並んで
   // いれば、同じ側の間隔 (0 − 2) と (1 − 3) の平均 / 2·kPitch、片方だけなら (0 − 2)。
-  float local_scale(const DiaPostEdgeParams &p) const {
+  // used には使った間隔の数(0〜2)を返す。
+  float local_scale(const DiaPostEdgeParams &p, int &used) const {
     const float two = 2.0f * kPitch;
-    float sum = 0.0f;
-    int n = 0;
-    if (n_hist_ >= 3 && hist_[2].side == hist_[0].side) {
-      const float sp = hist_[0].x - hist_[2].x;
-      if (std::fabs(sp - two) <= p.tol) { sum += sp; n++; }
+    used = 0;
+    if (!(n_hist_ >= 3 && hist_[2].side == hist_[0].side)) return 1.0f;
+    const float sp1 = hist_[0].x - hist_[2].x;
+    if (std::fabs(sp1 - two) > p.tol) return 1.0f;
+    used = 1;
+    const float s1 = sp1 / two;
+    if (n_hist_ >= 4 && hist_[3].side == hist_[1].side) {
+      const float sp2 = hist_[1].x - hist_[3].x;
+      if (std::fabs(sp2 - two) <= p.tol) {
+        used = 2;
+        return 1.5f * s1 - 0.5f * (sp2 / two);
+      }
     }
-    if (n == 1 && n_hist_ >= 4 && hist_[3].side == hist_[1].side) {
-      const float sp = hist_[1].x - hist_[3].x;
-      if (std::fabs(sp - two) <= p.tol) { sum += sp; n++; }
+    return s1;
+  }
+  // 倍率が信用できる組か(上の「使わない組」)。used = local_scale が使った間隔の数。
+  bool confident(int used, const DiaPostEdgeParams &p) const {
+    if (p.conf_accel <= 0.0f) return true;
+    if (used == 0) return std::fabs(hist_[0].accel) <= p.conf_accel;
+    const int last = (used >= 2) ? 3 : 2; // 倍率を出すのに使った一番古い縁
+    bool pos = false, neg = false;
+    for (int i = 0; i <= last; i++) {
+      pos |= hist_[i].accel > p.conf_accel;
+      neg |= hist_[i].accel < -p.conf_accel;
     }
-    return (n > 0) ? sum / (n * two) : 1.0f;
+    return !(pos && neg);
   }
 
   bool pair(Side side, float e, float ec, float epsi, const DiaPostEdgeParams &p) {
     if (!has_last_ || last_side_ == side) return false;
     const float g_raw = e - last_x_;
     if (std::fabs(g_raw - kPitch) > p.tol) return false;
-    scale_ = p.scale_fix ? local_scale(p) : 1.0f;
+    int used = 0;
+    const float sc = p.scale_fix ? local_scale(p, used) : 1.0f;
+    if (p.scale_fix && !confident(used, p)) {
+      n_skip_++;
+      return false;
+    }
+    scale_ = sc;
     const float g = g_raw / scale_;
     const float d = (last_side_ == RIGHT) ? (kPitch - g) * 0.5f : (g - kPitch) * 0.5f;
     const float mid = 0.5f * (e + last_x_);
@@ -206,11 +269,23 @@ private:
     const float dg = d - p.kappa * 0.5f * (epsi + last_psi_);
     kappa_ = p.kappa;
     if (n_pairs_ >= 1 && mid > pos_) {
-      const float ds = mid - pos_;
-      eps_deg_ = std::atan2(d - delta_, ds) * (180.0f / 3.14159265f);
-      const float sample = (dg - delta_gyro_) / ds - (cmid - c_pos_) / ds;
-      n_psi_++;
-      psi0_ += (sample - psi0_) / (float)n_psi_;
+      eps_deg_ = std::atan2(d - delta_, mid - pos_) * (180.0f / 3.14159265f);
+    }
+    // ψ0 = (δ − c) の位置に対する最小二乗の傾き(位置は最初の組から測る)
+    if (ls_n_ == 0) ls_x0_ = mid;
+    {
+      const float lx = mid - ls_x0_;
+      const float ly = dg - cmid;
+      ls_n_++;
+      ls_sx_ += lx;
+      ls_sy_ += ly;
+      ls_sxx_ += lx * lx;
+      ls_sxy_ += lx * ly;
+      const float den = (float)ls_n_ * ls_sxx_ - ls_sx_ * ls_sx_;
+      if (ls_n_ >= 2 && den > 1e-3f) {
+        psi0_ = ((float)ls_n_ * ls_sxy_ - ls_sx_ * ls_sy_) / den;
+        n_psi_ = ls_n_ - 1;
+      }
     }
     delta_ = d;
     delta_gyro_ = dg;
@@ -224,11 +299,14 @@ private:
   struct Hist {
     float x = 0.0f;
     Side side = LEFT;
+    float accel = 0.0f; // その縁を採ったときの目標の加速度
   };
   SideState s_[2];
   Hist hist_[4];
   int n_hist_ = 0;
   float scale_ = 1.0f;
+  int n_skip_ = 0;
+  float accel_ = 0.0f;
   bool has_last_ = false;
   Side last_side_ = LEFT;
   float last_x_ = 0.0f;
@@ -244,4 +322,7 @@ private:
   int n_psi_ = 0;
   float psi0_ = 0.0f;
   float c_pos_ = 0.0f;  // 最後の組の位置でのジャイロの向きの積分
+  // ψ0 の最小二乗の和(x = 組の位置 − 最初の組の位置、y = δ_gyro − c)
+  int ls_n_ = 0;
+  float ls_x0_ = 0.0f, ls_sx_ = 0.0f, ls_sy_ = 0.0f, ls_sxx_ = 0.0f, ls_sxy_ = 0.0f;
 };

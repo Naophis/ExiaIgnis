@@ -1182,6 +1182,13 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
   hf_side_hint_ = (next_motion.next_turn_dir == TurnDirection::None)
                       ? 0
                       : hf_side_of(next_motion.next_turn_dir);
+  // 斜めへ抜ける旋回の後は、柱の立ち下がり(dia_post_ctrl、2026-10-01)のために左右とも
+  // 1 tick に 4 回読む(5000mm/s 近くでは 1 tick 1 点だと壁のない柱の山に 2 点しか乗らない)
+  if (param->dia_post_ctrl.enable &&
+      (sp.type == TurnType::Dia45 || sp.type == TurnType::Dia135 ||
+       sp.type == TurnType::Dia90)) {
+    hf_side_hint_ = 0;
+  }
   if (ps_back.dist > 0) {
     res_b = go_straight(ps_back);
     if (res_b != MotionResult::NONE) {
@@ -1731,11 +1738,14 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
       ps.dist -= param->long_run_offset_dist;
       wall_off_controller->continuous_turn_flag = false;
       tgt_val->continuous_turn = false;
-      // この直進の先のターンの側だけ細かく読む(ターンが無ければ読まない)
+      // この直進の先のターンの側だけ細かく読む(ターンが無ければ読まない)。
+      // 斜めの直進は柱の立ち下がり(dia_post_ctrl)のために左右とも読む。
       hf_side_hint_ =
-          (turn_type == TurnType::None || turn_type == TurnType::Finish)
-              ? 3
-              : hf_side_of(turn_dir);
+          (dia && param->dia_post_ctrl.enable)
+              ? 0
+              : (turn_type == TurnType::None || turn_type == TurnType::Finish)
+                    ? 3
+                    : hf_side_of(turn_dir);
       auto res = go_straight(ps);
       carry_over_dist = 0;
       if (res == MotionResult::ERROR) {

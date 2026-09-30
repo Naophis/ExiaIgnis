@@ -31,6 +31,8 @@ left45 / right45)は柱を通り過ぎた瞬間に落ちるので、その位置
   wall_l wall_r  落ちた後 5〜15mm の生値の平均。柱に壁が付いていると高い
          (2026-09-30 の実測: 壁あり L 100〜130 / R 21〜24、なし L 57〜77 / R 10〜15)
   yawslp 直線中のジャイロ向きの変化 [deg/m](ε が直線の途中で変わっていないか)
+  hf     1 tick に 4 回読んだ(S1〜S3 を使った)サンプルの割合
+  skip   走行距離の倍率が信用できず使わなかった組の数(最初の組・加速 ↔ 減速の切り替わり)
   start  斜めへ抜ける旋回の開始位置(スタートからの走行距離)。δ0 はこれと一緒に見る:
          旋回開始が Δ 早いと出口は旋回の内側へ 0.71·Δ 寄る(45° / 135° とも sin = 0.71)
 
@@ -80,21 +82,37 @@ def segments(ms):
     return out
 
 
-def falling_edges(x, y, thr, n_above=3, peak_ratio=1.5):
-    """生値 y が thr を上から下へ切った位置(x を直線補間)。
-    手前 n_above サンプルが thr 以上で、直前 30mm の山が thr の peak_ratio 倍以上の
-    ものだけ(停止前の上昇中の 1 サンプルの落ち込みや弱い反射を弾く)。"""
+def falling_edges(x, y, thr, n_above=3, peak_ratio=1.2, min_run=2.0, mode=None):
+    """生値 y が thr を上から下へ切った位置(x を直線補間)。ファームの DiaPostEdgeDetector と同じ条件:
+    手前で thr 以上が n_above サンプル以上か、2 サンプル以上で min_run mm 以上続き、thr を越えて
+    からの山が thr × peak_ratio 以上のものだけ(停止前の上昇中の 1 サンプルの落ち込みや弱い反射を
+    弾く。5000mm/s 近くでは柱の山に 2 サンプルしか乗らないので長さでも見る)。
+    戻り値は (位置, 落ちた後 5〜15mm の生値の平均) の列。"""
     out = []
-    for i in range(n_above, len(y)):
-        if y[i - 1] >= thr > y[i] and (y[i - n_above:i] >= thr).all():
-            back = (x >= x[i] - 30) & (x < x[i])
-            if y[back].max() < thr * peak_ratio:
-                continue
-            p = x[i - 1] + (x[i] - x[i - 1]) * (y[i - 1] - thr) / (y[i - 1] - y[i])
-            # 落ちた後 5〜15mm の平均(壁が付いていると高いまま)
-            j = (x > p + 5) & (x < p + 15)
-            tail = float(y[j].mean()) if j.any() else float("nan")
-            out.append((p, tail))
+    above = 0
+    peak = 0.0
+    x_first = 0.0
+    for i in range(len(y)):
+        if mode is not None and i > 0 and mode[i] != mode[i - 1]:
+            # 読み方(S0 / S1〜S3)が変わったら途中状態を捨てる(ファームの reset_side と同じ)
+            above = 0
+            peak = 0.0
+            continue
+        if i > 0 and y[i - 1] >= thr > y[i]:
+            ok = above >= n_above or (above >= 2 and x[i - 1] - x_first >= min_run)
+            if ok and peak >= thr * peak_ratio:
+                p = x[i - 1] + (x[i] - x[i - 1]) * (y[i - 1] - thr) / (y[i - 1] - y[i])
+                j = (x > p + 5) & (x < p + 15)
+                tail = float(y[j].mean()) if j.any() else float("nan")
+                out.append((p, tail))
+        if y[i] >= thr:
+            if above == 0:
+                x_first = x[i]
+            above += 1
+            peak = max(peak, y[i])
+        else:
+            above = 0
+            peak = 0.0
     return out
 
 
@@ -111,22 +129,42 @@ def gate_spacing(edges, tol=15.0):
     return kept
 
 
-def local_scale(ev, i, tol=15.0):
-    """ev[i-1], ev[i] の組に使う走行距離の倍率(ファームの DiaPostEdgeDetector::local_scale と同じ)。
-    同じ側の間隔 (i − (i−2)) と ((i−1) − (i−3)) の平均 / 2·PITCH。加減速の空転・ロックで
-    走行距離が数 % 伸び縮みすると、右→左と左→右の組で δ に逆向きの誤差が出るのを直す。"""
+def local_scale_used(ev, i, tol=15.0):
+    """組 ev[i-1], ev[i] に使う走行距離の倍率と、使った間隔の数(0〜2)。ファームの
+    DiaPostEdgeDetector::local_scale と同じ: 新しい側の間隔 s1 = (i − (i−2))、古い側 s2 =
+    ((i−1) − (i−3))。両方あれば 1.5·s1 − 0.5·s2(組の中点まで先読み)、片方なら s1。"""
     two = 2 * PITCH
-    sps = []
-    if i >= 2 and ev[i - 2][1] == ev[i][1] and abs(ev[i][0] - ev[i - 2][0] - two) <= tol:
-        sps.append(ev[i][0] - ev[i - 2][0])
-        if i >= 3 and ev[i - 3][1] == ev[i - 1][1] and abs(ev[i - 1][0] - ev[i - 3][0] - two) <= tol:
-            sps.append(ev[i - 1][0] - ev[i - 3][0])
-    return sum(sps) / (len(sps) * two) if sps else 1.0
+    if not (i >= 2 and ev[i - 2][1] == ev[i][1] and abs(ev[i][0] - ev[i - 2][0] - two) <= tol):
+        return 1.0, 0
+    s1 = (ev[i][0] - ev[i - 2][0]) / two
+    if i >= 3 and ev[i - 3][1] == ev[i - 1][1] and abs(ev[i - 1][0] - ev[i - 3][0] - two) <= tol:
+        return 1.5 * s1 - 0.5 * (ev[i - 1][0] - ev[i - 3][0]) / two, 2
+    return s1, 1
 
 
-def pair_deltas(R, L, tol=15.0, scale_fix=True):
-    """隣り合う L/R の縁から δ(+右)と組の位置を出す。"""
+def confident(acc, i, used, conf_accel=4900.0):
+    """倍率が信用できる組か(ファームの DiaPostEdgeDetector::confident と同じ)。acc[k] は縁 k を
+    採ったときの目標の加速度。前に間隔が無いまま加減速中の組と、倍率を出した区間の中で
+    加速と減速が入れ替わった組は使わない。"""
+    if acc is None or conf_accel <= 0:
+        return True
+    if used == 0:
+        return abs(acc[i]) <= conf_accel
+    oldest = i - (3 if used >= 2 else 2)
+    w = acc[max(0, oldest):i + 1]
+    return not (max(w) > conf_accel and min(w) < -conf_accel)
+
+
+def local_scale(ev, i, tol=15.0):
+    """local_scale_used の倍率だけ。"""
+    return local_scale_used(ev, i, tol)[0]
+
+
+def pair_deltas(R, L, tol=15.0, scale_fix=True, acc_at=None, skipped=None):
+    """隣り合う L/R の縁から δ(+右)と組の位置を出す。acc_at(位置) を渡すと、倍率が信用できない
+    組(confident が偽)を外す(外した組の位置は skipped に足す)。"""
     ev = sorted([(p, "R") for p, _ in R] + [(p, "L") for p, _ in L])
+    acc = [acc_at(p) for p, _ in ev] if acc_at is not None else None
     out = []
     for i in range(1, len(ev)):
         (pa, sa), (pb, sb) = ev[i - 1], ev[i]
@@ -136,7 +174,12 @@ def pair_deltas(R, L, tol=15.0, scale_fix=True):
         if abs(g - PITCH) > tol:
             continue
         if scale_fix:
-            g /= local_scale(ev, i, tol)
+            sc, used = local_scale_used(ev, i, tol)
+            if not confident(acc, i, used):
+                if skipped is not None:
+                    skipped.append((pa + pb) / 2)
+                continue
+            g /= sc
         d = (PITCH - g) / 2 if sa == "R" else (g - PITCH) / 2
         out.append((d, (pa + pb) / 2))
     return out, (ev[0][1] if ev else "-")
@@ -187,7 +230,7 @@ def analyze(path, thr, k0, verbose, scale_fix=True):
 
 def _analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose, scale_fix=True):
     # 区間をつないで経路方向の位置 x を作る(各区間の dist は 0 から)
-    xs, cols = [], {c: [] for c in ("left45", "right45", "ang", "ideal_v")}
+    xs, cols = [], {c: [] for c in ("left45", "right45", "ang", "ideal_v", "accl")}
     base = 0.0
     for st, i0, i1 in idx:
         q = d.iloc[i0:i1 + 1]
@@ -198,11 +241,37 @@ def _analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose, sca
     x = np.concatenate(xs)
     L45 = np.concatenate(cols["left45"])
     R45 = np.concatenate(cols["right45"])
+    # 1 tick に 4 回読んでいる側は S1〜S3(wo_l1..3 / wo_r1..3)を使う(ファームと同じ)。
+    # 位置は dist + v·(読んだ時刻 − 600us)(S3 でエンコーダーを読む時刻の近似。左右に同じ
+    # だけ入るので組の δ には効かない)。
+    streams = {}
+    rows_all = pd.concat([d.iloc[i0:i1 + 1] for _, i0, i1 in idx])
+    has_wo = all(c in d for c in ("wo_n", "wo_l1", "wo_tl1", "wo_r1", "wo_tr1"))
+    for side, raw_col, pre in (("L", "left45", "l"), ("R", "right45", "r")):
+        sx, sy, sm = [], [], []
+        for xi, (_, r) in zip(x, rows_all.iterrows()):
+            v_ = float(r["ideal_v"])
+            if has_wo and int(r["wo_n"]) == 4 and r[f"wo_t{pre}1"] > 0:
+                for q in (1, 2, 3):
+                    t = r[f"wo_t{pre}{q}"]
+                    if t > 0:
+                        sx.append(xi + v_ * (t - 600) * 1e-6)
+                        sy.append(float(r[f"wo_{pre}{q}"]))
+                        sm.append(1)
+            else:
+                sx.append(xi)
+                sy.append(float(r[raw_col]))
+                sm.append(0)
+        streams[side] = (np.array(sx), np.array(sy), np.array(sm))
     ang = np.concatenate(cols["ang"])
     v = np.concatenate(cols["ideal_v"])
-    R = gate_spacing(falling_edges(x, R45, thr))
-    L = gate_spacing(falling_edges(x, L45, thr))
-    pairs, first = pair_deltas(R, L, scale_fix=scale_fix)
+    acl = np.concatenate(cols["accl"])
+    R = gate_spacing(falling_edges(*streams["R"][:2], thr, mode=streams["R"][2]))
+    L = gate_spacing(falling_edges(*streams["L"][:2], thr, mode=streams["L"][2]))
+    hf_frac = float(np.mean(np.r_[streams["L"][2], streams["R"][2]])) if len(x) else 0.0
+    skipped = []
+    pairs, first = pair_deltas(R, L, scale_fix=scale_fix, acc_at=lambda p: float(np.interp(p, x, acl)),
+                               skipped=skipped)
     if len(pairs) < 2:
         print(f"{path}: {kind} {turn_dir} 組が {len(pairs)} 個しかない(R {len(R)} L {len(L)})")
         return None
@@ -219,7 +288,7 @@ def _analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose, sca
     row = dict(file=path.split("/")[-1], kind=kind, dir=turn_dir, first=first, n=len(pairs),
                d0=d0, eps=eps, res=res, dend=dend, sp_l=sp(L), sp_r=sp(R),
                wall_l=tail(L), wall_r=tail(R), yawslp=yawslp, start=turn_start,
-               v=float(v.max()))
+               v=float(v.max()), hf=hf_frac, skip=len(skipped))
     if verbose:
         print(f"--- {row['file']} {kind} {turn_dir}  v {row['v']:.0f}")
         print("  R edges: " + "  ".join(f"{p:6.1f}(tail {t:3.0f})" for p, t in R))
@@ -248,6 +317,7 @@ def main():
     fmt = {c: "{:+.2f}".format for c in ("d0", "eps", "dend", "yawslp")}
     fmt.update({c: "{:.2f}".format for c in ("res", "sp_l", "sp_r")})
     fmt.update({c: "{:.0f}".format for c in ("wall_l", "wall_r", "start", "v")})
+    fmt["hf"] = "{:.2f}".format
     print(df.to_string(index=False, formatters=fmt))
     if a.summary:
         print()

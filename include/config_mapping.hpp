@@ -537,6 +537,8 @@ inline void convertFromJson(JsonVariantConst src, dia_post_ctrl_t& dst) {
     from_json_field(src, "slew", dst.slew);
     from_json_field(src, "kappa", dst.kappa);
     from_json_field(src, "psi0_enable", dst.psi0_enable);
+    from_json_field(src, "settle_handover", dst.settle_handover);
+    from_json_field(src, "conf_accel", dst.conf_accel);
     from_json_field(src, "dr_max", dst.dr_max);
 }
 

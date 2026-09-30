@@ -531,21 +531,34 @@ void SensorProcessor::update_dia_post_edge() {
     dia_c_valid_ = true;
   }
   if (!rearm && wo_seq != dia_post_wo_seq_ && se->wo.n >= 1) {
-    // S0 の読み(wo.l/r[0])だけを使う。オフラインで確かめたのはログの left45 /
-    // right45 列 = wo_l0 / wo_r0 で、S1〜S3 は同じ位置でも読みが違う(S0 が低い)。
+    // その側を 1 tick に 4 回読んでいれば(wall_off_hf_mode、斜めの直進は dia_post_ctrl で
+    // 左右とも)S1〜S3 だけを、読んでいなければ S0 を使う。S0 は同じ位置でも S1〜S3 より
+    // 低く出る(右で 10〜17 raw)ので混ぜない。読み方が変わったらその側の途中状態を捨てる。
     // 位置は読んだ時刻へ戻す(update_wall_edge と同じ)。左右で読んだ時刻が違う分も入る。
     const float v = 0.5f * (se->ego.v_l_dist + se->ego.v_r_dist); // [mm/s]
     const float t_enc = 0.5f * ((float)se->t_encl + (float)se->t_encr);
-    const float xl = x_now + v * ((float)se->wo.tl[0] - t_enc) * 1e-6f;
-    const float xr = x_now + v * ((float)se->wo.tr[0] - t_enc) * 1e-6f;
     DiaPostEdgeParams p;
     p.kappa = param->dia_post_ctrl.kappa;
-    const float cl = dia_c_ + psi_g * (xl - x_now);
-    const float cr = dia_c_ + psi_g * (xr - x_now);
-    bool paired =
-        dia_post_.update(DiaPostEdgeDetector::LEFT, xl, (float)se->wo.l[0], cl, psi_g, p);
-    paired |=
-        dia_post_.update(DiaPostEdgeDetector::RIGHT, xr, (float)se->wo.r[0], cr, psi_g, p);
+    p.conf_accel = param->dia_post_ctrl.conf_accel;
+    dia_post_.set_accel(tgt_val->ego_in.accl);
+    const int n = std::clamp((int)se->wo.n, 0, 4);
+    bool paired = false;
+    for (int k = 0; k < 2; k++) {
+      const auto side = (k == 0) ? DiaPostEdgeDetector::LEFT : DiaPostEdgeDetector::RIGHT;
+      const auto &val = (k == 0) ? se->wo.l : se->wo.r;
+      const auto &tim = (k == 0) ? se->wo.tl : se->wo.tr;
+      const bool hf = (n == 4) && tim[1] > 0;
+      if (hf != dia_post_hf_[k]) {
+        dia_post_.reset_side(side);
+        dia_post_hf_[k] = hf;
+      }
+      for (int q = hf ? 1 : 0; q < (hf ? 4 : 1); q++) {
+        if (hf && tim[q] <= 0) continue;
+        const float xs = x_now + v * ((float)tim[q] - t_enc) * 1e-6f;
+        const float cs = dia_c_ + psi_g * (xs - x_now);
+        paired |= dia_post_.update(side, xs, (float)val[q], cs, psi_g, p);
+      }
+    }
     if (paired) {
       se->dia_post.delta = dia_post_.delta();
       se->dia_post.pos = dia_post_.pos();

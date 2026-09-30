@@ -58,6 +58,7 @@ private:
   void  update_dia_post_edge();
   DiaPostEdgeDetector dia_post_;
   int   dia_post_wo_seq_ = -1;
+  bool  dia_post_hf_[2] = {false, false}; // 左右それぞれ S1〜S3 を使っているか
   float dia_c_ = 0.0f;         // ジャイロの向き(右向き +)の走行距離での積分 [mm·rad]
   float dia_c_x_ = 0.0f;
   bool  dia_c_valid_ = false;

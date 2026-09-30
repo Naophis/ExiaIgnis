@@ -1,5 +1,5 @@
 // DiaPostEdgeDetector のホスト検証(2026-10-01)。
-// 入力(標準入力): 1 行 1 tick "case_id rearm x y_left y_right c psi"。rearm=1 の行と
+// 入力(標準入力): 1 行 1 tick "case_id rearm x y_left y_right c psi accel"。rearm=1 の行と
 // case_id が変わった行で再アーム(その行のサンプルは入れない)。c はジャイロの向きの
 // 積分 [mm·rad]、psi はジャイロの向き [rad](どちらも右向き +)。
 // 引数 1 つ目: κ [mm/rad](既定 0)。
@@ -20,8 +20,8 @@ int main(int argc, char **argv) {
     std::istringstream is(line);
     std::string id;
     int rearm;
-    float x, yl, yr, c = 0.0f, psi = 0.0f;
-    is >> id >> rearm >> x >> yl >> yr >> c >> psi;
+    float x, yl, yr, c = 0.0f, psi = 0.0f, acc = 0.0f;
+    is >> id >> rearm >> x >> yl >> yr >> c >> psi >> acc;
     if (id != cur || rearm) {
       det.arm();
       cur = id;
@@ -30,6 +30,7 @@ int main(int argc, char **argv) {
     // ファームと同じく左 → 右の順に入れる
     const DiaPostEdgeDetector::Side sides[2] = {DiaPostEdgeDetector::LEFT, DiaPostEdgeDetector::RIGHT};
     const float ys[2] = {yl, yr};
+    det.set_accel(acc);
     const float before = det.n_pairs() >= 1 ? det.now_delta(x, c) : 0.0f;
     const int n_before = det.n_pairs();
     for (int k = 0; k < 2; k++) {

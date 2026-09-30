@@ -453,8 +453,11 @@ axel_degenerate_y: [1, 1, 0.975, 0.95, 0.5, 0.2, 0.1]
 
 # axel_degenerate_dia_x: [0, 1, 2, 4, 6, 8, 10]
 # axel_degenerate_dia_y: [1, 1, 1, 0.75, 0.75, 0.5, 0.125]
+# 2026-10-01: dia_post_ctrl.enable = 1 のときの x は、柱の立ち下がりから出した横位置の推測
+# |dnow − k0| [mm](普段 0〜2mm)。enable = 0 のときは従来の check_sen_error_dia の誤差
+# (sensor.yaml の dia.ref/exist、片側だと 2 倍)。
 axel_degenerate_dia_x: [0, 1, 2, 4, 6, 8, 10, 40]
-axel_degenerate_dia_y: [1, 1, 1, 0.95, 0.85, 0.75, 0.25, -0.1]
+axel_degenerate_dia_y: [1, 1, 1, 0.95, 0.85, 0.80, 0.75, -0.1]
 
 # 速度→加速度テーブル (STRAIGHT 時に tgt_in.accl をこの LUT で上書きしてから
 # axel_degenerate_gain を掛ける)。要素数が2未満の場合は無効(従来通り固定accl)。
@@ -998,6 +1001,8 @@ dia_post_ctrl:
   kappa: 75   # [mm/rad] 向きによる読みのずれ(δ_読み = δ_車軸 + κ·ψ)。次の組の推測の誤差が最小になる値
   psi0_enable: 1
   dr_max: 200 # [mm] 最後の柱の組からこれ以上進んだら目標を 0 へ
+  settle_handover: 1 # 使える柱の組ができたら旋回後の引き継ぎ(turn_settle)を終えて斜め制御へ渡す
+  conf_accel: 4900   # [mm/s^2] これを超える加減速のとき、走行距離の倍率が信用できない組を使わない
 gyro_param:
   gyro_w_gain_left: 0.0024565
   gyro_w_gain_right: 0.0024565
