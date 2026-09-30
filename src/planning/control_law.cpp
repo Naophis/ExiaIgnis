@@ -152,6 +152,7 @@ ControlLaw::calc_tgt_duty() {
 
   if (tgt_val_->nmr.sct != SensorCtrlType::Dia) {
     dia_post_duty_ = 0.0f; // 次の斜めは 0 から始める
+    dia_head_i_ = 0.0f;
   }
   if (tgt_val_->nmr.sct == SensorCtrlType::Straight) {
     duty_sen = calc_sensor_pid();
@@ -834,12 +835,25 @@ float ControlLaw::calc_dia_post_ctrl() {
   tgt = std::clamp(tgt, -lim, lim);
   const float step = pc.slew / 180.0f * M_PI * std::fabs(tgt_val_->ego_in.v) * dt_;
   const float next = dia_post_duty_ + std::clamp(tgt - dia_post_duty_, -step, step);
-  sen_kanayama_dw = (dt_ > 0.0f) ? (next - dia_post_duty_) / dt_ : 0.0f;
+  const float w_ff = (dt_ > 0.0f) ? (next - dia_post_duty_) / dt_ : 0.0f;
   dia_post_duty_ = next;
-  // ログ(s_pid_*): p = 横ずれ dnow − k0 [mm]、d = ψ0 [deg]、p_v = 向きの目標 [deg]、
-  // d_v = ヨーレートへの加算 [rad/s]
-  set_ctrl_val(ee->s_val, dp.dnow - pc.k0, 0, 0, dp.psi0 * 180.0f / M_PI,
-               next * 180.0f / M_PI, 0, 0, sen_kanayama_dw, 0, 0);
+  // 向きの追従(head_kp / head_ki、structs.hpp dia_post_ctrl_t): 角度の目標(img_ang +
+  // この目標)と ang_kf の差に比例と積分を足す。引き継ぎ中は turn_angle_fb が向きを
+  // 追っているので足さない(settle_handover = 1 なら斜めの直進に入った時点で終わっている)。
+  float w_head = 0.0f;
+  const float e_h = tgt_val_->ego_in.img_ang + next - sensing_result_->ego.ang_kf;
+  if (!turn_settle_active_ && (pc.head_kp > 0.0f || pc.head_ki > 0.0f)) {
+    if (pc.head_ki > 0.0f) {
+      const float i_lim = pc.head_i_max / pc.head_ki;
+      dia_head_i_ = std::clamp(dia_head_i_ + e_h * dt_, -i_lim, i_lim);
+    }
+    w_head = pc.head_kp * e_h + pc.head_ki * dia_head_i_;
+  }
+  sen_kanayama_dw = w_ff + w_head;
+  // ログ(s_pid_*): p = 横ずれ dnow − k0 [mm]、i = 向きの誤差の積分の出力 [rad/s]、
+  // d = 向きの誤差 [deg]、p_v = 向きの目標 [deg]、d_v = ヨーレートへの加算の合計 [rad/s]
+  set_ctrl_val(ee->s_val, dp.dnow - pc.k0, pc.head_ki * dia_head_i_, 0,
+               e_h * 180.0f / M_PI, next * 180.0f / M_PI, 0, 0, sen_kanayama_dw, 0, 0);
   return next;
 }
 __attribute__((noinline, section(".time_critical.control_law")))
@@ -1614,12 +1628,13 @@ bool ControlLaw::update_turn_ctx() {
     turn_settle_active_ = false;
     return false;
   }
-  // 斜め制御(dia_post_ctrl)の直進で、使える柱の組ができたら引き継ぎを終えて斜め制御へ
-  // 渡す(2026-10-01)。引き継ぎ中は斜め制御の目標を 0 に保つので、3300〜4000mm/s では
-  // 引き継ぎが 50 tick で時間切れになるまでの 170〜200mm、斜め制御が効かなかった
-  // (20261001_012610)。
+  // 斜め制御(dia_post_ctrl)の直進に入ったら引き継ぎを終えて斜め制御へ渡す(2026-10-01)。
+  // 引き継ぎ中は斜め制御の目標を 0 に保つので、3300〜4000mm/s では引き継ぎが 50 tick で
+  // 時間切れになるまでの 170〜200mm、斜め制御が効かなかった(20261001_012610)。
+  // 斜めの直進では calc_dia_post_ctrl が向きの誤差に比例と積分を足すので、旋回の残りの
+  // 向きもそちらで追う(二つの向きの制御を同時に効かせない)。
   if (param_->dia_post_ctrl.enable && param_->dia_post_ctrl.settle_handover &&
-      tgt_val_->nmr.sct == SensorCtrlType::Dia && sensing_result_->dia_post.n_pairs >= 1) {
+      tgt_val_->nmr.sct == SensorCtrlType::Dia) {
     turn_settle_active_ = false;
     return false;
   }
