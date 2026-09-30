@@ -252,11 +252,11 @@ export const CHART_VIEWS: ChartView[] = [
     title: "斜め柱",
     charts: [
       { title: "left45 / right45 (raw)", columns: ["left45", "right45"] },
-      { title: "dpe_delta (mm, +右)", columns: ["dpe_delta"] },
-      { title: "dpe_eps (deg, +右向き) / ang", columns: ["dpe_eps", "ang"] },
+      { title: "dpe_delta / dpe_dnow (mm, +右)", columns: ["dpe_delta", "dpe_dnow"] },
+      { title: "dpe_psi0 / dpe_eps (deg, +右向き) / ang", columns: ["dpe_psi0", "dpe_eps", "ang"] },
       { title: "dpe_lag (mm) / dpe_seq", columns: ["dpe_lag", "dpe_seq"] },
       { title: "motion_state", columns: ["motion_state", "continuous_turn"] },
-      { title: "duty_sen / s_pid_p", columns: ["duty_sen", "s_pid_p"] },
+      { title: "duty_sen / dbg_off_kny (w への加算)", columns: ["duty_sen", "dbg_off_kny"] },
     ],
   },
   {

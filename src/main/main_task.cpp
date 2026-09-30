@@ -89,6 +89,11 @@ bool MainTask::load_params() {
          param_->turn_settle.enable, param_->turn_settle.ang_th,
          param_->turn_settle.hold_ticks, param_->turn_settle.timeout,
          param_->turn_settle.skip_wall_snap);
+  printf("[param] dia_post_ctrl: enable=%d k0=%.2f lc=%.1f slew=%.3fdeg/mm kappa=%.0f "
+         "psi0_enable=%d dr_max=%.0f\n",
+         param_->dia_post_ctrl.enable, param_->dia_post_ctrl.k0, param_->dia_post_ctrl.lc,
+         param_->dia_post_ctrl.slew, param_->dia_post_ctrl.kappa,
+         param_->dia_post_ctrl.psi0_enable, param_->dia_post_ctrl.dr_max);
   any |= ConfigLoader::load_as("/system.txt", sys_);
   load_param_after();
   return any;

@@ -58,5 +58,8 @@ private:
   void  update_dia_post_edge();
   DiaPostEdgeDetector dia_post_;
   int   dia_post_wo_seq_ = -1;
+  float dia_c_ = 0.0f;         // ジャイロの向き(右向き +)の走行距離での積分 [mm·rad]
+  float dia_c_x_ = 0.0f;
+  bool  dia_c_valid_ = false;
   float calc_sensor_val(float data, float a, float b);
 };

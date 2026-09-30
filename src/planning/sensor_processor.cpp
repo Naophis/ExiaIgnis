@@ -513,11 +513,24 @@ void SensorProcessor::update_dia_post_edge() {
        mt == MotionType::NONE || mt == MotionType::READY ||
        mt == MotionType::FRONT_CTRL);
   const int wo_seq = se->wo.seq;
+  // ジャイロで見た右向きの向き [rad]。斜めの直進(SLA_BACK_STR / STRAIGHT / WALL_OFF_DIA /
+  // SLA_FRONT_STR)は目標の角度が 0 なので ang_kf をそのまま使う(img_ang を引くと、
+  // 区間が切り替わる tick に基準の切り替えが 1 tick ずれて 45° 等が混じる)。
+  const float psi_g = -se->ego.ang_kf;
   if (rearm) {
     dia_post_.arm();
     se->dia_post.n_pairs = 0;
     se->dia_post.eps = 0;
-  } else if (wo_seq != dia_post_wo_seq_ && se->wo.n >= 1) {
+    se->dia_post.psi0 = 0;
+    se->dia_post.n_psi = 0;
+    dia_c_ = 0.0f;
+    dia_c_valid_ = false;
+  } else {
+    if (dia_c_valid_) dia_c_ += psi_g * (x_now - dia_c_x_);
+    dia_c_x_ = x_now;
+    dia_c_valid_ = true;
+  }
+  if (!rearm && wo_seq != dia_post_wo_seq_ && se->wo.n >= 1) {
     // S0 の読み(wo.l/r[0])だけを使う。オフラインで確かめたのはログの left45 /
     // right45 列 = wo_l0 / wo_r0 で、S1〜S3 は同じ位置でも読みが違う(S0 が低い)。
     // 位置は読んだ時刻へ戻す(update_wall_edge と同じ)。左右で読んだ時刻が違う分も入る。
@@ -525,18 +538,26 @@ void SensorProcessor::update_dia_post_edge() {
     const float t_enc = 0.5f * ((float)se->t_encl + (float)se->t_encr);
     const float xl = x_now + v * ((float)se->wo.tl[0] - t_enc) * 1e-6f;
     const float xr = x_now + v * ((float)se->wo.tr[0] - t_enc) * 1e-6f;
-    const DiaPostEdgeParams p;
-    bool paired = dia_post_.update(DiaPostEdgeDetector::LEFT, xl, (float)se->wo.l[0], p);
-    paired |= dia_post_.update(DiaPostEdgeDetector::RIGHT, xr, (float)se->wo.r[0], p);
+    DiaPostEdgeParams p;
+    p.kappa = param->dia_post_ctrl.kappa;
+    const float cl = dia_c_ + psi_g * (xl - x_now);
+    const float cr = dia_c_ + psi_g * (xr - x_now);
+    bool paired =
+        dia_post_.update(DiaPostEdgeDetector::LEFT, xl, (float)se->wo.l[0], cl, psi_g, p);
+    paired |=
+        dia_post_.update(DiaPostEdgeDetector::RIGHT, xr, (float)se->wo.r[0], cr, psi_g, p);
     if (paired) {
       se->dia_post.delta = dia_post_.delta();
       se->dia_post.pos = dia_post_.pos();
       se->dia_post.eps = dia_post_.eps_deg();
       se->dia_post.n_pairs = dia_post_.n_pairs();
+      se->dia_post.psi0 = dia_post_.psi0();
+      se->dia_post.n_psi = dia_post_.n_psi();
       __dmb();
       se->dia_post.seq = dia_post_.seq();
     }
   }
   dia_post_wo_seq_ = wo_seq;
   se->dia_post.lag = x_now - se->dia_post.pos;
+  se->dia_post.dnow = (dia_post_.n_pairs() >= 1) ? dia_post_.now_delta(x_now, dia_c_) : 0.0f;
 }

@@ -274,6 +274,9 @@ private:
   void  check_fail_safe();
   float calc_sensor_pid();
   float calc_sensor_pid_dia();
+  // 斜めの直進を柱の立ち下がりの横位置で制御する(2026-10-01、dia_post_ctrl_t)
+  float calc_dia_post_ctrl();
+  float dia_post_duty_ = 0.0f; // 前 tick の向きの目標 [rad](傾きの上限とヨーレートへの加算用)
   void  update_start_align(SensingControlType type);
   void  update_wall_fit(SensingControlType type);
   void  reset_wall_fit();

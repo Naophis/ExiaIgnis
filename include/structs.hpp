@@ -327,14 +327,17 @@ typedef struct {
 // 斜めの柱の立ち下がりから出した横位置(2026-10-01、include/planning/dia_post_edge_detector.hpp)。
 // Core1 の SensorProcessor::update_dia_post_edge() が左右の組ができるたびに更新する。
 // 書き手は delta 等を書いてから __dmb() → seq の順、読み手は seq を見てから __dmb() → 他。
-// まだログに出すだけで、制御には使っていない。
+// dia_post_ctrl.enable = 1 のとき ControlLaw::calc_dia_post_ctrl が dnow / psi0 を使う。
 typedef struct {
   volatile uint16_t seq = 0;  // 組ができるたびに +1
   volatile float delta = 0;   // 横位置 [mm](+ は右。左右センサーの取り付け差 k0 は引いていない)
   volatile float pos = 0;     // 組の位置(2 つの縁の中点の global_pos.dist)[mm]
   volatile float eps = 0;     // 最後の 2 組から出した向き [deg](+ は右向き。組が 2 つ未満なら 0)
   volatile int n_pairs = 0;   // 再アーム(旋回・停止)してからの組の数
+  volatile float psi0 = 0;    // ジャイロの向きの基準と迷路の向きのずれ [rad](+ は右、組ごとの平均)
+  volatile int n_psi = 0;     // ψ0 を出した回数(= n_pairs − 1)
   volatile float lag = 0;     // 今の位置 − pos [mm](ログ用、毎 tick 更新)
+  volatile float dnow = 0;    // 今の位置の横位置の推測 [mm](最後の組からジャイロと ψ0 で進める、毎 tick)
 } dia_post_out_t;
 
 // ジャイロ FIFO の読み出し結果(2026-09-29、sensing_task.cpp)。Core1 の
@@ -803,6 +806,36 @@ typedef struct {
   char windup = 0;
   float windup_deg = 0;
 } kanayama_t;
+
+// 斜めの直進(sct = Dia)を柱の立ち下がりから出した横位置で制御する(2026-10-01、
+// ControlLaw::calc_dia_post_ctrl、include/planning/dia_post_edge_detector.hpp)。
+// enable = 1 のとき、従来の check_sen_error_dia(柱までの距離の読み、sensor.yaml の
+// dia.ref/exist)と kanayama_dia の代わりに使う。
+//   向きの目標(duty_sen、角度の目標へのずらし)= (δ_now − k0)/lc + ψ0
+//   δ_now: 最後の柱の組の横位置を、ジャイロの向きと ψ0 で今の位置まで進めたもの(+ は右)
+//   ψ0: ジャイロの向きの基準と迷路の向きのずれ(柱の組ごとの δ の変化 − ジャイロの向き)
+// 向きの目標の変化は slew(走行距離あたり)で抑え、その変化分をヨーレートの目標へ足す
+// (sen_kanayama_dw)。
+// 角度ループ(angle_pid.p 7.5 → 時定数 0.13 秒、3000mm/s で 400mm)を待たずに向きを
+// 変えるため。上限は sensor_deg_limitter_dia(度、速度ごと)。
+// シミュレーション(scratchpad の dia_sim、δ0 ±2mm・ψ0 ±2°・組ごとのばらつき 0.22mm):
+// 900mm の斜めの終わりの横ずれ rms 400mm/s 0.35mm、2000 0.5mm、3000 1.2mm
+// (FF なしだと 2000 で 4.4mm、P だけだと 18mm、制御なし 26mm)。
+typedef struct {
+  int enable = 0;
+  float k0 = 0.0f;       // [mm] 目標の横位置(左右センサーの取り付け差。0 = センサーの中心)
+  float lc = 100.0f;     // [mm] 横ずれを戻す距離(向きの目標 = 横ずれ / lc)
+  // [deg/mm] 向きの目標の変化の上限(走行距離あたり。400mm/s で 0.21rad/s、3000 で 1.57rad/s)。
+  // 最初は時間あたり 1.5rad/s にしていたが、400mm/s で 1.4° を 16 tick で切って向きが
+  // 行き過ぎ、目標より 0.3〜0.45° 先で止まった(20261001_004405)。
+  float slew = 0.03f;
+  // [mm/rad] 向きによる読みのずれ(δ_読み = δ_車軸 + κ·ψ、dia_post_edge_detector.hpp)。
+  // 次の組が来たときの推測の誤差が最小になる値(20261001_004338〜004501 の斜め制御あり
+  // 12 組で 0.71 → 0.31mm、制御なし 36 組で 0.67 → 0.42mm、ホスト再生)。0 で補正しない。
+  float kappa = 75.0f;
+  int psi0_enable = 1;   // 1 = ψ0 を向きの目標へ足す(組が 2 つできてから)
+  float dr_max = 200.0f; // [mm] 最後の組からジャイロで進める距離の上限。越えたら目標を 0 へ戻す
+} dia_post_ctrl_t;
 
 // 旋回終端(SLALOM/SLA_BACK_STR)でff_duty_rollがideal_wと共にゼロへ落ちた後、
 // 実測角速度(w_lp)が慣性で収束しきらず残ってしまう問題への対策
@@ -1531,6 +1564,8 @@ typedef struct {
   // リスクが高いため、kxとkyとkiは未使用のまま0固定運用とし、kim_theta基準の
   // e_theta(実測ヘディング)を使うk_thetaのみ使う想定。
   kanayama_t kanayama_dia;
+  // 柱の立ち下がりの横位置による斜め制御(2026-10-01、dia_post_ctrl_t 参照)
+  dia_post_ctrl_t dia_post_ctrl;
 
   // 軸退化ゲインテーブル (control_law で interp1d に渡す)
   std::vector<float> axel_degenerate_x;
@@ -2363,6 +2398,8 @@ typedef struct {
   real16_T dpe_delta;     // 最後の組の横位置 [mm](+ は右)
   real16_T dpe_eps;       // 最後の 2 組から出した向き [deg]
   real16_T dpe_lag;       // 今の位置 − 最後の組の位置 [mm]
+  real16_T dpe_dnow;      // 今の位置の横位置の推測 [mm]
+  real16_T dpe_psi0;      // ジャイロと迷路の向きのずれ ψ0 [deg]
 } log_data_t2;
 
 typedef struct {
@@ -2681,6 +2718,8 @@ typedef struct {
   float dpe_delta = 223; // 最後の組の横位置 [mm](+ は右、k0 は引いていない)
   float dpe_eps = 224;   // 最後の 2 組から出した向き [deg](+ は右向き、組が 2 つ未満なら 0)
   float dpe_lag = 225;   // 今の位置 − 最後の組の位置 [mm]
+  float dpe_dnow = 226;  // 今の位置の横位置の推測 [mm](最後の組からジャイロと ψ0 で進める)
+  float dpe_psi0 = 227;  // ジャイロの向きの基準と迷路の向きのずれ ψ0 [deg](+ は右)
 } LogStruct11;
 
 #endif

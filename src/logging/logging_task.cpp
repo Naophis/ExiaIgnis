@@ -459,6 +459,8 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.dpe_delta = floatToHalf(sr->dia_post.delta);
   ld.dpe_eps = floatToHalf(sr->dia_post.eps);
   ld.dpe_lag = floatToHalf(sr->dia_post.lag);
+  ld.dpe_dnow = floatToHalf(sr->dia_post.dnow);
+  ld.dpe_psi0 = floatToHalf(sr->dia_post.psi0 * 57.29578f);
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -747,6 +749,8 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_delta:float:%d\n", (int)sizeof(ls11.dpe_delta));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_eps:float:%d\n", (int)sizeof(ls11.dpe_eps));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_lag:float:%d\n", (int)sizeof(ls11.dpe_lag));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_dnow:float:%d\n", (int)sizeof(ls11.dpe_dnow));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_psi0:float:%d\n", (int)sizeof(ls11.dpe_psi0));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -1098,6 +1102,8 @@ void LoggingTask::dump_csv() const {
     ls11.dpe_delta = halfToFloat(e.dpe_delta);
     ls11.dpe_eps = halfToFloat(e.dpe_eps);
     ls11.dpe_lag = halfToFloat(e.dpe_lag);
+    ls11.dpe_dnow = halfToFloat(e.dpe_dnow);
+    ls11.dpe_psi0 = halfToFloat(e.dpe_psi0);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

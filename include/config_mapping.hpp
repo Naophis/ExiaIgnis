@@ -530,6 +530,16 @@ inline void convertFromJson(JsonVariantConst src, comp_param_t& dst) {
  * offset.txt
  * root → kanayama
  */
+inline void convertFromJson(JsonVariantConst src, dia_post_ctrl_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "k0", dst.k0);
+    from_json_field(src, "lc", dst.lc);
+    from_json_field(src, "slew", dst.slew);
+    from_json_field(src, "kappa", dst.kappa);
+    from_json_field(src, "psi0_enable", dst.psi0_enable);
+    from_json_field(src, "dr_max", dst.dr_max);
+}
+
 inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
     from_json_field(src, "kx", dst.kx);
     from_json_field(src, "ky", dst.ky);
@@ -965,6 +975,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "kanayama", dst.kanayama);
     from_json_nested(src, "kanayama_straight", dst.kanayama_straight);
     from_json_nested(src, "kanayama_dia", dst.kanayama_dia);
+    from_json_nested(src, "dia_post_ctrl", dst.dia_post_ctrl);
     // 軸退化ゲインテーブル (hardware.yaml: axel_degenerate_*)
     from_json_vector(src, "axel_degenerate_x",          dst.axel_degenerate_x);
     from_json_vector(src, "axel_degenerate_y",          dst.axel_degenerate_y);

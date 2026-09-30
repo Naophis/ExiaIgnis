@@ -982,6 +982,22 @@ kanayama_dia:
   enable: 1
   windup: 0
   windup_deg: 0
+
+# 2026-10-01: 斜めの直進(sct = Dia)を柱の立ち下がりの横位置で制御する(ルートの CLAUDE.md
+# 「斜めの横位置」、structs.hpp dia_post_ctrl_t)。enable: 1 で従来の check_sen_error_dia
+# (sensor.yaml の dia.ref/exist)と kanayama_dia の代わりに使う。
+#   向きの目標 = (横位置の推測 − k0)/lc + ψ0(ジャイロと迷路の向きのずれ)
+# 目標の変化は slew [deg/mm] で抑え、その変化分をヨーレートの目標へ足す。上限は
+# sensor_deg_limitter_dia。旋回後の引き継ぎ(turn_settle)中は 0 のまま。
+# k0(左右センサーの取り付け差)は未決定(同じ旋回の左右の δ0 の平均で決める)。
+dia_post_ctrl:
+  enable: 1
+  k0: 0.0     # [mm] 目標の横位置
+  lc: 100     # [mm] 横ずれを戻す距離
+  slew: 0.03  # [deg/mm] 向きの目標の変化の上限(走行距離あたり。400mm/s で 0.21rad/s)
+  kappa: 75   # [mm/rad] 向きによる読みのずれ(δ_読み = δ_車軸 + κ·ψ)。次の組の推測の誤差が最小になる値
+  psi0_enable: 1
+  dr_max: 200 # [mm] 最後の柱の組からこれ以上進んだら目標を 0 へ
 gyro_param:
   gyro_w_gain_left: 0.0024565
   gyro_w_gain_right: 0.0024565

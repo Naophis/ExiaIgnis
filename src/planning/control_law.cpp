@@ -137,6 +137,9 @@ ControlLaw::calc_tgt_duty() {
   ee->s_val.p_val = ee->s_val.i_val = ee->s_val.d_val = 0;
   ee->s_val.z = ee->s_val.zz = 0;
 
+  if (tgt_val_->nmr.sct != SensorCtrlType::Dia) {
+    dia_post_duty_ = 0.0f; // 次の斜めは 0 から始める
+  }
   if (tgt_val_->nmr.sct == SensorCtrlType::Straight) {
     duty_sen = calc_sensor_pid();
     ee->sen_dia.error_i = 0;
@@ -698,6 +701,9 @@ void ControlLaw::update_start_align(SensingControlType type) {
 
 __attribute__((noinline, section(".time_critical.control_law"))) float
 ControlLaw::calc_sensor_pid_dia() {
+  if (param_->dia_post_ctrl.enable) {
+    return calc_dia_post_ctrl();
+  }
   float duty = 0;
   SensingControlType type = SensingControlType::None;
   ee->sen_dia.error_d = ee->sen_dia.error_p;
@@ -783,6 +789,45 @@ ControlLaw::calc_sensor_pid_dia() {
   limit = limit / 180.0f * M_PI;
   duty = std::clamp(duty, -limit, limit);
   return duty;
+}
+// 斜めの直進を柱の立ち下がりの横位置で制御する(2026-10-01、structs.hpp dia_post_ctrl_t、
+// include/planning/dia_post_edge_detector.hpp)。戻り値は duty_sen(角度の目標へのずらし
+// [rad]、左回りが +)。向きの目標の変化(走行距離あたり slew [deg/mm] まで)を
+// sen_kanayama_dw(ヨーレートの目標への加算
+// [rad/s])に入れ、角度ループの遅れ(angle_pid.p 7.5 → 0.13 秒)を待たずに向きを変える。
+// kanayama_dia と従来の check_sen_error_dia は使わない。
+__attribute__((noinline, section(".time_critical.control_law")))
+float ControlLaw::calc_dia_post_ctrl() {
+  const auto &pc = param_->dia_post_ctrl;
+  const auto &dp = sensing_result_->dia_post;
+  const float lim = sensor_->interp1d(param_->sensor_deg_limitter_v,
+                                      param_->sensor_deg_limitter_dia,
+                                      tgt_val_->ego_in.v, false) /
+                    180.0f * M_PI;
+  // 旋回後の引き継ぎ(turn_settle)中は turn_angle_fb が img_ang − kim.theta(duty_sen を
+  // 含まない)を 0 へ押すので、目標を動かすと引き合う。引き継ぎが終わるまで 0 に保つ。
+  // turn_settle_active_ は calc_angle_velocity_ctrl() が更新するので 1 tick 前の値。
+  const bool have = dp.n_pairs >= 1 && dp.lag < pc.dr_max && pc.lc > 0.0f &&
+                    !turn_settle_active_;
+  float tgt = 0.0f;
+  if (have) {
+    // 右にずれている(dnow > k0)なら左へ向ける。ψ0 は「ジャイロで 0 のときの迷路での
+    // 右向きの向き」なので、同じだけ左へずらすと迷路に対してまっすぐになる。
+    tgt = (dp.dnow - pc.k0) / pc.lc;
+    if (pc.psi0_enable && dp.n_psi >= 1) {
+      tgt += dp.psi0;
+    }
+  }
+  tgt = std::clamp(tgt, -lim, lim);
+  const float step = pc.slew / 180.0f * M_PI * std::fabs(tgt_val_->ego_in.v) * dt_;
+  const float next = dia_post_duty_ + std::clamp(tgt - dia_post_duty_, -step, step);
+  sen_kanayama_dw = (dt_ > 0.0f) ? (next - dia_post_duty_) / dt_ : 0.0f;
+  dia_post_duty_ = next;
+  // ログ(s_pid_*): p = 横ずれ dnow − k0 [mm]、d = ψ0 [deg]、p_v = 向きの目標 [deg]、
+  // d_v = ヨーレートへの加算 [rad/s]
+  set_ctrl_val(ee->s_val, dp.dnow - pc.k0, 0, 0, dp.psi0 * 180.0f / M_PI,
+               next * 180.0f / M_PI, 0, 0, sen_kanayama_dw, 0, 0);
+  return next;
 }
 __attribute__((noinline, section(".time_critical.control_law")))
 float ControlLaw::check_sen_error(SensingControlType &type) {

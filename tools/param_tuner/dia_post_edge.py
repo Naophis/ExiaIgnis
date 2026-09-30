@@ -9,6 +9,8 @@ left45 / right45)は柱を通り過ぎた瞬間に落ちるので、その位置
     → 隣り合う L/R の間隔 g から  R→L: δ = (63.64 − g)/2   L→R: δ = (g − 63.64)/2
 
 前後のずれ(旋回出口の位置・読んだ時刻・速度の遅れ)は左右に同じだけ入るので消える。
+加減速の空転・ロックで走行距離が数 % 伸び縮みする分は、直近の左右の同じ側の間隔から
+その場の倍率を出して g を直す(ファームと同じ。--no-scale-fix で外す)。
 柱の反射の強さ(壁の有無で 5〜35mm 動く)も使わない。壁が柱に付いていると落ちる
 位置は左右とも 1〜2mm 遅れるが、差では 0.2mm(2026-09-30、壁あり/なし 11 本)。
 
@@ -109,22 +111,38 @@ def gate_spacing(edges, tol=15.0):
     return kept
 
 
-def pair_deltas(R, L, tol=15.0):
+def local_scale(ev, i, tol=15.0):
+    """ev[i-1], ev[i] の組に使う走行距離の倍率(ファームの DiaPostEdgeDetector::local_scale と同じ)。
+    同じ側の間隔 (i − (i−2)) と ((i−1) − (i−3)) の平均 / 2·PITCH。加減速の空転・ロックで
+    走行距離が数 % 伸び縮みすると、右→左と左→右の組で δ に逆向きの誤差が出るのを直す。"""
+    two = 2 * PITCH
+    sps = []
+    if i >= 2 and ev[i - 2][1] == ev[i][1] and abs(ev[i][0] - ev[i - 2][0] - two) <= tol:
+        sps.append(ev[i][0] - ev[i - 2][0])
+        if i >= 3 and ev[i - 3][1] == ev[i - 1][1] and abs(ev[i - 1][0] - ev[i - 3][0] - two) <= tol:
+            sps.append(ev[i - 1][0] - ev[i - 3][0])
+    return sum(sps) / (len(sps) * two) if sps else 1.0
+
+
+def pair_deltas(R, L, tol=15.0, scale_fix=True):
     """隣り合う L/R の縁から δ(+右)と組の位置を出す。"""
     ev = sorted([(p, "R") for p, _ in R] + [(p, "L") for p, _ in L])
     out = []
-    for (pa, sa), (pb, sb) in zip(ev, ev[1:]):
+    for i in range(1, len(ev)):
+        (pa, sa), (pb, sb) = ev[i - 1], ev[i]
         if sa == sb:
             continue
         g = pb - pa
         if abs(g - PITCH) > tol:
             continue
+        if scale_fix:
+            g /= local_scale(ev, i, tol)
         d = (PITCH - g) / 2 if sa == "R" else (g - PITCH) / 2
         out.append((d, (pa + pb) / 2))
     return out, (ev[0][1] if ev else "-")
 
 
-def analyze(path, thr, k0, verbose):
+def analyze(path, thr, k0, verbose, scale_fix=True):
     d = pd.read_csv(path)
     need = ["motion_state", "dist", "left45", "right45", "ideal_ang", "ideal_w", "ang"]
     if any(c not in d for c in need):
@@ -159,14 +177,15 @@ def analyze(path, thr, k0, verbose):
                     if not idx:
                         run_dist += seg_len
                         continue
-                    rows.append(_analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose))
+                    rows.append(_analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose,
+                                             scale_fix))
             run_dist += seg_len
         else:
             run_dist += seg_len
     return [r for r in rows if r]
 
 
-def _analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose):
+def _analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose, scale_fix=True):
     # 区間をつないで経路方向の位置 x を作る(各区間の dist は 0 から)
     xs, cols = [], {c: [] for c in ("left45", "right45", "ang", "ideal_v")}
     base = 0.0
@@ -183,7 +202,7 @@ def _analyze_run(path, d, idx, kind, turn_dir, turn_start, thr, k0, verbose):
     v = np.concatenate(cols["ideal_v"])
     R = gate_spacing(falling_edges(x, R45, thr))
     L = gate_spacing(falling_edges(x, L45, thr))
-    pairs, first = pair_deltas(R, L)
+    pairs, first = pair_deltas(R, L, scale_fix=scale_fix)
     if len(pairs) < 2:
         print(f"{path}: {kind} {turn_dir} 組が {len(pairs)} 個しかない(R {len(R)} L {len(L)})")
         return None
@@ -216,10 +235,12 @@ def main():
     ap.add_argument("--k0", type=float, default=0.0, help="左右センサーの取り付け差 [mm]。δ から引く")
     ap.add_argument("--summary", action="store_true", help="kind/dir ごとの平均と σ")
     ap.add_argument("-v", "--verbose", action="store_true")
+    ap.add_argument("--no-scale-fix", action="store_true",
+                    help="走行距離の伸び縮みを同じ側の柱の間隔で直さない(2026-10-01 より前の出力と同じ)")
     a = ap.parse_args()
     rows = []
     for f in a.files:
-        rows += analyze(f, a.thr, a.k0, a.verbose)
+        rows += analyze(f, a.thr, a.k0, a.verbose, not a.no_scale_fix)
     if not rows:
         return
     df = pd.DataFrame(rows)
