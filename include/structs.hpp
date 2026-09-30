@@ -302,6 +302,14 @@ typedef struct {
   volatile float fire_x = 0;    // 発火時の global_pos.dist [mm]
   volatile float lag = 0;       // 現在位置 − 谷底位置 [mm](ログ用)
   volatile int seq = 0;         // 発火ごとに +1
+  // 細かいサンプル(sensing_result->wo)で求め直した谷底の位置(2026-09-30、
+  // WallEdgeDetector::trough_vertex)。hf_tag = seq * 4 + 結果(1 = 求まった、
+  // 2 = 求められなかった)。hf_tag / 4 が seq と同じときだけ、その発火のもの。
+  // bottom_x_hf はサンプルを読んだ時刻の位置(bottom_x は planning の時刻の位置で、
+  // 速度 × 約 0.6ms だけ先にずれている)。書き手は bottom_x_hf → __dmb() → hf_tag。
+  volatile float bottom_x_hf = 0;
+  volatile int hf_tag = 0;
+  volatile float lag_hf = 0;    // 現在位置 − bottom_x_hf [mm](ログ用、無ければ 0、失敗は −1)
 } pillar_trough_out_t;
 
 // 壁の切れ目(壁あり → 急に遠のく)の形の検知の出力(2026-09-30、
@@ -355,6 +363,12 @@ typedef struct {
   int16_t r[4] = {0, 0, 0, 0};  // 右45 LED1 の差分 [raw]
   int16_t tl[4] = {0, 0, 0, 0}; // 左を読んだ時刻 [us、tick(S0)の開始から]
   int16_t tr[4] = {0, 0, 0, 0}; // 右を読んだ時刻 [us]
+  // 点灯前に読んだ暗い値 [raw](l/r はこれを引いた差分。点灯時の値 = l/r + bl/br、
+  // 差分が 0 にクランプされた読みでは点灯時の値の方が小さい)。[0] は S0 で使った
+  // 暗い値(tick おきにしか取らないので前の tick のものかもしれない)。2026-09-30、
+  // S1 だけ S2・S3 と読みの大きさが合わない原因の切り分け用。
+  int16_t bl[4] = {0, 0, 0, 0};
+  int16_t br[4] = {0, 0, 0, 0};
 } wo_hf_t;
 
 // 旋回の始まりを tick の途中へ合わせた結果(2026-09-30、planning/sla_start_align.hpp)。
@@ -714,6 +728,37 @@ typedef struct {
   float edge_fallback_dist = 60.0f; // [mm] 見逃しの保険: 45° がここまで遠のいたら従来の判定でも抜ける
   float edge_str_l = -4.3f;         // [mm] 基準位置からの補正距離(左)。従来の旋回位置に合わせた初期値
   float edge_str_r = -1.8f;         // [mm] 同(右)
+  // 2026-09-30: 細かいサンプルの取り方(sensing_task.cpp)。
+  //   0 = WALL_OFF / WALL_OFF_DIA 中だけ、S1〜S3 の各枠で左右とも読む(最初の実装)。
+  //   1 = 最短走行の直進(STRAIGHT / SLA_FRONT_STR / SLA_BACK_STR)でも同じ読み方で
+  //       読む。検知器には S1〜S3 の読みだけを入れる(S0 は入れない)。省電力のため使う側だけ読む。
+  //   2 = 1 と同じだが、省電力の側の指定を無視して直進中も WALL_OFF 中も左右とも読む(調査用)。
+  // 1 にする理由: (a) 壁なしで柱を見る WALL_OFF は柱の約 2 tick 手前で始まるので、
+  // WALL_OFF 中だけ読んでも柱の手前側が取れない。(b) S0 は S1〜S3 より低く出る
+  // (右の柱 raw 約 120 で −3〜−17)。読みは、そのセンサーを最後に光らせてからの
+  // 時間と直前の LED の並びで変わる。毎枠同じ並びで読む S1〜S3 どうしは揃うが、
+  // S0 を混ぜると 1 tick ごとの段になる。
+  int   hf_mode = 0;
+  // S1 の細かい読みの前の待ち時間 [us](調査用、2026-09-30)。0 = 従来(LED の待ち時間 ×
+  // 2)。S1 の暗い値だけが S2・S3 より 左 +3 / 右 +1.5 raw 高く出る(90 系の LED を消した
+  // 直後に読むため、余韻が乗っている疑い)ので、待ちを伸ばして暗い値の超過が減るかを見る。
+  // 上限 120(S2 の枠 +440us に間に合う範囲)。
+  int   hf_s1_guard_us = 0;
+  // 柱の谷底の位置を細かいサンプルで求め直す(WallEdgeDetector::trough_vertex)。
+  // 柱かどうかの判定は PillarTroughDetector のまま。1 のとき、求まれば
+  // ps_front.dist += pillar_hf_str − (現在位置 − bottom_x_hf)。求められなければ従来の
+  // 谷底(pillar_str)。谷底から pillar_hf_wait 進んでも求まらなければ従来の谷底。
+  int   pillar_hf = 0;
+  float pillar_hf_win = 4.0f;   // [mm] 放物線を当てる窓の半幅
+  float pillar_hf_wait = 8.0f;  // [mm]
+  float pillar_hf_str_l = 3.9f; // [mm] pillar_str_l + 速度 2200 のときの位置の基準の差 1.4
+  float pillar_hf_str_r = 0.0f; // [mm] 同(右)
+  // 柱の谷を追跡中(谷底が bottom_min〜max、手前のピークから depth_min 以上下がり、
+  // 谷底から max_lag 以内)は、従来の判定(wall_missing 等)を待たせて柱の検知に譲る。
+  // 谷底が WALL_OFF の開始より前に来ると、柱の検知(谷底の 2〜3 tick 後)より先に
+  // wall_missing が抜けて、別の補正値(left_str / right_str)で旋回位置が決まっていた
+  // (20260930_121814: 025937 と同じ柱で旋回が 3.7mm 手前)。
+  int   pillar_hold = 0;
 
 } wall_off_hold_dist_t;
 
@@ -1677,6 +1722,11 @@ typedef struct {
   // sla_align のとき、global_pos.dist が sla_start_x に来た位置で旋回を始める。
   volatile float sla_start_x = 0;
   volatile bool sla_align = false;
+  // 直進中に細かく読む側(2026-09-30、省電力。sensing_task.cpp、wall_off_hf_mode 1):
+  // 0 = 左右とも、1 = 左だけ、2 = 右だけ、3 = 読まない。最短走行では経路から
+  // 「次に曲がる側」が分かるので、その側だけ読む(MotionPlanning::hf_side_hint_)。
+  // WALL_OFF 中は motion_dir の側を読む。
+  volatile uint8_t hf_side = 0;
 } new_motion_req_t;
 
 typedef struct {
@@ -1714,6 +1764,7 @@ typedef struct {
   volatile int32_t motion_mode;
   MotionType motion_type;
   MotionDirection motion_dir;
+  volatile uint8_t hf_side = 0; // 直進中に細かく読む側(new_motion_req_t::hf_side の写し)
   volatile bool dia_mode = false;
   planning_req_t pl_req;
   fail_safe_state_t fss;
@@ -2015,6 +2066,7 @@ typedef struct {
   float decel = 0;
   bool skip_wall_off = false;
   float carry_over_dist = 0;
+  TurnDirection next_turn_dir = TurnDirection::None; // 次のターンの向き(細かく読む側の指定用)
 } next_motion_t;
 
 typedef struct {
@@ -2273,6 +2325,14 @@ typedef struct {
   int16_t wo_tr1;
   int16_t wo_tr2;
   int16_t wo_tr3;
+  int16_t wo_bl0;      // 点灯前の暗い値 [raw](wo_hf_t::bl / br、2026-09-30)
+  int16_t wo_bl1;
+  int16_t wo_bl2;
+  int16_t wo_bl3;
+  int16_t wo_br0;
+  int16_t wo_br1;
+  int16_t wo_br2;
+  int16_t wo_br3;
   int16_t wo_n;
   int16_t wo_seq;
   int16_t edge_seq_l;     // 壁の切れ目の検知の発火回数(左)(2026-09-30, wall_edge_out_t)
@@ -2283,6 +2343,8 @@ typedef struct {
   real16_T edge_lvl_r;
   real16_T sla_tau;       // 旋回の始まりのずれ [tick](sla_align_diag_t、2026-09-30)
   int16_t sla_wait;
+  real16_T pillar_hf_lag_l; // 現在位置 − 細かいサンプルで求めた谷底 [mm](無ければ 0、失敗は −1)
+  real16_T pillar_hf_lag_r;
 } log_data_t2;
 
 typedef struct {
@@ -2587,6 +2649,16 @@ typedef struct {
   float wo_dr3        = 209;
   float sla_tau       = 210; // 旋回の始まりのずれ [tick](9 = 合わせていない、2026-09-30)
   int sla_wait        = 211; // 直進で待った tick 数
+  float pillar_hf_lag_l = 212; // 現在位置 − 細かいサンプルで求めた谷底 [mm](無ければ 0、失敗は −1)
+  float pillar_hf_lag_r = 213;
+  int wo_bl0 = 214; // 点灯前の暗い値 [raw]、0=S0(前の tick のことがある) 1〜3=S1〜S3(2026-09-30)
+  int wo_bl1 = 215;
+  int wo_bl2 = 216;
+  int wo_bl3 = 217;
+  int wo_br0 = 218;
+  int wo_br1 = 219;
+  int wo_br2 = 220;
+  int wo_br3 = 221;
 } LogStruct11;
 
 #endif

@@ -412,24 +412,35 @@ void SensorProcessor::update_wall_edge() {
   // se->wo は S3(read_enc_bat の終わり)で 1 tick 分まとめて写される。同じ Core1 の
   // 中なので途中の状態は見えない。同じ組を 2 回入れないよう seq で確かめる。
   const int wo_seq = se->wo.seq;
+  // サンプルの位置: global_pos.dist はエンコーダーを読んだ時刻(S3)の位置なので、
+  // 読んだ時刻の差 × 速度で各サンプルの時刻へ戻す(速度は距離の積分と同じ
+  // 先読みなしの値)。時刻はどれも tick(S0)の開始からの us。
+  const float v = 0.5f * (se->ego.v_l_dist + se->ego.v_r_dist); // [mm/s]
+  const float t_enc = 0.5f * ((float)se->t_encl + (float)se->t_encr);
   if (rearm) {
     edge_l_.arm();
     edge_r_.arm();
   } else if (wo_seq != edge_wo_seq_) {
     const int n = std::clamp((int)se->wo.n, 0, 4);
-    // サンプルの位置: global_pos.dist はエンコーダーを読んだ時刻(S3)の位置なので、
-    // 読んだ時刻の差 × 速度で各サンプルの時刻へ戻す(速度は距離の積分と同じ
-    // 先読みなしの値)。時刻はどれも tick(S0)の開始からの us。
-    const float v = 0.5f * (se->ego.v_l_dist + se->ego.v_r_dist); // [mm/s]
-    const float t_enc = 0.5f * ((float)se->t_encl + (float)se->t_encr);
+    // wall_off_hf_mode 1 で細かく読んでいる tick は、S1〜S3 の読みだけを入れる。
+    // S0 は同じ位置でも S1〜S3 より低く出るので(右の柱で最大 4mm 遠く、
+    // 20260930_030005)、混ぜると 1 tick ごとの段になる。
+    const bool extras_only = (pp.hf_mode != 0) && n == 4;
     float xl[4], dl[4], xr[4], dr[4];
-    for (int q = 0; q < n; q++) {
-      xl[q] = x_now + v * ((float)se->wo.tl[q] - t_enc) * 1e-6f;
-      xr[q] = x_now + v * ((float)se->wo.tr[q] - t_enc) * 1e-6f;
-      dl[q] = calc_sensor_val((float)se->wo.l[q], param->sensor_gain.l45.a,
-                              param->sensor_gain.l45.b);
-      dr[q] = calc_sensor_val((float)se->wo.r[q], param->sensor_gain.r45.a,
-                              param->sensor_gain.r45.b);
+    int nl = 0, nr = 0;
+    for (int q = extras_only ? 1 : 0; q < n; q++) {
+      if (!extras_only || se->wo.tl[q] > 0) {
+        xl[nl] = x_now + v * ((float)se->wo.tl[q] - t_enc) * 1e-6f;
+        dl[nl] = calc_sensor_val((float)se->wo.l[q], param->sensor_gain.l45.a,
+                                 param->sensor_gain.l45.b);
+        nl++;
+      }
+      if (!extras_only || se->wo.tr[q] > 0) {
+        xr[nr] = x_now + v * ((float)se->wo.tr[q] - t_enc) * 1e-6f;
+        dr[nr] = calc_sensor_val((float)se->wo.r[q], param->sensor_gain.r45.a,
+                                 param->sensor_gain.r45.b);
+        nr++;
+      }
     }
     WallEdgeParams p;
     p.win_far = pp.edge_win_far;
@@ -448,10 +459,41 @@ void SensorProcessor::update_wall_edge() {
       __dmb();
       o.seq = d.seq();
     };
-    if (edge_l_.update(xl, dl, n, p)) publish(edge_l_, se->edge_l);
-    if (edge_r_.update(xr, dr, n, p)) publish(edge_r_, se->edge_r);
+    if (edge_l_.update(xl, dl, nl, p)) publish(edge_l_, se->edge_l);
+    if (edge_r_.update(xr, dr, nr, p)) publish(edge_r_, se->edge_r);
   }
   edge_wo_seq_ = wo_seq;
   se->edge_l.lag = x_now - edge_l_.edge_x();
   se->edge_r.lag = x_now - edge_r_.edge_x();
+
+  // 2026-09-30: 柱の谷底の位置を、貯めてある細かいサンプルで求め直す。柱かどうかの
+  // 判定は PillarTroughDetector(update_pillar_trough、この関数の前に更新済み)のまま。
+  // 発火した tick から、窓の先の端までサンプルが来るまで毎 tick 試す。
+  auto refine = [&](const PillarTroughDetector &pd, const WallEdgeDetector &ed,
+                    pillar_trough_out_t &o, int &done_seq, float t_s0) {
+    if (!pp.pillar_hf || pp.hf_mode == 0 || !pd.fired()) {
+      o.lag_hf = 0.0f;
+      return;
+    }
+    if (done_seq != pd.seq()) {
+      // 1 tick 1 点の谷底(planning の時刻の位置)を、S0 を読んだ時刻の位置へ戻して
+      // 初期値にする
+      const float x0 = pd.bottom_x() - v * (t_enc - t_s0) * 1e-6f;
+      float xv = 0.0f, dv = 0.0f;
+      const int r = ed.trough_vertex(x0, pp.pillar_hf_win, kPillarHfMaxShift, xv, dv);
+      if (r == WallEdgeDetector::VERTEX_WAIT) {
+        o.lag_hf = 0.0f;
+        return;
+      }
+      done_seq = pd.seq();
+      o.bottom_x_hf = xv;
+      __dmb();
+      o.hf_tag = pd.seq() * 4 + r;
+    }
+    o.lag_hf = ((o.hf_tag & 3) == WallEdgeDetector::VERTEX_OK)
+                   ? x_now - o.bottom_x_hf
+                   : -1.0f;
+  };
+  refine(pillar_l_, edge_l_, se->pillar_l, pillar_hf_seq_l_, (float)se->wo.tl[0]);
+  refine(pillar_r_, edge_r_, se->pillar_r, pillar_hf_seq_r_, (float)se->wo.tr[0]);
 }

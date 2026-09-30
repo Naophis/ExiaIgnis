@@ -240,6 +240,14 @@ inline void convertToJson(const wall_off_hold_dist_t& src, JsonVariant dst) {
     dst["wall_off_edge_fallback_dist"] = src.edge_fallback_dist;
     dst["wall_off_edge_str_l"]         = src.edge_str_l;
     dst["wall_off_edge_str_r"]         = src.edge_str_r;
+    dst["wall_off_hf_mode"]            = src.hf_mode;
+    dst["wall_off_hf_s1_guard_us"]     = src.hf_s1_guard_us;
+    dst["wall_off_pillar_hf"]          = src.pillar_hf;
+    dst["wall_off_pillar_hf_win"]      = src.pillar_hf_win;
+    dst["wall_off_pillar_hf_wait"]     = src.pillar_hf_wait;
+    dst["wall_off_pillar_hf_str_l"]    = src.pillar_hf_str_l;
+    dst["wall_off_pillar_hf_str_r"]    = src.pillar_hf_str_r;
+    dst["wall_off_pillar_hold"]        = src.pillar_hold;
     dst["wall_off_pillar_enable"]      = src.pillar_enable;
     dst["wall_off_pillar_depth_min"]   = src.pillar_depth_min;
     dst["wall_off_pillar_bottom_min"]  = src.pillar_bottom_min;

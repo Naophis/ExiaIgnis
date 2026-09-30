@@ -101,6 +101,9 @@ private:
   // 判定から戻った直後に読む(Core0 の判定は S3 の距離の更新までに終わる)。
   float decision_gx_ = 0.0f;
   bool decision_gx_valid_ = false;
+  // take_pillar_trough が「柱は発火済みで、細かいサンプルの谷底を待っている」で
+  // false を返したとき true(呼んだ側はほかの判定をせずに次の tick を待つ)
+  bool pillar_wait_ = false;
   // 壁切れの判定が終わったとき、次の直進の数え始め(ps_front.start_x)を決める。
   void set_front_start(param_straight_t &ps_front);
   bool process_right_wall_off_dia(param_straight_t &ps_front,

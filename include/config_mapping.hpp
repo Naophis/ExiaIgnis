@@ -475,6 +475,14 @@ inline void convertFromJson(JsonVariantConst src, wall_off_hold_dist_t& dst) {
     from_json_field(src, "wall_off_edge_fallback_dist",       dst.edge_fallback_dist);
     from_json_field(src, "wall_off_edge_str_l",               dst.edge_str_l);
     from_json_field(src, "wall_off_edge_str_r",               dst.edge_str_r);
+    from_json_field(src, "wall_off_hf_mode",                  dst.hf_mode);
+    from_json_field(src, "wall_off_hf_s1_guard_us",           dst.hf_s1_guard_us);
+    from_json_field(src, "wall_off_pillar_hf",                dst.pillar_hf);
+    from_json_field(src, "wall_off_pillar_hf_win",            dst.pillar_hf_win);
+    from_json_field(src, "wall_off_pillar_hf_wait",           dst.pillar_hf_wait);
+    from_json_field(src, "wall_off_pillar_hf_str_l",          dst.pillar_hf_str_l);
+    from_json_field(src, "wall_off_pillar_hf_str_r",          dst.pillar_hf_str_r);
+    from_json_field(src, "wall_off_pillar_hold",              dst.pillar_hold);
     from_json_field(src, "wall_off_pillar_enable",            dst.pillar_enable);
     from_json_field(src, "wall_off_pillar_depth_min",         dst.pillar_depth_min);
     from_json_field(src, "wall_off_pillar_bottom_min",        dst.pillar_bottom_min);

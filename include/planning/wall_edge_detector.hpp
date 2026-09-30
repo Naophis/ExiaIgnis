@@ -39,6 +39,14 @@
 // 戻るまで」にすると、発火直後の読みの揺れ(51.3 → 50.6、011727)で解けてしまった。
 // 壁の切れ目どうしは柱の間隔(90mm)以上離れているので、16mm 見ない区間は困らない。
 //
+// 柱の谷(壁なしで始まる WALL_OFF)の位置もここで求める(trough_vertex、2026-09-30)。
+// 柱かどうかの判定は PillarTroughDetector(1 tick 1 点、形で判定)のままで、谷底の
+// 位置だけを、貯めてある細かいサンプルに当てた放物線(最小二乗)の頂点で求め直す。
+// 1 tick 1 点の 3 点の放物線(今まで)は、実測の谷の形とノイズ(1.5 raw)で位置の
+// ばらつきが std 0.18〜0.24mm・最大 ±0.9mm、±4mm の窓の最小二乗は std 0.08〜0.10mm・
+// 最大 ±0.3mm(scratchpad の pillar_sim2.py、tick の位相・速度・WALL_OFF の開始位置を
+// 振った)。
+//
 // Pico SDK に依存しない純粋なクラス。Core1(SensorProcessor::update_wall_edge)が
 // 毎 tick 更新し、sensing_result_entity_t::edge_l/r に公開、Core0
 // (WallOffController::take_wall_edge)が読む。
@@ -57,7 +65,7 @@ struct WallEdgeParams {
   float noise_back = 1.0f;  // [mm] 上昇中にこれ以上戻ったら不採用
   float anchor_h = 3.0f;    // [mm] 基準位置 = level+anchor_h を越えた点
   int   min_run = 2;        // 上昇の連続サンプル数の下限(単発の跳ねを弾く)
-  float min_dx = 0.25f;     // [mm] 前に入れたサンプルからこれ未満しか進んでいなければ捨てる
+  float min_dx = 0.2f;      // [mm] 前に入れたサンプルからこれ未満しか進んでいなければ捨てる
 };
 
 class WallEdgeDetector {
@@ -122,6 +130,68 @@ public:
     return fired;
   }
 
+  enum VertexResult : int { VERTEX_WAIT = 0, VERTEX_OK = 1, VERTEX_FAIL = 2 };
+
+  // 谷底の位置 xv を、x0 のまわり ±w [mm] のサンプルに当てた放物線の頂点で求める。
+  // 窓を求めた頂点に置き直して 3 回くり返す(窓の置き方によらない点に収束させる)。
+  //   VERTEX_WAIT: 窓の先の端までサンプルがまだ来ていない(次の tick でやり直す)
+  //   VERTEX_FAIL: サンプルが足りない・片側に寄っている・範囲外の読みが混ざる・
+  //                下に凸でない・x0 から max_shift 以上離れた
+  int trough_vertex(float x0, float w, float max_shift, float &xv,
+                    float &dv) const {
+    if (n_ < kMinFit) return VERTEX_FAIL;
+    float xc = x0;
+    float d_min = 0.0f;
+    for (int it = 0; it < 3; it++) {
+      if (X(n_ - 1) < xc + w) return VERTEX_WAIT;
+      if (X(0) > xc - w) return VERTEX_FAIL; // 手前側がバッファに無い
+      float s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, t0 = 0, t1 = 0, t2 = 0;
+      float umin = 1.0e9f, umax = -1.0e9f;
+      int cnt = 0;
+      for (int i = n_ - 1; i >= 0; i--) {
+        const float u = X(i) - xc;
+        if (u < -w) break;
+        if (u > w) continue;
+        const float d = D(i);
+        if (d >= kInvalidD) return VERTEX_FAIL;
+        const float u2 = u * u;
+        s0 += 1.0f;
+        s1 += u;
+        s2 += u2;
+        s3 += u2 * u;
+        s4 += u2 * u2;
+        t0 += d;
+        t1 += u * d;
+        t2 += u2 * d;
+        if (u < umin) umin = u;
+        if (u > umax) umax = u;
+        cnt++;
+      }
+      if (cnt < kMinFit) return VERTEX_FAIL;
+      if (umin > -0.5f * w || umax < 0.5f * w) return VERTEX_FAIL;
+      // 正規方程式 [s0 s1 s2; s1 s2 s3; s2 s3 s4][c0 c1 c2]^T = [t0 t1 t2]^T
+      const float det = s0 * (s2 * s4 - s3 * s3) - s1 * (s1 * s4 - s3 * s2) +
+                        s2 * (s1 * s3 - s2 * s2);
+      if (det <= 0.0f) return VERTEX_FAIL;
+      const float c0 = (t0 * (s2 * s4 - s3 * s3) - s1 * (t1 * s4 - s3 * t2) +
+                        s2 * (t1 * s3 - s2 * t2)) / det;
+      const float c1 = (s0 * (t1 * s4 - t2 * s3) - t0 * (s1 * s4 - s3 * s2) +
+                        s2 * (s1 * t2 - s2 * t1)) / det;
+      const float c2 = (s0 * (s2 * t2 - s3 * t1) - s1 * (s1 * t2 - s2 * t1) +
+                        t0 * (s1 * s3 - s2 * s2)) / det;
+      if (c2 <= kMinCurv) return VERTEX_FAIL;
+      float step = -c1 / (2.0f * c2);
+      if (step > kMaxStep) step = kMaxStep;
+      if (step < -kMaxStep) step = -kMaxStep;
+      xc += step;
+      d_min = c0 - c1 * c1 / (4.0f * c2);
+      if (xc - x0 > max_shift || x0 - xc > max_shift) return VERTEX_FAIL;
+    }
+    xv = xc;
+    dv = d_min;
+    return VERTEX_OK;
+  }
+
   float edge_x() const { return edge_x_; }
   float fire_x() const { return fire_x_; }
   float level() const { return level_; }
@@ -129,6 +199,10 @@ public:
 
 private:
   static constexpr float kResetDx = 5.0f; // [mm]
+  static constexpr int kMinFit = 5;          // 放物線を当てるのに要るサンプル数
+  static constexpr float kInvalidD = 179.0f; // [mm] これ以上は範囲外の読み
+  static constexpr float kMinCurv = 0.01f;   // [mm/mm^2] 下に凸とみなす曲率の下限
+  static constexpr float kMaxStep = 2.5f;    // [mm] 1 回のくり返しで動かす上限
   float xs_[kBuf] = {};
   float ds_[kBuf] = {};
   int head_ = 0; // 次に書く位置

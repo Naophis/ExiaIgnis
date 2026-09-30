@@ -119,6 +119,21 @@ private:
   // planning/sla_start_align.hpp)。slalom() が req を立て、go_straight() が
   // SLA_FRONT_STR を 0.5 tick 早めに終えたら、旋回を始める位置 x(global_pos.dist)を
   // 記録して valid にする。slalom() が SLALOM の指令に付けて送り、どちらも下ろす。
+  // 直進中に細かく読む側(structs.hpp new_motion_req_t::hf_side、2026-09-30)。
+  // exec_path_running() が次に曲がる側を入れ、go_straight() が指令に付ける。
+  // slalom() は SLA_FRONT_STR には曲がる側、SLA_BACK_STR には次のターンの側を入れる。
+  uint8_t hf_side_hint_ = 0;
+  static uint8_t hf_side_of(TurnDirection td) {
+    return (td == TurnDirection::Left) ? 1 : (td == TurnDirection::Right) ? 2 : 3;
+  }
+
+public:
+  // テストモードなど、経路を通らずに go_straight() を呼ぶ側が、次のターンの側を
+  // 教える(None = 読まない)。exec_path_running() は自分で入れる。
+  void set_hf_side(TurnDirection td) { hf_side_hint_ = hf_side_of(td); }
+  void set_hf_side_both() { hf_side_hint_ = 0; }
+
+private:
   bool sla_align_req_ = false;
   bool sla_align_valid_ = false;
   float sla_align_x_ = 0.0f;

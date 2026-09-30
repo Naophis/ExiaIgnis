@@ -268,13 +268,49 @@ wall_off_edge_depth: 4.0
 wall_off_edge_span: 10.0
 wall_off_edge_band: 1.0
 wall_off_edge_noise_back: 1.0
-wall_off_edge_anchor_h: 3.0
+wall_off_edge_anchor_h: 2.5
 wall_off_edge_min_run: 2
 wall_off_edge_stale_dist: 30.0
 wall_off_edge_prestart_dist: 10.0
 wall_off_edge_fallback_dist: 60.0
-wall_off_edge_str_l: -4.3
-wall_off_edge_str_r: -1.8
+wall_off_edge_str_l: -3.3
+wall_off_edge_str_r: -3.8
+
+# 2026-09-30: 細かいサンプル(1 tick に S1〜S3 の 3 回)の取り方。
+#   0 = WALL_OFF 中だけ、各枠で左右とも読む(最初の実装)。検知器には S0 も入れる。
+#   1 = 最短走行の直進(STRAIGHT / SLA_FRONT_STR / SLA_BACK_STR)でも同じ読み方(各枠の最初、左 → 右の順)
+#       で読む。検知器には S1〜S3 だけ入れる。省電力のため読むのは使う側だけ(WALL_OFF 中は曲がる側、
+#       直進中は経路から分かる次のターンの側、ゴール後の直進は読まない)。読まなかった側は時刻 0。
+#   2 = 1 と同じだが、省電力の側の指定を無視して直進中も WALL_OFF 中も左右とも読む(調査用)。
+# 壁なしで柱を見る WALL_OFF は柱の約 2 tick 手前で始まるので、0 だと柱の手前側が細かく取れない。
+# S0 は S1〜S3 より低く出る(右の柱 raw 約 120 で −3〜−17)ので、混ぜると 1 tick ごとの段になる。
+# 枠ごとに読む側を変える取り方は不可(20260930_093556: 右の S1 が +9、S0 が 1 tick おきに −10)。
+# 0 → 1 で壁の切れ目の基準位置が 左 −0.2 / 右 +0.5mm 動く見込み(今日のログ 29 件の再生)。
+wall_off_hf_mode: 1
+# 調査用(2026-09-30): S1 の細かい読みの前の待ち時間 [us]。0 = 従来(LED の待ち時間 × 2 = 約 32us)、
+# 上限 120。S1 の暗い値だけが S2・S3 より 左 +3 / 右 +1.5 raw 高い(20260930_203714 / 203800、
+# 暗い値そのものは約 12 raw)。90 系の LED を消した直後の余韻なら、待ちを伸ばすと超過が減る
+# (予測: 100us で 左 +0.4〜0.7 / 右 +0.2〜0.4)。減らなければ余韻ではない。
+wall_off_hf_s1_guard_us: 0
+# 柱の谷底の位置を細かいサンプルで求め直す(±win の最小二乗の放物線の頂点)。柱かどうかの判定は
+# wall_off_pillar_* のまま。求まれば旋回位置 = 谷底 + front + wall_off_pillar_hf_str、
+# 求められなければ従来(wall_off_pillar_str)。ログ列 pillar_hf_lag_l/r(現在位置 − 求めた谷底、
+# 無ければ 0、求められなければ −1)。
+# hf_str の初期値は wall_off_pillar_str + 1.4: 従来の谷底は planning の時刻の位置で、読んだ時刻の
+# 位置より 速度 × 約 0.6ms(2200mm/s で 1.3mm)先にずれている。求め直した谷底は読んだ時刻の位置。
+wall_off_pillar_hf: 1
+wall_off_pillar_hf_win: 4.0
+wall_off_pillar_hf_wait: 8.0
+# 2026-09-30 20 時: 柱のタイプの旋回は壁のタイプより遅く始まっていた(旋回後の直線で外側へ
+# 左 +9.5 / 右 +3.7mm。旋回の始まりの遅れがそのまま出口の横ずれになる)。同じ量だけ手前に。
+# 元の値は 3.9 / 0.0(従来の谷底の補正値 + 1.4)。
+wall_off_pillar_hf_str_l: -5.5
+wall_off_pillar_hf_str_r: -4.0
+# 柱の谷を追跡中(谷底が bottom_min〜max、depth_min 以上下がり、谷底から max_lag 以内)は、従来の判定
+# (wall_missing 等)を待たせて柱の検知に譲る。谷底が WALL_OFF の開始より前に来た走行では柱の検知
+# (谷底の 2〜3 tick 後)より先に wall_missing が抜け、別の補正値(wall_off_hold_dist_str_l/r)で
+# 旋回位置が決まっていた(20260930_121814: 同じ柱で 025937 より 3.7mm 手前)。
+wall_off_pillar_hold: 1
 
 wall_off_noexist_diff_l: 0.5
 wall_off_noexist_diff_r: 0.5

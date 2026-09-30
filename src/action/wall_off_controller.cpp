@@ -115,6 +115,15 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
       if (take_pillar_trough(TurnDirection::Right, ps_front, tmp_dist_before)) {
         return true;
       }
+      if (pillar_wait_) {
+        // 柱は発火済みで、細かいサンプルの谷底を待っている。ほかの判定で先に
+        // 抜けると別の補正値で旋回位置が決まってしまうので、次の tick まで待つ。
+        if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
+          return false;
+        }
+        wait_tick();
+        continue;
+      }
       if (strategy.find_vertical_wall()) {
         break;
       }
@@ -179,6 +188,15 @@ bool WallOffController::process_right_wall_off(param_straight_t &ps_front) {
       if (take_pillar_trough(TurnDirection::Right, ps_front, tmp_dist_before)) {
         return true;
       }
+      if (pillar_wait_) {
+        // 柱は発火済みで、細かいサンプルの谷底を待っている。ほかの判定で先に
+        // 抜けると別の補正値で旋回位置が決まってしまうので、次の tick まで待つ。
+        if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
+          return false;
+        }
+        wait_tick();
+        continue;
+      }
       if (strategy.detect_wall_missing_by_deviation(exist)) {
         ps_front.dist += p_wall_off.right_str;
         ps_front.dist = MAX(ps_front.dist, 0.1);
@@ -220,6 +238,15 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
       // 2026-09-23: 柱の谷(下に凸)検知を最優先で拾う(谷底アンカー)。
       if (take_pillar_trough(TurnDirection::Left, ps_front, tmp_dist_before)) {
         return true;
+      }
+      if (pillar_wait_) {
+        // 柱は発火済みで、細かいサンプルの谷底を待っている。ほかの判定で先に
+        // 抜けると別の補正値で旋回位置が決まってしまうので、次の tick まで待つ。
+        if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
+          return false;
+        }
+        wait_tick();
+        continue;
       }
       if (se->ego.left45_dist < p_wall_off.exist_dist_l2) {
         break;
@@ -284,6 +311,15 @@ bool WallOffController::process_left_wall_off(param_straight_t &ps_front) {
     } else {
       if (take_pillar_trough(TurnDirection::Left, ps_front, tmp_dist_before)) {
         return true;
+      }
+      if (pillar_wait_) {
+        // 柱は発火済みで、細かいサンプルの谷底を待っている。ほかの判定で先に
+        // 抜けると別の補正値で旋回位置が決まってしまうので、次の tick まで待つ。
+        if (tgt_val->fss.error != static_cast<int>(FailSafe::NONE)) {
+          return false;
+        }
+        wait_tick();
+        continue;
       }
       if (strategy.detect_wall_missing_by_deviation(exist)) {
         ps_front.dist += p_wall_off.left_str;
@@ -370,6 +406,7 @@ bool WallOffController::take_pillar_trough(TurnDirection td,
   // (前のセルの柱など)場合は使わない。従来の絶対しきい値経路や 25mm 通過の
   // 安全網(detect_pass_through_case2)はそのまま残す。
   const auto &p_wall_off = get_wall_off_param();
+  pillar_wait_ = false;
   if (!p_wall_off.pillar_enable) {
     return false;
   }
@@ -377,24 +414,56 @@ bool WallOffController::take_pillar_trough(TurnDirection td,
   const pillar_trough_out_t &pt =
       (td == TurnDirection::Right) ? se->pillar_r : se->pillar_l;
   if (pt.state < PillarTroughDetector::FIRED_CURV) {
+    // 2026-09-30: 柱の谷を追跡中なら、従来の判定を待たせる(structs.hpp pillar_hold)。
+    // 条件は検知器の shape_ok と同じ。谷底から max_lag 進んでも発火しなければ
+    // 従来の判定に戻る。
+    if (p_wall_off.pillar_hold && pt.state == PillarTroughDetector::TRACKING) {
+      __dmb();
+      const float lag0 = tgt_val->global_pos.dist - pt.bottom_x;
+      if (pt.bottom >= p_wall_off.pillar_bottom_min &&
+          pt.bottom <= p_wall_off.pillar_bottom_max &&
+          (pt.peak - pt.bottom) >= p_wall_off.pillar_depth_min &&
+          lag0 >= 0.0f && lag0 <= p_wall_off.pillar_max_lag) {
+        pillar_wait_ = true;
+      }
+    }
     return false;
   }
   __dmb();
   const float gx = tgt_val->global_pos.dist;
-  const float lag = gx - pt.bottom_x;
+  // 2026-09-30: 谷底の位置は、細かいサンプルで求め直したもの(bottom_x_hf)があれば
+  // それを使う(SensorProcessor::update_wall_edge、WallEdgeDetector::trough_vertex)。
+  // まだ求まっていなければ次の tick を待ち(遅れは下の lag で差し引かれる)、
+  // 求められなかった・谷底から pillar_hf_wait 進んでも来ないときは従来の谷底。
+  const bool right = (td == TurnDirection::Right);
+  float anchor = pt.bottom_x;
+  float c = right ? p_wall_off.pillar_str_r : p_wall_off.pillar_str_l;
+  if (p_wall_off.pillar_hf && p_wall_off.hf_mode != 0) {
+    const int seq = pt.seq;
+    const int tag = pt.hf_tag;
+    __dmb();
+    if ((tag >> 2) == seq) {
+      if ((tag & 3) == 1) {
+        anchor = pt.bottom_x_hf;
+        c = right ? p_wall_off.pillar_hf_str_r : p_wall_off.pillar_hf_str_l;
+      }
+    } else if (gx - pt.bottom_x <= p_wall_off.pillar_hf_wait) {
+      pillar_wait_ = true;
+      return false;
+    }
+  }
+  const float lag = gx - anchor;
   if (lag < 0.0f || lag > p_wall_off.pillar_stale_dist) {
     return false;
   }
   // 検知器は直線中も柱(壁なし区間で 90mm ごと)を拾うので、WALL_OFF 開始より
   // pillar_prestart_dist 以上前の谷底は「前の柱」として使わない。開始直前
   // (SLA_BACK_STR 中や直線末尾、実測 −2〜−12mm)の本物の柱は拾える。
-  if (pt.bottom_x < wo_start_x - p_wall_off.pillar_prestart_dist) {
+  if (anchor < wo_start_x - p_wall_off.pillar_prestart_dist) {
     return false;
   }
   decision_gx_ = gx;
   decision_gx_valid_ = true;
-  const float c = (td == TurnDirection::Right) ? p_wall_off.pillar_str_r
-                                               : p_wall_off.pillar_str_l;
   ps_front.dist += c - lag;
   ps_front.dist = MAX(ps_front.dist, 0.1);
   return true;

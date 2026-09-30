@@ -235,6 +235,29 @@ void SensingTask::slot_s0(uint64_t tick_start) {
                    tv->motion_type == MotionType::SLA_BACK_STR);
   seq_hf_ = led_on && (tv->motion_type == MotionType::WALL_OFF ||
                        tv->motion_type == MotionType::WALL_OFF_DIA);
+  // 2026-09-30(wall_off_hf_mode 1): 最短走行の直進でも読む。壁なしで柱を見る
+  // WALL_OFF は柱の約 2 tick 手前で始まるので、その前の直進から読んでおかないと
+  // 柱の手前側が取れない。
+  // 読み方はどの枠も同じ(左 → 右)にすること。読みは、そのセンサーを最後に
+  // 光らせてからの時間と直前の LED の並びで変わる(右の柱 raw 約 100 で、枠ごとに
+  // 読む側を変えたら S1 が +9、S0 が 1 tick おきに −10。20260930_093556)。毎枠
+  // 同じ並びで読んだ S1〜S3 どうしは 1 raw 以内で揃う。
+  seq_hf_side_ = 0;
+  if (param->wall_off_dist.hf_mode != 0) {
+    // hf_mode 2 は調査用: 省電力の側の指定を無視して、直進中も WALL_OFF 中も左右とも読む
+    // (S1 の偏りが「読む側」に依るかを切り分ける、2026-09-30)。
+    const bool both = (param->wall_off_dist.hf_mode == 2);
+    if (led_on && !search_mode && r45 && l45 && (both || tv->hf_side != 3) &&
+        (tv->motion_type == MotionType::STRAIGHT ||
+         tv->motion_type == MotionType::SLA_FRONT_STR ||
+         tv->motion_type == MotionType::SLA_BACK_STR)) {
+      seq_hf_ = true;
+      seq_hf_side_ = both ? 0 : tv->hf_side; // 0 = 左右とも、1 = 左、2 = 右
+    }
+    if (tv->motion_type == MotionType::WALL_OFF && !both) {
+      seq_hf_side_ = (tv->motion_dir == MotionDirection::LEFT) ? 1 : 2;
+    }
+  }
   wo_work_ = wo_hf_t{};
 
   if (!led_on) {
@@ -510,6 +533,8 @@ void SensingTask::finalize_sensing(bool led_on) {
         (se->led_sen.left90.raw + se->led_sen.right90.raw) / 2;
     wo_work_.l[0] = (int16_t)se->led_sen.left45.raw;
     wo_work_.r[0] = (int16_t)se->led_sen.right45.raw;
+    wo_work_.bl[0] = (int16_t)se->led_sen_before.left45.raw;
+    wo_work_.br[0] = (int16_t)se->led_sen_before.right45.raw;
   } else {
     se->led_sen.right90.raw = se->led_sen.right45.raw =
         se->led_sen.right45_2.raw = se->led_sen.right45_3.raw =
@@ -526,7 +551,10 @@ void SensingTask::finalize_sensing(bool led_on) {
   // いた(LED を消した直後の受光素子の尾か ADC の前の値が残る)。90 系の最後の
   // LED を消してから LED の待ち時間の 2 倍空けて読む。
   if (led_on && seq_hf_) {
-    busy_wait_us_32(2 * wait_us_single());
+    // 待ち時間: 既定は LED の待ち時間の 2 倍。hf_s1_guard_us で調査用に伸ばせる(上限 120us)。
+    uint32_t g = (uint32_t)MAX(param->wall_off_dist.hf_s1_guard_us, 0);
+    g = (g == 0) ? 2 * wait_us_single() : MIN(g, 120u);
+    busy_wait_us_32(g);
     read_wo_extra(1);
   }
 }
@@ -913,23 +941,35 @@ void SensingTask::read_wo_extra(int k) {
   if (!seq_hf_) return;
   const uint32_t wait = wait_us_single();
 
-  adc_select_input(2);
-  const int dark_l = adc_read();
-  gpio_put(L45_LED_PIN, 1);
-  busy_wait_us_32(wait);
-  const int lit_l = adc_read();
-  wo_work_.tl[k] = (int16_t)(time_us_64() - seq_sense_start_);
-  gpio_put(L45_LED_PIN, 0);
-  wo_work_.l[k] = (int16_t)MAX(lit_l - dark_l, 0);
+  // 省電力: 使う側だけ読む(seq_hf_side_)。右だけ読んだときの右の読みは、左の
+  // 直後に右を読んだときと同じ形だった(20260930_093556 と 030005 の WALL_OFF 中)。
+  if (seq_hf_side_ != 2) {
+    adc_select_input(2);
+    const int dark_l = adc_read();
+    gpio_put(L45_LED_PIN, 1);
+    busy_wait_us_32(wait);
+    const int lit_l = adc_read();
+    wo_work_.tl[k] = (int16_t)(time_us_64() - seq_sense_start_);
+    gpio_put(L45_LED_PIN, 0);
+    wo_work_.l[k] = wo_last_l_ = (int16_t)MAX(lit_l - dark_l, 0);
+    wo_work_.bl[k] = (int16_t)dark_l;
+  } else {
+    wo_work_.l[k] = wo_last_l_; // 読んでいない(時刻 0)。ログの見やすさのため値は保持
+  }
 
-  adc_select_input(1);
-  const int dark_r = adc_read();
-  gpio_put(R45_LED_PIN, 1);
-  busy_wait_us_32(wait);
-  const int lit_r = adc_read();
-  wo_work_.tr[k] = (int16_t)(time_us_64() - seq_sense_start_);
-  gpio_put(R45_LED_PIN, 0);
-  wo_work_.r[k] = (int16_t)MAX(lit_r - dark_r, 0);
+  if (seq_hf_side_ != 1) {
+    adc_select_input(1);
+    const int dark_r = adc_read();
+    gpio_put(R45_LED_PIN, 1);
+    busy_wait_us_32(wait);
+    const int lit_r = adc_read();
+    wo_work_.tr[k] = (int16_t)(time_us_64() - seq_sense_start_);
+    gpio_put(R45_LED_PIN, 0);
+    wo_work_.r[k] = wo_last_r_ = (int16_t)MAX(lit_r - dark_r, 0);
+    wo_work_.br[k] = (int16_t)dark_r;
+  } else {
+    wo_work_.r[k] = wo_last_r_;
+  }
 }
 
 __attribute__((noinline, section(".time_critical.sensing.calc_vel")))

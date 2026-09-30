@@ -703,6 +703,8 @@
         <limitY/>
         <curve color="#1f77b4" name="pillar_lag_l"/>
         <curve color="#d62728" name="pillar_lag_r"/>
+        <curve color="#1ac938" name="pillar_hf_lag_l"/>
+        <curve color="#ff7f0e" name="pillar_hf_lag_r"/>
        </plot>
       </DockArea>
       <DockArea name="pillar_st">
@@ -718,7 +720,7 @@
   </Tab>
   <Tab containers="1" tab_name="wall_off_hf">
    <Container>
-    <DockSplitter count="3" orientation="-" sizes="0.3336;0.3328;0.3336">
+    <DockSplitter count="4" orientation="-" sizes="0.25;0.25;0.25;0.25">
      <DockSplitter count="3" orientation="|" sizes="0.3333;0.3333;0.3333">
       <DockArea name="wo_dist_l (mm)">
        <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
@@ -815,6 +817,28 @@
         <curve color="#9467bd" name="wo_tr1"/>
         <curve color="#17becf" name="wo_tr2"/>
         <curve color="#bcbd22" name="wo_tr3"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter count="2" orientation="|" sizes="0.5;0.5">
+      <DockArea name="wo_dark_l (S0..S3)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-2.000000" left="0.000000" right="288.000000" top="60.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="wo_bl0"/>
+        <curve color="#d62728" name="wo_bl1"/>
+        <curve color="#1ac938" name="wo_bl2"/>
+        <curve color="#ff7f0e" name="wo_bl3"/>
+       </plot>
+      </DockArea>
+      <DockArea name="wo_dark_r (S0..S3)">
+       <plot flip_x="false" flip_y="false" line_width="1.0" mode="TimeSeries">
+        <range bottom="-2.000000" left="0.000000" right="288.000000" top="60.000000"/>
+        <limitY/>
+        <curve color="#1f77b4" name="wo_br0"/>
+        <curve color="#d62728" name="wo_br1"/>
+        <curve color="#1ac938" name="wo_br2"/>
+        <curve color="#ff7f0e" name="wo_br3"/>
        </plot>
       </DockArea>
      </DockSplitter>

@@ -432,6 +432,14 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.wo_tr1 = sr->wo.tr[1];
   ld.wo_tr2 = sr->wo.tr[2];
   ld.wo_tr3 = sr->wo.tr[3];
+  ld.wo_bl0 = sr->wo.bl[0];
+  ld.wo_bl1 = sr->wo.bl[1];
+  ld.wo_bl2 = sr->wo.bl[2];
+  ld.wo_bl3 = sr->wo.bl[3];
+  ld.wo_br0 = sr->wo.br[0];
+  ld.wo_br1 = sr->wo.br[1];
+  ld.wo_br2 = sr->wo.br[2];
+  ld.wo_br3 = sr->wo.br[3];
   ld.wo_n = sr->wo.n;
   ld.wo_seq = static_cast<int16_t>(sr->wo.seq);
   // 壁の切れ目の形の検知(2026-09-30, structs.hpp wall_edge_out_t)
@@ -444,6 +452,8 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   // 旋回の始まりを tick の途中へ合わせた結果(2026-09-30)
   ld.sla_tau = floatToHalf(sr->sla_align.tau);
   ld.sla_wait = sr->sla_align.wait;
+  ld.pillar_hf_lag_l = floatToHalf(sr->pillar_l.lag_hf);
+  ld.pillar_hf_lag_r = floatToHalf(sr->pillar_r.lag_hf);
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -718,6 +728,16 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_dr3:float:%d\n", (int)sizeof(ls11.wo_dr3));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "sla_tau:float:%d\n", (int)sizeof(ls11.sla_tau));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "sla_wait:int:%d\n", (int)sizeof(ls11.sla_wait));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_hf_lag_l:float:%d\n", (int)sizeof(ls11.pillar_hf_lag_l));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "pillar_hf_lag_r:float:%d\n", (int)sizeof(ls11.pillar_hf_lag_r));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_bl0:int:%d\n", (int)sizeof(ls11.wo_bl0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_bl1:int:%d\n", (int)sizeof(ls11.wo_bl1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_bl2:int:%d\n", (int)sizeof(ls11.wo_bl2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_bl3:int:%d\n", (int)sizeof(ls11.wo_bl3));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_br0:int:%d\n", (int)sizeof(ls11.wo_br0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_br1:int:%d\n", (int)sizeof(ls11.wo_br1));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_br2:int:%d\n", (int)sizeof(ls11.wo_br2));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "wo_br3:int:%d\n", (int)sizeof(ls11.wo_br3));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -1055,6 +1075,16 @@ void LoggingTask::dump_csv() const {
     }
     ls11.sla_tau = halfToFloat(e.sla_tau);
     ls11.sla_wait = e.sla_wait;
+    ls11.pillar_hf_lag_l = halfToFloat(e.pillar_hf_lag_l);
+    ls11.pillar_hf_lag_r = halfToFloat(e.pillar_hf_lag_r);
+    ls11.wo_bl0 = e.wo_bl0;
+    ls11.wo_bl1 = e.wo_bl1;
+    ls11.wo_bl2 = e.wo_bl2;
+    ls11.wo_bl3 = e.wo_bl3;
+    ls11.wo_br0 = e.wo_br0;
+    ls11.wo_br1 = e.wo_br1;
+    ls11.wo_br2 = e.wo_br2;
+    ls11.wo_br3 = e.wo_br3;
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

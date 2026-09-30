@@ -57,6 +57,12 @@ private:
     void read_enc_bat();               // S3
     void read_wo_extra(int k);         // S1(90 系のあと)・S2・S3: 左右の 45° LED1(WALL_OFF 中だけ)
     bool     seq_hf_ = false;          // この tick で壁切れセンサーを 4 回読むか(S0 で決める)
+    // S1〜S3 で読む側(S0 で決める): 0 = 左右とも、1 = 左だけ、2 = 右だけ。
+    // WALL_OFF 中は曲がる側、直進中は Core0 が経路から入れた側(tgt_val->hf_side)。
+    // 省電力のため。読み方(左 → 右の順、各枠の最初)は変えない。
+    uint8_t  seq_hf_side_ = 0;
+    int16_t  wo_last_l_ = 0;           // 読まなかった側のログ用に、最後に読んだ値を保持
+    int16_t  wo_last_r_ = 0;
     wo_hf_t  wo_work_{};               // 1 tick 分を貯め、S3 の最後に sensing_result->wo へ写す
 
     std::shared_ptr<input_param_t> param;

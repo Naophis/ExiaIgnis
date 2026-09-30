@@ -501,6 +501,7 @@ void PlanningTask::cp_request() {
   tgt_val->ego_in.sla_param.state = 0;
 
   tgt_val->motion_dir = receive_req->nmr.motion_dir;
+  tgt_val->hf_side = receive_req->nmr.hf_side;
   tgt_val->dia_mode = receive_req->nmr.dia_mode;
 
   tgt_val->tgt_in.accl_param.limit = 5500;

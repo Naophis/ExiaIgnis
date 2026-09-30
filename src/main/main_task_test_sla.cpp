@@ -160,6 +160,7 @@ void MainTask::test_sla() {
     ps.sct = SensorCtrlType::Straight;
     ps.motion_type = MotionType::STRAIGHT;
     ps.dia_mode = false;
+    mp->set_hf_side(rorl); // ターン前の直進は曲がる側だけ細かく読む(省電力)
     mp->go_straight(ps);
 
     nm.v_max = sla_p.v;
@@ -265,7 +266,9 @@ void MainTask::test_sla() {
     ps.motion_type = MotionType::STRAIGHT;
     // ps.motion_type = MotionType::SLA_BACK_STR;
 
+    mp->set_hf_side(TurnDirection::None); // ターン後の直進は細かく読まない
     mp->go_straight(ps);
+    mp->set_hf_side_both();
     mp->wall_off_controller->continuous_turn_flag = false;
 
     sleep_ms(25);

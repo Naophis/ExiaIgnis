@@ -212,7 +212,10 @@ export const CHART_VIEWS: ChartView[] = [
       { title: "duty_sen", columns: ["duty_sen"] },
       { title: "motion_state", columns: ["motion_state", "continuous_turn"] },
       { title: "pillar_btm", columns: ["pillar_btm_l", "pillar_btm_r"] },
-      { title: "pillar_lag", columns: ["pillar_lag_l", "pillar_lag_r"] },
+      {
+        title: "pillar_lag",
+        columns: ["pillar_lag_l", "pillar_lag_r", "pillar_hf_lag_l", "pillar_hf_lag_r"],
+      },
       { title: "pillar_st", columns: ["pillar_st"] },
     ],
   },
@@ -234,6 +237,8 @@ export const CHART_VIEWS: ChartView[] = [
       { title: "edge_seq / wo_n", columns: ["edge_seq_l", "edge_seq_r", "wo_n"] },
       { title: "motion_state", columns: ["motion_state", "continuous_turn"] },
       { title: "dist / ideal_dist", columns: ["dist", "ideal_dist"] },
+      { title: "wo_dark_l (S0..S3)", columns: ["wo_bl0", "wo_bl1", "wo_bl2", "wo_bl3"] },
+      { title: "wo_dark_r (S0..S3)", columns: ["wo_br0", "wo_br1", "wo_br2", "wo_br3"] },
       {
         title: "wo_time (us)",
         columns: ["wo_tl0", "wo_tl1", "wo_tl2", "wo_tl3", "wo_tr0", "wo_tr1", "wo_tr2", "wo_tr3"],

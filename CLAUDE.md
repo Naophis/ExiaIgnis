@@ -69,6 +69,12 @@ TIMER0 のハードウェアアラームを使用（alarm_pool オーバーヘ�
 | S3 | +600us | エンコーダー・バッテリー、車輪速度、距離・角度の積分（`read_enc_bat`） |
 
 WALL_OFF / WALL_OFF_DIA 中は、左右の 45° LED1 も読む（`read_wo_extra`、環境光もその場で読んで差分、約 40us）。S2・S3 は枠の最初、S1 は 90 系を読み終えて LED の待ち時間の 2 倍空けてから（45° を先に読むと直後の 90° の生値が 0〜4 → 6〜14 に上がった。LED を消した直後の受光素子の尾か ADC の前の値が残るため。**別の LED の読みを続けるときは、間を空けて、読むたびに暗い値をその場で取ること**）。S0 の 45 系シーケンスの LED1 と合わせて 4 サンプル / tick。1 tick 分（値と読んだ時刻）を S3 の最後に `sensing_result->wo`（`wo_hf_t`）へまとめて写すので、ログや planning が見る 1 組の中で tick が混ざらない。ログ列は `wo_l0..3` / `wo_r0..3`（差分 raw）、`wo_tl0..3` / `wo_tr0..3`（tick 開始からの時刻 [us]）、`wo_n`（4 = WALL_OFF 中、1 = S0 の分だけ）、`wo_seq`（`gyro_fifo_seq` と同じ tick 番号）。
+
+`offset.yaml` の `wall_off_hf_mode: 1`(2026-09-30)では、最短走行の直進(STRAIGHT / SLA_FRONT_STR / SLA_BACK_STR)でも同じ読み方(各枠の最初、左 → 右の順)で読み、検知器(`SensorProcessor::update_wall_edge`)には S1〜S3 だけを入れる(S0 は入れない)。省電力のため読むのは使う側だけ: WALL_OFF 中は曲がる側(`motion_dir`)、直進中は Core0 が経路から指令に付けた側(`nmr.hf_side`: 0 = 左右とも、1 = 左、2 = 右、3 = 読まない。`MotionPlanning::hf_side_hint_`、`exec_path_running()` が次のターンの側、`slalom()` が SLA_FRONT_STR に曲がる側・SLA_BACK_STR に `next_motion.next_turn_dir` を入れる。ゴール後の直進は 3)。読まなかった側は時刻が 0 で、値は最後に読んだものを保持(ログの見やすさのため)。右だけ読んだ右の読みは、左の直後に読んだ右と同じ形(093556 と 030005)。壁なしで柱を見る WALL_OFF は柱の約 2 tick 手前で始まるので、WALL_OFF 中だけ読んでも柱の手前側が取れないため。
+
+**読みは、そのセンサーを最後に光らせてからの時間と直前の LED の並びで変わる**(原因は未確定)。毎枠同じ並びで読む S1〜S3 どうしは 1 raw 以内で揃うが、S0(tick の最初、前の点灯から 380us 以上)は低く出る(右の柱 raw 約 120 で −3〜−17)。S0 を混ぜた今日の壁ありのログ 29 件の再生では、S1〜S3 だけにすると同じコースの基準位置のばらつきが 左 0.79 → 0.58 / 右 0.64 → 0.37mm になった。**枠ごとに読む側を変えてはいけない**(片側ずつ交互に読む版を入れたら、右の柱で S1 が +9、S0 が 1 tick おきに −10 になり、1 tick 1 点の谷底が約 1mm ずれた。20260930_093556。読む並びを変えるときは S1〜S3 が揃うこと・S0 に 1 tick おきの段が出ないことをログで確かめる)。左の直後に右を読んでも右は変わらない(右だけ読んだときと同じ形、030005 と 093556 の WALL_OFF 中)。
+
+S1 は S2・S3 と読みの大きさが少し合わない(2026-09-30、`hf_mode` 1 の 15630 件の再生): 平らな区間で、左は S1−S2 が raw 0〜60 で +2.6、60〜150 で +1.8、150〜300 で +0.6、300 以上で −0.9〜−1.3、右は 150〜450 で ±0.1(S1〜S3 が揃う)。傾き・レベル・時刻ずれを同時に回帰すると、時刻ずれは ±8us で 0 と区別できず(急な区間で「S1 が約 50us 早い」に見えたのはレベルの偏りの見かけ)、S1 は S2・S3 より 加算 +2〜5 raw / ゲイン −0.8〜−1.3%(左は raw 370、右は 260 付近が境目)。原因は直前の LED の余韻(2026-09-30 確認): 暗い値(約 12 raw、ログ `wo_bl0..3` / `wo_br0..3`。点灯時の値 = 差分 + 暗い値)は、直前に LED を消してから約 40us 後の読みで +3〜4 raw 高く、約 100us 後では 0(S1 の前の待ち `wall_off_hf_s1_guard_us` を 32 → 100us にすると、超過が S1 から S2 に移った: S1 の暗い値 左 +2.5 → −0.4、S2 の暗い値 −0.5 → +2.8 / 右 S2 +3.7。S1 の読んだ時刻 305 → 377us)。**読みの偏り(低いレベルで高く・高いレベルで低い差分)も余韻のある枠に付いて移る**(0〜40 raw で S2 が +10、120〜250 で +5、250〜400 で +1、400 以上で 0。待ち 32us のときの S1 は +2.6 / +1.8 / +0.6 / −1.3)。余韻はセンサーの動作点を上げて小さい信号のゲインを増やす形。待ちを伸ばしても S1〜S3 は 220us の中に収まらず、余韻が別の枠へ移るだけ(S1 の 90 系の後の待ち 100us なら S2 が 40us)なので、既定(0 = 約 32us)のまま。柱の谷底(raw 230 付近)への影響は約 0.2〜0.5mm、肩(raw 100 付近)で約 0.7〜1.7mm。`wall_off_hf_mode: 2` は省電力の側の指定を無視して常に左右とも読む調査用(結果は 1 と同じ形)。
 | planning | +720us | 最大 247us（09-26〜29 のログ）→ 次の S0（+1000us）までに終わる |
 
 - **Alarm 1** (`timer_b_irq_handler`): 枠の予約と振り分け。各枠の入口で次の枠を予約する。S0 の予約時刻がその tick の基準（ドリフトなし）で、Core1 が止まって 1ms 以上遅れたときだけ今に取り直す。S0 で planning を基準 + `PlanningTask::kPhaseAfterSensingUs`(720us) に予約する。
@@ -240,6 +246,14 @@ PlanningTask は以下のサブシステムを内包:
 #### 壁切れ検知の柱の谷(下に凸)検知 (`include/planning/pillar_trough_detector.hpp`)
 
 壁なし開始の `WALL_OFF` では注視側 45° LED1 が「下降→谷底→急上昇」の谷を見せる。`PillarTroughDetector` は Core1 の `SensorProcessor::update_pillar_trough()` で左右 2 本を毎 tick 更新し(旋回・超信地・停止中は再アーム)、結果を `sensing_result->pillar_l/r` に公開する。切れ目の判定は**走行距離で正規化した 2 階微分(曲率)が `curv_th` 以上を `curv_n` tick 連続**で行う。首振れや姿勢ドリフトは読みをほぼ直線に動かすので 2 階微分では符号が交互に振れるだけになり、1 階微分では紛らわしい緩い上昇を弾ける。1 階微分ルールと `far_th` 到達は保険として残してある。Core0 の `WallOffController::take_pillar_trough()` が exist=false の経路で最優先に拾い、発火位置ではなく谷底位置でアンカーして `ps_front.dist += pillar_str − (現在位置 − 谷底位置)` とする。パラメータは `offset.yaml` の `wall_off_pillar_*`。従来の絶対しきい値経路と 25mm 通過の安全網(`detect_pass_through_case2`)は残してある。ホスト検証は `tests/pillar_trough_host/run.sh`(CSV ログを渡すと全行再生)。
+
+谷底の**位置**は、`wall_off_pillar_hf: 1`(かつ `wall_off_hf_mode: 1`)のとき細かいサンプルで求め直す(2026-09-30、`WallEdgeDetector::trough_vertex()`、±`pillar_hf_win` の最小二乗の放物線の頂点を窓を置き直して 3 回)。柱かどうかの判定は `PillarTroughDetector` のまま。Core1 は発火した tick から、窓の先の端までサンプルが来るまで毎 tick 試し、`pillar_l/r.bottom_x_hf` と `hf_tag` に出す。Core0 の `take_pillar_trough()` は求まっていればそれを使い(`wall_off_pillar_hf_str_l/r`)、求められなければ従来の谷底(`wall_off_pillar_str_l/r`)、まだなら**ほかの判定をせずに**次の tick を待つ(`pillar_wait_`。谷底から `pillar_hf_wait` まで)。
+
+- 従来の谷底 `bottom_x` は planning の時刻の位置で、読んだ時刻の位置より 速度 × 約 0.6ms(2200mm/s で 1.3mm)先にずれている。`bottom_x_hf` は読んだ時刻の位置。`pillar_hf_str` の初期値はこの差を足したもの(`pillar_str` + 1.4)。
+- 実測の谷の形とノイズ 1.5 raw での位置のばらつき(tick の位相・速度・WALL_OFF の開始位置を振った再生): 従来 std 0.18〜0.23mm・最大 ±0.9mm → 求め直し std 0.08〜0.10mm・最大 ±0.3mm。2200mm/s では発火の tick で求まり、1500mm/s では半分が 1 tick 待ち。
+- ホスト検証は `tests/wall_edge_host/test_vertex.cpp`。ログ列 `pillar_hf_lag_l/r`(現在位置 − 求めた谷底、無ければ 0、求められなければ −1)。
+- `wall_off_pillar_hold: 1` で、柱の谷を追跡中(検知器の shape_ok と同じ条件)は従来の判定(`wall_missing` 等)を待たせて柱の検知に譲る。谷底が WALL_OFF の開始より前に来た走行では柱の検知(谷底の 2〜3 tick 後)より先に `wall_missing` が抜け、別の補正値(`wall_off_hold_dist_str_l/r`)で旋回位置が決まっていた(20260930_121814: 同じ柱で 025937 より 3.7mm 手前)。
+- 実機(左 → 右で毎枠読む版、121814 / 121834): 直進中も S1〜S3 は揃い(右の柱 22,23,25 | 28,30,31 | …)、S0 は S1〜S3 より 右 −10〜−17 / 左 −1〜−4 raw で一定(1 tick おきの段は無し)。右の柱の谷底(細かいサンプル)は 3 走行で 99.14〜99.32mm(スタートから)、旋回開始は 127.72〜127.93mm。
 
 #### 壁ありで始まる WALL_OFF の壁の切れ目の形の検知 (`include/planning/wall_edge_detector.hpp`、2026-09-30)
 

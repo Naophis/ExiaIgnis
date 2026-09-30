@@ -121,6 +121,7 @@ MotionResult MotionPlanning::go_straight(param_straight_t &p,
   if (p.motion_type != MotionType::NONE) {
     tgt_val->nmr.motion_type = p.motion_type;
   }
+  tgt_val->nmr.hf_side = hf_side_hint_;
   tgt_val->nmr.timstamp = tgt_val->nmr.timstamp + 1;
 
   sla_align_valid_ = false;
@@ -652,6 +653,7 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
                    sp.type != TurnType::Normal;
   sla_align_valid_ = false;
   ps_front.start_x_valid = false; // 壁切れが決めたときだけ使う
+  hf_side_hint_ = hf_side_of(td); // SLA_FRONT_STR は曲がる側だけ細かく読む
 
   ps_front.search_str_wide_ctrl_l = false;
   ps_front.search_str_wide_ctrl_r = false;
@@ -1176,6 +1178,10 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
     next_motion.carry_over_dist = ps_back.dist;
     return MotionResult::NONE;
   }
+  // SLA_BACK_STR は次のターンの側だけ細かく読む(向きが無ければ左右とも)
+  hf_side_hint_ = (next_motion.next_turn_dir == TurnDirection::None)
+                      ? 0
+                      : hf_side_of(next_motion.next_turn_dir);
   if (ps_back.dist > 0) {
     res_b = go_straight(ps_back);
     if (res_b != MotionResult::NONE) {
@@ -1725,6 +1731,11 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
       ps.dist -= param->long_run_offset_dist;
       wall_off_controller->continuous_turn_flag = false;
       tgt_val->continuous_turn = false;
+      // この直進の先のターンの側だけ細かく読む(ターンが無ければ読まない)
+      hf_side_hint_ =
+          (turn_type == TurnType::None || turn_type == TurnType::Finish)
+              ? 3
+              : hf_side_of(turn_dir);
       auto res = go_straight(ps);
       carry_over_dist = 0;
       if (res == MotionResult::ERROR) {
@@ -1758,6 +1769,8 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
       nm.decel = p_set.str_map[st].decel;
       nm.is_turn = false;
       nm.skip_wall_off = start_turn;
+      nm.next_turn_dir = exist_next_idx ? tc.get_turn_dir(pc->path_t[i + 1])
+                                        : TurnDirection::None;
 
       if (exist_next_idx && !(dist3 > 0 && dist4 > 0)) {
         // 連続スラロームのとき、次のスラロームの速度になるように加速
@@ -1808,7 +1821,9 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
   ps.accl = p_set.str_map[StraightType::FastRun].accl;
   ps.decel = p_set.str_map[StraightType::FastRun].decel;
   ps.sct = !dia ? SensorCtrlType::Straight : SensorCtrlType::Dia;
+  hf_side_hint_ = 3; // ゴール後の直進は細かく読まない
   go_straight(ps);
+  hf_side_hint_ = 0;
   reset_tgt_data();
   reset_ego_data();
   sleep_ms(100);

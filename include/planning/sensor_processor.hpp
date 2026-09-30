@@ -48,5 +48,9 @@ private:
   WallEdgeDetector edge_l_;
   WallEdgeDetector edge_r_;
   int   edge_wo_seq_ = -1;
+  // 柱の谷底を細かいサンプルで求め直した発火の番号(PillarTroughDetector::seq)
+  int   pillar_hf_seq_l_ = -1;
+  int   pillar_hf_seq_r_ = -1;
+  static constexpr float kPillarHfMaxShift = 3.0f; // [mm] 1 tick 1 点の谷底からのずれの上限
   float calc_sensor_val(float data, float a, float b);
 };
