@@ -260,6 +260,21 @@ export const CHART_VIEWS: ChartView[] = [
     ],
   },
   {
+    // 直進の壁なし区間の柱の立ち下がりから出した横位置(2026-10-02、structs.hpp str_post_ctrl_t)。
+    // 縁 = left45 / right45 が直前の山の 50% を切った点。spe_* は組ができた tick で更新、
+    // spe_dnow はジャイロで毎 tick 進めた推測。s_pid_p = error_p(= 2·(dnow − k0)、壁の誤差と同じ形)。
+    key: "str_post",
+    title: "直進柱",
+    charts: [
+      { title: "left45 / right45 (raw)", columns: ["left45", "right45"] },
+      { title: "spe_delta / spe_dnow (mm, +右)", columns: ["spe_delta", "spe_dnow"] },
+      { title: "spe_psi0 (deg, +右向き) / ang / ang_kf_sum", columns: ["spe_psi0", "ang", "ang_kf_sum"] },
+      { title: "spe_lag (mm) / spe_seq", columns: ["spe_lag", "spe_seq"] },
+      { title: "s_pid_p (error_p mm) / duty_sen", columns: ["s_pid_p", "duty_sen"] },
+      { title: "left45_d / right45_d (mm) / motion_state", columns: ["left45_d", "right45_d", "motion_state"] },
+    ],
+  },
+  {
     key: "imu_accel",
     title: "IMU加速度",
     charts: [

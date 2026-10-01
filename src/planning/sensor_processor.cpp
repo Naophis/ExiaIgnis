@@ -163,6 +163,7 @@ void SensorProcessor::calc_dist() {
   update_pillar_trough();
   update_wall_edge();
   update_dia_post_edge();
+  update_str_post_edge();
 }
 
 __attribute__((noinline, section(".time_critical.sensor_processor")))
@@ -573,4 +574,142 @@ void SensorProcessor::update_dia_post_edge() {
   dia_post_wo_seq_ = wo_seq;
   se->dia_post.lag = x_now - se->dia_post.pos;
   se->dia_post.dnow = (dia_post_.n_pairs() >= 1) ? dia_post_.now_delta(x_now, dia_c_) : 0.0f;
+}
+
+// 直進の壁なし区間の柱の立ち下がり(2026-10-02、structs.hpp str_post_ctrl_t)。update_dia_post_edge
+// と同じ入れ方(再アームの区間・S1〜S3 か S0 か・位置の戻し)で、検知器を直進の柱の並び
+// (pair_pitch 0 / same_pitch 90)と相対しきい値で動かす。向きはジャイロの純積分 ang_kf_sum
+// (右向き + に符号を変える)。斜めの直進では左右の縁が 63.64mm ずれるので組はできない。
+__attribute__((noinline, section(".time_critical.sensor_processor")))
+void SensorProcessor::update_str_post_edge() {
+  const auto &pc = param->str_post_ctrl;
+  const float x_now = tgt_val->global_pos.dist;
+  const auto mt = tgt_val->motion_type;
+  const bool rearm =
+      (mt == MotionType::SLALOM || mt == MotionType::PIVOT ||
+       mt == MotionType::PIVOT_PRE || mt == MotionType::PIVOT_PRE2 ||
+       mt == MotionType::PIVOT_AFTER || mt == MotionType::PIVOT_OFFSET ||
+       mt == MotionType::NONE || mt == MotionType::READY ||
+       mt == MotionType::FRONT_CTRL);
+  const int wo_seq = se->wo.seq;
+  const float psi_g = -se->ang_kf_sum;
+  if (rearm) {
+    str_post_.arm();
+    if (pc.psi0_w > 0.0f) str_post_.set_psi0_prior(0.0f, pc.psi0_w);
+    se->str_post.n_pairs = 0;
+    se->str_post.eps = 0;
+    se->str_post.psi0 = 0;
+    se->str_post.n_psi = 0;
+    str_c_ = 0.0f;
+    str_c_valid_ = false;
+    str_wall_active_ = false;
+  } else {
+    if (str_c_valid_) str_c_ += psi_g * (x_now - str_c_x_);
+    str_c_x_ = x_now;
+    str_c_valid_ = true;
+  }
+  // 壁からの引き継ぎ(structs.hpp str_post_ctrl_t::wall_seed)。両壁(45° が 30〜60mm)が続く間、
+  // ang_kf_sum と L45 / R45 を距離 seed_tau の指数平均で追い、区間が seed_min_len 以上続いて
+  // 終わった tick に、横位置(読みの座標 (L − R)/2 + k0)を組 1 つ分、ang_kf_sum を ψ0 の事前値
+  // として検知器へ入れる(壁に沿って走っていた = 迷路に対して向き 0 とみなす)。
+  // 区間の終わりは「両壁の条件が外れた」ではなく「どちらかの読みが指数平均から seed_dev 以上
+  // 離れた」で決める: 壁の終わりは 45° の読みが約 20mm かけて遠のく(004431: L 46 → 60 で x 88 → 102)
+  // ので、60mm を越えるまで待つと区間の終わりの値がその上りを含んで (L − R)/2 が 1.1 → 1.9mm に
+  // ずれる。閉じた後は両壁が一度消えるまで新しい区間を始めない(上りの途中で始め直さない)。
+  if (!rearm && pc.wall_seed) {
+    const float l = se->ego.left45_dist, r = se->ego.right45_dist;
+    const bool both = l > 30.0f && l < 60.0f && r > 30.0f && r < 60.0f;
+    if (!both) str_wall_hold_ = false;
+    bool close = false;
+    if (both && !str_wall_hold_) {
+      if (!str_wall_active_) {
+        str_wall_active_ = true;
+        str_wall_x0_ = x_now;
+        str_wall_ema_ang_ = se->ang_kf_sum;
+        str_wall_ema_l_ = l;
+        str_wall_ema_r_ = r;
+        str_wall_x_prev_ = x_now;
+      } else if (std::fabs(l - str_wall_ema_l_) > pc.seed_dev || std::fabs(r - str_wall_ema_r_) > pc.seed_dev) {
+        close = true;
+        str_wall_hold_ = true;
+      } else {
+        const float a = (pc.seed_tau > 0.0f) ? std::min(1.0f, (x_now - str_wall_x_prev_) / pc.seed_tau) : 1.0f;
+        str_wall_ema_ang_ += (se->ang_kf_sum - str_wall_ema_ang_) * a;
+        str_wall_ema_l_ += (l - str_wall_ema_l_) * a;
+        str_wall_ema_r_ += (r - str_wall_ema_r_) * a;
+        str_wall_x_prev_ = x_now;
+      }
+    } else if (str_wall_active_) {
+      close = true;
+    }
+    if (close) {
+      str_wall_active_ = false;
+      if (str_wall_x_prev_ - str_wall_x0_ >= pc.seed_min_len) {
+        // 迷路に対してまっすぐ(ψ_true = −ang_kf_sum + ψ0 = 0)→ ψ0 = ang_kf_sum
+        const float dw = 0.5f * (str_wall_ema_l_ - str_wall_ema_r_);
+        str_post_.seed(str_wall_x_prev_, str_c_ + (-se->ang_kf_sum) * (str_wall_x_prev_ - x_now),
+                       -str_wall_ema_ang_, dw + pc.k0, str_wall_ema_ang_, pc.psi0_w, pc.kappa);
+        se->str_post.delta = str_post_.delta();
+        se->str_post.pos = str_post_.pos();
+        se->str_post.n_pairs = str_post_.n_pairs();
+        se->str_post.psi0 = str_post_.psi0();
+        se->str_post.n_psi = str_post_.n_psi();
+        __dmb();
+        se->str_post.seq = str_post_.seq();
+      }
+    }
+  }
+  if (!rearm && wo_seq != str_post_wo_seq_ && se->wo.n >= 1) {
+    const float v = 0.5f * (se->ego.v_l_dist + se->ego.v_r_dist); // [mm/s]
+    const float t_enc = 0.5f * ((float)se->t_encl + (float)se->t_encr);
+    DiaPostEdgeParams p;
+    p.pair_pitch = 0.0f;
+    p.same_pitch = 90.0f;
+    p.gate_kmax = 3;
+    p.scale_fix = 0;
+    p.conf_accel = 0.0f;
+    p.tol = pc.tol;
+    p.kappa = pc.kappa;
+    p.rel_thr = (pc.rel_thr > 0.0f) ? pc.rel_thr : 0.5f;
+    p.low_ratio = pc.low_ratio;
+    p.contrast_min = pc.contrast_min;
+    p.rise_max = pc.rise_max;
+    p.fall_max = pc.fall_max;
+    const int n = std::clamp((int)se->wo.n, 0, 4);
+    bool paired = false;
+    for (int k = 0; k < 2; k++) {
+      const auto side = (k == 0) ? DiaPostEdgeDetector::LEFT : DiaPostEdgeDetector::RIGHT;
+      const auto &val = (k == 0) ? se->wo.l : se->wo.r;
+      const auto &tim = (k == 0) ? se->wo.tl : se->wo.tr;
+      const auto &g = (k == 0) ? param->sensor_gain.l45 : param->sensor_gain.r45;
+      // 山の下限は距離で指定し、側ごとのゲインで生値へ換算する
+      p.peak_min = raw_of_dist(pc.post_dist_max, g.a, g.b);
+      const bool hf = (n == 4) && tim[1] > 0;
+      if (hf != str_post_hf_[k]) {
+        str_post_.reset_side(side);
+        str_post_hf_[k] = hf;
+      }
+      for (int q = hf ? 1 : 0; q < (hf ? 4 : 1); q++) {
+        if (hf && tim[q] <= 0) continue;
+        const float xs = x_now + v * ((float)tim[q] - t_enc) * 1e-6f;
+        const float cs = str_c_ + psi_g * (xs - x_now);
+        paired |= str_post_.update(side, xs, (float)val[q], cs, psi_g, p);
+      }
+    }
+    if (paired) {
+      se->str_post.delta = str_post_.delta();
+      se->str_post.pos = str_post_.pos();
+      se->str_post.eps = str_post_.eps_deg();
+      se->str_post.n_pairs = str_post_.n_pairs();
+      se->str_post.psi0 = str_post_.psi0();
+      se->str_post.n_psi = str_post_.n_psi();
+      __dmb();
+      se->str_post.seq = str_post_.seq();
+    }
+  }
+  str_post_wo_seq_ = wo_seq;
+  se->str_post.lag = x_now - se->str_post.pos;
+  // 読みの座標(車軸 + κ·向き)。斜め(dia_post.dnow)は車軸の横位置なので別
+  se->str_post.dnow =
+      (str_post_.n_pairs() >= 1) ? str_post_.now_delta_read(x_now, str_c_, psi_g) : 0.0f;
 }

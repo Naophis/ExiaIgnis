@@ -545,6 +545,26 @@ inline void convertFromJson(JsonVariantConst src, dia_post_ctrl_t& dst) {
     from_json_field(src, "dr_max", dst.dr_max);
 }
 
+inline void convertFromJson(JsonVariantConst src, str_post_ctrl_t& dst) {
+    from_json_field(src, "enable", dst.enable);
+    from_json_field(src, "k0", dst.k0);
+    from_json_field(src, "kappa", dst.kappa);
+    from_json_field(src, "psi0_enable", dst.psi0_enable);
+    from_json_field(src, "dr_max", dst.dr_max);
+    from_json_field(src, "rel_thr", dst.rel_thr);
+    from_json_field(src, "post_dist_max", dst.post_dist_max);
+    from_json_field(src, "low_ratio", dst.low_ratio);
+    from_json_field(src, "contrast_min", dst.contrast_min);
+    from_json_field(src, "rise_max", dst.rise_max);
+    from_json_field(src, "fall_max", dst.fall_max);
+    from_json_field(src, "tol", dst.tol);
+    from_json_field(src, "wall_seed", dst.wall_seed);
+    from_json_field(src, "seed_min_len", dst.seed_min_len);
+    from_json_field(src, "seed_tau", dst.seed_tau);
+    from_json_field(src, "seed_dev", dst.seed_dev);
+    from_json_field(src, "psi0_w", dst.psi0_w);
+}
+
 inline void convertFromJson(JsonVariantConst src, kanayama_t& dst) {
     from_json_field(src, "kx", dst.kx);
     from_json_field(src, "ky", dst.ky);
@@ -981,6 +1001,7 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_nested(src, "kanayama_straight", dst.kanayama_straight);
     from_json_nested(src, "kanayama_dia", dst.kanayama_dia);
     from_json_nested(src, "dia_post_ctrl", dst.dia_post_ctrl);
+    from_json_nested(src, "str_post_ctrl", dst.str_post_ctrl);
     // 軸退化ゲインテーブル (hardware.yaml: axel_degenerate_*)
     from_json_vector(src, "axel_degenerate_x",          dst.axel_degenerate_x);
     from_json_vector(src, "axel_degenerate_y",          dst.axel_degenerate_y);

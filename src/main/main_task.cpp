@@ -97,6 +97,17 @@ bool MainTask::load_params() {
          param_->dia_post_ctrl.psi0_enable, param_->dia_post_ctrl.dr_max,
          param_->dia_post_ctrl.settle_handover, param_->dia_post_ctrl.conf_accel,
          param_->dia_post_ctrl.head_kp, param_->dia_post_ctrl.head_ki);
+  printf("[param] str_post_ctrl: enable=%d k0=%.2f kappa=%.0f psi0_enable=%d dr_max=%.0f "
+         "rel_thr=%.2f post_dist_max=%.0f low_ratio=%.2f contrast_min=%.2f rise_max=%.0f "
+         "fall_max=%.0f tol=%.0f wall_seed=%d seed_min_len=%.0f seed_tau=%.0f seed_dev=%.1f psi0_w=%.0f\n",
+         param_->str_post_ctrl.enable, param_->str_post_ctrl.k0, param_->str_post_ctrl.kappa,
+         param_->str_post_ctrl.psi0_enable, param_->str_post_ctrl.dr_max,
+         param_->str_post_ctrl.rel_thr, param_->str_post_ctrl.post_dist_max,
+         param_->str_post_ctrl.low_ratio, param_->str_post_ctrl.contrast_min,
+         param_->str_post_ctrl.rise_max,
+         param_->str_post_ctrl.fall_max, param_->str_post_ctrl.tol,
+         param_->str_post_ctrl.wall_seed, param_->str_post_ctrl.seed_min_len,
+         param_->str_post_ctrl.seed_tau, param_->str_post_ctrl.seed_dev, param_->str_post_ctrl.psi0_w);
   any |= ConfigLoader::load_as("/system.txt", sys_);
   load_param_after();
   return any;

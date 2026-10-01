@@ -1189,6 +1189,10 @@ MotionResult MotionPlanning::slalom(slalom_param2_t &sp, TurnDirection td,
        sp.type == TurnType::Dia90)) {
     hf_side_hint_ = 0;
   }
+  // 直進へ抜ける旋回の後も、壁なし区間の柱の立ち下がり(str_post_ctrl、2026-10-02)のために左右とも読む
+  if (param->str_post_ctrl.enable && ps_back.sct == SensorCtrlType::Straight) {
+    hf_side_hint_ = 0;
+  }
   if (ps_back.dist > 0) {
     res_b = go_straight(ps_back);
     if (res_b != MotionResult::NONE) {
@@ -1739,9 +1743,10 @@ void MotionPlanning::exec_path_running(param_set_t &p_set) {
       wall_off_controller->continuous_turn_flag = false;
       tgt_val->continuous_turn = false;
       // この直進の先のターンの側だけ細かく読む(ターンが無ければ読まない)。
-      // 斜めの直進は柱の立ち下がり(dia_post_ctrl)のために左右とも読む。
+      // 斜めの直進は柱の立ち下がり(dia_post_ctrl)、直交の直進は壁なし区間の柱の
+      // 立ち下がり(str_post_ctrl、2026-10-02)のために左右とも読む。
       hf_side_hint_ =
-          (dia && param->dia_post_ctrl.enable)
+          ((dia && param->dia_post_ctrl.enable) || (!dia && param->str_post_ctrl.enable))
               ? 0
               : (turn_type == TurnType::None || turn_type == TurnType::Finish)
                     ? 3

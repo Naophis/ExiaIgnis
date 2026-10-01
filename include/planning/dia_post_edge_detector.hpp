@@ -76,14 +76,31 @@
 // 残差 1.0〜1.3 → 0.7〜0.96mm。切り替わりの組を外さないと、どの走行も減速の始めに
 // +2〜4mm 跳ね、制御がそれを追った(20261001_012610 / 012628)。
 //
-// Pico SDK に依存しない純粋なクラス。Core1(SensorProcessor::update_dia_post_edge)が
-// 毎 tick 左右 1 サンプルずつ入れ、sensing_result_entity_t::dia_post に公開する。
+// 直進の柱(2026-10-02、rel_thr > 0): 同じクラスを pair_pitch 0 / same_pitch 90 で使う。直進では
+// 左右の柱が同じ位置にあるので δ = (x_R − x_L)/2 − k0 で、柱の間隔も走行距離の倍率も要らない
+// (scale_fix 0)。縁は固定の生値ではなく「直前の山の rel_thr(50%)」を切る点: 柱の山は左
+// 230〜240 / 右 130〜150 raw(距離 62mm 前後)で左右のゲインが違い、柱までの距離でも変わる
+// ので、固定値だと切る位置の形が左右・距離で変わる。山に対する割合なら、ビームの形の
+// たたみ込みで決まる縁の形が振幅によらず同じになる。直進の柱の後ろは 10〜20 raw まで
+// 落ちるので、斜めで相対値を避けた理由(縁の後ろに次の壁が見える)は起きない。
+// 壁の終わり(500 raw の段)の 50% を切る点は柱の山の 50% より約 5mm 手前(ビーム幅 σ≈9mm の
+// モデルで 5.8mm、20261002_004431 で 左 6.4 / 右 3.9mm)なので別物として扱い、縁にしない:
+// 山の手前 rise_max(78mm)の間の最小を下地(base)とし、山がその倍以上(contrast_min)で、頂点の
+// 手前に下地近く(base + 30%)の読みがあった山だけ柱とみなす(壁は 78mm 以上続いて下地が無い。
+// 柱の間の谷は寄った側で 10〜47 raw まで動くので絶対値ではなく下地からの割合)。
+// 壁がある側はその壁の距離で横位置が分かるので壁制御に任せる。
+// 20261002_004431(400mm/s、壁なしの柱 6 本、制御なし)で (x_R − x_L)/2 = −0.76〜−1.00、
+// σ 0.11mm、直線を引いた後の残差 0.12mm。ツールは tools/param_tuner/str_post_edge.py。
+//
+// Pico SDK に依存しない純粋なクラス。Core1(SensorProcessor::update_dia_post_edge /
+// update_str_post_edge)が毎 tick 左右のサンプルを入れ、sensing_result_entity_t::dia_post /
+// str_post に公開する。
 
 #include <cmath>
 #include <cstdint>
 
 struct DiaPostEdgeParams {
-  float thr = 250.0f;       // [raw] 縁とみなす生値
+  float thr = 250.0f;       // [raw] 縁とみなす生値(rel_thr = 0 のとき)
   int n_above = 3;          // 縁の手前で thr 以上が続いたサンプル数(これ以上なら長さを問わない)
   float min_run = 2.0f;     // [mm] 2 サンプル以上のときの thr 以上の区間の長さの下限
   float peak_ratio = 1.2f;  // thr を越えてからの山 / thr の下限
@@ -91,11 +108,32 @@ struct DiaPostEdgeParams {
   float kappa = 0.0f;       // [mm/rad] 向きによる読みのずれ(δ_読み = δ_車軸 + κ·ψ)
   int scale_fix = 1;        // 1 = 直近の同じ側の間隔から走行距離の縮みを出して直す
   float conf_accel = 4900.0f; // [mm/s^2] これを超える加減速のとき、倍率が信用できない組を使わない
+  // 柱の並び(既定は斜め)。直進は pair_pitch 0(左右の柱が同じ位置)・same_pitch 90。
+  float pair_pitch = 63.63961f; // [mm] 反対側の縁との間隔(90/√2)
+  float same_pitch = 2.0f * 63.63961f; // [mm] 同じ側の縁の間隔(2·pair_pitch)
+  int gate_kmax = 0;            // 同じ側の間隔が same_pitch × これを超えたら整数倍の確認をしない(0 = 常に確認)
+  // 相対しきい値(直進の柱、2026-10-02)。0 より大きいと、縁 = 生値が「下地 + rel_thr·(山 − 下地)」
+  // を上から下へ切った点(update_rel)。n_above / min_run / peak_ratio / thr は使わない。
+  float rel_thr = 0.0f;
+  float peak_min = 0.0f;   // [raw] 山の下限(側ごとに距離から換算して渡す)
+  // 山の手前の下地(base)= 頂点の手前 rise_max の間の最小(1mm ごとの最小の輪)。柱の判定に使う:
+  // 山は (山 − base)/山 ≥ contrast_min のときだけ柱(壁は 78mm 以上続いて下地が無い)、
+  // x_low = 頂点の手前で base + low_ratio·(山 − base) 以下だった最後の位置(柱の間の谷は寄った側で
+  // 10〜47 raw まで動く(013141)ので、絶対値ではなく下地からの割合)。しきい値は rel_thr·山。
+  float low_ratio = 0.3f;
+  float contrast_min = 0.5f;
+  float rise_max = 78.0f;  // [mm] x_low から縁まで(柱 25〜60)。下地を見る窓の長さでもある
+  float fall_max = 30.0f;  // [mm] 山の頂点から縁まで
+  // ψ0 の事前値(直進)。最小二乗に重み psi0_w [mm^2] で傾き psi0_prior を足す(組が 1 つなら
+  // そのまま事前値、組が増えるほど組の傾きへ寄る。90^2 で組 1 つ分の重み)。0 で使わない
+  float psi0_w = 0.0f;
+  float psi0_prior = 0.0f; // [rad]
 };
 
 class DiaPostEdgeDetector {
 public:
   static constexpr float kPitch = 63.63961f; // 90/√2 [mm]
+  static constexpr int kRing = 96;           // rel_thr > 0 の下地の輪(1mm ごと)。rise_max 以上
   enum Side { LEFT = 0, RIGHT = 1 };
 
   void arm() {
@@ -111,12 +149,37 @@ public:
     c_pos_ = 0.0f;
     ls_n_ = 0;
     ls_x0_ = ls_sx_ = ls_sy_ = ls_sxx_ = ls_sxy_ = 0.0f;
+    prior_w_ = 0.0f;
+    prior_b0_ = 0.0f;
+  }
+
+  // 壁から横位置と向きを引き継ぐ(直進、2026-10-02)。両壁の区間が終わるときに、壁の距離から
+  // 出した横位置(読みの座標 δ_wall + k0)と、壁に沿って走っていたときのジャイロの向きから出した
+  // ψ0 を入れる。横位置は組 1 つ分として(n_pairs 1、seq +1)、ψ0 は最小二乗の事前値として
+  // (重み w。その後の柱の組で寄っていく)。最初の柱の組まで(90mm 以上)制御が無い区間と、
+  // 組 2 つまで ψ0 が無い区間(組が 1 つのときの次の組の推測の誤差 +1.2〜+5.5mm)をなくす。
+  void seed(float x, float c, float psi, float delta_read, float psi0, float w, float kappa) {
+    kappa_ = kappa;
+    delta_ = delta_read;
+    delta_gyro_ = delta_read - kappa * psi;
+    pos_ = x;
+    c_pos_ = c;
+    if (n_pairs_ < 1) n_pairs_ = 1;
+    seq_++;
+    set_psi0_prior(psi0, w);
+  }
+  // ψ0 の事前値(重み w [mm^2])。組が 1 つのときはそのまま使い、組が増えると組の傾きへ寄る
+  void set_psi0_prior(float b0, float w) {
+    prior_b0_ = b0;
+    prior_w_ = w;
+    recompute_psi0();
   }
 
   // 1 サンプル入れる。x は読んだ時刻の位置 [mm](global_pos.dist 基準)、y は生値、
   // c はその位置までのジャイロの向きの積分 [mm·rad]、psi はそのときのジャイロの向き
   // [rad](どちらも右向きが +)。左右の組ができた(横位置が更新された)ら true。
   bool update(Side side, float x, float y, float c, float psi, const DiaPostEdgeParams &p) {
+    if (p.rel_thr > 0.0f) return update_rel(side, x, y, c, psi, p);
     SideState &s = s_[side];
     bool paired = false;
     const bool long_enough =
@@ -128,15 +191,7 @@ public:
       const float ec = s.prev_c + (c - s.prev_c) * f;
       const float epsi = s.prev_psi + (psi - s.prev_psi) * f;
       if (accept_same_side(s, e, p)) {
-        s.has_edge = true;
-        s.edge_x = e;
-        push_hist(side, e);
-        paired = pair(side, e, ec, epsi, p);
-        has_last_ = true;
-        last_side_ = side;
-        last_x_ = e;
-        last_c_ = ec;
-        last_psi_ = epsi;
+        take_edge(side, e, ec, epsi, p, paired);
       }
     }
     if (y >= p.thr) {
@@ -146,6 +201,72 @@ public:
     } else {
       s.above = 0;
       s.peak = 0;
+    }
+    s.has_prev = true;
+    s.prev_x = x;
+    s.prev_y = y;
+    s.prev_c = c;
+    s.prev_psi = psi;
+    return paired;
+  }
+
+  // 相対しきい値の縁(直進の柱、rel_thr > 0)。山(peak)は最後の縁(か再アーム)からの最大、
+  // 下地(base)は頂点の手前 rise_max の間の最小(1mm ごとの最小の輪 ring_ から、頂点が更新された
+  // ときに求め直す)。縁 = rel_thr·peak を上から下へ切った点。切ったら(採っても採らなくても)
+  // 山を捨てる(壁の終わりもここで捨てる)。採るのは、山が peak_min 以上で下地より十分高く
+  // (contrast_min)、頂点から fall_max 以内に切り、頂点の手前 rise_max 以内に下地近く
+  // (base + low_ratio·(peak − base) 以下)の読みがあったものだけ。
+  bool update_rel(Side side, float x, float y, float c, float psi, const DiaPostEdgeParams &p) {
+    SideState &s = s_[side];
+    bool paired = false;
+    if (s.has_prev && s.peak >= p.peak_min) {
+      // しきい値は山の割合そのまま(下地を引いて割合を取る形も試したが、下地が 78mm の間の
+      // 1mm ごとの最小=ノイズの下端で、004431 の残差 0.12 → 0.27mm と悪くなった)
+      const float thr = p.rel_thr * s.peak;
+      if (s.prev_y >= thr && y < thr) {
+        const float f = (s.prev_y - thr) / (s.prev_y - y);
+        const float e = s.prev_x + (x - s.prev_x) * f;
+        const float ec = s.prev_c + (c - s.prev_c) * f;
+        const float epsi = s.prev_psi + (psi - s.prev_psi) * f;
+        if (s.has_low && s.peak - s.base >= p.contrast_min * s.peak && e - s.peak_x <= p.fall_max &&
+            e - s.x_low <= p.rise_max && accept_same_side(s, e, p)) {
+          take_edge(side, e, ec, epsi, p, paired);
+        }
+        s.peak = 0.0f;
+      }
+    }
+    // 1mm ごとの最小の輪
+    {
+      const int bin = (int)std::floor(x);
+      const int i = ((bin % kRing) + kRing) % kRing;
+      if (s.ring_bin[i] != bin) {
+        s.ring_bin[i] = bin;
+        s.ring_y[i] = y;
+      } else if (y < s.ring_y[i]) {
+        s.ring_y[i] = y;
+      }
+    }
+    if (y > s.peak) {
+      s.peak = y;
+      s.peak_x = x;
+      // 下地と x_low を求め直す(頂点の手前 rise_max の間)
+      const int pb = (int)std::floor(x);
+      float base = y;
+      for (int b = pb - 1; b >= pb - (int)p.rise_max; b--) {
+        const int i = ((b % kRing) + kRing) % kRing;
+        if (s.ring_bin[i] == b && s.ring_y[i] < base) base = s.ring_y[i];
+      }
+      s.base = base;
+      const float lvl = base + p.low_ratio * (y - base);
+      s.has_low = false;
+      for (int b = pb - 1; b >= pb - (int)p.rise_max; b--) {
+        const int i = ((b % kRing) + kRing) % kRing;
+        if (s.ring_bin[i] == b && s.ring_y[i] <= lvl) {
+          s.has_low = true;
+          s.x_low = (float)b + 1.0f; // その 1mm の終わり
+          break;
+        }
+      }
     }
     s.has_prev = true;
     s.prev_x = x;
@@ -166,6 +287,7 @@ public:
     s.has_prev = false;
     s.above = 0;
     s.peak = 0.0f;
+    // 下地の輪・has_low / x_low は残す(位置は同じ座標)
   }
 
   // 位置 x(ジャイロの向きの積分 c)での横位置の推測 [mm]。最後の組から、ジャイロで
@@ -174,6 +296,13 @@ public:
     float d = delta_gyro_ - kappa_ * psi0_ + (c - c_pos_);
     if (n_psi_ >= 1) d += psi0_ * (x - pos_);
     return d;
+  }
+  // 同、センサーの読みの座標で(車軸の横位置 + κ × いまの迷路に対する向き ψ_g + ψ0)。
+  // 「いま柱の組ができたらこう読める」値。直進の制御(str_post_ctrl)はこちらを使う: 壁の
+  // 45° の読みも向きで κ_w·ψ 動き、既存の壁制御はその分(向きの変化が横位置の変化より
+  // 先に見える = 減衰)込みで調整されているので、同じ形で渡す(2026-10-02)。
+  float now_delta_read(float x, float c, float psi_now) const {
+    return now_delta(x, c) + kappa_ * (psi_now + psi0_);
   }
 
   uint16_t seq() const { return seq_; }       // 組ができるたびに +1(arm でも戻さない)
@@ -188,7 +317,7 @@ public:
   float scale() const { return scale_; }      // 最後の組で使った走行距離の倍率(1 = 直していない)
   int n_skip() const { return n_skip_; }      // 使わなかった組の数(arm してから)
   float psi0() const { return psi0_; }        // 向きのずれ ψ0 [rad](+ は右、組ごとの平均)
-  int n_psi() const { return n_psi_; }        // ψ0 を出した回数(= 組の数 − 1)
+  int n_psi() const { return n_psi_; }        // ψ0 が使える(≥ 1)。事前値なしなら組の数 − 1、ありなら組の数 + 1
 
 private:
   struct SideState {
@@ -199,16 +328,37 @@ private:
     float prev_psi = 0.0f;
     int above = 0;      // 今 thr 以上が続いているサンプル数
     float first_x = 0.0f; // その区間の最初のサンプルの位置
-    float peak = 0.0f;  // thr を越えてからの最大
+    float peak = 0.0f;  // thr を越えてからの最大(rel_thr > 0 では最後の縁からの最大)
+    float peak_x = 0.0f; // その位置(rel_thr > 0)
+    float base = 0.0f;   // rel_thr > 0: 頂点の手前 rise_max の間の最小(下地)
+    bool has_low = false; // rel_thr > 0: 頂点の手前に下地近くの読みがあった
+    float x_low = 0.0f;   // その最後の位置
     bool has_edge = false;
     float edge_x = 0.0f; // 最後に採った縁
+    int ring_bin[kRing];  // rel_thr > 0: 1mm ごとの最小の輪(位置 [mm] の整数部と、その中の最小)
+    float ring_y[kRing];
+    SideState() { for (int i = 0; i < kRing; i++) { ring_bin[i] = -1000000; ring_y[i] = 0.0f; } }
   };
+
+  void take_edge(Side side, float e, float ec, float epsi, const DiaPostEdgeParams &p, bool &paired) {
+    SideState &s = s_[side];
+    s.has_edge = true;
+    s.edge_x = e;
+    push_hist(side, e);
+    paired = pair(side, e, ec, epsi, p);
+    has_last_ = true;
+    last_side_ = side;
+    last_x_ = e;
+    last_c_ = ec;
+    last_psi_ = epsi;
+  }
 
   static bool accept_same_side(const SideState &s, float e, const DiaPostEdgeParams &p) {
     if (!s.has_edge) return true;
     const float g = e - s.edge_x;
-    const float k = std::round(g / (2.0f * kPitch));
-    return k >= 1.0f && std::fabs(g - k * 2.0f * kPitch) <= p.tol;
+    const float k = std::round(g / p.same_pitch);
+    if (p.gate_kmax > 0 && k > (float)p.gate_kmax) return true;
+    return k >= 1.0f && std::fabs(g - k * p.same_pitch) <= p.tol;
   }
 
   // 採った縁の履歴(新しい順)。走行距離の縮みを出すのに使う。
@@ -221,7 +371,7 @@ private:
   // いれば、同じ側の間隔 (0 − 2) と (1 − 3) の平均 / 2·kPitch、片方だけなら (0 − 2)。
   // used には使った間隔の数(0〜2)を返す。
   float local_scale(const DiaPostEdgeParams &p, int &used) const {
-    const float two = 2.0f * kPitch;
+    const float two = p.same_pitch;
     used = 0;
     if (!(n_hist_ >= 3 && hist_[2].side == hist_[0].side)) return 1.0f;
     const float sp1 = hist_[0].x - hist_[2].x;
@@ -253,7 +403,7 @@ private:
   bool pair(Side side, float e, float ec, float epsi, const DiaPostEdgeParams &p) {
     if (!has_last_ || last_side_ == side) return false;
     const float g_raw = e - last_x_;
-    if (std::fabs(g_raw - kPitch) > p.tol) return false;
+    if (std::fabs(g_raw - p.pair_pitch) > p.tol) return false;
     int used = 0;
     const float sc = p.scale_fix ? local_scale(p, used) : 1.0f;
     if (p.scale_fix && !confident(used, p)) {
@@ -262,7 +412,7 @@ private:
     }
     scale_ = sc;
     const float g = g_raw / scale_;
-    const float d = (last_side_ == RIGHT) ? (kPitch - g) * 0.5f : (g - kPitch) * 0.5f;
+    const float d = (last_side_ == RIGHT) ? (p.pair_pitch - g) * 0.5f : (g - p.pair_pitch) * 0.5f;
     const float mid = 0.5f * (e + last_x_);
     const float cmid = 0.5f * (ec + last_c_);
     // 2 つの縁の時刻のジャイロの向きの分だけ直す(κ·ψ0 は今の横位置を出すときに引く)
@@ -281,11 +431,7 @@ private:
       ls_sy_ += ly;
       ls_sxx_ += lx * lx;
       ls_sxy_ += lx * ly;
-      const float den = (float)ls_n_ * ls_sxx_ - ls_sx_ * ls_sx_;
-      if (ls_n_ >= 2 && den > 1e-3f) {
-        psi0_ = ((float)ls_n_ * ls_sxy_ - ls_sx_ * ls_sy_) / den;
-        n_psi_ = ls_n_ - 1;
-      }
+      recompute_psi0();
     }
     delta_ = d;
     delta_gyro_ = dg;
@@ -294,6 +440,25 @@ private:
     n_pairs_++;
     seq_++;
     return true;
+  }
+
+  // 最小二乗の傾き。事前値があれば Σ(y − a − b x)^2 + w (b − b0)^2 の最小化
+  // (b = (n Sxy − Sx Sy + n w b0) / (n Sxx − Sx^2 + n w))。事前値が無いときは組が 2 つから。
+  void recompute_psi0() {
+    const float n = (float)ls_n_;
+    const float den = n * ls_sxx_ - ls_sx_ * ls_sx_;
+    const float num = n * ls_sxy_ - ls_sx_ * ls_sy_;
+    if (prior_w_ > 0.0f) {
+      if (ls_n_ >= 1) {
+        psi0_ = (num + n * prior_w_ * prior_b0_) / (den + n * prior_w_);
+      } else {
+        psi0_ = prior_b0_;
+      }
+      n_psi_ = ls_n_ + 1;
+    } else if (ls_n_ >= 2 && den > 1e-3f) {
+      psi0_ = num / den;
+      n_psi_ = ls_n_ - 1;
+    }
   }
 
   struct Hist {
@@ -325,4 +490,6 @@ private:
   // ψ0 の最小二乗の和(x = 組の位置 − 最初の組の位置、y = δ_gyro − c)
   int ls_n_ = 0;
   float ls_x0_ = 0.0f, ls_sx_ = 0.0f, ls_sy_ = 0.0f, ls_sxx_ = 0.0f, ls_sxy_ = 0.0f;
+  float prior_w_ = 0.0f;  // ψ0 の事前値の重み [mm^2](0 = 無し)
+  float prior_b0_ = 0.0f; // ψ0 の事前値 [rad]
 };

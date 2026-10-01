@@ -219,6 +219,12 @@ private:
   // 今tickのerror_pを求める前に前tickのerror_pを積分するため、その誤差が
   // 壁を見えている状態のものだったかを判定するのに使う。
   bool  sen_ctrl_active_prev_      = false;
+  // 直進の壁なし区間を柱の立ち下がりの横位置で制御中(2026-10-02、structs.hpp str_post_ctrl_t)。
+  // check_sen_error() が立て、calc_sensor_pid() が最初の tick の D 項を止め、ψ0 を向きの
+  // 目標へ足すのに使う。
+  bool  str_post_active_           = false;
+  bool  str_post_active_prev_      = false;
+  float str_post_psi0_             = 0.0f; // ang_kf の座標へ直した ψ0 [rad](CCW +)
   // 2026-08-30: mpc_tgt_calc.cpp(Simulink自動生成)のsign()実装が、入力が
   // ちょうど0.0fを跨ぐ瞬間だけ0を返す仕様のため、ff_front_torque/
   // ff_friction_torque_r/lが走行中(速度が明確に非ゼロ)でも数tickおきに

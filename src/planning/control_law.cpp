@@ -318,6 +318,12 @@ ControlLaw::calc_sensor_pid() {
   }
   ee->sen.error_d = ee->sen.error_p;
   ee->sen.error_p = check_sen_error(type);
+  // 柱の横位置の制御に入った最初の tick は D 項を 0 に(前 tick の誤差 0 や壁の誤差からの
+  // 段で 1 tick の蹴りが出ないように)。壁 → 柱の切り替わりは k0 が合っていれば段は小さい。
+  if (str_post_active_ && !str_post_active_prev_) {
+    ee->sen.error_d = ee->sen.error_p;
+  }
+  str_post_active_prev_ = str_post_active_;
 
   // ego_in.ang再アンカー(2026-08-23): ego_in.angはSensingTask::calc_vel()
   // (sensing_task.cpp)で毎tick生ジャイロ(w_raw/w_kf)を積分しているだけの
@@ -396,6 +402,11 @@ ControlLaw::calc_sensor_pid() {
       const float i_gain = param_->str_ang_pid_fast.i * ee->sen.error_i;
       duty = param_->str_ang_pid_fast.p * ee->sen.error_p + i_gain -
              param_->str_ang_pid_fast.d * ee->sen.error_d;
+      // 柱の横位置の制御中は、ジャイロと迷路の向きのずれ ψ0 を向きの目標へ足す
+      // (斜めの dia_post_ctrl と同じ。structs.hpp str_post_ctrl_t 参照)
+      if (str_post_active_) {
+        duty += str_post_psi0_;
+      }
       ee->sen_log.gain_zz = ee->sen_log.gain_z;
       ee->sen_log.gain_z = duty;
       set_ctrl_val(ee->s_val, ee->sen.error_p, ee->sen.error_i, 0,
@@ -862,6 +873,7 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
   const auto prm = param_;
   float error = 0;
   int check = 0;
+  str_post_active_ = false; // 壁が見えない tick の柱の横位置の制御(下)で立てる
   float dist_mod = (int)(tgt_val_->ego_in.dist / param_->dist_mod_num);
   float tmp_dist = tgt_val_->ego_in.dist - param_->dist_mod_num * dist_mod;
 
@@ -1046,7 +1058,27 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
     const bool exist_left45_b =
         se->ego.left45_dist < prm->sen_ref_p.search_exist.left45;
 
-    if (!(check_front_left && check_front_right)) {
+    // 柱の立ち下がりの横位置(2026-10-02、structs.hpp str_post_ctrl_t)。両側とも壁なしの柱の組が
+    // できていれば、最後の組からジャイロと ψ0 で進めた横位置 dnow を、両壁の誤差と同じ形
+    // (右寄りで正、2δ)で流す。従来の Piller(下の normal2 の串制御)はこのとき使わない。
+    // 最短走行だけ(探索は従来のまま)。SLA_FRONT_STR は従来の Piller と同じく対象外。
+    const bool str_post_on =
+        !search_mode_ && prm->str_post_ctrl.enable &&
+        !(check_front_left && check_front_right) &&
+        tgt_val_->motion_type != MotionType::SLA_FRONT_STR &&
+        se->str_post.n_pairs >= 1 && se->str_post.lag < prm->str_post_ctrl.dr_max;
+    if (str_post_on) {
+      error = 2.0f * (se->str_post.dnow - prm->str_post_ctrl.k0);
+      check = 2;
+      type = SensingControlType::Piller;
+      str_post_active_ = true;
+      // ψ0 はジャイロの純積分(ang_kf_sum)の座標。角度の目標は ang_kf の座標なので、
+      // スナップで切られた分(ang_kf_sum − ang_kf)を引いて直す。迷路に対して
+      // まっすぐ = −ang_kf_sum + ψ0 = 0 → ang_kf = ψ0 − (ang_kf_sum − ang_kf)。
+      str_post_psi0_ = (prm->str_post_ctrl.psi0_enable && se->str_post.n_psi >= 1)
+                           ? se->str_post.psi0 - (se->ang_kf_sum - se->ego.ang_kf)
+                           : 0.0f;
+    } else if (!(check_front_left && check_front_right)) {
       if (range_check_passed_right && !exist_left45_b) {
         error += prm->sen_ref_p.normal2.ref.right45 - se->sen.r45.sensor_dist;
         check++;

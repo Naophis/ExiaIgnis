@@ -461,6 +461,12 @@ bool LoggingTask::log_timer_callback(repeating_timer_t *) {
   ld.dpe_lag = floatToHalf(sr->dia_post.lag);
   ld.dpe_dnow = floatToHalf(sr->dia_post.dnow);
   ld.dpe_psi0 = floatToHalf(sr->dia_post.psi0 * 57.29578f);
+  // 直進の壁なし区間の柱の立ち下がりから出した横位置(2026-10-02, str_post_ctrl_t)
+  ld.spe_seq = static_cast<int16_t>(sr->str_post.seq);
+  ld.spe_delta = floatToHalf(sr->str_post.delta);
+  ld.spe_lag = floatToHalf(sr->str_post.lag);
+  ld.spe_dnow = floatToHalf(sr->str_post.dnow);
+  ld.spe_psi0 = floatToHalf(sr->str_post.psi0 * 57.29578f);
 
   self->log_vec_.emplace_back(std::move(ld));
   return true;
@@ -751,6 +757,11 @@ void LoggingTask::dump_csv() const {
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_lag:float:%d\n", (int)sizeof(ls11.dpe_lag));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_dnow:float:%d\n", (int)sizeof(ls11.dpe_dnow));
   header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "dpe_psi0:float:%d\n", (int)sizeof(ls11.dpe_psi0));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "spe_seq:int:%d\n", (int)sizeof(ls11.spe_seq));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "spe_delta:float:%d\n", (int)sizeof(ls11.spe_delta));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "spe_lag:float:%d\n", (int)sizeof(ls11.spe_lag));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "spe_dnow:float:%d\n", (int)sizeof(ls11.spe_dnow));
+  header_len += (size_t)snprintf(header_buf + header_len, sizeof(header_buf) - header_len, "spe_psi0:float:%d\n", (int)sizeof(ls11.spe_psi0));
 
   fwrite(header_buf, 1, header_len, stdout);
 
@@ -1104,6 +1115,11 @@ void LoggingTask::dump_csv() const {
     ls11.dpe_lag = halfToFloat(e.dpe_lag);
     ls11.dpe_dnow = halfToFloat(e.dpe_dnow);
     ls11.dpe_psi0 = halfToFloat(e.dpe_psi0);
+    ls11.spe_seq = e.spe_seq;
+    ls11.spe_delta = halfToFloat(e.spe_delta);
+    ls11.spe_lag = halfToFloat(e.spe_lag);
+    ls11.spe_dnow = halfToFloat(e.spe_dnow);
+    ls11.spe_psi0 = halfToFloat(e.spe_psi0);
 
     size_t off = 0;
     memcpy(send_buf + off, &ls1, sizeof(ls1));

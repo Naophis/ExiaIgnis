@@ -283,6 +283,26 @@ inline void convertToJson(const comp_param_t& src, JsonVariant dst) {
     dst["enable"]          = src.enable;
 }
 
+inline void convertToJson(const str_post_ctrl_t& src, JsonVariant dst) {
+    dst["enable"]        = src.enable;
+    dst["k0"]            = src.k0;
+    dst["kappa"]         = src.kappa;
+    dst["psi0_enable"]   = src.psi0_enable;
+    dst["dr_max"]        = src.dr_max;
+    dst["rel_thr"]       = src.rel_thr;
+    dst["post_dist_max"] = src.post_dist_max;
+    dst["low_ratio"]     = src.low_ratio;
+    dst["contrast_min"]  = src.contrast_min;
+    dst["rise_max"]      = src.rise_max;
+    dst["fall_max"]      = src.fall_max;
+    dst["tol"]           = src.tol;
+    dst["wall_seed"]     = src.wall_seed;
+    dst["seed_min_len"]  = src.seed_min_len;
+    dst["seed_tau"]      = src.seed_tau;
+    dst["seed_dev"]      = src.seed_dev;
+    dst["psi0_w"]        = src.psi0_w;
+}
+
 inline void convertToJson(const dia_post_ctrl_t& src, JsonVariant dst) {
     dst["enable"]      = src.enable;
     dst["k0"]          = src.k0;
@@ -667,6 +687,7 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["kanayama_straight"]        = src.kanayama_straight;
     dst["kanayama_dia"]             = src.kanayama_dia;
     dst["dia_post_ctrl"]            = src.dia_post_ctrl;
+    dst["str_post_ctrl"]            = src.str_post_ctrl;
     {
         JsonArray a = dst["axel_degenerate_x"].to<JsonArray>();
         for (float v : src.axel_degenerate_x) a.add(v);

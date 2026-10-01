@@ -2,6 +2,7 @@
 
 #include "planning/astraea_types.hpp"
 #include "planning/dia_post_edge_detector.hpp"
+#include <cmath>
 #include "planning/pillar_trough_detector.hpp"
 #include "planning/wall_edge_detector.hpp"
 #include "structs.hpp"
@@ -62,5 +63,25 @@ private:
   float dia_c_ = 0.0f;         // ジャイロの向き(右向き +)の走行距離での積分 [mm·rad]
   float dia_c_x_ = 0.0f;
   bool  dia_c_valid_ = false;
+  // 直進の壁なし区間の柱の立ち下がりから横位置を出す(2026-10-02、structs.hpp str_post_ctrl_t)。
+  // 同じ検知器を pair_pitch 0 / same_pitch 90 / 相対しきい値で使い、結果を se->str_post に公開する。
+  // 向きはジャイロの純積分 ang_kf_sum で数える(壁のスナップで ang が切られても折れない)。
+  void  update_str_post_edge();
+  DiaPostEdgeDetector str_post_;
+  int   str_post_wo_seq_ = -1;
+  bool  str_post_hf_[2] = {false, false};
+  float str_c_ = 0.0f;
+  float str_c_x_ = 0.0f;
+  bool  str_c_valid_ = false;
+  // 壁からの引き継ぎ(str_post_ctrl_t::wall_seed): 両壁の区間の長さと、区間の終わりの値の指数平均
+  bool  str_wall_active_ = false;
+  bool  str_wall_hold_ = false;   // 読みが離れ始めて区間を閉じた後、両壁が一度消えるまで新しい区間を始めない
+  float str_wall_x0_ = 0.0f;
+  float str_wall_x_prev_ = 0.0f;
+  float str_wall_ema_ang_ = 0.0f; // ang_kf_sum [rad]
+  float str_wall_ema_l_ = 0.0f;   // L45 [mm]
+  float str_wall_ema_r_ = 0.0f;   // R45 [mm]
   float calc_sensor_val(float data, float a, float b);
+  // 距離 [mm] → 生値(calc_sensor_val の逆、raw = exp(a/(dist + b)))。縁の条件の換算用
+  static float raw_of_dist(float dist, float a, float b) { return std::exp(a / (dist + b)); }
 };

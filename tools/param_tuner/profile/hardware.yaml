@@ -1008,6 +1008,38 @@ dia_post_ctrl:
   head_ki: 60     # [1/s^2]
   head_i_max: 0.3 # [rad/s] 積分の出力の上限
   conf_accel: 4900   # [mm/s^2] これを超える加減速のとき、走行距離の倍率が信用できない組を使わない
+
+# 直進(sct = Straight)の壁なし区間を、左右の柱の立ち下がりの位置の差で出した横位置で制御する
+# (2026-10-02、CLAUDE.md「直進の壁なし区間の横位置」、structs.hpp str_post_ctrl_t)。
+# 直進では左右の柱が同じ位置にあるので δ = (x_R − x_L)/2 − k0(+ は右)。柱の間隔も走行距離の
+# 倍率も要らない。enable: 1 で、壁が見えない tick に従来の Piller(sensor.yaml の normal2 の
+# ref/kireme/exist を流用した串制御)の代わりに、横位置の推測 dnow を両壁の誤差と同じ形
+# error_p = 2·(dnow − k0) で既存の直進の壁制御(str_ang_pid_fast + kanayama_straight、上限
+# sensor_deg_limitter_piller)へ流す。ψ0(ジャイロと迷路の向きのずれ)は向きの目標へ足す。
+# 縁 = 45° LED1 の生値が直前の山の rel_thr(50%)を切った点。壁の終わりは縁にしない
+# (山の手前 rise_max 以内に low_dist より遠い読みが要る。壁は 78mm 以上続く)。
+# k0 は壁区間(両壁)の横位置 (L45 − R45)/2 と柱の組の δ の差で決める
+# (tools/param_tuner/str_post_edge.py。20261002_004431 で −1.8)。実機の制御は未確認。
+str_post_ctrl:
+  enable: 1
+  k0: -2.5          # [mm] 目標の横位置(左右センサーの取り付け差)
+  kappa: 50        # [mm/rad] 向きによる読みのずれ。横位置を振った 4 本(013141〜013459)の同時当てはめで 49
+  psi0_enable: 1
+  dr_max: 200      # [mm] 最後の柱の組からこれ以上進んだら制御しない
+  rel_thr: 0.5     # 縁 = 直前の山のこの割合を切った点(下地は引かない)
+  post_dist_max: 120 # [mm] 山(柱の一番近い読み)の距離の上限。側ごとに sensor_gain で生値へ換算(左 46 / 右 21 raw)。85 だと 7mm 以上寄ると遠い側が取れない
+  low_ratio: 0.3   # 下地(頂点の手前 rise_max の最小)+ これ ×(山 − 下地)以下の読みが頂点の手前にあること
+  contrast_min: 0.5 # (山 − 下地)/山 がこれ以上なら柱(壁は 78mm 以上続いて下地が無い)
+  rise_max: 78     # [mm] 下地近くの最後の読みから縁まで(柱 25〜60)。下地を見る窓
+  fall_max: 30     # [mm] 山の頂点から縁まで
+  tol: 20          # [mm] 左右の縁の差(2δ)の上限と、同じ側の 90mm の整数倍からの許容
+  # 壁からの引き継ぎ: 両壁の区間(seed_min_len 以上)が終わるとき、壁の距離の横位置 + k0 を組 1 つ分、
+  # 区間の終わりの ang_kf_sum(距離 seed_tau の指数平均)を ψ0 の事前値(重み psi0_w)として入れる
+  wall_seed: 1
+  seed_min_len: 40 # [mm]
+  seed_tau: 10     # [mm]
+  seed_dev: 1.5    # [mm] どちらかの 45° の読みが指数平均からこれ以上離れたら区間の終わり(壁の終わりの上りを入れない)
+  psi0_w: 8100     # [mm^2] ψ0 の事前値の重み(90^2 = 組 1 つ分)。引き継ぎが無ければ事前値 0 にこの重み
 gyro_param:
   gyro_w_gain_left: 0.0024565
   gyro_w_gain_right: 0.0024565
