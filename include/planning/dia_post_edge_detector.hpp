@@ -128,6 +128,13 @@ struct DiaPostEdgeParams {
   // そのまま事前値、組が増えるほど組の傾きへ寄る。90^2 で組 1 つ分の重み)。0 で使わない
   float psi0_w = 0.0f;
   float psi0_prior = 0.0f; // [rad]
+  // 縁の差から出した δ を実際の横位置へ: δ = ((x_R − x_L)/2 − offset)/gain。直進の 45° の縁は
+  // 機体が 1mm 動いても 0.4mm しか動かない(2026-10-02、7 本 41 区間の当てはめで gain 0.37〜0.41。
+  // ビームが進行方向から 45° でなく約 68° に向いている形)。gain を 1 のままにすると、向きを
+  // 変えたときの読みの変化を ψ0 が吸い、見かけの ψ0 が g·ψ0 − (1 − g)·ψ_g と向きで動いて、
+  // 目標に着いた後も 0.3〜0.9mm/区画ずれ続けた(020709 / 020735 / 020807)。斜めは 1 / 0。
+  float gain = 1.0f;
+  float offset = 0.0f;     // [mm、読みの座標] 真ん中にいるときの縁の差/2(左右センサーの取り付け差 k0)
 };
 
 class DiaPostEdgeDetector {
@@ -154,14 +161,14 @@ public:
   }
 
   // 壁から横位置と向きを引き継ぐ(直進、2026-10-02)。両壁の区間が終わるときに、壁の距離から
-  // 出した横位置(読みの座標 δ_wall + k0)と、壁に沿って走っていたときのジャイロの向きから出した
+  // 出した横位置(実際の mm、(L45 − R45)/2)と、壁に沿って走っていたときのジャイロの向きから出した
   // ψ0 を入れる。横位置は組 1 つ分として(n_pairs 1、seq +1)、ψ0 は最小二乗の事前値として
   // (重み w。その後の柱の組で寄っていく)。最初の柱の組まで(90mm 以上)制御が無い区間と、
   // 組 2 つまで ψ0 が無い区間(組が 1 つのときの次の組の推測の誤差 +1.2〜+5.5mm)をなくす。
-  void seed(float x, float c, float psi, float delta_read, float psi0, float w, float kappa) {
+  void seed(float x, float c, float psi, float delta, float psi0, float w, float kappa) {
     kappa_ = kappa;
-    delta_ = delta_read;
-    delta_gyro_ = delta_read - kappa * psi;
+    delta_ = delta;
+    delta_gyro_ = delta - kappa * psi;
     pos_ = x;
     c_pos_ = c;
     if (n_pairs_ < 1) n_pairs_ = 1;
@@ -297,17 +304,17 @@ public:
     if (n_psi_ >= 1) d += psi0_ * (x - pos_);
     return d;
   }
-  // 同、センサーの読みの座標で(車軸の横位置 + κ × いまの迷路に対する向き ψ_g + ψ0)。
-  // 「いま柱の組ができたらこう読める」値。直進の制御(str_post_ctrl)はこちらを使う: 壁の
-  // 45° の読みも向きで κ_w·ψ 動き、既存の壁制御はその分(向きの変化が横位置の変化より
-  // 先に見える = 減衰)込みで調整されているので、同じ形で渡す(2026-10-02)。
-  float now_delta_read(float x, float c, float psi_now) const {
-    return now_delta(x, c) + kappa_ * (psi_now + psi0_);
+  // 同、制御へ渡す形(車軸の横位置 + head_gain × いまの迷路に対する向き ψ_g + ψ0)。直進の
+  // 制御(str_post_ctrl)はこちらを使う: 壁の 45° の読みも向きで約 75mm/rad 動き、既存の壁制御は
+  // その分(向きの変化が横位置の変化より先に見える = 減衰)込みで調整されているので、同じ形で
+  // 渡す(2026-10-02)。head_gain は壁の読みの向きの感度に合わせる(κ とは別)。
+  float now_delta_ctrl(float x, float c, float psi_now, float head_gain) const {
+    return now_delta(x, c) + head_gain * (psi_now + psi0_);
   }
 
   uint16_t seq() const { return seq_; }       // 組ができるたびに +1(arm でも戻さない)
   int n_pairs() const { return n_pairs_; }    // arm してからの組の数
-  float delta() const { return delta_; }      // 最後の組の横位置 [mm](+ は右、向きの補正前)
+  float delta() const { return delta_; }      // 最後の組の横位置 [mm](+ は右、向きの補正前。(縁の差/2 − offset)/gain)
   // 同、車軸の横位置に直したもの(縁の時刻のジャイロの向きと、いまの ψ0 で)
   float delta_axle() const { return delta_gyro_ - kappa_ * psi0_; }
   float pos() const { return pos_; }          // 最後の組の位置(2 つの縁の中点)[mm]
@@ -412,7 +419,8 @@ private:
     }
     scale_ = sc;
     const float g = g_raw / scale_;
-    const float d = (last_side_ == RIGHT) ? (p.pair_pitch - g) * 0.5f : (g - p.pair_pitch) * 0.5f;
+    const float d_read = (last_side_ == RIGHT) ? (p.pair_pitch - g) * 0.5f : (g - p.pair_pitch) * 0.5f;
+    const float d = (d_read - p.offset) / p.gain; // 実際の横位置 [mm]
     const float mid = 0.5f * (e + last_x_);
     const float cmid = 0.5f * (ec + last_c_);
     // 2 つの縁の時刻のジャイロの向きの分だけ直す(κ·ψ0 は今の横位置を出すときに引く)

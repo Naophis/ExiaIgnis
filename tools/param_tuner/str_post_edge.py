@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """直進の壁なし区間の横位置を、左右の柱の立ち下がりの位置の差から出す(2026-10-02)。
 
-直進では左右の柱が同じ位置にあるので、右へ δ ずれると左の縁は −δ・右の縁は +δ 動く:
-    δ = (x_R − x_L)/2 − k0        (+ は右。k0 = 左右センサーの取り付け差)
-斜め(dia_post_edge.py)と違って柱の間隔も走行距離の倍率も要らない。
+直進では左右の柱が同じ位置にあるので、右へずれると左の縁は手前・右の縁は先へ動く:
+    読み = (x_R − x_L)/2 = k0 + gain·δ + kappa·ψ   (δ = 実際の横位置、+ は右。ψ = 迷路に対する向き)
+斜め(dia_post_edge.py)と違って柱の間隔も走行距離の倍率も要らない。gain は 1 でなく約 0.4
+(7 本 41 区間の組の差を gain·(ジャイロの横の移動) + κ·Δψ で当てると 0.37〜0.41。ビームが進行方向
+から約 68° に向いている形)。1 のままだと見かけの ψ0 が g·ψ0 − (1 − g)·ψ_g と向きで動き、
+目標に着いた後も 0.3〜0.9mm/区画ずれ続けた(020709 / 020735 / 020807)。
 
 縁 = 45° LED1 の生値が「直前の山の rel_thr(50%)」を上から下へ切った点(直線補間)。固定の
 生値だと左右のゲイン差(左の柱の山 230〜240 raw、右 130〜150)と柱までの距離で切る位置が
@@ -59,8 +62,12 @@ class Params:
     fall_max = 30.0        # [mm] 山の頂点から縁まで
     tol = 20.0             # [mm] 組(|x_R − x_L|)と同じ側(90 の整数倍)の許容
     gate_kmax = 3          # 同じ側の間隔が 90 × これを超えたら整数倍の確認をしない
-    kappa = 50.0           # [mm/rad] 013141〜013459 の組を κ と走行ごとの ψ0 で同時に当てた値(rms 0.39)
-    k0 = 0.0               # [mm] 壁からの引き継ぎの横位置に足す
+    # 読み(縁の差/2)= k0 + gain·δ + kappa·ψ。7 本 41 区間の組の差の当てはめ(2026-10-02)で gain 0.37〜0.41、
+    # kappa 64。gain 1 だと見かけの ψ0 が g·ψ0 − (1 − g)·ψ_g と向きで動く
+    gain = 0.4
+    kappa = 64.0           # [mm/rad、読み]。検知器では kappa/gain(実際の mm/rad)
+    k0 = -1.5              # [mm、読み] 真ん中にいるときの読み
+    head_gain = 75.0       # [mm/rad] 制御へ渡す横位置に足す向きの分(壁の読みの向きの感度に合わせる)
     wall_seed = 1          # 両壁の区間の終わりで横位置と ψ0 を引き継ぐ
     seed_min_len = 40.0    # [mm]
     seed_tau = 10.0        # [mm]
@@ -92,6 +99,7 @@ class StrPostDetector:
 
     def __init__(self, p):
         self.p = p
+        self.kappa_true = p.kappa / p.gain
         self.arm()
 
     def arm(self):
@@ -127,14 +135,14 @@ class StrPostDetector:
             self.psi0 = num / den
             self.n_psi = n - 1
 
-    def seed(self, x, c, psi, delta_read, psi0, w):
-        """壁からの引き継ぎ(ファームの DiaPostEdgeDetector::seed と同じ)"""
-        self.delta = delta_read
-        self.delta_gyro = delta_read - self.p.kappa * psi
+    def seed(self, x, c, psi, delta, psi0, w):
+        """壁からの引き継ぎ(ファームの DiaPostEdgeDetector::seed と同じ)。delta は実際の mm"""
+        self.delta = delta
+        self.delta_gyro = delta - self.kappa_true * psi
         self.pos, self.c_pos = x, c
         if self.n_pairs < 1:
             self.n_pairs = 1
-        self.seeds.append((x, delta_read, psi0))
+        self.seeds.append((x, delta, psi0))
         self.set_psi0_prior(psi0, w)
 
     def accept_same_side(self, s, e):
@@ -202,10 +210,11 @@ class StrPostDetector:
         g = e - self.last_x
         if abs(g) > self.p.tol:
             return False
-        d = -g * 0.5 if self.last_side == self.RIGHT else g * 0.5
+        d_read = -g * 0.5 if self.last_side == self.RIGHT else g * 0.5
+        d = (d_read - self.p.k0) / self.p.gain  # 実際の横位置 [mm]
         mid = 0.5 * (e + self.last_x)
         cmid = 0.5 * (ec + self.last_c)
-        dg = d - self.p.kappa * 0.5 * (epsi + self.last_psi)
+        dg = d - self.kappa_true * 0.5 * (epsi + self.last_psi)
         if self.n_pairs >= 1 and mid > self.pos:
             self.eps_deg = math.degrees(math.atan2(d - self.delta, mid - self.pos))
         ls = self.ls
@@ -223,14 +232,18 @@ class StrPostDetector:
         return True
 
     def now_delta(self, x, c):
-        d = self.delta_gyro - self.p.kappa * self.psi0 + (c - self.c_pos)
+        d = self.delta_gyro - self.kappa_true * self.psi0 + (c - self.c_pos)
         if self.n_psi >= 1:
             d += self.psi0 * (x - self.pos)
         return d
 
-    def now_delta_read(self, x, c, psi_now):
-        """読みの座標(車軸 + κ·いまの向き)。ファームの str_post.dnow はこちら"""
-        return self.now_delta(x, c) + self.p.kappa * (psi_now + self.psi0)
+    def now_delta_ctrl(self, x, c, psi_now):
+        """制御へ渡す形(車軸 + head_gain·いまの向き、実際の mm)。ファームの str_post.dnow はこちら"""
+        return self.now_delta(x, c) + self.p.head_gain * (psi_now + self.psi0)
+
+    def now_delta_pred(self, x, c, psi_now):
+        """次の組の δ(delta、向きの補正前)の推測 = 車軸 + κ·いまの向き"""
+        return self.now_delta(x, c) + self.kappa_true * (psi_now + self.psi0)
 
 
 def straight_segments(ms, dist):
@@ -282,7 +295,7 @@ def run_segment(det, q, ticks, x, c, on_pair=None, on_tick=None, on_seed=None):
                 wall_active = False
                 if x_prev - x0 >= p.seed_min_len:
                     cw = c[i] + (-ang[i]) * (x_prev - x[i])
-                    det.seed(x_prev, cw, -ema_ang, 0.5 * (ema_l - ema_r) + p.k0, ema_ang, p.psi0_w)
+                    det.seed(x_prev, cw, -ema_ang, 0.5 * (ema_l - ema_r), ema_ang, p.psi0_w)
                     if on_seed:
                         on_seed(det, i)
         for side, xs, y, cs, ps in row:
@@ -333,7 +346,7 @@ def analyze(path, p, k0, verbose):
         def on_tick(det, i):
             if det.n_pairs >= 1:
                 row = ticks[i]
-                pred_at[i] = det.now_delta_read(row[0][1], row[0][3], row[0][4])
+                pred_at[i] = det.now_delta_pred(row[0][1], row[0][3], row[0][4])
 
         def on_pair(det, i):
             pairs.append((det.pos, det.delta, det.delta_gyro, det.psi0, det.n_psi))
@@ -347,15 +360,15 @@ def analyze(path, p, k0, verbose):
             for i in np.where(np.diff(sq) != 0)[0] + 1:
                 fw.append((float(q["dist"].iloc[i]), float(q["spe_delta"].iloc[i])))
         fw_diff = [fd - pp[1] for fx, fd in fw for pp in pairs if abs(fx - pp[0]) < 20]
-        # k0: 壁からの引き継ぎ(δ_wall + k0)をジャイロで最初の組まで進めた推測と、来た組の δ の差。
-        # 引き継ぎの δ_wall は壁の 45° の距離の表の座標、組の δ は柱の縁の座標なので、その差が k0。
-        # 壁の終わりで機体が平行(psi_we ≈ 0 = 壁の区間の終わりの ang_kf_sum と ψ0 の差)な走行の値を使う。
+        # k0: 壁からの引き継ぎ(実際の横位置)をジャイロで最初の組まで進めた推測と、来た組の δ の差
+        # (実際の mm)に gain を掛けて読みの座標へ戻し、入れた k0 に足す。壁の終わりで機体が平行
+        # (psi_we ≈ 0 = 壁の区間の終わりの ang_kf_sum と ψ0 の差)な走行の値を使う。
         k0_est = psi_we = float("nan")
-        d_wall = det.seeds[0][1] - k0 if det.seeds else float("nan")
+        d_wall = det.seeds[0][1] if det.seeds else float("nan")
         if det.seeds and preds and pairs and pairs[0][0] > det.seeds[0][0]:
-            k0_est = k0 + preds[0]
+            k0_est = k0 + p.gain * preds[0]
             psi_we = math.degrees(det.seeds[0][2] - det.psi0)
-        D = np.array([pp[1] for pp in pairs]) - k0
+        D = np.array([pp[1] for pp in pairs])
         P = np.array([pp[0] for pp in pairs])
         if len(pairs) >= 2:
             slope, dd0 = np.polyfit(P, D, 1)
@@ -376,9 +389,9 @@ def analyze(path, p, k0, verbose):
             print(f"--- {row['file']} seg {row['seg']} v {row['v']:.0f} hf {row['hf']:.2f}")
             print("  L edges: " + " ".join(f"{e:7.2f}" for s, e in det.edges if s == 0))
             print("  R edges: " + " ".join(f"{e:7.2f}" for s, e in det.edges if s == 1))
-            print("  pairs (pos: δ, δ_gyro, ψ0 deg): " + " ".join(f"{pp[0]:6.1f}:{pp[1] - k0:+5.2f},{pp[2] - k0:+5.2f},{math.degrees(pp[3]):+5.2f}" for pp in pairs))
+            print("  pairs (pos: δ, δ_gyro, ψ0 deg): " + " ".join(f"{pp[0]:6.1f}:{pp[1]:+5.2f},{pp[2]:+5.2f},{math.degrees(pp[3]):+5.2f}" for pp in pairs))
             if det.seeds:
-                print("  壁からの引き継ぎ (x: δ_wall+k0, ψ0 deg): " + " ".join(f"{sx:6.1f}:{sd:+5.2f},{math.degrees(sp0):+5.2f}" for sx, sd, sp0 in det.seeds))
+                print("  壁からの引き継ぎ (x: δ_wall, ψ0 deg): " + " ".join(f"{sx:6.1f}:{sd:+5.2f},{math.degrees(sp0):+5.2f}" for sx, sd, sp0 in det.seeds))
             if preds:
                 print("  次の組の推測の誤差(組 − 推測): " + " ".join(f"{e:+.2f}" for e in preds))
             if fw:
@@ -391,7 +404,7 @@ def dump(path, p):
     続けて期待する組 "PAIR seg pos delta psi0_deg n_psi"。"""
     d = pd.read_csv(path)
     print(f"PARAM {p.rel_thr} {p.peak_min[0]:.4f} {p.peak_min[1]:.4f} {p.low_ratio} {p.contrast_min} "
-          f"{p.rise_max} {p.fall_max} {p.tol} {p.gate_kmax} {p.kappa} {p.psi0_w}")
+          f"{p.rise_max} {p.fall_max} {p.tol} {p.gate_kmax} {p.kappa / p.gain} {p.psi0_w} {p.gain} {p.k0}")
     for i0, i1 in straight_segments(d["motion_state"].values, d["dist"].values):
         q = d.iloc[i0:i1 + 1].reset_index(drop=True)
         if q["dist"].iloc[-1] < 150:
@@ -420,14 +433,16 @@ def dump(path, p):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("files", nargs="+")
-    ap.add_argument("--k0", type=float, default=0.0, help="左右センサーの取り付け差 [mm]。δ から引く")
-    ap.add_argument("--kappa", type=float, default=Params.kappa)
+    ap.add_argument("--k0", type=float, default=Params.k0, help="[mm、読み] 真ん中 にいるときの読み(左右センサーの取り付け差)")
+    ap.add_argument("--kappa", type=float, default=Params.kappa, help="[mm/rad、読み]")
+    ap.add_argument("--gain", type=float, default=Params.gain, help="機体が 1mm 動いたときの読みの変化")
     ap.add_argument("--rel-thr", type=float, default=Params.rel_thr)
     ap.add_argument("--dump", action="store_true", help="ホスト検証用のサンプル列を出す")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args()
     p = Params()
     p.kappa = a.kappa
+    p.gain = a.gain
     p.rel_thr = a.rel_thr
     p.k0 = a.k0
     if a.dump:

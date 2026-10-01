@@ -611,7 +611,8 @@ void SensorProcessor::update_str_post_edge() {
   // 壁からの引き継ぎ(structs.hpp str_post_ctrl_t::wall_seed)。両壁(45° が 30〜60mm)が続く間、
   // ang_kf_sum と L45 / R45 を距離 seed_tau の指数平均で追い、区間が seed_min_len 以上続いて
   // 終わった tick に、横位置(読みの座標 (L − R)/2 + k0)を組 1 つ分、ang_kf_sum を ψ0 の事前値
-  // として検知器へ入れる(壁に沿って走っていた = 迷路に対して向き 0 とみなす)。
+  // として検知器へ入れる(壁に沿って走っていた = 迷路に対して向き 0 とみなす)。横位置は実際の
+  // mm(検知器の δ も (読み − k0)/gain で実際の mm)。
   // 区間の終わりは「両壁の条件が外れた」ではなく「どちらかの読みが指数平均から seed_dev 以上
   // 離れた」で決める: 壁の終わりは 45° の読みが約 20mm かけて遠のく(004431: L 46 → 60 で x 88 → 102)
   // ので、60mm を越えるまで待つと区間の終わりの値がその上りを含んで (L − R)/2 が 1.1 → 1.9mm に
@@ -646,9 +647,10 @@ void SensorProcessor::update_str_post_edge() {
       str_wall_active_ = false;
       if (str_wall_x_prev_ - str_wall_x0_ >= pc.seed_min_len) {
         // 迷路に対してまっすぐ(ψ_true = −ang_kf_sum + ψ0 = 0)→ ψ0 = ang_kf_sum
-        const float dw = 0.5f * (str_wall_ema_l_ - str_wall_ema_r_);
+        const float dw = 0.5f * (str_wall_ema_l_ - str_wall_ema_r_); // 実際の横位置 [mm]
+        const float gain = (pc.gain > 0.05f) ? pc.gain : 1.0f;
         str_post_.seed(str_wall_x_prev_, str_c_ + (-se->ang_kf_sum) * (str_wall_x_prev_ - x_now),
-                       -str_wall_ema_ang_, dw + pc.k0, str_wall_ema_ang_, pc.psi0_w, pc.kappa);
+                       -str_wall_ema_ang_, dw, str_wall_ema_ang_, pc.psi0_w, pc.kappa / gain);
         se->str_post.delta = str_post_.delta();
         se->str_post.pos = str_post_.pos();
         se->str_post.n_pairs = str_post_.n_pairs();
@@ -669,7 +671,9 @@ void SensorProcessor::update_str_post_edge() {
     p.scale_fix = 0;
     p.conf_accel = 0.0f;
     p.tol = pc.tol;
-    p.kappa = pc.kappa;
+    p.gain = (pc.gain > 0.05f) ? pc.gain : 1.0f;
+    p.offset = pc.k0;
+    p.kappa = pc.kappa / p.gain; // 読みの座標 → 実際の mm/rad
     p.rel_thr = (pc.rel_thr > 0.0f) ? pc.rel_thr : 0.5f;
     p.low_ratio = pc.low_ratio;
     p.contrast_min = pc.contrast_min;
@@ -709,7 +713,7 @@ void SensorProcessor::update_str_post_edge() {
   }
   str_post_wo_seq_ = wo_seq;
   se->str_post.lag = x_now - se->str_post.pos;
-  // 読みの座標(車軸 + κ·向き)。斜め(dia_post.dnow)は車軸の横位置なので別
+  // 制御へ渡す形(車軸 + head_gain·向き、実際の mm)。斜め(dia_post.dnow)は車軸の横位置なので別
   se->str_post.dnow =
-      (str_post_.n_pairs() >= 1) ? str_post_.now_delta_read(x_now, str_c_, psi_g) : 0.0f;
+      (str_post_.n_pairs() >= 1) ? str_post_.now_delta_ctrl(x_now, str_c_, psi_g, pc.head_gain) : 0.0f;
 }

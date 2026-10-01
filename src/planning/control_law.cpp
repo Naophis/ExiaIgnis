@@ -1058,9 +1058,9 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
     const bool exist_left45_b =
         se->ego.left45_dist < prm->sen_ref_p.search_exist.left45;
 
-    // 柱の立ち下がりの横位置(2026-10-02、structs.hpp str_post_ctrl_t)。両側とも壁なしの柱の組が
-    // できていれば、最後の組からジャイロと ψ0 で進めた横位置 dnow を、両壁の誤差と同じ形
-    // (右寄りで正、2δ)で流す。従来の Piller(下の normal2 の串制御)はこのとき使わない。
+    // 柱の立ち下がりの横位置(2026-10-02、structs.hpp str_post_ctrl_t)。両側とも壁なしの柱の組
+    // (か壁からの引き継ぎ)があれば、最後の組からジャイロと ψ0 で進めた横位置 dnow を、両壁の
+    // 誤差と同じ形(右寄りで正、2δ)で流す。従来の Piller(下の normal2 の串制御)はこのとき使わない。
     // 最短走行だけ(探索は従来のまま)。SLA_FRONT_STR は従来の Piller と同じく対象外。
     const bool str_post_on =
         !search_mode_ && prm->str_post_ctrl.enable &&
@@ -1068,7 +1068,8 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
         tgt_val_->motion_type != MotionType::SLA_FRONT_STR &&
         se->str_post.n_pairs >= 1 && se->str_post.lag < prm->str_post_ctrl.dr_max;
     if (str_post_on) {
-      error = 2.0f * (se->str_post.dnow - prm->str_post_ctrl.k0);
+      // dnow は実際の mm(k0 と gain は検知器で引いてある)。両壁の誤差 d_L − d_R と同じ 2δ
+      error = 2.0f * se->str_post.dnow;
       check = 2;
       type = SensingControlType::Piller;
       str_post_active_ = true;

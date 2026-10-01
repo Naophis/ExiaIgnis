@@ -548,7 +548,9 @@ inline void convertFromJson(JsonVariantConst src, dia_post_ctrl_t& dst) {
 inline void convertFromJson(JsonVariantConst src, str_post_ctrl_t& dst) {
     from_json_field(src, "enable", dst.enable);
     from_json_field(src, "k0", dst.k0);
+    from_json_field(src, "gain", dst.gain);
     from_json_field(src, "kappa", dst.kappa);
+    from_json_field(src, "head_gain", dst.head_gain);
     from_json_field(src, "psi0_enable", dst.psi0_enable);
     from_json_field(src, "dr_max", dst.dr_max);
     from_json_field(src, "rel_thr", dst.rel_thr);

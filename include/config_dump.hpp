@@ -286,7 +286,9 @@ inline void convertToJson(const comp_param_t& src, JsonVariant dst) {
 inline void convertToJson(const str_post_ctrl_t& src, JsonVariant dst) {
     dst["enable"]        = src.enable;
     dst["k0"]            = src.k0;
+    dst["gain"]          = src.gain;
     dst["kappa"]         = src.kappa;
+    dst["head_gain"]     = src.head_gain;
     dst["psi0_enable"]   = src.psi0_enable;
     dst["dr_max"]        = src.dr_max;
     dst["rel_thr"]       = src.rel_thr;

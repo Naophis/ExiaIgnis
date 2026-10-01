@@ -330,7 +330,7 @@ typedef struct {
 // dia_post_ctrl.enable = 1 のとき ControlLaw::calc_dia_post_ctrl が dnow / psi0 を使う。
 typedef struct {
   volatile uint16_t seq = 0;  // 組ができるたびに +1
-  volatile float delta = 0;   // 横位置 [mm](+ は右。左右センサーの取り付け差 k0 は引いていない)
+  volatile float delta = 0;   // 横位置 [mm](+ は右。dia_post は縁の差/2 そのまま、str_post は (読み − k0)/gain)
   volatile float pos = 0;     // 組の位置(2 つの縁の中点の global_pos.dist)[mm]
   volatile float eps = 0;     // 最後の 2 組から出した向き [deg](+ は右向き。組が 2 つ未満なら 0)
   volatile int n_pairs = 0;   // 再アーム(旋回・停止)してからの組の数
@@ -338,7 +338,7 @@ typedef struct {
   volatile int n_psi = 0;     // ψ0 を出した回数(= n_pairs − 1)
   volatile float lag = 0;     // 今の位置 − pos [mm](ログ用、毎 tick 更新)
   volatile float dnow = 0;    // 今の位置の横位置の推測 [mm](最後の組からジャイロと ψ0 で進める、毎 tick)。
-                              // dia_post は車軸の横位置、str_post は読みの座標(車軸 + κ·向き)
+                              // dia_post は車軸の横位置、str_post は制御へ渡す形(車軸 + head_gain·向き)
 } dia_post_out_t;
 
 // ジャイロ FIFO の読み出し結果(2026-09-29、sensing_task.cpp)。Core1 の
@@ -860,10 +860,10 @@ typedef struct {
 // 制御する(2026-10-02、ControlLaw::check_sen_error の check == 0 の分岐、
 // include/planning/dia_post_edge_detector.hpp の rel_thr > 0 の経路、
 // SensorProcessor::update_str_post_edge、tools/param_tuner/str_post_edge.py)。
-// 直進では左右の柱が同じ位置にあるので δ = (x_R − x_L)/2 − k0(+ は右)。柱の間隔も走行距離の
-// 倍率も要らない。enable = 1 のとき、壁が見えない tick に従来の Piller(sensor.yaml の normal2 の
+// 直進では左右の柱が同じ位置にあるので 読み = (x_R − x_L)/2 = k0 + gain·δ(+ は右)。柱の間隔も走行
+// 距離の倍率も要らない。enable = 1 のとき、壁が見えない tick に従来の Piller(sensor.yaml の normal2 の
 // ref/kireme/exist を流用した「串」制御)の代わりに、横位置の推測 dnow(最後の組からジャイロと
-// ψ0 で進めたもの)を壁の誤差と同じ形 error_p = 2·(dnow − k0) で既存の直進の壁制御
+// ψ0 で進めたもの、実際の mm)を壁の誤差と同じ形 error_p = 2·dnow で既存の直進の壁制御
 // (str_ang_pid_fast + kanayama_straight、上限 sensor_deg_limitter_piller)へ流す。
 // ψ0(ジャイロと迷路の向きのずれ)は向きの目標(duty_sen)へ足す。ジャイロの向きは純積分
 // ang_kf_sum で数える(壁のスナップで ang が 0 に切られても組の並びが折れない)ので、足す
@@ -872,13 +872,23 @@ typedef struct {
 // 残差 0.12mm、k0 ≈ −1.8mm(壁区間の (L45 − R45)/2 との差)。実機の制御は未確認。
 typedef struct {
   int enable = 0;
-  float k0 = 0.0f;       // [mm] 目標の横位置(左右センサーの取り付け差。壁区間の横位置と柱の組の δ の差で決める)
-  // [mm/rad] 向きによる読みのずれ(δ_読み = δ_車軸 + κ·ψ)。幾何の見積もり(45° のビームが向きで
-  // 回る分 2·39 + センサーが車軸より前にある分)は約 110 だったが、横位置を振った 4 本
-  // (20261002_013141〜013459、向き最大 5°)の組を κ と走行ごとの ψ0 で同時に当てると 49
-  // (rms 0.39mm、110 だと 0.93)。110 のままだと向きを切っている間の組の δ を 8mm も直して
-  // ψ0 が +5° に飛び、制御が行き過ぎた。
-  float kappa = 50.0f;
+  // 縁の差/2(読み)と実際の横位置の関係: 読み = k0 + gain·δ + kappa·ψ(ψ = 迷路に対する向き、右 +)
+  // [mm、読みの座標] 真ん中にいるときの読み(左右センサーの取り付け差)。壁区間(両壁)の横位置を
+  // 引き継いだ推測と最初の組の差で決める(str_post_edge.py の列 k0)。004431 / 013141 で −1.3 / −1.7
+  float k0 = -1.5f;
+  // 機体が 1mm 動いたときの読みの変化。7 本 41 区間(20261002_004431〜020807)の組の差を
+  // gain·(ジャイロの横の移動) + κ·Δψ で当てると 0.37〜0.41(1 だと残差 0.79mm、0.4 で 0.32)。
+  // ビームが進行方向から約 68° に向いている形(45° なら 1)。1 のままだと、向きを変えたときの
+  // 読みの変化を ψ0 が吸って見かけの ψ0 が向きで動き(g·ψ0 − (1 − g)·ψ_g)、目標に着いた後も
+  // 0.3〜0.9mm/区画ずれ続けた(020709 / 020735 / 020807)。
+  float gain = 0.4f;
+  // [mm/rad、読みの座標] 向きによる読みのずれ。同じ当てはめで 64(gain 1 のときの 49〜54 とは別)。
+  // 検知器には kappa/gain(実際の mm/rad)で渡す。
+  float kappa = 64.0f;
+  // [mm/rad、実際の mm] 制御へ渡す横位置に足す向きの分(dnow = 車軸 + head_gain·(ψ_g + ψ0))。
+  // 壁の 45° の読みも向きで約 75mm/rad 動き(Y√2/√2·… ≈ 39 + センサーの前後位置)、既存の壁制御は
+  // その減衰込みで調整されているので同じ形にする。
+  float head_gain = 75.0f;
   int psi0_enable = 1;   // 1 = ψ0 を向きの目標へ足す(組が 2 つできてから)
   float dr_max = 200.0f; // [mm] 最後の組からジャイロで進める距離の上限。越えたら制御しない(従来と同じ 0)
   // 縁の条件(dia_post_edge_detector.hpp の rel_thr / peak_min / low_abs / rise_max / fall_max / tol)
@@ -2481,7 +2491,7 @@ typedef struct {
   real16_T dpe_dnow;      // 今の位置の横位置の推測 [mm]
   real16_T dpe_psi0;      // ジャイロと迷路の向きのずれ ψ0 [deg]
   int16_t spe_seq;        // 直進の柱の立ち下がりの組の数(2026-10-02, str_post、str_post_ctrl_t)
-  real16_T spe_delta;     // 最後の組の横位置 [mm](+ は右、k0 は引いていない)
+  real16_T spe_delta;     // 最後の組の横位置 [mm](+ は右。(縁の差/2 − k0)/gain、実際の mm)
   real16_T spe_lag;       // 今の位置 − 最後の組の位置 [mm]
   real16_T spe_dnow;      // 今の位置の横位置の推測 [mm]
   real16_T spe_psi0;      // ジャイロ(純積分 ang_kf_sum)と迷路の向きのずれ ψ0 [deg]
@@ -2806,7 +2816,7 @@ typedef struct {
   float dpe_dnow = 226;  // 今の位置の横位置の推測 [mm](最後の組からジャイロと ψ0 で進める)
   float dpe_psi0 = 227;  // ジャイロの向きの基準と迷路の向きのずれ ψ0 [deg](+ は右)
   int spe_seq = 228;     // 直進の柱の立ち下がりの組の数(2026-10-02、str_post_ctrl_t)
-  float spe_delta = 229; // 最後の組の横位置 [mm](+ は右、k0 は引いていない)
+  float spe_delta = 229; // 最後の組の横位置 [mm](+ は右。(縁の差/2 − k0)/gain、実際の mm)
   float spe_lag = 230;   // 今の位置 − 最後の組の位置 [mm]
   float spe_dnow = 231;  // 今の位置の横位置の推測 [mm]
   float spe_psi0 = 232;  // ジャイロの純積分と迷路の向きのずれ ψ0 [deg](+ は右)
