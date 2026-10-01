@@ -339,6 +339,10 @@ typedef struct {
   volatile float lag = 0;     // 今の位置 − pos [mm](ログ用、毎 tick 更新)
   volatile float dnow = 0;    // 今の位置の横位置の推測 [mm](最後の組からジャイロと ψ0 で進める、毎 tick)。
                               // dia_post は車軸の横位置、str_post は制御へ渡す形(車軸 + head_gain·向き)
+  // str_post だけ: この直進の向きの基準 [rad]。ジャイロの純積分 ang_kf_sum を直進の最初に 90° の
+  // 倍数へ丸めたもの。向き ψ_g = −(ang_kf_sum − ref) で数える(2026-10-02。ang_kf_sum をそのまま
+  // 使っていて、90° 旋回の後の直進で ψ_g が −90° になり κ·ψ の補正 −250mm で機体が回った。024646)
+  volatile float ref = 0;
 } dia_post_out_t;
 
 // ジャイロ FIFO の読み出し結果(2026-09-29、sensing_task.cpp)。Core1 の
@@ -866,8 +870,9 @@ typedef struct {
 // ψ0 で進めたもの、実際の mm)を壁の誤差と同じ形 error_p = 2·dnow で既存の直進の壁制御
 // (str_ang_pid_fast + kanayama_straight、上限 sensor_deg_limitter_piller)へ流す。
 // ψ0(ジャイロと迷路の向きのずれ)は向きの目標(duty_sen)へ足す。ジャイロの向きは純積分
-// ang_kf_sum で数える(壁のスナップで ang が 0 に切られても組の並びが折れない)ので、足す
-// ときは ang_kf の座標へ直す: ψ0 − (ang_kf_sum − ang_kf)。
+// ang_kf_sum(から直進の最初に 90° の倍数へ丸めた基準 ref を引いたもの)で数える(壁のスナップで
+// ang が 0 に切られても組の並びが折れない)ので、足すときは ang_kf の座標へ直す:
+// ψ0 − ((ang_kf_sum − ref) − ang_kf)。
 // 20261002_004431(400mm/s、壁なしの柱 6 本、制御なし): 組ごとの σ 0.11mm、直線を引いた後の
 // 残差 0.12mm、k0 ≈ −1.8mm(壁区間の (L45 − R45)/2 との差)。実機の制御は未確認。
 typedef struct {

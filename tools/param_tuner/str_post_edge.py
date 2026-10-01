@@ -21,7 +21,8 @@
 firmware(include/planning/dia_post_edge_detector.hpp の rel_thr > 0 の経路、
 SensorProcessor::update_str_post_edge)と同じ手順(StrPostDetector)。ファームと同じく
 1 tick に 4 回読んでいる側は S1〜S3、読んでいなければ S0 を使う。
-向き: ジャイロの純積分 ang_kf_sum(壁のスナップで動かない)を使う。
+向き: ジャイロの純積分 ang_kf_sum(壁のスナップで動かない)から、直進の最初の値を 90° の倍数へ
+丸めた基準を引いたものを使う(旋回の後の直進で ψ_g が ±90° にならないように)。
 
 出力(ログごと): 組の数、δ の平均と σ、ψ0(δ − ジャイロの向きの積分 の最小二乗の傾き)、
 直線を引いた後の残差、次の組が来る直前の推測(読みの座標)と来た組の差 pred、ファームの
@@ -266,6 +267,7 @@ def run_segment(det, q, ticks, x, c, on_pair=None, on_tick=None, on_seed=None):
     tick の最初に on_tick(det, i)、組ができたら on_pair(det, i)、引き継ぎで on_seed(det, i) を呼ぶ。"""
     p = det.p
     ang = np.radians(q["ang_kf_sum"].values.astype(float))
+    ang = ang - round(ang[0] / (math.pi / 2)) * (math.pi / 2)  # 直進の基準(90° の倍数)からの向き
     l45 = q["left45_d"].values.astype(float)
     r45 = q["right45_d"].values.astype(float)
     wall_active = hold = False
@@ -309,7 +311,10 @@ def sample_stream(d):
     has_wo = all(c in d for c in ("wo_n", "wo_l1", "wo_tl1", "wo_r1", "wo_tr1"))
     x = d["dist"].values.astype(float)
     v = d["ideal_v"].values.astype(float)
-    psi_g = -np.radians(d["ang_kf_sum"].values.astype(float))
+    # 向きの基準 = 直進の最初の ang_kf_sum を 90° の倍数へ丸めたもの(ファームと同じ)
+    ang = np.radians(d["ang_kf_sum"].values.astype(float))
+    ref = round(ang[0] / (math.pi / 2)) * (math.pi / 2)
+    psi_g = -(ang - ref)
     c = np.zeros(len(x))
     for i in range(1, len(x)):
         c[i] = c[i - 1] + psi_g[i] * (x[i] - x[i - 1])

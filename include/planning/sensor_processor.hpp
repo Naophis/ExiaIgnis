@@ -73,6 +73,7 @@ private:
   float str_c_ = 0.0f;
   float str_c_x_ = 0.0f;
   bool  str_c_valid_ = false;
+  float str_ref_ = 0.0f;          // この直進の向きの基準 [rad](ang_kf_sum を 90° の倍数へ丸めたもの)
   // 壁からの引き継ぎ(str_post_ctrl_t::wall_seed): 両壁の区間の長さと、区間の終わりの値の指数平均
   bool  str_wall_active_ = false;
   bool  str_wall_hold_ = false;   // 読みが離れ始めて区間を閉じた後、両壁が一度消えるまで新しい区間を始めない

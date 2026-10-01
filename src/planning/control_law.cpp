@@ -1073,11 +1073,11 @@ float ControlLaw::check_sen_error(SensingControlType &type) {
       check = 2;
       type = SensingControlType::Piller;
       str_post_active_ = true;
-      // ψ0 はジャイロの純積分(ang_kf_sum)の座標。角度の目標は ang_kf の座標なので、
-      // スナップで切られた分(ang_kf_sum − ang_kf)を引いて直す。迷路に対して
-      // まっすぐ = −ang_kf_sum + ψ0 = 0 → ang_kf = ψ0 − (ang_kf_sum − ang_kf)。
+      // ψ0 はジャイロの純積分(ang_kf_sum − この直進の基準 ref)の座標。角度の目標は ang_kf の
+      // 座標なので、スナップで切られた分((ang_kf_sum − ref) − ang_kf)を引いて直す。迷路に対して
+      // まっすぐ = −(ang_kf_sum − ref) + ψ0 = 0 → ang_kf = ψ0 − ((ang_kf_sum − ref) − ang_kf)。
       str_post_psi0_ = (prm->str_post_ctrl.psi0_enable && se->str_post.n_psi >= 1)
-                           ? se->str_post.psi0 - (se->ang_kf_sum - se->ego.ang_kf)
+                           ? se->str_post.psi0 - ((se->ang_kf_sum - se->str_post.ref) - se->ego.ang_kf)
                            : 0.0f;
     } else if (!(check_front_left && check_front_right)) {
       if (range_check_passed_right && !exist_left45_b) {

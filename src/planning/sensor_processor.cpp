@@ -578,8 +578,9 @@ void SensorProcessor::update_dia_post_edge() {
 
 // 直進の壁なし区間の柱の立ち下がり(2026-10-02、structs.hpp str_post_ctrl_t)。update_dia_post_edge
 // と同じ入れ方(再アームの区間・S1〜S3 か S0 か・位置の戻し)で、検知器を直進の柱の並び
-// (pair_pitch 0 / same_pitch 90)と相対しきい値で動かす。向きはジャイロの純積分 ang_kf_sum
-// (右向き + に符号を変える)。斜めの直進では左右の縁が 63.64mm ずれるので組はできない。
+// (pair_pitch 0 / same_pitch 90)と相対しきい値で動かす。向きはジャイロの純積分 ang_kf_sum から
+// この直進の基準(90° の倍数)を引いたもの(右向き + に符号を変える)。斜めの直進では左右の縁が
+// 63.64mm ずれるので組はできない。
 __attribute__((noinline, section(".time_critical.sensor_processor")))
 void SensorProcessor::update_str_post_edge() {
   const auto &pc = param->str_post_ctrl;
@@ -592,7 +593,6 @@ void SensorProcessor::update_str_post_edge() {
        mt == MotionType::NONE || mt == MotionType::READY ||
        mt == MotionType::FRONT_CTRL);
   const int wo_seq = se->wo.seq;
-  const float psi_g = -se->ang_kf_sum;
   if (rearm) {
     str_post_.arm();
     if (pc.psi0_w > 0.0f) str_post_.set_psi0_prior(0.0f, pc.psi0_w);
@@ -603,10 +603,19 @@ void SensorProcessor::update_str_post_edge() {
     str_c_ = 0.0f;
     str_c_valid_ = false;
     str_wall_active_ = false;
-  } else {
-    if (str_c_valid_) str_c_ += psi_g * (x_now - str_c_x_);
+  } else if (!str_c_valid_) {
+    // 直進の最初: 向きの基準 = ang_kf_sum を 90° の倍数へ丸めたもの(旋回の残りと壁のスナップの
+    // 分は ψ0 が吸う)。ang_kf_sum をそのまま使うと 90° 旋回の後の直進で ψ_g が −90° になり、
+    // κ·ψ の補正(160mm/rad)が −250mm になって機体が回った(20261002_024646)。
+    str_ref_ = std::round(se->ang_kf_sum / (float)M_PI_2) * (float)M_PI_2;
+    se->str_post.ref = str_ref_;
     str_c_x_ = x_now;
     str_c_valid_ = true;
+  }
+  const float psi_g = -(se->ang_kf_sum - str_ref_); // この直進の向きに対するジャイロの向き [rad](右 +)
+  if (!rearm) {
+    str_c_ += psi_g * (x_now - str_c_x_);
+    str_c_x_ = x_now;
   }
   // 壁からの引き継ぎ(structs.hpp str_post_ctrl_t::wall_seed)。両壁(45° が 30〜60mm)が続く間、
   // ang_kf_sum と L45 / R45 を距離 seed_tau の指数平均で追い、区間が seed_min_len 以上続いて
@@ -626,7 +635,7 @@ void SensorProcessor::update_str_post_edge() {
       if (!str_wall_active_) {
         str_wall_active_ = true;
         str_wall_x0_ = x_now;
-        str_wall_ema_ang_ = se->ang_kf_sum;
+        str_wall_ema_ang_ = se->ang_kf_sum - str_ref_;
         str_wall_ema_l_ = l;
         str_wall_ema_r_ = r;
         str_wall_x_prev_ = x_now;
@@ -635,7 +644,7 @@ void SensorProcessor::update_str_post_edge() {
         str_wall_hold_ = true;
       } else {
         const float a = (pc.seed_tau > 0.0f) ? std::min(1.0f, (x_now - str_wall_x_prev_) / pc.seed_tau) : 1.0f;
-        str_wall_ema_ang_ += (se->ang_kf_sum - str_wall_ema_ang_) * a;
+        str_wall_ema_ang_ += ((se->ang_kf_sum - str_ref_) - str_wall_ema_ang_) * a;
         str_wall_ema_l_ += (l - str_wall_ema_l_) * a;
         str_wall_ema_r_ += (r - str_wall_ema_r_) * a;
         str_wall_x_prev_ = x_now;
@@ -649,7 +658,7 @@ void SensorProcessor::update_str_post_edge() {
         // 迷路に対してまっすぐ(ψ_true = −ang_kf_sum + ψ0 = 0)→ ψ0 = ang_kf_sum
         const float dw = 0.5f * (str_wall_ema_l_ - str_wall_ema_r_); // 実際の横位置 [mm]
         const float gain = (pc.gain > 0.05f) ? pc.gain : 1.0f;
-        str_post_.seed(str_wall_x_prev_, str_c_ + (-se->ang_kf_sum) * (str_wall_x_prev_ - x_now),
+        str_post_.seed(str_wall_x_prev_, str_c_ + psi_g * (str_wall_x_prev_ - x_now),
                        -str_wall_ema_ang_, dw, str_wall_ema_ang_, pc.psi0_w, pc.kappa / gain);
         se->str_post.delta = str_post_.delta();
         se->str_post.pos = str_post_.pos();
