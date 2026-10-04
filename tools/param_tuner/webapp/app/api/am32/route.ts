@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { machineOf, sendErrorResponse } from "@/lib/api-util";
 import { serialManager } from "@/lib/serial-manager";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
       if (!mode || typeof mode !== "string") {
         return NextResponse.json({ error: "mode is required" }, { status: 400 });
       }
-      await serialManager.syncAm32(mode);
+      await serialManager.syncAm32(machineOf(request, body?.machine), mode, body?.force === true);
     } else if (action === "write" || action === "read") {
       await serialManager.runAm32Command(action);
     } else {
@@ -24,6 +25,6 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return sendErrorResponse(err);
   }
 }

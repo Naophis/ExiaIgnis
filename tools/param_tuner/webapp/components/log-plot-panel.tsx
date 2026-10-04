@@ -28,12 +28,15 @@ import {
   useTip,
   type TurnExitSummaryData,
 } from "@/components/turn-exit-table";
+import { MachineDot } from "@/components/machine-chip";
+import { findMachine, useMachines } from "@/lib/machine-client";
 import { buildTrajectoryData, DEFAULT_X_OFFSET, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
 
 interface LogFileInfo {
   name: string;
   mtimeMs: number;
   size: number;
+  machine?: string; // このログを出した機体(受信時に基板から決めたもの)
 }
 
 function formatDate(mtimeMs: number): string {
@@ -92,6 +95,7 @@ function LogPlotPanelInner({
   // 旋回テーブルで選択中の行(プロット上で旋回区間と旋回後の窓を強調する)
   const [selectedTurnKey, setSelectedTurnKey] = useState<string | null>(null);
   const router = useRouter();
+  const { registry } = useMachines();
   const { tip: turnTip, show: showTurnTip, hide: hideTurnTip } = useTip();
 
   const refreshFiles = useCallback(async () => {
@@ -101,7 +105,13 @@ function LogPlotPanelInner({
     // 3 秒ごとの取り直しで中身が同じなら入れ替えない(一覧の描き直しを起こさない)
     setFiles((prev) =>
       prev.length === nextFiles.length &&
-      prev.every((f, i) => f.name === nextFiles[i].name && f.mtimeMs === nextFiles[i].mtimeMs && f.size === nextFiles[i].size)
+      prev.every(
+        (f, i) =>
+          f.name === nextFiles[i].name &&
+          f.mtimeMs === nextFiles[i].mtimeMs &&
+          f.size === nextFiles[i].size &&
+          f.machine === nextFiles[i].machine,
+      )
         ? prev
         : nextFiles,
     );
@@ -337,6 +347,16 @@ function LogPlotPanelInner({
                   <span className="truncate font-medium">{f.name}</span>
                   <span className={selected === f.name ? "text-primary-foreground/70" : "text-muted-foreground"}>
                     {formatDate(f.mtimeMs)}
+                    {f.machine && (
+                      <span
+                        className="ml-1.5 inline-flex items-center gap-1"
+                        title={`このログを出した機体: ${findMachine(registry, f.machine)?.label ?? f.machine}`}
+                        data-log-machine={f.machine}
+                      >
+                        <MachineDot machine={findMachine(registry, f.machine)} />
+                        {findMachine(registry, f.machine)?.label ?? f.machine}
+                      </span>
+                    )}
                   </span>
                 </span>
                 <Button

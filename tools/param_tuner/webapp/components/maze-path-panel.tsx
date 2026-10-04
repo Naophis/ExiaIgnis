@@ -157,11 +157,11 @@ export function MazePathPanel({
               onClick={() => onExecChange(o.index)}
               title={`run_prf[${o.index}]: ${execDetail(o)}\n機体の mode ${o.index + 2}  LED ${ledText(o.index + 3)}`}
               className={`flex h-6 items-center justify-between gap-1 rounded border px-1.5 font-mono text-[11px] ${
-                selected ? "border-primary bg-primary/15 ring-1 ring-primary" : "border-border hover:bg-muted"
+                selected ? "border-primary-bright bg-primary-bright/15 ring-1 ring-primary-bright" : "border-border hover:bg-muted"
               }`}
             >
               <LedPattern value={o.index + 3} />
-              <span className={selected ? "font-bold text-primary" : "text-muted-foreground"}>{o.index}</span>
+              <span className={selected ? "font-bold text-primary-bright" : "text-muted-foreground"}>{o.index}</span>
             </button>
           );
         })}

@@ -410,6 +410,18 @@ R90・L90 は LED1本。全読み取りは `led_settle_us_` のビジーウェ�
 | 28 | L45_SEN (ADC2) |
 | 29 | L90_SEN (ADC3) |
 
+## 機体(個体)ごとのパラメータ(2026-10-04〜)
+
+回路とファームは全機体で同じで、違うのはパラメータだけ。以前はブランチ(`calibur` / `1st_v2`)でパラメータを分けていたが、機体ごとのフォルダに分けた。
+
+- **置き場所**: `tools/param_tuner/machines/<機体>/profile/`(以前の `tools/param_tuner/profile/` と同じ並びの一式。`system.yaml` / `hardware.yaml` / `am32.yaml` / `hf/*.yaml` など)。登録簿は `tools/param_tuner/machines.yaml`(機体の一覧・表示色・基板の USB シリアル番号・`default`・`specific`)。**`tools/param_tuner/profile/` はもう無い。** このファイルやメモの「`hardware.yaml` の …」「`offset.yaml` の …」は、機体ごとのそのファイルのこと。
+- **yaml を足す・変えるときは、どの機体のファイルかを必ず確かめる。** ファームに新しいパラメータを足したら、**全機体の yaml に足す**(片方だけに足すと、Param Console の「機体比較」に「未整理」の差として出る。そこで「無いキーを追加」を押せば、説明のコメントごと相手の機体へ入る)。調整値(タイヤ径・センサーのゲイン・壁切れの補正など)は機体ごとに違うので、片方の値をもう片方へ機械的に写さない。
+- **機体の見分け**: USB のシリアル番号(pico_unique_board_id。ファームは変えていない)。Param Console は、つないだ基板の番号を `machines.yaml` の `serials` と照らして機体を決め、表示をその機体へ切り替える。表示中の機体と基板の機体が違う・基板が未登録のまま送ろうとすると、確認を出す(`SerialManager::checkSendTarget`)。
+- **スクリプトが使う機体**: `tools/param_tuner/machine_paths.py`(Python)/ `machines.js`(node)が決める。引数 → 環境変数 `EXIA_MACHINE` → (送信系だけ)つないでいる基板 → `machines.yaml` の `default`。`check_time_path.py` / `check_search.py` / `tools/slalom/` / `update_param.sh`(`tx_term.js`)/ `send_profile.py` / `send_file.py am32sync` はこれを通す。`python3 tools/param_tuner/machine_paths.py [機体]` で profile の場所が出る。
+- **「固有」**(`machines.yaml` の `specific`): 機体ごとに違ってよい値の登録。機体比較で、登録済みの差(固有)と、まだ決めていない差(未整理)を分けて出すためだけのもので、送信の中身には影響しない。`hf/enc_lut.yaml: true`(ファイル全体)か、ファイルごとのキーの一覧。
+- **ログ**(`tools/param_tuner/logs/`)と迷路(`maze_logs/` / `maze_data/`)は全機体で共通の場所のまま。どの機体のログかは、受信したときの基板から `tools/param_tuner/.console_state.json`(git に入れない)に残り、Param Console のログ一覧に出る。2026-10-04 より前のログには印が無い。**ログを複数本まとめて使う解析(`enc_lut_fit.py` など)は、機体を混ぜないこと。**
+- 機体の追加は Param Console のヘッダーの「機体設定」(既存の機体をコピー、または `tools/param_tuner/profile` を持つブランチから取り込む)。詳しくは `tools/param_tuner/webapp/CLAUDE.md` の「機体」。
+
 ## 設定システム（ConfigLoader）
 
 `ConfigLoader`（`include/config_loader.hpp`, `src/config_loader.cpp`）は起動時にフラッシュ末尾 256KB の LittleFS から各 JSON ファイルを読み込みます。初回起動時はフォーマットしてデフォルト値を自動生成します。
@@ -501,7 +513,7 @@ self->data.gz_dt   = self->data.gz_ts_z ? (self->data.gz_ts - self->data.gz_ts_z
 
 磁石の芯ずれ・タイヤの振れによる角度依存誤差を、`SensingTask::correct_enc()` が `read_angle()` の直後に引きます(生角度の上位 6bit で 64 点テーブルを引き線形補間、補正後 = 生角度 − table、単位 count)。
 
-- テーブルは `tools/param_tuner/enc_lut_fit.py` が低速直進ログ(v=400 前後、機体を置き直しながら 8 本以上)から同定し、`profile/hf/enc_lut.yaml` を生成します(手で編集しない)。機体へは `/enc_lut.hf` として送られ、ファイルが無い・点数が 64 でない場合は補正なしで動きます。
+- テーブルは `tools/param_tuner/enc_lut_fit.py` が低速直進ログ(v=400 前後、機体を置き直しながら 8 本以上)から同定し、その機体の `machines/<機体>/profile/hf/enc_lut.yaml` を生成します(手で編集しない。テーブルは個体ごとなので、ログを取った機体の profile へ書く)。機体へは `/enc_lut.hf` として送られ、ファイルが無い・点数が 64 でない場合は補正なしで動きます。
 - 同定は左右差とジャイロだけを使います(v_c が速度 PID へ戻るため、片輪ごとの平滑化残差では左右の誤差が混ざる)。超信地は 4 輪のスクラブで使えず、ツールが自動で除外します。
 - ログの `v_l_enc` / `v_r_enc` は補正前の生角度(`encoder.left_raw/right_raw`)なので、補正の有効/無効に関係なく校正し直せます。ファームの適用確認は `enc_lut_fit.py --check`。
 - 磁石・タイヤを付け直したら取り直してください。

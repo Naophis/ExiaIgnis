@@ -19,14 +19,20 @@ import yaml
 
 H = os.path.dirname(os.path.abspath(__file__))
 PT = os.path.join(H, "..", "param_tuner")
+# 走行パラメータは機体ごと(machines/<機体>/profile)。EXIA_MACHINE で機体を指定、
+# 無ければ machines.yaml の default。
+sys.path.insert(0, PT)
+from machine_paths import profile_dir  # noqa: E402
+
+PROFILE = profile_dir()
 REF = os.path.join(H, "search_ref.json")
 
 
 def profile_files():
     files = {}
     for f in ["system.yaml", "hardware.yaml"]:
-        files[f.replace("yaml", "txt")] = json.dumps(yaml.safe_load(open(f"{PT}/profile/{f}")))
-    for f in sorted(glob.glob(f"{PT}/profile/hf/*.yaml")):
+        files[f.replace("yaml", "txt")] = json.dumps(yaml.safe_load(open(f"{PROFILE}/{f}")))
+    for f in sorted(glob.glob(f"{PROFILE}/hf/*.yaml")):
         files[os.path.basename(f).replace("yaml", "hf")] = json.dumps(yaml.safe_load(open(f)))
     return files
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { machineOf } from "@/lib/api-util";
 import { checkWalls } from "@/lib/maze";
 import { runSearchSim } from "@/lib/search-sim";
 
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     const walls = checkWalls(body?.walls);
     const goals = Array.isArray(body?.goals) ? body.goals : null;
     if (Array.isArray(goals) && goals.length === 0) throw new Error("ゴールがありません(ツールバーの G: でゴールを置いてください)");
-    return NextResponse.json(await runSearchSim({ walls, goals }));
+    return NextResponse.json(await runSearchSim({ machine: machineOf(request), walls, goals }));
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message, log: "" }, { status: 500 });
   }

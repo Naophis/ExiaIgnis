@@ -1,11 +1,10 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { REPO_ROOT } from "./paths";
 import { serialManager } from "./serial-manager";
 
-// webapp/ -> tools/param_tuner/ -> repo root, where flash.sh lives.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const REPO_ROOT = path.join(PARAM_TUNER_ROOT, "..", "..");
+// repo root, where flash.sh lives.
 const FLASH_SCRIPT = path.join(REPO_ROOT, "flash.sh");
 
 export interface FlashResult {

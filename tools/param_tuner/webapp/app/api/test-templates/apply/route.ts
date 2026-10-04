@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { machineOf } from "@/lib/api-util";
 import { applyArrayValuesToSystemYaml, applyTestTemplateToSystemYaml, getTestTemplate } from "@/lib/test-templates";
 
 export const runtime = "nodejs";
@@ -10,9 +11,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
   try {
-    const template = getTestTemplate(id);
-    applyTestTemplateToSystemYaml(template.values);
-    if (template.arrayValues) applyArrayValuesToSystemYaml(template.arrayValues);
+    const machine = machineOf(request);
+    const template = getTestTemplate(machine, id);
+    applyTestTemplateToSystemYaml(machine, template.values);
+    if (template.arrayValues) applyArrayValuesToSystemYaml(machine, template.arrayValues);
     return NextResponse.json({ ok: true, name: template.name });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });

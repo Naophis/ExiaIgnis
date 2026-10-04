@@ -1,5 +1,7 @@
 #!/bin/bash
-input_file="../param_tuner/profile/hf/t_$1.yaml"
+# 機体の profile(machines/<機体>/profile。EXIA_MACHINE か machines.yaml の default)
+profile_dir=$(python3 ../param_tuner/machine_paths.py) || exit 1
+input_file="$profile_dir/hf/t_$1.yaml"
 new_txt=$(cat "./result.yaml")
 
 echo $1

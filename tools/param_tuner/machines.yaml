@@ -1,0 +1,21 @@
+# 機体の登録簿。Param Console(ヘッダーの「機体設定」と「機体比較」)が書き換える。手で直してもよい。
+#   machines/<id>/profile/ … その機体のパラメータ一式(以前の profile/ と同じ並び)
+#   serials  … その機体の基板の USB シリアル番号。つなぐと Param Console が機体を自動で見分ける
+#              (手で書くときは "..." で囲む)
+#   default  … 機体を指定しないスクリプト(update_param.sh・check_*.py など)が使う機体
+#   specific … 機体ごとに違ってよい値(機体比較で「固有」に分ける)。
+#              ファイル名(hf/t_*.yaml のように * も可): true = ファイル全体 / キーの一覧
+default: 3rd
+machines:
+  - id: calibur
+    label: calibur
+    color: '#2b31d4'
+    serials:
+      - 5E17A6AC7E691763
+  - id: 3rd
+    label: 3rd
+    color: '#d6007d'
+    serials:
+      - A2FEC5EA5F5821CB
+specific:
+  hf/enc_lut.yaml: true

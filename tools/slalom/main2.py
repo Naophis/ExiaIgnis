@@ -9,6 +9,15 @@ import os
 import yaml
 
 
+def _hardware_yaml():
+    """機体の hardware.yaml(machines/<機体>/profile。EXIA_MACHINE か machines.yaml の default)。"""
+    import sys
+    pt = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "param_tuner")
+    sys.path.insert(0, pt)
+    from machine_paths import profile_dir
+    return os.path.join(profile_dir(), "hardware.yaml")
+
+
 def read_yaml(filename):
     # 現在のスクリプトのディレクトリを取得
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +28,7 @@ def read_yaml(filename):
         data = yaml.safe_load(file)
     return data
 
-data = read_yaml("../param_tuner/profile/hardware.yaml")
+data = read_yaml(_hardware_yaml())
 
 p = Plot2()
 po = PlotOrval()

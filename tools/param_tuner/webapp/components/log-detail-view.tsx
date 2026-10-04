@@ -373,7 +373,7 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
 
   return (
     <div className="flex h-screen flex-col gap-1.5 p-2">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-2 border-l-accent-gold bg-card px-3 py-1 text-xs ring-1 ring-primary/20">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-2 border-l-accent-gold bg-card px-3 py-1 text-xs ring-1 ring-primary-bright/20">
         <button
           type="button"
           onClick={() => router.push("/")}
@@ -578,7 +578,7 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
                     <div
                       onPointerDown={(e) => startResize(e, chart.id, chart.height ?? DEFAULT_CHART_HEIGHT)}
                       title="ドラッグで高さを変える"
-                      className="h-1.5 cursor-ns-resize rounded-b bg-border/40 hover:bg-primary/40"
+                      className="h-1.5 cursor-ns-resize rounded-b bg-border/40 hover:bg-primary-bright/40"
                     />
                   </div>
                 ))}

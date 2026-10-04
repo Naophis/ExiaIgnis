@@ -15,7 +15,38 @@
 - **Next.js 16 App Router**、Turbopack。`serverExternalPackages: ["serialport", "@serialport/bindings-cpp"]` を `next.config.ts` に設定(ネイティブ依存をクライアントバンドルに巻き込まない)。
 - **サーバー専用シングルトン**は `globalThis` 経由で dev モードの HMR を生き延びる(Prisma client パターンと同じ)。対象: `lib/serial-manager.ts` の `serialManager`。新しいメソッドを足した直後に古い `next dev` プロセスをそのまま叩くと、`globalThis` にキャッシュされた**古いクラス定義のインスタンス**が使われ「is not a function」エラーになることがある → **サーバー再起動が必要**なケースとして覚えておくこと。
 - 全ての `app/api/**/route.ts` は `export const runtime = "nodejs"`(serialport 等の Node ネイティブ依存のため Edge 不可)。
-- ファイルパス系のコードは共通して `path.join(process.cwd(), "..")` を `PARAM_TUNER_ROOT` とする(Next サーバーの cwd は `webapp/`)。
+- 場所の決まりは `lib/paths.ts` に集めてある(Next サーバーの cwd は `webapp/`): `TOOL_ROOT` = `tools/param_tuner`、`DATA_ROOT` = 機体のパラメータ・ログ・迷路の置き場所(普段は `TOOL_ROOT` と同じ。環境変数 `EXIA_PARAM_TUNER_ROOT` で別の場所にできる = 同期や上書きを本物のパラメータに触らずに試すため)。**機体のパラメータの場所は `lib/machines.ts` の `profileDir(機体)`** で、`profile/` を直接組み立てない(下の「機体」)。
+
+## 機体(複数個体)— `lib/machines.ts` / `lib/machine-*.ts` / `components/machine-*.tsx`(2026-10-04〜)
+
+回路とファームは全機体で同じで、違うのはパラメータだけ。機体ごとに `tools/param_tuner/machines/<機体>/profile/`(以前の `profile/` と同じ並びの一式)を持ち、登録簿は `tools/param_tuner/machines.yaml`。ユーザーの要求は「機体の違いが分かること」「管理しやすいこと」で、いちばんの心配は**同じ名前のファイルの取り違え**(別の機体の yaml を直す・送る)。過去に却下された案: 片方を読み取り専用にするロック(両方を編集したい)、共通ファイル + 機体別の上書きファイル(キーの仕分けが面倒)、1 ファイルに `key@機体` で並べる(ピンとこない)。**この 3 つは出し直さない。** このファイルのほかの節に出てくる `profile/`(`profile/hf/profiles.yaml`、`profile/test_templates.json`、迷路タブの「過去の迷路 (profile)」など)は、どれも表示中の機体の `machines/<機体>/profile/` のこと。
+
+- **サーバーは「今の機体」を覚えない。** どの機体のファイルを読む・書く・送るかは毎回リクエストで受け取る(画面に出ている機体と、実際に触る機体がずれないように)。クライアントは `lib/machine-client.ts` の `apiFetch()` がヘッダー `x-exia-machine` に今の機体を付ける。API ルートは `lib/api-util.ts` の `machineOf(request, body.machine)`(body / `?machine=` があればそれ、無ければヘッダー。どれも無ければエラー = 既定の機体へ黙って落とさない)。**機体のパラメータを読む・書く API を足すときは、クライアントは `apiFetch`、ルートは `machineOf` を使う。** ログ・迷路のログ・大会迷路は全機体共通なので素の `fetch` のまま。
+- **今の機体**は `app/page.tsx` の state(`localStorage` の `exia-machine-v1` に覚える)。`selectMachine()` が `setCurrentMachine()`(`apiFetch` 用のモジュール変数)を state より先に書き換える: 子のパネルはマウント直後の effect で fetch し、それは親の effect より先に走るため。機体で中身が変わるパネルは `key={machine}` で作り直す(パラメータ表・テンプレート・センサ校正)。迷路タブは編集中の迷路を残すため作り直さず、一覧の取り直し(`refreshNonce`)と `usePathSim` / `useSearchSim` の依存に機体を入れてある。
+- **`MachineContext`**(`useMachines()`): 登録簿・今の機体・接続中の基板・`guardedSend`。値は `useMemo` で固定してある(page.tsx はログ 1 行ごとに描き直すので、毎回新しいオブジェクトを渡すと `LogPlotPanel` などが全部描き直される)。**page.tsx 自身は Provider の外側**なので `useMachines()` は使えない(`useMachineDiff` に登録簿を引数で渡しているのはこのため。最初ここで空の登録簿を読んで、編集画面の印が出なかった)。
+- **機体の見分け**: `SerialPort.list()` の `serialNumber`(= pico_unique_board_id。ファームは変えていない)を `machines.yaml` の `serials` と照らす。`serialManager.getStatus()` / SSE の `status` に `serial` と `machine` が載る。つないだ直後の 1 回だけ、表示をその基板の機体へ切り替える(`autoSwitchedSerial`。そのあと手で別の機体を見に行っても戻さない)。未登録の基板はヘッダーに「未登録の基板 → 〇〇 に登録」を出す。
+- **送信の関門**: `SerialManager::checkSendTarget(機体, force)` を `sendFile` / `sendAll` / `syncAm32` とセンサ校正の「保存+送信」が最初に呼ぶ。基板が別の機体・未登録なら `SendTargetError` → API は 409 と `code`(`mismatch` / `unregistered`)。クライアントは `guardedSend(run)` が確認の窓(`components/choice-dialog.tsx`)を出し、選んだら `force: true` で送り直す(または基板を登録して送り直す・表示を切り替えて何も送らない)。**送信の API を足したら `guardedSend` で包む。** 迷路の送信(`maze.txt`)は機体に依らないので関門なし。
+- **未送信の印**: 基板(シリアル番号)ごとに、最後に送れた中身のハッシュを `tools/param_tuner/.console_state.json`(git に入れない)に残す。`listProfiles()` の `unsent` = 記録があって今の中身と違うファイル。一度も送っていないファイルは基板の中身が分からないので数えない(初めての基板で全ファイルに印が付くのを避けた)。ほかの機体の yaml を「機体比較」で直したあと、その機体をつないだときに何を送ればよいかが分かるようにするため。
+- **機体比較**(ヘッダーの「機体比較」、`components/machine-compare-panel.tsx` / `lib/machine-compare.ts`): 全機体・全ファイルの差のあるキーを出す。比べるのは js-yaml で読んだ値(= 機体へ送る JSON)なので、コメントや `45` と `45.0` の違いは差にしない。マップは降り、マップを含む配列(`v_prof` など)は要素ごとに降り、スカラーだけの配列(ゲインの `[a, b]`、テーブル)は 1 つの値(`lib/yaml-compare.ts`)。枝ごと無い機体があるときは、いちばん上の無い枝で 1 件。
+  - **未整理 / 固有**: 差のあるキーのうち、`machines.yaml` の `specific` に登録したもの(ファイル全体 `true` か、キーの一覧。キーの登録はその下すべてに効く。ファイル名は `hf/t_*.yaml` のように `*` を使える)が「固有」= 機体ごとに違ってよい値、それ以外が「未整理」。未整理を 0 に保つのが運用の目安: そろえる(→ / ←)か、固有にする。キーの仕分けを先に全部やらせる作り(共通ファイルと上書きファイル)は却下されているので、**固有の登録は差が出たキーにだけ、その場で 1 クリック**。
+  - **同期**: `→` / `←`、「無いキーを追加」(ファームに足したパラメータを、説明のコメントごと相手へ)、「未整理をすべて A → B」(2 回押し)、ファイルごとコピー。どれも相手の yaml の**コメントを残す**: `lib/yaml-patch.ts` が `yaml` パッケージで文字の範囲だけを調べ、コピー元の同じキーの文字列を差し込む(parse → dump で書き直さない)。差し込んだあと読み直して「そのキーだけがその値になった」ことを確かめ、違えば書かない。直前の書き換えはトーストの「元に戻す」で戻せる(サーバーのメモリに 30 件)。
+  - `lib/yaml-patch.ts` / `lib/yaml-compare.ts` を変えたら `npx --yes tsx scripts/check-yaml-patch.ts [別の profile のフォルダ ...]` を回す(機体どうしの差をメモリ上で全部写して、失敗 0・残り 0・コメント行が減らないこと。2026-10-04 に 4 つのブランチの profile と calibur の間で 1986 個、失敗 0)。
+- **編集画面**(`components/yaml-editor.tsx`): 見出しに機体の色のチップ。編集先の機体は `EditTarget.machine` が自分で持つ(表示中の機体を切り替えても保存先は変わらない。違う機体のファイルを開いているときは帯で知らせる)。ほかの機体と値が違う行の左に帯(琥珀 = 未整理、紫 = 固有)、マウスを載せると相手の値(`lib/cm-machine-diff.ts`、`lib/use-machine-diff.ts` が下書きとほかの機体の値を 250ms 待って比べる)。「次の差 ↓」で次の印へ。
+  - **保存したとき**(`/api/profile-file` の `propagate`、`suggestPropagation()`): 変えたキーのうち、ほかの機体も「変える前と同じ値」だったもの(= そろっていた値)を「〇〇 にも同じ変更を入れる」として出す。固有のキーと、元から違っていたキーは出さない(機体ごとの値とみなす)。自動では入れない(たまたま同じ値だっただけかもしれない)。
+- **機体の追加**(ヘッダーの「機体設定」、`components/machine-dialog.tsx` / `createMachine()`): 既存の機体をコピーするか、`tools/param_tuner/profile` を持つブランチ(機体を分ける前の置き場所。`git archive` で取り出す)から取り込む。消す操作は画面に無い(フォルダと `machines.yaml` の行を手で消す)。
+- **どの機体のログか**: 受信したとき(`writeLogFile`)に基板の機体を `.console_state.json` の `logs` に残し、`/api/logs` の `machine` → プロットタブの一覧に色の点と名前。古いログには無い。
+- **試験用の擬似基板**: 環境変数 `EXIA_SIM_BOARD_FILE` に `{"path": "/dev/pts/N", "serialNumber": "..."}` を書いたファイルを指定すると、ttyACM* を探す代わりにそれを基板として開く(ファイルが無ければ「基板なし」)。pty の向こうで `name@content` に `OK` を返すだけのスクリプトを動かせば、実機なしで自動判別・登録・送信の関門・未送信の印を試せる(`EXIA_PARAM_TUNER_ROOT` と合わせて、別ポートの `next dev` で)。
+
+## テーマカラー — `lib/theme.ts` / `components/theme-picker.tsx` / `components/theme-sync.tsx`(2026-10-04〜)
+
+ヘッダーの「テーマ」で、画面全体の主色(ボタン・バッジ・選択中のタブ・フォーカスの輪・枠線の色味)を変えられる。ユーザーが機体設定で calibur の色を濃い青(`#2b31d4`)に変えたあと「テーマカラーを変えられるように、全体で」と頼んだもの。
+
+- **2 つの持ち方**(`ThemePrefs.mode`、`localStorage` の `exia-theme-v1`): `machine`(既定)= 機体ごとの色。選んだ色は表示中の機体の色(`machines.yaml` の `color`、機体設定の色と同じもの)になり、機体を切り替えると画面全体の色も変わる = どの機体を見ているかが色で分かる。`fixed` = 全機体で 1 色(このブラウザに覚える)。
+- **色の作り方**: `app/globals.css` の `.dark` は、主色から作る色(primary / ring / accent / border / input / chart-1 / sidebar-*)を `--theme-*` の変数から計算している。`lib/theme.ts` の `themeVars(#rrggbb)` がその値を決めて `<html>` の style に書く(既定の色のときは何も書かない = もとの見た目と同じ値)。背景(濃紺のパネル)・警告色・グラフやマーカーの色・エディタの配色は変えない。
+  - 塗り(`bg-primary`)は選んだ色そのもの(明るさが 0.42 未満のごく暗い色だけ持ち上げる)。その上の文字(`--primary-foreground`)は、塗りが暗ければ白、明るければ今までの濃紺。
+  - **暗い背景の上で主色を文字・線・薄い塗りに使う所は `primary-bright`**(`text-primary-bright` / `border-primary-bright` / `ring-primary-bright` / `bg-primary-bright/20`)。濃い色を選んだときに `text-primary` だと背景に溶けて読めないため、明るさの下限(0.74)を持つ別の色にしてある。既定の色では `primary` と同じ。**主色を足すときは、ベタ塗りなら `bg-primary` + `text-primary-foreground`、文字・線なら `primary-bright`。** フォーカスの輪(`--ring`)も明るい方から作る。
+- **ちらつき防止**: `app/layout.tsx` の `<head>` の 1 行スクリプト(`THEME_INIT_SCRIPT`)が、覚えてある値(`exia-theme-applied-v2` = 当てる CSS 変数そのもの)を最初の描画の前に当てる(Next の「preventing flash before hydration」の手順。`<html>` に `suppressHydrationWarning`)。開発モードでは React が `<html>` の属性を JSX のものへ戻すので、`ThemeSync`(layout に常駐)が `useLayoutEffect` で当て直す。`ThemeSync` は別のタブでの変更(storage イベント)と同じページでの変更(`exia-theme-change`)も拾うので、`/logs` ページにも同じ色が当たる(機体ごとの色のときも、決まった値を残してあるので機体を知らないページで当てられる)。
+- どの色を当てるかを決めるのは `app/page.tsx`(`commitTheme()`)。テーマの窓から機体の色を変えたときは、画面をすぐ変えて `machines.yaml` へは 400ms 待ってから書く(色を選んでいる間は input イベントが連続で来る)。
 
 ## RX(シリアル受信)— `lib/serial-manager.ts`
 
@@ -33,6 +64,7 @@
 
 `tx_term.js`(実体は `send_file.py::cmd_write` に委譲されていた)のプロトコルを移植: `<remote>@<content>\n` を書き込み → 応答1行を待つ。待機中はテレメトリ/デバッグ行(`ADC0:`/`Gx:`/`Enc0:` を含む行、`[` で始まる行)を読み飛ばす。`OK` で成功、それ以外は失敗(10秒タイムアウト)。バイナリダンプ中や map/csv-text 蓄積中は送信を拒否する(同時破壊防止)。
 
+- 以下の `profile/` は、その機体の `machines/<機体>/profile/`。
 - base files (`system.yaml`/`hardware.yaml`/`am32.yaml`) は `profile/` 直下、リモート名は `.txt` 拡張子。
 - mode files は `profile/hf/`、リモート名は `.hf` 拡張子。`.maze` は中身を `| 0xf0` してswap変換後 `maze.txt` として送信。
 - 「全て送信」は mode dir の `*.yaml`(`*.maze` は含まない)→ base files の順。
@@ -182,6 +214,8 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 
 ## API 一覧
 
+機体のパラメータを読む・書く API(profiles / profile-file / send / am32 / test-templates / param-matrix / sensor-calib / maze / maze/path / maze/search)は、ヘッダー `x-exia-machine`(または `?machine=` / body の `machine`)で機体を受け取る。
+
 | エンドポイント | メソッド | 役割 |
 |---|---|---|
 | `/api/ports` | GET | ttyACM* ポート一覧 |
@@ -189,10 +223,13 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 | `/api/disconnect` | POST | 切断・自動接続を停止 |
 | `/api/status` | GET | 現在の接続状態 |
 | `/api/stream` | GET (SSE) | `log`/`status`/`saved`/`clear` イベント配信 |
-| `/api/modes` | GET | `profile/` 配下のモード一覧 |
-| `/api/profiles` | GET | 指定モードのファイル一覧(base/mode) |
-| `/api/profile-file` | GET/POST | YAMLファイルの読み込み/保存 |
-| `/api/send` | POST | 個別ファイル送信 / 全送信 |
+| `/api/machines` | GET/POST | 機体の登録簿 + 接続中の基板。`?action=sources`(取り込み元のブランチ)。POST `create` / `update` / `assignSerial` / `removeSerial` / `setDefault` / `specific` |
+| `/api/machines/compare` | GET | 機体どうしの差(`?mode=hf`、`&file=` で 1 ファイル)。`?values=1&file=` は機体ごとの値(編集画面用) |
+| `/api/machines/sync` | POST | `{from, to, file, paths}` キーを写す / `{whole: true}` ファイルごと / `{undo}` 元に戻す |
+| `/api/modes` | GET | その機体の `profile/` 配下のモード一覧 |
+| `/api/profiles` | GET | 指定モードのファイル一覧(base/mode)+ 接続中の基板へ未送信のファイル |
+| `/api/profile-file` | GET/POST | YAMLファイルの読み込み/保存(`machine` を明示。保存の返事に `propagate`) |
+| `/api/send` | POST | 個別ファイル送信 / 全送信(`all`)/ 未送信だけ(`unsent`)。基板が別の機体・未登録なら 409(`force` で送る) |
 | `/api/am32` | POST | `sync`(am32.yaml送信+AM32WRITE) / `write` / `read` |
 | `/api/test-templates` | GET/POST/DELETE | テンプレート一覧/作成更新/削除 |
 | `/api/test-templates/apply` | POST | 保存済みテンプレートをsystem.yamlへ適用 |

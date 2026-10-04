@@ -47,8 +47,10 @@ Pico へ USB CDC 経由でファイルを操作するスクリプト。
 
   am32sync [<am32.yamlのパス>]
       am32.yaml を /am32.txt としてアップロードし、続けて am32write を実行する
-      (tools/param_tuner/profile/am32.yaml を編集するたびにこれ1つ叩けばよい)。
-      パス省略時は tools/param_tuner/profile/am32.yaml を使う。
+      (am32.yaml を編集するたびにこれ1つ叩けばよい)。
+      パス省略時は、つないでいる基板の機体の am32.yaml
+      (tools/param_tuner/machines/<機体>/profile/am32.yaml)を使う。機体の決め方は
+      tools/param_tuner/machine_paths.py を参照(EXIA_MACHINE で指定もできる)。
       例: python send_file.py am32sync
 
   dshotdir
@@ -77,9 +79,14 @@ TIMEOUT_SEC = 10
 PICO_VID    = 0x2E8A  # Raspberry Pi
 COMMANDS    = {"write", "read", "list", "delete", "deleteall", "show",
                "am32read", "am32write", "am32sync", "dshotdir"}
-AM32_YAML_DEFAULT = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "tools", "param_tuner", "profile", "am32.yaml")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "tools", "param_tuner"))
+
+
+def am32_yaml_default() -> str:
+    """つないでいる基板の機体(無ければ既定の機体)の am32.yaml。"""
+    from machine_paths import profile_dir
+    return os.path.join(profile_dir(detect=True), "am32.yaml")
 
 
 def find_pico_port() -> str | None:
@@ -364,7 +371,7 @@ def main() -> None:
             cmd_am32write(ser)
 
         elif command == "am32sync":
-            local = args[1] if len(args) > 1 else AM32_YAML_DEFAULT
+            local = args[1] if len(args) > 1 else am32_yaml_default()
             cmd_am32sync(ser, local)
 
         elif command == "dshotdir":

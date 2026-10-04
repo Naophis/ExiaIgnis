@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { machineOf } from "@/lib/api-util";
 import { checkWalls, listMazeFiles, readMaze, readSystemMaze, saveMazeAs, writeMaze } from "@/lib/maze";
 import { mazeSizeOf } from "@/lib/maze-shared";
 import { serialManager } from "@/lib/serial-manager";
@@ -11,11 +12,14 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const action = sp.get("action");
   try {
-    if (action === "list") return NextResponse.json({ files: listMazeFiles(), system: readSystemMaze() });
+    if (action === "list") {
+      const machine = machineOf(request);
+      return NextResponse.json({ files: listMazeFiles(machine), system: readSystemMaze(machine) });
+    }
     if (action === "read") {
       const id = sp.get("id");
       if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
-      return NextResponse.json(readMaze(id));
+      return NextResponse.json(readMaze(machineOf(request), id));
     }
     return NextResponse.json({ error: "unknown action" }, { status: 400 });
   } catch (err) {
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   try {
     if (body?.action === "save") {
-      writeMaze(String(body.id ?? ""), body.walls);
+      writeMaze(machineOf(request), String(body.id ?? ""), body.walls);
       return NextResponse.json({ id: body.id });
     }
     if (body?.action === "saveAs") {
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
       const size = mazeSizeOf(walls.length);
       // ファームは system.yaml の maze_size の並びで読むので、違う大きさを送ると
       // 壁が全部ずれる。
-      const { mazeSize } = readSystemMaze();
+      const { mazeSize } = readSystemMaze(machineOf(request));
       if (mazeSize !== null && mazeSize !== size) {
         throw new Error(`迷路は ${size}x${size}、system.yaml の maze_size は ${mazeSize} です。揃えてから送ってください`);
       }

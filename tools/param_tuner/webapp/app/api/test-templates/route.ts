@@ -6,11 +6,16 @@ import {
   type TestTemplateArrayValues,
   type TestTemplateValues,
 } from "@/lib/test-templates";
+import { machineOf } from "@/lib/api-util";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  return NextResponse.json({ templates: listTestTemplates() });
+export async function GET(request: NextRequest) {
+  try {
+    return NextResponse.json({ templates: listTestTemplates(machineOf(request)) });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -23,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "name, values is required" }, { status: 400 });
   }
   try {
-    const template = saveTestTemplate(name, values, arrayValues, id);
+    const template = saveTestTemplate(machineOf(request), name, values, arrayValues, id);
     return NextResponse.json({ template });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
@@ -35,6 +40,10 @@ export async function DELETE(request: NextRequest) {
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
-  deleteTestTemplate(id);
-  return NextResponse.json({ ok: true });
+  try {
+    deleteTestTemplate(machineOf(request), id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+  }
 }

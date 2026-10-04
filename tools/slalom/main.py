@@ -15,6 +15,15 @@ from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+def _hardware_yaml():
+    """機体の hardware.yaml(machines/<機体>/profile。EXIA_MACHINE か machines.yaml の default)。"""
+    import sys
+    pt = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "param_tuner")
+    sys.path.insert(0, pt)
+    from machine_paths import profile_dir
+    return os.path.join(profile_dir(), "hardware.yaml")
+
+
 def read_yaml(filename):
     # 現在のスクリプトのディレクトリを取得
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -45,7 +54,7 @@ class SlalomGUI:
         self.window_height = 600
         master.geometry(f"{self.window_width}x{self.window_height}")
 
-        self.data = read_yaml("../param_tuner/profile/hardware.yaml")
+        self.data = read_yaml(_hardware_yaml())
         self.plot = Plot()
         self.plot_orval = PlotOrval()
 

@@ -1,4 +1,7 @@
+import fs from "node:fs";
 import { NextRequest, NextResponse } from "next/server";
+import { machineOf } from "@/lib/api-util";
+import { suggestPropagation } from "@/lib/machine-compare";
 import { serialManager, type SendScope } from "@/lib/serial-manager";
 
 export const runtime = "nodejs";
@@ -11,13 +14,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "mode, scope, file is required" }, { status: 400 });
   }
   try {
-    const content = serialManager.readProfileFile(mode, scope, file);
+    const content = serialManager.readProfileFile(machineOf(request), mode, scope, file);
     return NextResponse.json({ content });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
 }
 
+// 保存。propagate = 変えたキーのうち、ほかの機体も同じ値だったもの
+// (画面が「ほかの機体にも入れる」を出す)。
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const mode = body?.mode as string | undefined;
@@ -28,8 +33,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "mode, scope, file, content is required" }, { status: 400 });
   }
   try {
-    serialManager.writeProfileFile(mode, scope, file, content);
-    return NextResponse.json({ ok: true });
+    const machine = machineOf(request, body?.machine);
+    const filePath = serialManager.resolveYamlPath(machine, mode, scope, file);
+    const before = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf-8") : null;
+    serialManager.writeProfileFile(machine, mode, scope, file, content);
+    const rel = scope === "base" ? file : `${mode}/${file}`;
+    return NextResponse.json({ ok: true, propagate: suggestPropagation(machine, rel, before, content) });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }

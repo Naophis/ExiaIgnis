@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
+import { profileDir } from "./machines";
 import {
   TEST_TEMPLATE_ARRAY_KEYS,
   TEST_TEMPLATE_KEYS,
@@ -23,11 +24,9 @@ export {
   type TestTemplateValues,
 };
 
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
-const SYSTEM_YAML_PATH = path.join(PROFILE_DIR, "system.yaml");
-const TEMPLATES_PATH = path.join(PROFILE_DIR, "test_templates.json");
+// system.yaml とテンプレートは機体ごと(machines/<id>/profile)。
+const systemYamlPath = (machine: string) => path.join(profileDir(machine), "system.yaml");
+const templatesPath = (machine: string) => path.join(profileDir(machine), "test_templates.json");
 
 // Seeded from the 3 hand-toggled blocks already present in system.yaml's
 // test: section (1 active + 2 commented-out alternatives) so existing
@@ -50,42 +49,43 @@ const SEED_TEMPLATES: TestTemplate[] = [
   },
 ];
 
-export function listTestTemplates(): TestTemplate[] {
-  if (!fs.existsSync(TEMPLATES_PATH)) {
-    writeTemplates(SEED_TEMPLATES);
+export function listTestTemplates(machine: string): TestTemplate[] {
+  if (!fs.existsSync(templatesPath(machine))) {
+    writeTemplates(machine, SEED_TEMPLATES);
     return SEED_TEMPLATES;
   }
-  return JSON.parse(fs.readFileSync(TEMPLATES_PATH, "utf-8"));
+  return JSON.parse(fs.readFileSync(templatesPath(machine), "utf-8"));
 }
 
-function writeTemplates(templates: TestTemplate[]): void {
-  fs.mkdirSync(PROFILE_DIR, { recursive: true });
-  fs.writeFileSync(TEMPLATES_PATH, JSON.stringify(templates, null, 2), "utf-8");
+function writeTemplates(machine: string, templates: TestTemplate[]): void {
+  fs.mkdirSync(profileDir(machine), { recursive: true });
+  fs.writeFileSync(templatesPath(machine), JSON.stringify(templates, null, 2), "utf-8");
 }
 
 export function saveTestTemplate(
+  machine: string,
   name: string,
   values: TestTemplateValues,
   arrayValues?: TestTemplateArrayValues,
   id?: string
 ): TestTemplate {
   if (!name.trim()) throw new Error("テンプレート名を入力してください");
-  const templates = listTestTemplates();
+  const templates = listTestTemplates(machine);
   const template: TestTemplate = { id: id ?? randomUUID(), name: name.trim(), values };
   if (arrayValues && Object.keys(arrayValues).length > 0) template.arrayValues = arrayValues;
   const idx = templates.findIndex((t) => t.id === template.id);
   if (idx >= 0) templates[idx] = template;
   else templates.push(template);
-  writeTemplates(templates);
+  writeTemplates(machine, templates);
   return template;
 }
 
-export function deleteTestTemplate(id: string): void {
-  writeTemplates(listTestTemplates().filter((t) => t.id !== id));
+export function deleteTestTemplate(machine: string, id: string): void {
+  writeTemplates(machine, listTestTemplates(machine).filter((t) => t.id !== id));
 }
 
-export function getTestTemplate(id: string): TestTemplate {
-  const template = listTestTemplates().find((t) => t.id === id);
+export function getTestTemplate(machine: string, id: string): TestTemplate {
+  const template = listTestTemplates(machine).find((t) => t.id === id);
   if (!template) throw new Error("テンプレートが見つかりません");
   return template;
 }
@@ -93,8 +93,8 @@ export function getTestTemplate(id: string): TestTemplate {
 // file_idx indexes into profile/hf/profiles.yaml's `list` array (each entry
 // a speed-profile filename like "t_2200.hf"), so its selectable options are
 // read from that file rather than hardcoded.
-export function readFileIdxOptions(mode = "hf"): NamedOption[] {
-  const profilesPath = path.join(PROFILE_DIR, mode, "profiles.yaml");
+export function readFileIdxOptions(machine: string, mode = "hf"): NamedOption[] {
+  const profilesPath = path.join(profileDir(machine), mode, "profiles.yaml");
   const doc = loadYaml(fs.readFileSync(profilesPath, "utf-8")) as { list?: string[] };
   const list = doc.list ?? [];
   return list.map((entry, index) => ({ label: entry.replace(/\.\w+$/, ""), value: index }));
@@ -111,8 +111,8 @@ function arrayKeyLineRegex(key: string): RegExp {
 // Reads the current *active* accl_v_x/accl_v_y LUT lines as raw "n1, n2, ..."
 // text (comma-joined, whitespace-normalized) for prefilling the template
 // editor's array fields.
-export function readActiveArrayValues(keys: readonly TestTemplateArrayKey[]): TestTemplateArrayValues {
-  const lines = fs.readFileSync(SYSTEM_YAML_PATH, "utf-8").split("\n");
+export function readActiveArrayValues(machine: string, keys: readonly TestTemplateArrayKey[]): TestTemplateArrayValues {
+  const lines = fs.readFileSync(systemYamlPath(machine), "utf-8").split("\n");
   const remaining = new Set(keys);
   const values: TestTemplateArrayValues = {};
 
@@ -140,8 +140,8 @@ export function readActiveArrayValues(keys: readonly TestTemplateArrayKey[]): Te
 // accl_v_x/accl_v_y LUT arrays: each value is raw "n1, n2, n3" text, parsed
 // to numbers and re-wrapped in brackets, replacing only the array literal
 // on the key's first uncommented line.
-export function applyArrayValuesToSystemYaml(values: TestTemplateArrayValues): void {
-  const content = fs.readFileSync(SYSTEM_YAML_PATH, "utf-8");
+export function applyArrayValuesToSystemYaml(machine: string, values: TestTemplateArrayValues): void {
+  const content = fs.readFileSync(systemYamlPath(machine), "utf-8");
   const lines = content.split("\n");
 
   const remaining = new Set(Object.keys(values) as TestTemplateArrayKey[]);
@@ -174,7 +174,7 @@ export function applyArrayValuesToSystemYaml(values: TestTemplateArrayValues): v
     );
   }
 
-  fs.writeFileSync(SYSTEM_YAML_PATH, lines.join("\n"), "utf-8");
+  fs.writeFileSync(systemYamlPath(machine), lines.join("\n"), "utf-8");
 }
 
 // Most target keys (v_max, dist, sla_type, ...) live inside the test: block,
@@ -186,8 +186,8 @@ export function applyArrayValuesToSystemYaml(values: TestTemplateArrayValues): v
 
 // Reads the current *active* value for each key, without modifying anything.
 // Used to prefill "quick apply" inputs with what's live right now.
-export function readActiveValues(keys: readonly TestTemplateKey[]): TestTemplateValues {
-  const lines = fs.readFileSync(SYSTEM_YAML_PATH, "utf-8").split("\n");
+export function readActiveValues(machine: string, keys: readonly TestTemplateKey[]): TestTemplateValues {
+  const lines = fs.readFileSync(systemYamlPath(machine), "utf-8").split("\n");
   const remaining = new Set(keys);
   const values: TestTemplateValues = {};
 
@@ -216,8 +216,8 @@ const MODE_OPTION_RE = /^(#\s?)?mode\s*:\s*(-?\d+)\s*#\s*(.*)$/;
 // there. Some descriptions use ":" to mark a short name followed by longer
 // detail (e.g. "wall off: search_mode(1)->..."); keep only the part before
 // it so long descriptions don't blow up the button width in the UI.
-export function readModeOptions(): NamedOption[] {
-  const lines = fs.readFileSync(SYSTEM_YAML_PATH, "utf-8").split("\n");
+export function readModeOptions(machine: string): NamedOption[] {
+  const lines = fs.readFileSync(systemYamlPath(machine), "utf-8").split("\n");
   const options: NamedOption[] = [];
   for (const line of lines) {
     const m = line.match(MODE_OPTION_RE);
@@ -274,8 +274,8 @@ function applyModeToggle(lines: string[], newMode: number): string[] {
 // round-trip: system.yaml carries ~150 lines of comments (goal-preset
 // history, alternative test: blocks, AM32 migration notes) that a parser
 // would silently discard. Every other line is left untouched.
-export function applyTestTemplateToSystemYaml(values: TestTemplateValues): void {
-  const content = fs.readFileSync(SYSTEM_YAML_PATH, "utf-8");
+export function applyTestTemplateToSystemYaml(machine: string, values: TestTemplateValues): void {
+  const content = fs.readFileSync(systemYamlPath(machine), "utf-8");
   let lines = content.split("\n");
 
   const remaining = new Set(Object.keys(values) as TestTemplateKey[]);
@@ -305,5 +305,5 @@ export function applyTestTemplateToSystemYaml(values: TestTemplateValues): void 
     );
   }
 
-  fs.writeFileSync(SYSTEM_YAML_PATH, lines.join("\n"), "utf-8");
+  fs.writeFileSync(systemYamlPath(machine), lines.join("\n"), "utf-8");
 }

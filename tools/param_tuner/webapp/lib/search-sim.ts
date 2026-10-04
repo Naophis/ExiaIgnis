@@ -48,9 +48,9 @@ export interface SearchSimResult {
   log: string;
 }
 
-export function runSearchSim(req: { walls: number[]; goals: Cell[] | null }): Promise<SearchSimResult> {
+export function runSearchSim(req: { machine: string; walls: number[]; goals: Cell[] | null }): Promise<SearchSimResult> {
   return runHostSim<Omit<SearchSimResult, "log">>("search_sim", {
-    files: profileFiles(),
+    files: profileFiles(req.machine),
     truth: toFirmwareMap(req.walls, 0),
     ...(req.goals ? { goals: req.goals } : {}),
   });

@@ -1,3 +1,7 @@
+// パラメータは機体ごと(machines/<機体>/profile)。機体は EXIA_MACHINE、無ければ
+// machines.yaml の default(./machines.js)。
+const __machines = require("./machines");
+const PROFILE_DIR = __machines.profileDir(process.env.EXIA_MACHINE || __machines.readRegistry().default);
 var fs = require("fs");
 const yaml = require("js-yaml");
 const { decode } = require("punycode");
@@ -66,7 +70,7 @@ const convert = (filename) => {
 
 const callerFun = async (mode) => {
   while (true) {
-    const files = fs.readdirSync(__dirname + `/profile/${mode}/`);
+    const files = fs.readdirSync(`${PROFILE_DIR}/${mode}/`);
     var list = ["system.yaml", "hardware.yaml"].concat(files.filter((file) => {
       return file.match(/.yaml$/) || file.match(/.maze$/);
     }));
@@ -93,7 +97,7 @@ const callerFun = async (mode) => {
       console.log("all");
       for (const file of files) {
         if (file.match(/.yaml$/)) {
-          let txt = fs.readFileSync(`${__dirname}/profile/${mode}/${file}`, {
+          let txt = fs.readFileSync(`${PROFILE_DIR}/${mode}/${file}`, {
             encoding: "utf-8",
           });
           let file_name = "";
@@ -115,7 +119,7 @@ const callerFun = async (mode) => {
         }
       }
       for (const file of ["system.yaml", "hardware.yaml"]) {
-        let txt = fs.readFileSync(`${__dirname}/profile/${file}`, {
+        let txt = fs.readFileSync(`${PROFILE_DIR}/${file}`, {
           encoding: "utf-8",
         });
 
@@ -143,7 +147,7 @@ const callerFun = async (mode) => {
         if (idx === 1) {
           file = "hardware.yaml";
         }
-        let txt = fs.readFileSync(`${__dirname}/profile/${list[idx]}`, {
+        let txt = fs.readFileSync(`${PROFILE_DIR}/${list[idx]}`, {
           encoding: "utf-8",
         });
         var file_name = file.replace("yaml", "txt");
@@ -153,7 +157,7 @@ const callerFun = async (mode) => {
         await sleep2(800);
         console.log(`${file}, ${file_name}: finish!!`);
       } else {
-        let txt = fs.readFileSync(`${__dirname}/profile/${mode}/${list[idx]}`, {
+        let txt = fs.readFileSync(`${PROFILE_DIR}/${mode}/${list[idx]}`, {
           encoding: "utf-8",
         });
 

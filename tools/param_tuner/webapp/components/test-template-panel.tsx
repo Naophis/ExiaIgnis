@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MachineChip } from "@/components/machine-chip";
+import { apiFetch, findMachine, useMachines } from "@/lib/machine-client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -98,6 +100,7 @@ export function TestTemplatePanel({
   onDelete,
   onClose,
 }: Props) {
+  const { registry, current } = useMachines();
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [name, setName] = useState("");
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -112,13 +115,13 @@ export function TestTemplatePanel({
   const [modeOptions, setModeOptions] = useState<NamedOption[]>([]);
 
   useEffect(() => {
-    void fetch("/api/test-templates/quick-apply")
+    void apiFetch("/api/test-templates/quick-apply")
       .then((res) => res.json())
       .then((data) => setQuickValues(data.values as TestTemplateValues));
-    void fetch("/api/test-templates/file-idx-options")
+    void apiFetch("/api/test-templates/file-idx-options")
       .then((res) => res.json())
       .then((data) => setFileIdxOptions((data.options as NamedOption[]) ?? []));
-    void fetch("/api/test-templates/mode-options")
+    void apiFetch("/api/test-templates/mode-options")
       .then((res) => res.json())
       .then((data) => setModeOptions((data.options as NamedOption[]) ?? []));
   }, []);
@@ -127,7 +130,7 @@ export function TestTemplatePanel({
     if (Number.isNaN(next)) return;
     setQuickApplying(key);
     try {
-      const res = await fetch("/api/test-templates/quick-apply", {
+      const res = await apiFetch("/api/test-templates/quick-apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ values: { [key]: next } }),
@@ -175,7 +178,10 @@ export function TestTemplatePanel({
   return (
     <Card className="flex h-full min-w-0 flex-col overflow-hidden">
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>system.yaml テストテンプレート</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          <MachineChip machine={findMachine(registry, current)} fallback={current ?? "?"} />
+          system.yaml テストテンプレート
+        </CardTitle>
         <Button size="sm" variant="outline" onClick={onClose}>
           閉じる
         </Button>
@@ -425,7 +431,7 @@ function QuickApplySelectRow({
                 className={cn(
                   "rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ring-1 ring-border transition-colors disabled:pointer-events-none disabled:opacity-50",
                   active
-                    ? "bg-primary text-primary-foreground ring-primary"
+                    ? "bg-primary text-primary-foreground ring-primary-bright"
                     : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >

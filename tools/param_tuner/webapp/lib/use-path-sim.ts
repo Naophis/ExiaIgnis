@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch, useMachines } from "./machine-client";
 import type { Cell } from "./maze-shared";
 import type { ExecOption, PathDirection, PathSimResult } from "./path-sim";
 
@@ -26,6 +27,8 @@ export function usePathSim(enabled: boolean, walls: number[], goals: Cell[]) {
   const [result, setResult] = useState<PathSimResult | null>(null);
   const [busy, setBusy] = useState(false);
   const reqId = useRef(0);
+  // 走行パラメータは機体ごと。機体を切り替えたら選択肢も経路も取り直す
+  const machine = useMachines().current;
 
   useEffect(() => {
     if (!enabled) return;
@@ -39,14 +42,14 @@ export function usePathSim(enabled: boolean, walls: number[], goals: Cell[]) {
     }
     void (async () => {
       try {
-        const res = await fetch("/api/maze/path");
+        const res = await apiFetch("/api/maze/path");
         const data = await res.json();
         if (res.ok) setOptions(data.options as ExecOption[]);
       } catch {
         // 選択肢が無くても番号で回せる
       }
     })();
-  }, [enabled, prefsLoaded]);
+  }, [enabled, prefsLoaded, machine]);
 
   useEffect(() => {
     if (!prefsLoaded) return;
@@ -64,7 +67,7 @@ export function usePathSim(enabled: boolean, walls: number[], goals: Cell[]) {
     const timer = setTimeout(async () => {
       setBusy(true);
       try {
-        const res = await fetch("/api/maze/path", {
+        const res = await apiFetch("/api/maze/path", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ walls, goals: JSON.parse(goalsKey), exec, direction }),
@@ -78,7 +81,7 @@ export function usePathSim(enabled: boolean, walls: number[], goals: Cell[]) {
       }
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, prefsLoaded, walls, goalsKey, exec, direction]);
+  }, [enabled, prefsLoaded, walls, goalsKey, exec, direction, machine]);
 
   return { options, exec, setExec, direction, setDirection, result, busy };
 }

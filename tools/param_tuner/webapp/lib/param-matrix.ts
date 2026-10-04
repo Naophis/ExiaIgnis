@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { dump as dumpYaml, load as loadYaml } from "js-yaml";
+import { profileDir } from "./machines";
 import {
   emptyStatusRow,
   emptyVelBlock,
@@ -22,9 +23,6 @@ export {
   type VelBlock,
 } from "./param-matrix-shared";
 
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
 const STATUS_FILE = "param_matrix_status.json";
 
 interface ProfilesYaml {
@@ -57,8 +55,8 @@ interface ColumnNotes {
   led: string;
 }
 
-function readStatusMap(mode: string): Record<number, ColumnNotes> {
-  const p = path.join(PROFILE_DIR, mode, STATUS_FILE);
+function readStatusMap(machine: string, mode: string): Record<number, ColumnNotes> {
+  const p = path.join(profileDir(machine), mode, STATUS_FILE);
   if (!fs.existsSync(p)) return {};
   const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as Record<string, Partial<ColumnNotes>>;
   const out: Record<number, ColumnNotes> = {};
@@ -72,8 +70,8 @@ function readStatusMap(mode: string): Record<number, ColumnNotes> {
   return out;
 }
 
-function writeStatusMap(mode: string, rows: ParamMatrixRow[]): void {
-  const p = path.join(PROFILE_DIR, mode, STATUS_FILE);
+function writeStatusMap(machine: string, mode: string, rows: ParamMatrixRow[]): void {
+  const p = path.join(profileDir(machine), mode, STATUS_FILE);
   const out: Record<string, ColumnNotes> = {};
   for (const r of rows) {
     out[String(r.vMax)] = { status: r.status, profileIdxNote: r.profileIdxNote, led: r.led };
@@ -86,12 +84,12 @@ function writeStatusMap(mode: string, rows: ParamMatrixRow[]): void {
 // shared "run_param" index they all reference each other by) and joins them
 // with the tuning-status JSON (keyed by vMax, so it survives column
 // deletes/reorders even though the YAMLs themselves are positional).
-export function readParamMatrix(mode = "hf"): ParamMatrixRow[] {
-  const modeDir = path.join(PROFILE_DIR, mode);
+export function readParamMatrix(machine: string, mode = "hf"): ParamMatrixRow[] {
+  const modeDir = path.join(profileDir(machine), mode);
   const profiles = loadYaml(fs.readFileSync(path.join(modeDir, "profiles.yaml"), "utf-8")) as ProfilesYaml;
   const velProf = loadYaml(fs.readFileSync(path.join(modeDir, "vel_prof.yaml"), "utf-8")) as VelProfYaml;
   const runPrf = loadYaml(fs.readFileSync(path.join(modeDir, "run_prf.yaml"), "utf-8")) as RunPrfYaml;
-  const notes = readStatusMap(mode);
+  const notes = readStatusMap(machine, mode);
 
   return profiles.list.map((entry, i) => {
     const vMaxMatch = entry.match(/^t_(\d+)\.hf$/);
@@ -128,8 +126,13 @@ export function readParamMatrix(mode = "hf"): ParamMatrixRow[] {
 // history to preserve (they're the direct output of param.gs's own
 // yamlStringify), so a plain js-yaml dump is safe and matches how they were
 // produced in the first place.
-export function writeParamMatrix(rows: ParamMatrixRow[], newVMaxFiles: number[] = [], mode = "hf"): void {
-  const modeDir = path.join(PROFILE_DIR, mode);
+export function writeParamMatrix(
+  machine: string,
+  rows: ParamMatrixRow[],
+  newVMaxFiles: number[] = [],
+  mode = "hf",
+): void {
+  const modeDir = path.join(profileDir(machine), mode);
   const n = rows.length;
 
   const seen = new Set<number>();
@@ -174,7 +177,7 @@ export function writeParamMatrix(rows: ParamMatrixRow[], newVMaxFiles: number[] 
   const exec_prof = rows.map((r) => ({ fast: r.execFast, normal: r.execNormal, slow: r.execSlow }));
   fs.writeFileSync(path.join(modeDir, "run_prf.yaml"), dumpYaml({ exec_prof }), "utf-8");
 
-  writeStatusMap(mode, rows);
+  writeStatusMap(machine, mode, rows);
 
   // New columns get a turn-detail file (t_<vMax>.yaml) seeded from the
   // previous last column, so they're immediately editable/sendable instead

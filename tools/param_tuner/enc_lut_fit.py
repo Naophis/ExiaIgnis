@@ -28,10 +28,11 @@
   校正し直せる。目安は 8 本以上。
 
 使い方:
-    # 同定してテーブルを書き出す(profile/hf/enc_lut.yaml -> 機体では /enc_lut.hf)
-    python3 tools/param_tuner/enc_lut_fit.py -o tools/param_tuner/profile/hf/enc_lut.yaml logs/2026..._*.csv
+    # 同定してテーブルを書き出す(その機体の profile/hf/enc_lut.yaml -> 機体では /enc_lut.hf)
+    # テーブルは個体ごと。ログを取った機体の profile へ書くこと(ログ一覧の機体の印で確かめる)
+    python3 tools/param_tuner/enc_lut_fit.py -o tools/param_tuner/machines/<機体>/profile/hf/enc_lut.yaml logs/2026..._*.csv
     # 補正を有効にして走ったログで、ファームが同じテーブルを同じ向きで引いているか照合
-    python3 tools/param_tuner/enc_lut_fit.py --check tools/param_tuner/profile/hf/enc_lut.yaml logs/2026..._*.csv
+    python3 tools/param_tuner/enc_lut_fit.py --check tools/param_tuner/machines/<機体>/profile/hf/enc_lut.yaml logs/2026..._*.csv
 """
 import argparse
 import datetime
@@ -244,13 +245,13 @@ def main(files, out_path=None):
         ]
         write_yaml(out_path, lut_l, lut_r, [r["path"] for r in runs], summary)
     else:
-        print("\n(-o profile/hf/enc_lut.yaml でテーブルを書き出す)")
+        print("\n(-o machines/<機体>/profile/hf/enc_lut.yaml でテーブルを書き出す)")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("logs", nargs="+")
-    ap.add_argument("-o", "--out", help="補正テーブルの書き出し先 (profile/hf/enc_lut.yaml)")
+    ap.add_argument("-o", "--out", help="補正テーブルの書き出し先 (machines/<機体>/profile/hf/enc_lut.yaml)")
     ap.add_argument("--check", metavar="ENC_LUT_YAML",
                     help="同定せず、ログの輪速がこのテーブルで補正されているかを照合する")
     a = ap.parse_args()

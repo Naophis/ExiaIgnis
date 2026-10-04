@@ -32,6 +32,12 @@ interface Props {
   // 右ペインの「コンソール / プロット」切り替え。右ペイン内に置くと1行分の高さを
   // 食うので、ヘッダーバーの空いている中央に出す(page.tsx が既定ビューのときだけ渡す)。
   tabs?: ReactNode;
+  // 機体の切り替え(components/machine-bar.tsx)
+  machines?: ReactNode;
+  // 表示中の機体の色(左の縁に出す)
+  accentColor?: string;
+  // 右端のボタンの手前に出すもの(テーマカラーの切り替え)
+  actions?: ReactNode;
 }
 
 export function PortPanel({
@@ -44,6 +50,9 @@ export function PortPanel({
   onEnableAutoConnect,
   onFlash,
   tabs,
+  machines,
+  accentColor,
+  actions,
 }: Props) {
   const label = !autoConnect
     ? "Disconnected (auto-connect paused)"
@@ -51,15 +60,19 @@ export function PortPanel({
   const variant = !autoConnect ? "destructive" : STATUS_VARIANT[status];
 
   return (
-    <div className="flex shrink-0 items-center gap-2 rounded-xl border-l-2 border-l-accent-gold bg-card px-2.5 py-1 text-sm ring-1 ring-primary/20">
+    <div
+      className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border-l-4 border-l-accent-gold bg-card px-2.5 py-1 text-sm ring-1 ring-primary-bright/20"
+      style={accentColor ? { borderLeftColor: accentColor } : undefined}
+    >
       <span className="font-semibold tracking-wide text-accent-gold">Exia PARAM CONSOLE</span>
-      <span className="text-muted-foreground">Pico (ttyACM*)</span>
       <Badge variant={variant}>{label}</Badge>
       <span className="text-muted-foreground">
         {connectedPath ?? (ports[0]?.path ? `検出済み: ${ports[0].path}` : "デバイス未検出")}
       </span>
+      {machines}
       {tabs && <div className="ml-2 flex gap-1">{tabs}</div>}
       <div className="flex-1" />
+      {actions}
       <Button size="sm" variant="outline" disabled={flashing} onClick={onFlash}>
         {flashing ? "Flashing..." : "Flash"}
       </Button>

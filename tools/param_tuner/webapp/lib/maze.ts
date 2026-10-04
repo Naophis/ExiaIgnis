@@ -1,14 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
+import { profileDir } from "./machines";
 import { formatMazeText, mazeSizeOf, parseMazeText, type Cell } from "./maze-shared";
+import { MAZE_DATA_DIR, MAZE_LOGS_DIR } from "./paths";
 
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const MAZE_LOGS_DIR = path.join(PARAM_TUNER_ROOT, "maze_logs");
-const MAZE_DATA_DIR = path.join(PARAM_TUNER_ROOT, "maze_data");
-const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
-const SYSTEM_YAML = path.join(PROFILE_DIR, "system.yaml");
+// profile/ と system.yaml は機体ごと(machines/<id>/profile)。迷路のログと大会迷路は全機体で共通。
 
 // log     = maze_logs/*.maze   機体から受信した迷路と、ここで保存した迷路(保存先はここ。ユーザー指定)。
 //           受信した迷路(日時の名前)は記録なので読み取り専用、それ以外は上書き保存できる
@@ -39,14 +36,14 @@ export interface MazeContent {
 
 const NAME_RE = /^[\w.-]+$/;
 
-function resolveMazePath(id: string): { group: MazeGroup; name: string; file: string } {
+function resolveMazePath(machine: string, id: string): { group: MazeGroup; name: string; file: string } {
   const slash = id.indexOf("/");
   const group = id.slice(0, slash) as MazeGroup;
   const name = id.slice(slash + 1);
   if (slash < 0 || !NAME_RE.test(name)) throw new Error("不正なファイル名です");
   if (group === "log" && name.endsWith(".maze")) return { group, name, file: path.join(MAZE_LOGS_DIR, name) };
   if (group === "contest" && /\.(yaml|maze)$/.test(name)) return { group, name, file: path.join(MAZE_DATA_DIR, name) };
-  if (group === "profile" && name.endsWith(".yaml")) return { group, name, file: path.join(PROFILE_DIR, name) };
+  if (group === "profile" && name.endsWith(".yaml")) return { group, name, file: path.join(profileDir(machine), name) };
   throw new Error("不明なファイルです");
 }
 
@@ -68,10 +65,11 @@ function isMazeText(file: string): boolean {
   }
 }
 
-export function listMazeFiles(): MazeFileInfo[] {
+export function listMazeFiles(machine: string): MazeFileInfo[] {
   const logs = listDir(MAZE_LOGS_DIR, "log", /\.maze$/).sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const profiles = listDir(PROFILE_DIR, "profile", /\.yaml$/)
-    .filter((f) => isMazeText(path.join(PROFILE_DIR, f.name)))
+  const dir = profileDir(machine);
+  const profiles = listDir(dir, "profile", /\.yaml$/)
+    .filter((f) => isMazeText(path.join(dir, f.name)))
     .sort((a, b) => a.name.localeCompare(b.name));
   const contests = listDir(MAZE_DATA_DIR, "contest", /\.(yaml|maze)$/).sort((a, b) => a.name.localeCompare(b.name));
   return [...logs, ...profiles, ...contests];
@@ -81,8 +79,8 @@ interface ContestYaml {
   maze_data?: { maze_size?: number; wall?: number[]; goal?: Cell[] };
 }
 
-export function readMaze(id: string): MazeContent {
-  const { group, file } = resolveMazePath(id);
+export function readMaze(machine: string, id: string): MazeContent {
+  const { group, file } = resolveMazePath(machine, id);
   if (!fs.existsSync(file)) throw new Error("ファイルが見つかりません");
   const text = fs.readFileSync(file, "utf-8");
   if (group === "contest" && file.endsWith(".yaml")) {
@@ -109,8 +107,8 @@ export function checkWalls(walls: unknown): number[] {
   return walls as number[];
 }
 
-export function writeMaze(id: string, walls: unknown): void {
-  const { group, name, file } = resolveMazePath(id);
+export function writeMaze(machine: string, id: string, walls: unknown): void {
+  const { group, name, file } = resolveMazePath(machine, id);
   const editable = group === "profile" || (group === "log" && !isReceivedMazeName(name));
   if (!editable) throw new Error("このファイルは上書きできません。別名で保存してください");
   // profile/ はパラメータの yaml と同じ場所なので、今の中身が迷路のファイルだけ上書きする
@@ -133,9 +131,9 @@ export function saveMazeAs(name: string, walls: unknown): string {
 }
 
 // system.yaml は読むだけ(書き換えは test-templates.ts の行置換で行う決まり)。
-export function readSystemMaze(): { goals: Cell[] | null; mazeSize: number | null } {
+export function readSystemMaze(machine: string): { goals: Cell[] | null; mazeSize: number | null } {
   try {
-    const sys = loadYaml(fs.readFileSync(SYSTEM_YAML, "utf-8")) as { goals?: Cell[]; maze_size?: number };
+    const sys = loadYaml(fs.readFileSync(path.join(profileDir(machine), "system.yaml"), "utf-8")) as { goals?: Cell[]; maze_size?: number };
     return {
       goals: Array.isArray(sys?.goals) ? sys.goals : null,
       mazeSize: typeof sys?.maze_size === "number" ? sys.maze_size : null,

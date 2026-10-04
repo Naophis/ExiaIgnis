@@ -1,0 +1,81 @@
+# AM32 ESC (吸引モーター用) 設定。
+# write_am32_param() (テストモード25) 実行時にESCから読み出した現在値へ
+# ここに書かれた項目だけを上書きし、flashへ書き込む。
+# ここに無い項目・コメントアウトした項目はESCの現在値がそのまま維持される。
+#
+# 各項目の意味・単位は include/driver/am32_config.hpp の AM32Settings 参照。
+# 範囲外の値は AM32::writeSettings() の am32_validate_settings() で弾かれる
+# (書き込みは中断され、何もESCへ送られない)。setter自体が範囲をクランプする
+# 項目もあるため、範囲外を書いても即エラーにならず黙って丸められる場合もある
+# (詳細は各setterのコメント参照)。
+#
+# 送信方法(推奨): Param Console の am32.yaml 行にある「ESC書込」ボタン。
+# /am32.txt の送信と AM32WRITE (= write_am32_param() 実行) を続けて行う。
+# 編集画面からは「保存してESC書込」で保存も含めて1操作で回せる。
+# 「ESC読出」は AM32READ (ESCの現在値をコンソールへダンプ)。
+# CLI なら `python3 send_file.py am32sync` が同じことをする。
+#
+# 注意: 単にファイルを送っただけ (tx_term.js の番号2、Param Console の Send、
+# 「全て送信」) では /am32.txt がデバイスのLittleFSに置かれるだけで、ESCには
+# 何も書き込まれない。反映には上記の書き込み操作が必要。
+# また、どの方法でもデバイスが起動直後のボタン待ちループにいること
+# (モード選択に入る前) が前提。
+#
+
+motor_kv: 2500                 # 実KV値。20〜10220、40刻み(raw=(kv-20)/40、最も近い値に丸め)。
+                                # 8500はちょうどこの並びに乗る値(=212*40+20)なので丸め誤差なし
+motor_poles: 12                 # モーター極数(ローター磁石の総数)。2〜36。
+                                # 訂正: 以前「12N14P(14極)が1103サイズの一般的構成」としたのは
+                                # 根拠のない推測で誤りだった。他社1103サイズモーター(BR1103B)の
+                                # 実例調査で9N12P(=12極)が一般的と判明。BetaFPV公式には極数記載
+                                # 無し。ユーザーが実測で磁石12枚と数えた値の方を採用する。
+                                # 14のままだと、ジリジリ音+発熱+低速回転(=コミュテーション位相
+                                # ズレの典型症状)が出ていた。16も試したが回転数/吸引力の低下を
+                                # 確認したため、実測値の12へ戻す
+timing: 30                      # AM32 Configuratorのスライダーと同じ0〜32単位(0〜32でクランプ)。
+                                # eeprom_version<3の旧フォーマット(0-3, 7.5deg刻み)は非対応。
+                                # auto_advance: trueの間は使われ方が出典未確認(ベース値/フォールバックか
+                                # 完全に無視されるか不明)なので0のままにしている
+auto_advance: false             # true/false。要fw>=2.16(このESCはfw2.19なので対応)。有効時はRPMに応じて
+                                # ESC側がtimingを動的調整する。8500KVのような極小・高KVモーターは
+                                # 高RPM域で電気角周波数が上がるため、固定timingの決め打ちより
+                                # 自動調整の方が安全側に倒せる、という一般的なESCチューニングの経験則
+                                # (AM32プロトコル自体の出典ではない)
+pwm_frequency_khz: 96          # 8〜144 (validateで拒否)。48kHzを試したが実測でRPMが落ちたため24に戻した
+                                # (このESCはdevinfoからSTM32F051(48MHz M0)と判明しており、非力なMCUでは
+                                # switching周波数を上げるほど処理負荷/デッドタイム比率が増え不利に働いた
+                                # と考えられる。24kHzが実測で確認できている値)
+variable_pwm: true             # true/false (fw>=2.18では内部的に0/1/2のenumだが0=無効/非0=有効で統一)。
+                                # raw=1("Variable")固定で書く。これが実測で確認できている値
+pwm_mode: 1                   # 0=Fixed/1=Variable/2=by RPM (fw>=2.18限定、生enum直接指定)。
+                                # 試したところRPMが落ちたため不採用(variable_pwm:trueのまま=raw1を維持)。
+                                # PWM周波数48kHz化の件と合わせ、この非力なMCU(STM32F051)では
+                                # スイッチング/PWM方式まわりの憶測ベースの変更は軒並み逆効果という
+                                # 傾向が出ている
+startup_power_percent: 150     # 50〜150 (setterでクランプ)。130/150まで試したが改善せず、トルク不足
+                                # ではなさそうと判断し100(元の値)に戻した
+sine_startup: true             # true/false。12.0V失敗時の症状が「本来高速回転するはずが1秒に数回転
+                                # しか回らない」だったため、始動トルク不足ではなく、センサーレス方式の
+                                # コミュテーション検出が低電圧下でロックできず低速の強制駆動から
+                                # 抜け出せていない可能性が高いと判断。正弦波起動は低速域のコミュテー
+                                # ション安定性を上げる機能なのでtrueにして試す
+bidirectional: false           # true/false (3Dモード)
+complementary_pwm: true        # true/false (demag compensationとは別項目。AM32公式構造体に
+                                # demag comp相当の独立項目は存在しない)
+stuck_rotor_protection: true   # true/false。falseで試した結果、症状が「低速で回り続ける」に変わった
+                                # だけで直らなかった。つまりfalse時は保護が誤検知していたのではなく、
+                                # 正しく異常(低速のまま高速化できない)を検知して電力カットしていた
+                                # ということが分かったので、安全のためtrueへ戻す
+brake_on_stop: 0               # enum値。AM32公式資料上の取り得る値の一覧は未確認(出典不明のためvalidate対象外)
+drag_brake_strength: 10        # 1〜10 (setterでクランプ、validateでも拒否)
+driving_brake_strength: 10     # 1〜10 (setterでクランプ、validateでも拒否)
+
+current_limit_disabled: false  # trueならcurrent_limit_amps無視 (raw=202を書き込む)
+current_limit_amps: 204        # 0〜402、2A刻み(raw=amps/2を0-201へクランプ)。raw=202が「無効」sentinel
+                                # (current_limit_disabled: trueにするとそちらが優先される)
+
+temp_limit_disabled: true      # trueならtemp_limit_c無視 (raw=255を書き込む)
+temp_limit_c: 100              # 70〜140 (setterでクランプ)。disabled=falseの時のみ有効
+
+beep_volume: 11                 # 0〜11 (setterでクランプ、validateでも拒否)
+max_ramp: 140

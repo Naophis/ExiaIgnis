@@ -132,9 +132,9 @@ export function MazeSearchPanel({
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
   const prevRow = useRef<Element | null>(null);
   useEffect(() => {
-    prevRow.current?.classList.remove("bg-primary/20");
+    prevRow.current?.classList.remove("bg-primary-bright/20");
     const row = tbodyRef.current?.querySelector(`[data-i="${step}"]`) ?? null;
-    row?.classList.add("bg-primary/20");
+    row?.classList.add("bg-primary-bright/20");
     row?.scrollIntoView({ block: "nearest" });
     prevRow.current = row;
   }, [step, rows]);
@@ -163,7 +163,7 @@ export function MazeSearchPanel({
               key={s}
               type="button"
               onClick={() => onSpeed(s)}
-              className={`rounded border px-1 font-mono text-[10px] ${speed === s ? "border-primary text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+              className={`rounded border px-1 font-mono text-[10px] ${speed === s ? "border-primary-bright text-primary-bright" : "border-border text-muted-foreground hover:bg-muted"}`}
             >
               {s}/s
             </button>
@@ -202,7 +202,7 @@ export function MazeSearchPanel({
           max={last}
           value={step}
           onChange={(e) => onStep(Number(e.target.value))}
-          className="mx-1.5 my-1 accent-[var(--primary)]"
+          className="mx-1.5 my-1 accent-[var(--primary-bright)]"
         />
       )}
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { machineOf, sendErrorResponse } from "@/lib/api-util";
 import {
   listCalibDirs,
   loadCalibDir,
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const action = sp.get("action");
   try {
-    if (action === "gains") return NextResponse.json({ gains: readSensorGains() });
+    if (action === "gains") return NextResponse.json({ gains: readSensorGains(machineOf(request)) });
     if (action === "dirs") return NextResponse.json({ dirs: listCalibDirs() });
     if (action === "load") {
       const dir = sp.get("dir");
@@ -31,7 +32,8 @@ export async function GET(request: NextRequest) {
 }
 
 // POST {action:"save", rows}           csv/calib_<日時>/ に旧形式で保存
-// POST {action:"apply", gains, send}   sensor.yaml の該当行を置換(+送信)
+// POST {action:"apply", gains, send}   その機体の sensor.yaml の該当行を置換(+送信)
+//   force: true = 送り先の基板が別の機体・未登録でも送る(画面で確認済み)
 export async function POST(request: NextRequest) {
   const body = await request.json();
   try {
@@ -41,10 +43,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ dir });
     }
     if (body?.action === "apply") {
-      const patched = patchSensorYaml(body.gains ?? {});
+      const machine = machineOf(request);
+      // 送るつもりなら、yaml を書き換える前に送り先の基板を確かめる(別の機体の基板なら何も書かない)
       if (body.send) {
         try {
-          await serialManager.sendFile("hf", "mode", "sensor.yaml");
+          serialManager.checkSendTarget(machine, body.force === true);
+        } catch (err) {
+          return sendErrorResponse(err);
+        }
+      }
+      const patched = patchSensorYaml(machine, body.gains ?? {});
+      if (body.send) {
+        try {
+          await serialManager.sendFile(machine, "hf", "mode", "sensor.yaml", body.force === true);
         } catch (err) {
           return NextResponse.json(
             { patched, error: `保存済み・送信失敗: ${(err as Error).message}` },

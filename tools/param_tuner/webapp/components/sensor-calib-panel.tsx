@@ -39,6 +39,8 @@ import {
   type TargetDef,
   type TargetKey,
 } from "@/lib/sensor-calib-shared";
+import { MachineChip } from "@/components/machine-chip";
+import { SendCancelled, apiFetch, findMachine, useMachines } from "@/lib/machine-client";
 
 // 記録途中の位置表は per-viewer の作業状態なので localStorage に置く
 // (リロードで 15 分の測定が消えるのを防ぐ)。読めなくても空で動く。
@@ -63,9 +65,13 @@ interface Stored {
   sweepD0?: number;
 }
 
-function loadStored(): Stored | null {
+// 位置表は機体ごとに持つ(別の機体の読みを混ぜない)。機体を分ける前に記録した表は
+// 鍵に機体名が無いので、最初の機体(legacy = true)のときだけそれを引き継ぐ。
+const storageKey = (machine: string) => `${STORAGE_KEY}:${machine}`;
+
+function loadStored(machine: string, legacy: boolean): Stored | null {
   try {
-    const s = localStorage.getItem(STORAGE_KEY);
+    const s = localStorage.getItem(storageKey(machine)) ?? (legacy ? localStorage.getItem(STORAGE_KEY) : null);
     return s ? (JSON.parse(s) as Stored) : null;
   } catch {
     return null;
@@ -260,7 +266,19 @@ const fmtSigned = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}`;
 
 // connected: param console が機体とつながっているか。スイープはケーブルなしで
 // 走らせるので、つながっていない間の案内を出すのに使う。
-export function SensorCalibPanel({ connected }: { connected: boolean }) {
+// machine: どの機体の sensor.yaml を読み書きするか(page.tsx が key に入れているので、
+// 機体を切り替えるとこのパネルは作り直される)。
+export function SensorCalibPanel({
+  connected,
+  machine,
+  legacyStorage = false,
+}: {
+  connected: boolean;
+  machine: string;
+  legacyStorage?: boolean;
+}) {
+  const { registry, board, guardedSend } = useMachines();
+  const machineLabel = findMachine(registry, machine)?.label ?? machine;
   const [rows, setRows] = useState<CalibRow[]>(() => presetRows());
   const [ranges, setRanges] = useState<Record<TargetKey, [number, number]>>(() => defaultRanges());
   const [nSamples, setNSamples] = useState(50);
@@ -319,7 +337,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
   }, [rows]);
 
   useEffect(() => {
-    const s = loadStored();
+    const s = loadStored(machine, legacyStorage);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (s?.rows?.length) setRows(s.rowsVersion === ROWS_VERSION ? s.rows : migrateRows(s.rows));
     if (s?.ranges && s.rangesVersion === RANGES_VERSION) setRanges((prev) => ({ ...prev, ...s.ranges }));
@@ -329,13 +347,13 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
     if (s?.nSamples) setNSamples(s.nSamples);
     if (s?.sweepD0) setSweepD0(s.sweepD0);
     setHydrated(true);
-  }, []);
+  }, [machine, legacyStorage]);
 
   useEffect(() => {
     if (!hydrated) return;
     try {
       localStorage.setItem(
-        STORAGE_KEY,
+        storageKey(machine),
         JSON.stringify({
           rows,
           ranges,
@@ -351,10 +369,10 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
     } catch {
       // 容量超過などは無視(作業は続けられる)
     }
-  }, [hydrated, rows, ranges, nSamples, sweepD0, linkLR, autoD0, fitStatic]);
+  }, [hydrated, machine, rows, ranges, nSamples, sweepD0, linkLR, autoD0, fitStatic]);
 
   const refreshGains = useCallback(async () => {
-    const res = await fetch("/api/sensor-calib?action=gains");
+    const res = await apiFetch("/api/sensor-calib?action=gains");
     const data = await res.json();
     if (res.ok) setCurGains(data.gains);
   }, []);
@@ -611,13 +629,21 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
       toast.error("反映するゲインがありません");
       return;
     }
+    // 読みは「つないでいる基板」のもの。別の機体の sensor.yaml へ入れない
+    if (board.machine && board.machine !== machine) {
+      const b = findMachine(registry, board.machine)?.label ?? board.machine;
+      toast.error(`つないでいる基板は ${b} です。表示を ${b} に切り替えてから保存してください(いまは ${machineLabel} の sensor.yaml)`);
+      return;
+    }
     setBusy(send ? "send" : "apply");
     try {
-      const res = await fetch("/api/sensor-calib", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "apply", gains, send }),
-      });
+      const res = await guardedSend((force) =>
+        apiFetch("/api/sensor-calib", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "apply", gains, send, force }),
+        }),
+      );
       const data = await res.json();
       if (!res.ok) {
         if (data.patched) {
@@ -629,10 +655,10 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
         throw new Error(data.error ?? "反映に失敗しました");
       }
       toast.success(
-        `sensor.yaml ${send ? "へ保存して機体へ送信しました" : "へ保存しました(機体へは未送信)"}: ${(data.patched as string[]).join(", ")}`,
+        `${machineLabel} の sensor.yaml ${send ? "へ保存して機体へ送信しました" : "へ保存しました(機体へは未送信)"}: ${(data.patched as string[]).join(", ")}`,
       );
     } catch (err) {
-      toast.error((err as Error).message);
+      if (!(err instanceof SendCancelled)) toast.error((err as Error).message);
     } finally {
       setBusy(null);
       void refreshGains();
@@ -813,7 +839,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
       {/* 1 行目: いま何をするか + 記録 + 保存。普段使わない操作は「詳細」に畳む */}
       <div className="flex shrink-0 items-center gap-1.5">
         <span
-          className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${rxAlive ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}
+          className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${rxAlive ? "bg-primary-bright/20 text-primary-bright" : "bg-destructive/20 text-destructive"}`}
           title="機体の生値(テストモード15 の 9 列、またはモード14 の sensor: 行)を受信しているか"
         >
           {!connected ? "未接続" : rxAlive ? "受信中" : "未受信"}
@@ -838,12 +864,17 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
         >
           {recordingId && recRow ? `停止 ${recRow.samples.length}/${nSamples}` : "● 記録 (Space)"}
         </Button>
+        <MachineChip
+          machine={findMachine(registry, machine)}
+          fallback={machine}
+          title={`保存先は ${machineLabel} の sensor.yaml(machines/${machine}/profile/hf)`}
+        />
         <Button
           size="sm"
           variant="outline"
           disabled={busy !== null || !fits.some((f) => f.fit)}
           onClick={() => void apply(false)}
-          title="新しい a, b を sensor.yaml に書き込む(機体へは送らない)"
+          title={`新しい a, b を ${machineLabel} の sensor.yaml に書き込む(機体へは送らない)`}
         >
           保存
         </Button>
@@ -852,7 +883,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
           variant="secondary"
           disabled={busy !== null || !fits.some((f) => f.fit)}
           onClick={() => void apply(true)}
-          title="sensor.yaml に書き込んで機体へ送る。機体が受信できるのは、テストモード28(校正)か 14 の実行中、または起動直後のボタン待ち(モード15 の実行中は受信しない)"
+          title={`${machineLabel} の sensor.yaml に書き込んで機体へ送る。機体が受信できるのは、テストモード28(校正)か 14 の実行中、または起動直後のボタン待ち(モード15 の実行中は受信しない)`}
         >
           {busy === "send" ? "送信中..." : "保存+送信"}
         </Button>
@@ -1090,7 +1121,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
                     <tr
                       key={r.id}
                       onClick={() => setSelectedId(r.id)}
-                      className={`cursor-pointer border-t border-border/40 ${sel ? "bg-primary/15" : "hover:bg-muted/40"} ${r.use ? "" : "opacity-50"}`}
+                      className={`cursor-pointer border-t border-border/40 ${sel ? "bg-primary-bright/15" : "hover:bg-muted/40"} ${r.use ? "" : "opacity-50"}`}
                     >
                       <td className="px-1">
                         <input
@@ -1267,7 +1298,7 @@ export function SensorCalibPanel({ connected }: { connected: boolean }) {
                     <tr
                       key={k}
                       onClick={() => setActiveKey(k)}
-                      className={`cursor-pointer border-t border-border/40 ${sel ? "bg-primary/15" : "hover:bg-muted/40"}`}
+                      className={`cursor-pointer border-t border-border/40 ${sel ? "bg-primary-bright/15" : "hover:bg-muted/40"}`}
                     >
                       <td className="px-1">
                         <input

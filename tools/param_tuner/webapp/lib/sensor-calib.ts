@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
+import { profileDir } from "./machines";
+import { REPO_ROOT } from "./paths";
 import {
   GROUP_ORDER,
   TARGET_KEYS,
@@ -11,12 +13,11 @@ import {
   type TargetKey,
 } from "./sensor-calib-shared";
 
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const SENSOR_YAML_PATH = path.join(PARAM_TUNER_ROOT, "profile", "hf", "sensor.yaml");
+// sensor.yaml は機体ごと(センサーの個体差そのもの)。
+const sensorYamlPath = (machine: string) => path.join(profileDir(machine), "hf", "sensor.yaml");
 // 旧手順(sensor.sh / pyplot.py)の作業場所。セッション保存もここに置いて
 // pyplot.py からも読めるようにする。
-export const CSV_DIR = path.join(PARAM_TUNER_ROOT, "..", "..", "csv");
+export const CSV_DIR = path.join(REPO_ROOT, "csv");
 
 const CSV_NAME_RE = /^([lrf])_(-?\d+(?:\.\d+)?)\.csv$/;
 // 前壁スイープ(テストモード28)の保存形式。行ごとに dist が違う。
@@ -157,8 +158,8 @@ export function saveCalibSession(
   return dirName;
 }
 
-export function readSensorGains(): Partial<Record<TargetKey, Gain>> {
-  const doc = loadYaml(fs.readFileSync(SENSOR_YAML_PATH, "utf-8")) as Record<string, unknown>;
+export function readSensorGains(machine: string): Partial<Record<TargetKey, Gain>> {
+  const doc = loadYaml(fs.readFileSync(sensorYamlPath(machine), "utf-8")) as Record<string, unknown>;
   const gain = (doc?.gain ?? {}) as Record<string, unknown>;
   const out: Partial<Record<TargetKey, Gain>> = {};
   for (const k of TARGET_KEYS) {
@@ -173,8 +174,8 @@ const fmt = (v: number) => v.toFixed(6);
 // sensor.yaml はコメントだらけなので YAML の parse→dump はしない
 // (lib/test-templates.ts と同じ方針)。gain: ブロック内の、コメントアウト
 // されていない "KEY: [a, b]" 行の値部分だけを置換し、行末コメントは残す。
-export function patchSensorYaml(gains: Partial<Record<TargetKey, Gain>>): TargetKey[] {
-  const text = fs.readFileSync(SENSOR_YAML_PATH, "utf-8");
+export function patchSensorYaml(machine: string, gains: Partial<Record<TargetKey, Gain>>): TargetKey[] {
+  const text = fs.readFileSync(sensorYamlPath(machine), "utf-8");
   const lines = text.split("\n");
   const gainStart = lines.findIndex((l) => /^gain:\s*(#.*)?$/.test(l));
   if (gainStart < 0) throw new Error("sensor.yaml に gain: がありません");
@@ -202,6 +203,6 @@ export function patchSensorYaml(gains: Partial<Record<TargetKey, Gain>>): Target
   }
   const next = lines.join("\n");
   loadYaml(next); // 壊していないことだけ確認
-  fs.writeFileSync(SENSOR_YAML_PATH, next, "utf-8");
+  fs.writeFileSync(sensorYamlPath(machine), next, "utf-8");
   return patched;
 }

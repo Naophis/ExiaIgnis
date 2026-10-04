@@ -3,12 +3,16 @@ import json, os, glob, re, collections
 import yaml
 R = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..")); PT = f"{R}/tools/param_tuner"
 H = os.path.dirname(os.path.abspath(__file__))
+# 走行パラメータは機体ごと(machines/<機体>/profile)。EXIA_MACHINE か machines.yaml の default
+import sys; sys.path.insert(0, PT)
+from machine_paths import profile_dir
+PROFILE = profile_dir()
 
 def profile_files():
     files = {}
     for f in ["system.yaml", "hardware.yaml"]:
-        files[f.replace("yaml", "txt")] = json.dumps(yaml.safe_load(open(f"{PT}/profile/{f}")))
-    for f in sorted(glob.glob(f"{PT}/profile/hf/*.yaml")):
+        files[f.replace("yaml", "txt")] = json.dumps(yaml.safe_load(open(f"{PROFILE}/{f}")))
+    for f in sorted(glob.glob(f"{PROFILE}/hf/*.yaml")):
         files[os.path.basename(f).replace("yaml", "hf")] = json.dumps(yaml.safe_load(open(f)))
     return files
 
@@ -67,7 +71,7 @@ def load_all():
     for f in ["japan2025_final.maze"]:
         src.append((f[:-5], "contest32", parse_text(open(f"{PT}/maze_logs/{f}").read()), None))
     for f in ["higashi2024.yaml", "kansai2025.yaml", "maze.yaml"]:
-        src.append((f[:-5], "regional", parse_text(open(f"{PT}/profile/{f}").read()), None))
+        src.append((f[:-5], "regional", parse_text(open(f"{PROFILE}/{f}").read()), None))
     for f in sorted(os.listdir(f"{PT}/maze_logs")):
         if f.endswith(".maze") and f != "japan2025_final.maze":
             src.append((f[:-5], "log", parse_text(open(f"{PT}/maze_logs/{f}").read()), None))

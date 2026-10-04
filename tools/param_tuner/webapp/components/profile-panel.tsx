@@ -1,22 +1,30 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { MachineChip } from "@/components/machine-chip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { AM32_FILE, type Am32Action } from "@/lib/am32-shared";
+import type { Machine } from "@/lib/machine-shared";
 import type { ProfileList, SendScope } from "@/lib/serial-manager";
 
 const ALL_SENTINEL = "__all__";
+const UNSENT_SENTINEL = "__unsent__";
 
 interface Props {
   profiles: ProfileList;
   sending: string | null;
   am32Action: Am32Action | null;
+  // 表示している機体(このパネルのファイルはすべてこの機体のもの)
+  machine: Machine | null;
+  // 接続中の基板が別の機体のとき、その機体(送信ボタンに注意を出す)
+  boardMachine: Machine | null;
   onSendFile: (scope: SendScope, file: string) => void;
   onSendAll: () => void;
+  onSendUnsent: () => void;
   onEditFile: (scope: SendScope, file: string) => void;
   onOpenTemplates: () => void;
   onOpenMatrix: () => void;
@@ -28,8 +36,11 @@ export function ProfilePanel({
   profiles,
   sending,
   am32Action,
+  machine,
+  boardMachine,
   onSendFile,
   onSendAll,
+  onSendUnsent,
   onEditFile,
   onOpenTemplates,
   onOpenMatrix,
@@ -38,6 +49,7 @@ export function ProfilePanel({
 }: Props) {
   const isBusy = sending !== null || am32Action !== null;
   const total = profiles.base.length + profiles.mode.length;
+  const mismatch = boardMachine !== null && machine !== null && boardMachine.id !== machine.id;
 
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
@@ -50,24 +62,52 @@ export function ProfilePanel({
     [profiles.mode, needle]
   );
   const shown = base.length + mode.length;
+  const unsent = useMemo(() => new Set(profiles.unsent ?? []), [profiles.unsent]);
+  const unsentCount = profiles.unsent?.length ?? 0;
 
   return (
-    <Card className="flex h-full min-w-0 flex-col overflow-hidden">
+    <Card
+      className="flex h-full min-w-0 flex-col overflow-hidden"
+      style={machine ? { boxShadow: `inset 0 3px 0 ${machine.color}` } : undefined}
+      data-profile-panel
+    >
       <CardHeader className="gap-1">
-        <div className="flex items-center justify-between">
-          <CardTitle>パラメータ送信 (hf)</CardTitle>
+        <div className="flex items-center justify-between gap-1">
+          <CardTitle className="flex min-w-0 items-center gap-1.5">
+            {machine && <MachineChip machine={machine} title={`machines/${machine.id}/profile`} />}
+            <span className="truncate">パラメータ (hf)</span>
+          </CardTitle>
           <Button size="sm" variant="ghost" onClick={onOpenMatrix}>
             パラメータ表
           </Button>
         </div>
         <span className="text-xs text-muted-foreground">
           {needle ? `${shown} / ${total} ファイル` : `${total} ファイル`}
+          {mismatch && (
+            <span className="ml-1.5 text-amber-300" data-send-warning>
+              接続中の基板は {boardMachine.label}(送信時に確認します)
+            </span>
+          )}
         </span>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-1.5 overflow-hidden">
-        <Button onClick={onSendAll} disabled={isBusy} className="w-full">
-          {sending === ALL_SENTINEL ? "送信中..." : "全て送信"}
-        </Button>
+        <div className="flex gap-1.5">
+          <Button onClick={onSendAll} disabled={isBusy} className="min-w-0 flex-1">
+            {sending === ALL_SENTINEL ? "送信中..." : "全て送信"}
+          </Button>
+          {profiles.unsent !== null && (
+            <Button
+              variant={unsentCount > 0 ? "secondary" : "outline"}
+              onClick={onSendUnsent}
+              disabled={isBusy || unsentCount === 0}
+              className="min-w-0 flex-1"
+              title="いまつないでいる基板へ最後に送った中身と違うファイルだけ送る(● の付いたファイル)。この Param Console から送った分だけを覚えているので、一度も送っていないファイルは数えない"
+              data-send-unsent
+            >
+              {sending === UNSENT_SENTINEL ? "送信中..." : unsentCount > 0 ? `未送信 ${unsentCount} を送信` : "未送信なし"}
+            </Button>
+          )}
+        </div>
         <Input
           placeholder="ファイルを絞り込み..."
           value={query}
@@ -85,6 +125,7 @@ export function ProfilePanel({
                 file={file}
                 sending={sending}
                 disabled={isBusy}
+                unsent={unsent.has(`base/${file}`)}
                 onSend={() => onSendFile("base", file)}
                 onEdit={() => onEditFile("base", file)}
                 extra={
@@ -142,6 +183,7 @@ export function ProfilePanel({
                 file={file}
                 sending={sending}
                 disabled={isBusy}
+                unsent={unsent.has(`mode/${file}`)}
                 onSend={() => onSendFile("mode", file)}
                 onEdit={() => onEditFile("mode", file)}
               />
@@ -157,6 +199,7 @@ function FileRow({
   file,
   sending,
   disabled,
+  unsent,
   onSend,
   onEdit,
   extra,
@@ -164,6 +207,7 @@ function FileRow({
   file: string;
   sending: string | null;
   disabled: boolean;
+  unsent: boolean;
   onSend: () => void;
   onEdit: () => void;
   extra?: ReactNode;
@@ -182,8 +226,20 @@ function FileRow({
           : undefined
       }
       className={`flex items-center justify-between gap-2 rounded px-1.5 py-0.5 hover:bg-muted ${editable ? "cursor-pointer" : ""}`}
+      data-file-row={file}
     >
-      <span className="truncate text-sm">{file}</span>
+      <span className="flex min-w-0 items-center gap-1 text-sm">
+        <span className="truncate">{file}</span>
+        {unsent && (
+          <span
+            className="shrink-0 text-[0.6rem] text-amber-300"
+            title="いまつないでいる基板へ最後に送ったあと、中身が変わっている(まだ送っていない)"
+            data-unsent
+          >
+            ●
+          </span>
+        )}
+      </span>
       <div className="flex shrink-0 items-center gap-1">
         {extra}
         <Button
@@ -202,4 +258,4 @@ function FileRow({
   );
 }
 
-export { ALL_SENTINEL };
+export { ALL_SENTINEL, UNSENT_SENTINEL };

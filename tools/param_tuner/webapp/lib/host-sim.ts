@@ -2,27 +2,27 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
+import { profileDir } from "./machines";
 import { mazeSizeOf } from "./maze-shared";
+import { TOOL_ROOT } from "./paths";
 
 // tools/path_sim のホスト用コマンド(path_sim / search_sim)を呼ぶ共通部分。
 // どちらもファームのソースそのものをビルドしたもので、実行前に毎回 `make -s` を
 // 通すので、ファームのソースを変えると次の計算から反映される(初回ビルドは十数秒)。
 
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-export const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
 export const MODE = "hf";
-const PATH_SIM_DIR = path.join(PARAM_TUNER_ROOT, "..", "path_sim");
+const PATH_SIM_DIR = path.join(TOOL_ROOT, "..", "path_sim");
 const BUILD_TIMEOUT_MS = 180_000;
 const RUN_TIMEOUT_MS = 20_000;
 
 // 機体へ送るときと同じ名前・同じ変換(yaml → JSON)。serial-manager の sendFile 参照。
-export function profileFiles(): Record<string, string> {
+export function profileFiles(machine: string): Record<string, string> {
+  const dir = profileDir(machine);
   const files: Record<string, string> = {};
   for (const f of ["system.yaml", "hardware.yaml"]) {
-    files[f.replace("yaml", "txt")] = JSON.stringify(loadYaml(fs.readFileSync(path.join(PROFILE_DIR, f), "utf-8")));
+    files[f.replace("yaml", "txt")] = JSON.stringify(loadYaml(fs.readFileSync(path.join(dir, f), "utf-8")));
   }
-  const modeDir = path.join(PROFILE_DIR, MODE);
+  const modeDir = path.join(dir, MODE);
   for (const f of fs.readdirSync(modeDir).filter((n) => n.endsWith(".yaml"))) {
     files[f.replace("yaml", MODE)] = JSON.stringify(loadYaml(fs.readFileSync(path.join(modeDir, f), "utf-8")));
   }

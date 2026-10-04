@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
-import { MODE, PROFILE_DIR, profileFiles, runHostSim, toFirmwareMap } from "./host-sim";
+import { MODE, profileFiles, runHostSim, toFirmwareMap } from "./host-sim";
+import { profileDir } from "./machines";
 import type { Cell } from "./maze-shared";
 
 // tools/path_sim の path_sim(MainTask::path_run() の経路生成のホスト版)を呼ぶ。
@@ -89,18 +90,18 @@ export interface PathSimResult {
   log: string; // ファームの printf(実機のコンソールと同じ)
 }
 
-function readModeYaml<T>(file: string): T | null {
+function readModeYaml<T>(machine: string, file: string): T | null {
   try {
-    return loadYaml(fs.readFileSync(path.join(PROFILE_DIR, MODE, file), "utf-8")) as T;
+    return loadYaml(fs.readFileSync(path.join(profileDir(machine), MODE, file), "utf-8")) as T;
   } catch {
     return null;
   }
 }
 
-export function readExecOptions(): ExecOption[] {
-  const run = readModeYaml<{ exec_prof?: { fast?: number; normal?: number; slow?: number }[] }>("run_prf.yaml");
-  const vel = readModeYaml<{ v_prof?: { fast?: { v?: number } }[] }>("vel_prof.yaml");
-  const prof = readModeYaml<{ list?: string[]; profile_idx?: { large?: number }[] }>("profiles.yaml");
+export function readExecOptions(machine: string): ExecOption[] {
+  const run = readModeYaml<{ exec_prof?: { fast?: number; normal?: number; slow?: number }[] }>(machine, "run_prf.yaml");
+  const vel = readModeYaml<{ v_prof?: { fast?: { v?: number } }[] }>(machine, "vel_prof.yaml");
+  const prof = readModeYaml<{ list?: string[]; profile_idx?: { large?: number }[] }>(machine, "profiles.yaml");
   return (run?.exec_prof ?? []).map((e, index) => {
     const fast = e.fast ?? 0;
     const normal = e.normal ?? 0;
@@ -117,6 +118,7 @@ export function readExecOptions(): ExecOption[] {
 }
 
 export function runPathSim(req: {
+  machine: string; // どの機体の走行パラメータで計算するか
   walls: number[]; // .maze の並び(idx = x * size + y)
   goals: Cell[] | null;
   exec: number;
@@ -124,7 +126,7 @@ export function runPathSim(req: {
 }): Promise<PathSimResult> {
   // シミュレータでは全マス既知(踏破済み)として扱う。
   return runHostSim<Omit<PathSimResult, "log">>("path_sim", {
-    files: profileFiles(),
+    files: profileFiles(req.machine),
     map: toFirmwareMap(req.walls, 0xf0),
     exec: req.exec,
     direction: req.direction,

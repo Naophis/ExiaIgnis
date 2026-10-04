@@ -184,7 +184,7 @@ export function SlalomSimPanel({ file, draft, onApply }: Props) {
                   className={cn(
                     "rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap ring-1 ring-border transition-colors",
                     active
-                      ? "bg-primary text-primary-foreground ring-primary"
+                      ? "bg-primary text-primary-foreground ring-primary-bright"
                       : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
@@ -307,7 +307,7 @@ export function SlalomSimPanel({ file, draft, onApply }: Props) {
                     className={cn(
                       "rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap ring-1 ring-border transition-colors",
                       active
-                        ? "bg-primary text-primary-foreground ring-primary"
+                        ? "bg-primary text-primary-foreground ring-primary-bright"
                         : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >

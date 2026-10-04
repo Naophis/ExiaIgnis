@@ -1,0 +1,511 @@
+
+clear_angle: 5
+clear_dist_order: 88
+
+pivot_angle_90: 89.999
+pivot_angle_180: 180.0
+judge_pivot: 88
+
+# 探索スラローム
+th_offset_dist: 52
+sla_front_ctrl_th: 135.0 # 探索時前壁補正条件しきい時間
+# front_dist_offset: 94.750 # 探索時の前壁補正 大→手前になる
+front_dist_offset: 93.0 # 探索時の前壁補正 大→手前になる
+# front_dist_offset: 92.1250 # 探索時の前壁補正 大→短くなる
+
+normal_sla_offset_front: 9 # 探索スラローム前補正
+normal_sla_offset_back: 6 # 探索スラローム後補正
+# normal_sla_offset_front: 0 # 探索スラローム前補正
+# normal_sla_offset_back: 0 # 探索スラローム後補正
+orval_offset_enable: 1
+large_offset_enable: 1
+dia45_offset_enable: 1
+dia135_offset_enable: 1
+orval_offset_max_dist: 6 # orvalターン半径の変化量上限
+large_offset_max_dist: 5 # large壁切れ距離補正最大値
+dia45_offset_max_dist: 5 # 斜め壁切れ距離補正最大値
+dia135_offset_max_dist: 10 # 斜め壁切れ距離補正最大値
+dia_offset_max_dist: 4 # 斜め壁切れ距離補正最大値 Dia135_2, Dia90
+dia45_2_offset_max_dist: 6 # dia45_2壁切れ距離補正最大値
+dia135_2_offset_max_dist: 8 # dia135_2壁切れ距
+dia90_offset_max_dist: 8 # dia90壁切れ距離補正最大値
+lim_angle: 2.50 # 壁切れ補正計算用エゴ角制限値(rad) 0.5236=30deg
+
+front_dist_offset0: 96.0 # pivot時の前壁補正ref
+pivot_back_enable_front_th: 120 # バック判断のための壁有無しきい値
+pivot_back_offset: 2.5 # pivot時の前壁補正後のバック距離のオフセット
+pivot_back_dist0: 5.0 # pivot時の前壁補正後のバック距離のオフセット
+pivot_back_dist1: 10.0 # pivot時の前壁補正後のバック距離のオフセット
+# スラロームオフセット距離壁補正リファレンス値
+sla_wall_ref_l: 45.0 #大→短くなる
+sla_wall_ref_r: 45.0 #大→短くなる
+
+sla_max_offset_dist: 0 #not use
+
+# Orvalスラロームオフセット距離壁補正リファレンス値
+sla_wall_ref_l_orval: 45.0
+sla_wall_ref_r_orval: 45.0
+# orval_rad_offset_l: 5
+orval_rad_offset_l: 0
+orval_rad_offset_r: 0
+
+
+# front_dist_offset2: 137.0
+
+front_diff_th: 20.5 # 前壁制御左右偏差条件
+front_dist_offset_pivot_th: 82.5 #前壁制御接近条件
+front_dist_offset_pivot: 90
+
+front_dist_offset_dia_front: 139
+front_dist_offset_dia_45_th: 77
+# front_dist_offset_dia_right45: 74
+front_dist_offset_dia_right45: 54
+front_dist_offset_dia_left45: 50
+
+seach_timer: 450 # 探索時間 450sec -> 7.5min
+
+clear_dist_ragne_from: 22.5
+clear_dist_ragne_to: 50.0
+
+clear_dist_ragne_dist_list: [0, 20, 25, 50, 60, 90]
+clear_dist_ragne_th_list: [50, 50, 44.5, 44.5, 50, 50]
+
+clear_dist_ragne_to2: 35 # 探索時制御範囲拡張移動距離
+
+wall_off_hold_dist: 88
+
+# 探索壁あり判定
+ctrl_exist_wall_th_l: 56.5 #探索壁切れ
+ctrl_exist_wall_th_r: 56.5 #探索壁切れ
+go_straight_wide_ctrl_th: 75
+search_wall_off_l_dist_offset: 53.5
+search_wall_off_r_dist_offset: 53.5
+# search_wall_off_l_dist_offset: 50.0
+# search_wall_off_r_dist_offset: 50.0
+search_wall_off_offset_dist: 5.0
+search_wall_off_enable: 1
+
+# 壁切れ壁あり判定
+wall_off_exist_wall_th_l: 52
+wall_off_exist_wall_th_r: 52
+# 壁切れ In(最初からあるとき)
+wall_off_hold_exist_dist_l: 48
+wall_off_hold_exist_dist_r: 48
+# 壁切れ Out(最初からあるとき)
+wall_off_hold_noexist_th_l: 49
+wall_off_hold_noexist_th_r: 49
+# 壁切れ Out(最初からあるとき、相対偏差版。2026-09-05〜こちらを使用。
+# sen.l45/r45.sensor_dist(壁に最も寄った時の最小値保持)からこれだけ
+# 離れたら壁切れ。絶対しきい値(上のnoexist_th_l/r)は壁までの距離で検出
+# 遅れが変わるため、wall_off_edge_check.py の実測(n=4)で左右別値にした。
+# 右は早めるとばらつきが悪化する側なので現行相当のまま、左は現行より
+# 約4mm早められることを確認済み。実機の姿勢が悪いケースでの再検証が必要。
+wall_off_hold_exist_delta_l: 2.5
+wall_off_hold_exist_delta_r: 2.5
+
+# 壁切れ オフセット距離(最初からあるとき)
+wall_off_hold_dist_str_l_exist: -0.0  #p_wall_off.left_str_exist
+wall_off_hold_dist_str_r_exist: -1.0 #p_wall_off.right_str_exist
+
+# 壁切れ In2(最初からないとき)
+wall_off_hold_exist_dist_l2: 60 #p_wall_off.exist_dist_l2
+wall_off_hold_exist_dist_r2: 68 #p_wall_off.exist_dist_r2
+# 壁切れ Out2(最初からないとき)
+wall_off_hold_noexist_th_l2: 60.5
+wall_off_hold_noexist_th_r2: 68.5
+# 壁切れ オフセット距離(最初からないとき)
+wall_off_hold_dist_str_l: -2.0 #p_wall_off.left_str
+wall_off_hold_dist_str_r: -7.5 #p_wall_off.right_str
+
+# 2026-09-15: WALL_OFF中の注視側45°LED1高頻度サンプリング(hf)。
+# sensing_task.cppがTIMER0 alarm3で1msあたりsub_samples回の追加サンプルを取り
+# (3で4kHz相当)、「min-hold + delta を confirm_n サンプル連続で超えた」点を
+# サンプル間補間して壁切れ位置(global_pos.dist基準)を確定する。
+# wall_off_controller.cppはこれを最優先で拾い、発火までに進んだ距離を
+# 残距離から差し引く(ポーリング/指令受け取りの遅れが定数に混ざらない)。
+#   壁あり開始(A)のdeltaは既存の wall_off_hold_exist_delta_l/r を使う。
+#   壁なし開始(B)のdeltaは下の hf_delta_b(6本のB走行で同側ばらつき0.3mm以下、
+#   接近中の誤発火なしを確認した値)。
+# 有効化後は left_str/right_str/*_exist を再測定すること(旧値には1kHz判定の
+# 頂点→発火の遅れ 約3mm@1500 が含まれている)。
+wall_off_hf_enable: 1
+wall_off_hf_sub_samples: 3
+wall_off_hf_delta_b: 0.5
+wall_off_hf_confirm_n: 2
+wall_off_hf_min_valid: 100
+
+# 2026-09-23: 柱の谷(下に凸)検知(include/planning/pillar_trough_detector.hpp)。
+# 壁なし開始の WALL_OFF で、注視側45° LED1 の「下降→谷底→急上昇」の形を検知し、
+# 発火位置ではなく谷底位置でアンカーして残距離を決める:
+#   ps_front.dist += wall_off_pillar_str_{l,r} − (発火時位置 − 谷底位置)
+# 従来の絶対しきい値(exist_dist_l2/r2=60)では谷底が60〜70mmでばらつく右側の柱を
+# 取りこぼし、25mm走行の安全網(pass_through_case2)に落ちて旋回が約20mm遅れていた
+# (20260923_064918.csv idx2203。同じターンを正常検知した走行と旋回突入時の
+# front_d が16〜25mm違う)。既存経路(find_vertical_wall→missing_by_deviation、
+# wall_missing、pass_through)はそのまま残し、この検知が先に成立したときだけ使う。
+#   depth_min : 谷底がその前のピーク(180=範囲外も可)よりこれだけ低いこと [mm]
+#   bottom_min: 谷底の下限 [mm]。旋回直後に「今曲がった角の柱」が32〜38mmの近い谷として
+#               見えるのを除外する(遠い柱は実測53〜70mm)。近い物は exist 経路の担当
+#   bottom_max: 谷底の上限 [mm]
+#   curv_th   : [主] 連続とみなす曲率の下限 [mm/mm^2]。既定 0.0 = 「正である」。
+#   curv_n    : [主] その連続の最小 tick 数。
+#   curv_sum  : [主] 連続区間の曲率の合計 [mm/mm](= 傾きの総変化量)。
+#               連続と合計の両方が要る。連続だけだと谷底が丸い走行で1tick遅れ
+#               (173424: 谷底の曲率が0.206しかなく curv_th=0.3 では谷底+2)、
+#               合計だけだと孤立した1発で誤発火する(013712 idx376: 単発1.151の
+#               直後に-0.262)。実機9本で谷底の曲率は0.206〜0.775と4倍近く振れるが、
+#               谷底をまたぐ連続区間の合計は0.77〜1.58とまとまり、首振れランプの
+#               最大0.34とよく離れる。0.7 で9本中8本が谷底+1。
+#               2026-09-23: 首振れ/姿勢ドリフトは読みをほぼ直線に動かすので2階微分では
+#               符号が交互に振れるだけ(013712 idx376-384、ヨー-1.2→-3.3°: -0.99,+0.37,
+#               +0.41,+0.48,-1.61,+2.21,-1.26,+0.56)。柱の切れ目は傾きが変わるので正が
+#               続く(160516 idx85-89: -0.07,+1.21,+0.94,+2.13,+1.04)。実機8本で7本が
+#               谷底+1 で発火、平均lag 4.53mm→1.71mm。両点灯ch(LED1より約2tick遅れて
+#               谷底を打つ)に依存しないのも効いている。
+#               柱8本の「2tickペアの小さい方」は 0.357〜0.632 で、0.3 に対する余裕は
+#               最悪19%。0.4 にすると 152125 が谷底+5 まで落ちる。使える窓は 0.25〜0.35。
+#   slope_min : [保険] 1階微分版の上昇率 [mm/mm]。曲率が閾値に届かない形のとき用。
+#               曲率ルールのほうが常に先に出るので、通常はこちらは発火しない。
+#   both_diff_min: 両点灯 ch の 1tick 差分がこれより大きいこと [mm]。接近中(両 ch が
+#               毎tick −1.5〜−3mm 下降)の LED1 単独の跳ねを弾く。0 にすると従来どおり
+#               「両点灯 ch も上昇」を要求するが、両点灯 ch は LED1 より約 2tick 遅れる
+#   rise_min  : 谷底からの上昇量 [mm]
+#   far_th    : 確認条件。ここまで抜けたら離脱確定 [mm]
+#   max_lag   : 谷底からこれ以内に離脱しなければ柱ではない(壁の平坦を除外) [mm]
+#   stale_dist: 谷底がこれより古ければ追跡し直す [mm]
+#   prestart_dist: WALL_OFF 開始よりこれ以上前にある谷底は拾わない [mm]。検知器は直線中
+#               も柱(壁なし区間で90mmごと)を検知するので、直前の柱を次の旋回の柱と
+#               取り違えないための窓。谷底が開始の直前(SLA_BACK_STR 中や直線末尾、
+#               実測 −2〜−12mm)にある本物の柱は拾う
+#   min_v     : これ未満の速度では追跡のみで発火しない [mm/s]
+# 首振れ耐性: 45°読みのヨー感度≈1.1mm/deg@65mm、直線中の観測最大ヨー1.5°/tick
+# でも1tick≤1.7mm(壁読みの|Δd| p99=1.8mm/tick)。早期条件は1800mm/sで
+# ≥2.7mm/tickの単発上昇+前tick上昇+累積4mm以上を要求、far_thは+30mm以上を
+# 要求するので首振れでは成立しない。首振れ由来の浅い谷(実測4.7mm、20260923_064338.csv idx410)は
+# depth_min=8で棄却。
+# wall_off_pillar_str_l/r の初期値は従来経路(谷底から2〜3tick後に発火 +
+# left_str/right_str)と同じ位置になる換算値(右: −4.5+5.5, 左: −2.0+4.5)。
+# 有効化後は n≥4 で再測定し、旋回突入時の front_d を基準に合わせ込むこと。
+# ログ列 pillar_st(右*10+左: 1=追跡 2=曲率発火 3=far_th確認 4=1階微分保険) / pillar_lag_l,r /
+# pillar_btm_l,r で動作を確認できる。
+wall_off_pillar_enable: 1
+wall_off_pillar_depth_min: 8.0
+wall_off_pillar_bottom_min: 48.0
+wall_off_pillar_bottom_max: 80.0
+wall_off_pillar_curv_th: 0.0
+wall_off_pillar_curv_n: 2
+wall_off_pillar_curv_sum: 0.7
+wall_off_pillar_slope_min: 1.5
+wall_off_pillar_both_diff_min: -1.0
+wall_off_pillar_rise_min: 1.5
+wall_off_pillar_far_th: 100.0
+wall_off_pillar_max_lag: 14.0
+wall_off_pillar_stale_dist: 30.0
+wall_off_pillar_prestart_dist: 20.0
+wall_off_pillar_min_v: 500
+# 谷底を放物線(谷底の前・谷底・谷底の次)の頂点でサブtick補正する。0で無効。
+# 手持ちのログでは効果を測れない: 機体は補間なしの谷底にアンカーしているので、
+# 同じ点を基準にした「停止−谷底」では量子化が相殺される。速度を変えた2条件で
+# 停止位置の差が縮むかを見るのが正しい検証。平均のずれは8本で+0.01mmなので
+# pillar_str の付け替えは不要。同値が2点並ぶ平坦な谷底では+0.5tickが一意に正しい。
+wall_off_pillar_vertex_interp: 1
+wall_off_pillar_str_l: 2.5
+wall_off_pillar_str_r: -1.5
+
+wall_off_diff_ref_th: 6.5
+wall_off_diff_ref_front_th: 30 # 壁切れ偏差チェックの前後距離差条件
+
+# 壁切れ(detect_missing_by_deviation) 偏差(最初見えず、柱で反応)
+wall_off_hold_div_th_l: 1.5 #p_wall_off.left_diff_th
+wall_off_hold_div_th_r: 1.5 #p_wall_off.right_diff_th
+
+# 壁切れ 偏差(壁が見える前に過ぎてた場合)
+wall_off_hold_div_th_l2: 0.5 #p_wall_off.div_th_l2
+wall_off_hold_div_th_r2: 0.5 #p_wall_off.div_th_r2
+
+# 壁切れ 偏差
+wall_off_hold_div_th_l3: 0.01 #p_wall_off.div_th_l3
+wall_off_hold_div_th_r3: 0.01 #p_wall_off.div_th_r3
+
+# wall_off()確定→SLA_FRONT_STR走行完了時点でここまで遠のいていなければ
+# 誤検知(見きれず)とみなしwall_off()をやり直す。壁の有無はだいたい60mm
+# 以内で決着する(noexist_th_l2/exist_dist_l2も約60mm前後)ため60を初期値と
+# する(MotionPlanning::slalom()側の後付けチェック、検出タイミング自体は
+# 変更しない)。20260909_231228.csv idx1290-1318(本物の壁切れ、dist=9.57mm
+# で60mm超え)とidx1418-1427相当の誤検知(50mm止まり)を両方正しく判別できる
+# ことを実測ログで確認済み。
+wall_off_recheck_dist_l: 49.0
+wall_off_recheck_dist_r: 49.0
+# 2026-09-30: 上の絶対値だけだと、壁から少し離れて走っているときの壁ありの距離
+# (48〜49mm)と区別できず、誤検知でも通っていた(20260930_002609: 入るとき 46.6 →
+# 終わり 49.05mm で通過)。WALL_OFF に入るとき壁があった(< wall_off_exist_wall_th)
+# なら、そこから delta 以上遠のいたことも求める。誤検知の実例は +0.7 / +2.4mm、
+# WALL_OFF 開始時の寄りは最大 +2.6mm。過去ログ 933 組で 5mm にすると、今 OK の
+# 組のうち 8 組(どれも入るとき 45〜52mm → 終わり 49〜56mm でほとんど遠のいて
+# いない)がやり直しに変わる。本物の壁切れの終わりは中央値 90mm。
+wall_off_recheck_delta_l: 5.0
+wall_off_recheck_delta_r: 5.0
+
+# 2026-09-30: 壁ありで始まる WALL_OFF の壁の切れ目を、1 tick に 4 回読む 45° LED1
+# (ログ列 wo_*)の形で検知する(include/planning/wall_edge_detector.hpp)。
+#   壁の距離 = 少し前の区間 [x−win_far, x−win_near] の中央値(level_max 以上なら壁なし)。
+#   発火 = 壁の距離 + depth 以上まで、壁の距離 + band を越えてから span mm 以内に
+#          min_run サンプル以上かけて遠のき、途中で noise_back 以上戻っていない。
+#   基準位置 = 壁の距離 + anchor_h を越えた点。旋回位置はここから決める
+#          (ps_front.dist += edge_str − (今の位置 − 基準位置))。
+# edge_enable: 0 = 検知してログに出すだけ(旋回は従来の判定)、1 = 旋回位置に使う。
+# 1 のときの従来の判定は、45° が edge_fallback_dist まで遠のいたときだけ(見逃しの保険)。
+# edge_str_l/r の初期値は、過去ログ(09-29 の同じコースの反復)で基準位置が従来の
+# 検知位置より 左 +4.35 / 右 +0.83mm 先に出たので、従来と同じ旋回位置になる換算値
+# (wall_off_hold_dist_str_*_exist − その差)。左右差は壁との距離の違い(左 46 / 右 48.5mm
+# で従来の 49mm しきい値までの余裕が違う)なので、有効化後に n≥4 で合わせ直すこと。
+# ログ列 edge_seq_l/r(発火回数)・edge_lag_l/r(今の位置 − 基準位置)・edge_lvl_l/r。
+wall_off_edge_enable: 1
+wall_off_edge_win_far: 16.0
+wall_off_edge_win_near: 4.0
+wall_off_edge_level_max: 60.0
+wall_off_edge_depth: 4.0
+wall_off_edge_span: 10.0
+wall_off_edge_band: 1.0
+wall_off_edge_noise_back: 1.0
+wall_off_edge_anchor_h: 2.5
+wall_off_edge_min_run: 2
+wall_off_edge_stale_dist: 30.0
+wall_off_edge_prestart_dist: 10.0
+wall_off_edge_fallback_dist: 60.0
+wall_off_edge_str_l: -3.3
+wall_off_edge_str_r: -3.8
+
+# 2026-09-30: 細かいサンプル(1 tick に S1〜S3 の 3 回)の取り方。
+#   0 = WALL_OFF 中だけ、各枠で左右とも読む(最初の実装)。検知器には S0 も入れる。
+#   1 = 最短走行の直進(STRAIGHT / SLA_FRONT_STR / SLA_BACK_STR)でも同じ読み方(各枠の最初、左 → 右の順)
+#       で読む。検知器には S1〜S3 だけ入れる。省電力のため読むのは使う側だけ(WALL_OFF 中は曲がる側、
+#       直進中は経路から分かる次のターンの側、ゴール後の直進は読まない)。読まなかった側は時刻 0。
+#   2 = 1 と同じだが、省電力の側の指定を無視して直進中も WALL_OFF 中も左右とも読む(調査用)。
+# 壁なしで柱を見る WALL_OFF は柱の約 2 tick 手前で始まるので、0 だと柱の手前側が細かく取れない。
+# S0 は S1〜S3 より低く出る(右の柱 raw 約 120 で −3〜−17)ので、混ぜると 1 tick ごとの段になる。
+# 枠ごとに読む側を変える取り方は不可(20260930_093556: 右の S1 が +9、S0 が 1 tick おきに −10)。
+# 0 → 1 で壁の切れ目の基準位置が 左 −0.2 / 右 +0.5mm 動く見込み(今日のログ 29 件の再生)。
+wall_off_hf_mode: 1
+# 調査用(2026-09-30): S1 の細かい読みの前の待ち時間 [us]。0 = 従来(LED の待ち時間 × 2 = 約 32us)、
+# 上限 120。S1 の暗い値だけが S2・S3 より 左 +3 / 右 +1.5 raw 高い(20260930_203714 / 203800、
+# 暗い値そのものは約 12 raw)。90 系の LED を消した直後の余韻なら、待ちを伸ばすと超過が減る
+# (予測: 100us で 左 +0.4〜0.7 / 右 +0.2〜0.4)。減らなければ余韻ではない。
+wall_off_hf_s1_guard_us: 0
+# 柱の谷底の位置を細かいサンプルで求め直す(±win の最小二乗の放物線の頂点)。柱かどうかの判定は
+# wall_off_pillar_* のまま。求まれば旋回位置 = 谷底 + front + wall_off_pillar_hf_str、
+# 求められなければ従来(wall_off_pillar_str)。ログ列 pillar_hf_lag_l/r(現在位置 − 求めた谷底、
+# 無ければ 0、求められなければ −1)。
+# hf_str の初期値は wall_off_pillar_str + 1.4: 従来の谷底は planning の時刻の位置で、読んだ時刻の
+# 位置より 速度 × 約 0.6ms(2200mm/s で 1.3mm)先にずれている。求め直した谷底は読んだ時刻の位置。
+wall_off_pillar_hf: 1
+wall_off_pillar_hf_win: 4.0
+wall_off_pillar_hf_wait: 8.0
+# 2026-09-30 20 時: 柱のタイプの旋回は壁のタイプより遅く始まっていた(旋回後の直線で外側へ
+# 左 +9.5 / 右 +3.7mm。旋回の始まりの遅れがそのまま出口の横ずれになる)。同じ量だけ手前に。
+# 元の値は 3.9 / 0.0(従来の谷底の補正値 + 1.4)。
+wall_off_pillar_hf_str_l: -5.5
+wall_off_pillar_hf_str_r: -4.0
+# 柱の谷を追跡中(谷底が bottom_min〜max、depth_min 以上下がり、谷底から max_lag 以内)は、従来の判定
+# (wall_missing 等)を待たせて柱の検知に譲る。谷底が WALL_OFF の開始より前に来た走行では柱の検知
+# (谷底の 2〜3 tick 後)より先に wall_missing が抜け、別の補正値(wall_off_hold_dist_str_l/r)で
+# 旋回位置が決まっていた(20260930_121814: 同じ柱で 025937 より 3.7mm 手前)。
+wall_off_pillar_hold: 1
+
+wall_off_noexist_diff_l: 0.5
+wall_off_noexist_diff_r: 0.5
+
+wall_off_front_move_dist_th: 2
+wall_off_front_move_dia_dist_th: 2
+# 壁切れ街制限距離
+wall_off_wait_dist_dia: 85
+
+#detect_pass_through_case1（通過+見切れチェック）
+diff_dist_th_l: 1.5 # 壁切れ偏差チェック 偏差条件
+diff_dist_th_r: 1.5 # 壁切れ偏差チェック 偏差条件
+
+#detect_pass_through_case1/2(通過距離)
+wall_off_diff_check_dist: 25 # 移動距離条件 p_wall_off.diff_check_dist
+
+#detect_pass_through_case1(dia: 通過チェック)
+diff_check_dist_dia_2: 5 # 壁切れ偏差チェック　距離条件
+
+# detect_pass_through_case1/2(通過時の距離補正値)
+wall_off_pass_through_offset_l: 5
+wall_off_pass_through_offset_r: 5
+
+
+# 壁切れ：前壁補正　リファレンス値(大：前に近づく)
+front_dist_offset2: 140 # ref
+# 壁切れ：前壁補正  しきい値(far: center)
+front_dist_offset3: 135.0 # th
+# 壁切れ：前壁補正　しきい値(far: both)
+front_dist_offset4: 135.0 # both front sensors condition th
+
+# 壁切れ街制限距離
+wall_off_wait_dist: 65
+
+# 壁切れ壁あり判定
+wall_off_exist_dia_wall_th_l: 45
+wall_off_exist_dia_wall_th_r: 45
+
+### 最初から壁がある場合
+# 壁切れ In(斜め)
+wall_off_hold_exist_dist_dia_l: 39
+wall_off_hold_exist_dist_dia_r: 39
+# 壁切れ Out(斜め)
+wall_off_hold_noexist_dia_th_l: 40
+wall_off_hold_noexist_dia_th_r: 40
+# 壁切れ Out(斜め、相対偏差版。2026-09-05〜絶対値とORで併用。直進側の
+# exist_delta_l/rと同じ理由(wall_off_controller.cppのdetect_wall_off_exist
+# コメント参照)。値は直進側と同じ初期値から開始、要実機検証。
+wall_off_hold_exist_delta_dia_l: 5.0
+wall_off_hold_exist_delta_dia_r: 5.0
+# 壁切れ オフセット距離
+wall_off_hold_dist_dia_l: 4.5
+wall_off_hold_dist_dia_r: 4.5
+#斜め壁切れ時のmax接近距離
+# dia_wall_off_ref_l: 35.0
+# dia_wall_off_ref_r: 32.0
+dia_wall_off_ref_l: 24.0 #dia135
+dia_wall_off_ref_r: 24.0 #dia135
+#斜め壁切れ時のmax接近距離
+dia_wall_off_ref_l_wall: 33.0 #exist_wall
+dia_wall_off_ref_r_wall: 30.5 #exist_wall
+dia_wall_off_ref_l_piller: 40.0 #noexist_wall
+dia_wall_off_ref_r_piller: 38.25 #noexist_wall
+
+dia_wall_off_ref_l_wall2: 33.0 #exist_wall
+dia_wall_off_ref_r_wall2: 30.5 #exist_wall in suction run
+
+# 斜め壁切れ偏差
+wall_off_hold_div_th_dia_l: 0.250
+wall_off_hold_div_th_dia_r: 0.250
+
+### 最初から壁がない場合
+# 壁切れ In(斜め)
+wall_off_hold_exist_dist_dia_l2: 48
+wall_off_hold_exist_dist_dia_r2: 48
+# 壁切れ Out(斜め)
+wall_off_hold_noexist_dia_th_l2: 50
+wall_off_hold_noexist_dia_th_r2: 50
+# 壁切れ オフセット距離
+wall_off_hold_dist_dia_l2: 1.0
+wall_off_hold_dist_dia_r2: 1.0
+
+#斜めターン壁有り補正
+dia_turn_th_l: 62.5
+dia_turn_th_r: 62.5
+
+dia_turn_ref_l: 60.0
+dia_turn_ref_r: 65.0
+
+dia_turn_max_dist_l: 15.0
+dia_turn_max_dist_r: 15.0
+
+# 壁切れ オフセット距離(反対側の壁有り)
+wall_off_hold_dist_dia_l_oppo: -2.5
+wall_off_hold_dist_dia_r_oppo: -2.5
+# 壁あり補正有効条件距離
+wall_off_diff_check_dist_dia: 10.5
+
+# dia_wall_off_ref_l: 33.90
+# dia_wall_off_ref_r: 33.675
+
+wall_off_pass_dist: 10
+
+#ターン後オフセット距離
+offset_after_turn_l: 10 #dia45, dia135 
+offset_after_turn_r: 10 #dia45, dia135
+offset_after_turn_l2: 18 #large, orval
+offset_after_turn_r2: 18 #large, orval
+offset_after_turn_dia_l: 24 #dia45_2, dia135_2
+offset_after_turn_dia_r: 24 #dia45_2, dia135_2
+
+# 45, 135ターン時のオフセット距離計算用閾値
+dia_turn_offset_calc_th: 52
+
+
+
+# constant
+cell: 90.0
+cell2: 90.0
+
+# 2026-08-30: trj_length=15を試したところ、旋回終盤でodm_xが85.9に張り付いた
+# まま動かなくなり(15ms先=既にモーションフェーズが変わった後の状態を参照して
+# しまうため)、kim_xとの乖離が17mm以上・knym_wも35.5まで過大補正になる悪化を
+# 確認(20260830_224534.csv)。処理負荷(pln_time_diff)は1000のまま問題なかった
+# が、先読みが長すぎるとモーション境界を跨いで参照点が不整合になるとわかった
+# ため、実測で良好だったtrj_length=5に戻す。
+trj_length: 5 # Number of trajectory points to generate
+
+trj_idx_v:   [0,   300, 1000, 2000, 3000]
+trj_idx_val: [0,   0,   0,    2,    3]
+# 2026-08-23: 対象範囲をSLALOM/SLA_BACK_STR限定からほぼ全モーションに拡張し、
+# w_cmdをcalc_pid_val_ang_vel()のee->w.error_p(ヨー主力ゲインkp/kb/kcの
+# 入力)にも配線した(trajectory_generator.cpp calc_kanayama()、
+# control_law.cpp参照)。実機テストの結果、enable=1でSTRAIGHT走行の壁追従・
+# 向き保持が明確に悪化した(20260823_165521.csv enable=0: 平均|sen_error_p|
+# =0.35mm・平均|kim_theta|=0.34° / 20260823_165611.csv enable=1: 2.71mm・
+# 5.42°、8〜16倍悪化)。kanayama_straightとの干渉か、kx=10/ky=0.0005が
+# SLALOM用のまま流用されているのが原因かは未切り分け。enable=0に戻す。
+kanayama:
+  kx: 10
+  # 2026-08-30: 高速SLALOM(v≈2500)でknym_wが最大38まで伸び「きつい」と
+  # 感じたが、内訳を見るとknym_wの大部分はideal_w(そのターン半径・速度で
+  # 元々必要なベース角速度)で、Kanayama補正分(ky*ey+k_theta*sin(e_theta))
+  # は±1〜9程度の小さな上乗せに過ぎないと判明(20260830_230226.csv)。
+  # ky=0.0003に下げてもknym_w最大値はほぼ変わらなかった(37.96→36.72)。
+  # 「きつい」の正体はKanayamaではなくその速度帯のターン半径プロファイル
+  # 側の問題と判断し、ky は元に戻す。
+  ky: 0.0005
+  k_theta: 0.0005
+  # 2026-08-30: kim.x/y座標系リベースバグ([[project-kim-frame-rebase-bugfix-2026-08-29]])
+  # とe_theta基準バグ([[project-kanayama-2d-bugfix-2026-08-23]])を修正済み、
+  # かつturn_end_brake/turn_angle_fb再有効化・アンチワインドチャタリング修正も
+  # 済んだ状態で再テストする。
+  enable: 1
+  windup: 1
+  windup_deg: 2.5
+
+# STRAIGHT壁追従のKanayamaカスケード(2026-08-22追加、要実機チューニング)。
+# kxは未使用(kanayama_tを流用しているだけ)。
+# 初回実機テスト(ky=0.0005)ではeyが-35mmまで単調に発散し全く収束しなかった
+# ため、kyを大幅に引き上げた(2026-08-22)。
+# ky=0.03のみだとeyが-15→-9mm付近で頭打ちになり定常偏差が残ったため、
+# I項を追加(ki)。str_ang_pid_fastのwindup_i_max(=90)でクランプされる
+# ee->sen.error_iを使うので、ki=0.006なら最大でも0.5rad/s程度の寄与。
+# 2026-08-23: str_ang_pid_fast(速いP+D直接duty)より収束が遅いと判明したため
+# 排他をやめ、str_ang_pid_fast.i=0にした上で両方を並行実行する「いいとこ取り」
+# 構成に変更(control_law.cpp calc_sensor_pid()参照)。
+# 2026-08-23: kanayama(2D姿勢、trajectory_generator.cpp calc_kanayama())を
+# SLALOM/SLA_BACK_STR限定からほぼ全モーションに拡張し、w_cmd経由でヨーの
+# 主力ゲイン(kp/kb/kc、ee->w.error_p)にも配線した。ky*ey(壁センサー基準の
+# 横方向補正)は2D kanayamaが持たない独立した情報源(実壁との距離)なので
+# そのまま残すが、k_theta*sin(e_theta)(向き補正)は2D kanayama側の向き補正
+# (dead-reckoning基準)と役割が重複するため無効化して二重補正を避ける。
+kanayama_straight:
+  kx: 0
+  ky: 0.09
+  # 2026-08-30: ki=6.0(元0.006相当)は常時クランプに張り付いてジッター
+  # ("ぷるぷる")。ki=2.0(元0.002相当)までジッターは消えたが、今度は
+  # s_pid_pが常時-7mm近くまで悪化・kim_thetaも-2.9°まで残留する定常誤差が
+  # 出た(20260830_164918.csv、s_pid_iは終始クランプ-0.09に張り付いたまま
+  # 補正力不足)。中間値で様子見。
+  ki: 0.0
+  # 2026-09-05: 0(2D kanayamaの向き補正と重複するため無効化していた)から
+  # 復元。実測(knym_w)で2D kanayamaが直進中は終始0.0で全く働いておらず、
+  # ey収束後にang_kfが戻らず残留する主因と判明。sen_kanayama_dw経由で
+  # calc_pid_val_ang_vel()のoffsetに直接加算される(str_ang_pid_fastの
+  # img_ang+duty_sen→angle_pidカスケードより低遅延)。e_thetaはkim_theta
+  # (独立実測)基準。ky*ey項(ey~1-2mm)と同程度の寄与になるよう
+  # k_theta*sin(e_theta)|e_theta~1°で概算し1.0を初期値とした。要実機検証:
+  # ang_kf@wall_off進入の残留角、duty_sen/w_lpのガタつき有無を確認。
+  # 2026-09-05: 2.5は同程度の初期ey外乱(+0.30 vs +0.28mm)に対しang_kf@進入が
+  # +0.008°と+0.526°で65倍もばらつき、軽い振動(低ダンピング)に入りかけている
+  # サインが出た(w_lp最大値自体は1.0の時と同程度なので振幅増大ではなく
+  # 応答の再現性低下)。1.0に戻す。
+  k_theta: 1.0
+  enable: 1
+  windup: 1
+  windup_deg: 2.5

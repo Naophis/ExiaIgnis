@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { machineOf } from "@/lib/api-util";
 import { checkWalls } from "@/lib/maze";
 import { mazeIndex, mazeSizeOf, reachableCells } from "@/lib/maze-shared";
 import { readExecOptions, runPathSim } from "@/lib/path-sim";
@@ -6,9 +7,9 @@ import { readExecOptions, runPathSim } from "@/lib/path-sim";
 export const runtime = "nodejs";
 
 // GET                                     走行パラメータの選択肢(run_prf の exec_prof)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    return NextResponse.json({ options: readExecOptions() });
+    return NextResponse.json({ options: readExecOptions(machineOf(request)) });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
     const exec = Number(body?.exec ?? 0);
     const direction = body?.direction === "left" ? "left" : "right";
-    return NextResponse.json(await runPathSim({ walls, goals, exec, direction }));
+    return NextResponse.json(await runPathSim({ machine: machineOf(request), walls, goals, exec, direction }));
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message, log: "" }, { status: 500 });
   }

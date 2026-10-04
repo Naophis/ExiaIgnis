@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MachineChip } from "@/components/machine-chip";
+import { apiFetch, findMachine, useMachines } from "@/lib/machine-client";
 import {
   emptyStatusRow,
   emptyVelBlock,
@@ -92,6 +94,7 @@ function cloneRow(r: ParamMatrixRow): ParamMatrixRow {
 }
 
 export function ParamMatrixPanel({ onClose }: Props) {
+  const { registry, current } = useMachines();
   const [rows, setRows] = useState<ParamMatrixRow[] | null>(null);
   const [addedVMax, setAddedVMax] = useState<number[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -99,7 +102,7 @@ export function ParamMatrixPanel({ onClose }: Props) {
   const [newVMaxInput, setNewVMaxInput] = useState("");
 
   useEffect(() => {
-    void fetch("/api/param-matrix")
+    void apiFetch("/api/param-matrix")
       .then((res) => res.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
@@ -199,7 +202,7 @@ export function ParamMatrixPanel({ onClose }: Props) {
     if (!rows) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/param-matrix", {
+      const res = await apiFetch("/api/param-matrix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows, newVMaxFiles: addedVMax }),
@@ -219,7 +222,10 @@ export function ParamMatrixPanel({ onClose }: Props) {
   return (
     <Card className="flex flex-1 flex-col overflow-hidden">
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>パラメータ表 (hf)</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          <MachineChip machine={findMachine(registry, current)} fallback={current ?? "?"} />
+          パラメータ表 (hf)
+        </CardTitle>
         <div className="flex items-center gap-2">
           {dirty && <span className="text-xs text-muted-foreground">未保存の変更があります</span>}
           <Button size="sm" onClick={save} disabled={!rows || saving}>
@@ -419,7 +425,7 @@ function StatusButton({ value, onClick }: { value: StatusCell; onClick: () => vo
   const label = value === "o" ? "○" : value === "x" ? "×" : "";
   const color =
     value === "o"
-      ? "text-primary"
+      ? "text-primary-bright"
       : value === "x"
         ? "text-destructive"
         : "text-muted-foreground/40";

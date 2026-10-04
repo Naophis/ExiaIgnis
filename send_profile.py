@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-tools/param_tuner/profile の YAML ファイルを選択して Pico に転送するスクリプト。
+機体の profile(tools/param_tuner/machines/<機体>/profile)の YAML ファイルを選択して
+Pico に転送するスクリプト。
 
 使い方:
   python send_profile.py [port] [subdir]
@@ -8,6 +9,9 @@ tools/param_tuner/profile の YAML ファイルを選択して Pico に転送す
 引数:
   port   : シリアルポート (省略時は Raspberry Pi Pico を自動検出)
   subdir : profile/ 以下のサブディレクトリ名 (省略時は直下)
+
+機体は、つないでいる基板の USB シリアル番号から決める(登録が無ければ machines.yaml の
+default。EXIA_MACHINE=<機体> で指定もできる。tools/param_tuner/machine_paths.py 参照)。
 
 例:
   python send_profile.py                  # 自動検出, profile/ 直下
@@ -27,7 +31,10 @@ from serial.tools import list_ports
 import yaml
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-PROFILE_ROOT = os.path.join(SCRIPT_DIR, "tools", "param_tuner", "profile")
+sys.path.insert(0, os.path.join(SCRIPT_DIR, "tools", "param_tuner"))
+from machine_paths import profile_dir  # noqa: E402
+
+PROFILE_ROOT = profile_dir(detect=True)
 TIMEOUT_SEC  = 10
 PICO_VID     = 0x2E8A
 

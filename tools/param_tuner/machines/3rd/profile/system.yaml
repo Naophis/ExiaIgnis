@@ -1,0 +1,240 @@
+# goals: [[7, 7], [7, 8], [8, 7], [8, 8]]
+# goals: [[8, 8],[8, 9],[9, 8],[9, 9]]
+# goals: [[1, 0], [2, 0]]
+goals: [[1, 0], [2, 0], [1, 1], [2, 1]] 
+# goals: [[0, 1]]
+# goals: [[3, 0]]
+# goals: [[7, 0], [8, 0]]
+# goals: [[6, 2], [7, 2]]
+# goals: [[3, 0], [4, 0]]
+# goals: [[1, 1], [1, 2], [2, 1], [2, 2]]
+# goals: [[3, 0], [3, 1], [2, 0], [2, 1]]
+# goals: [[7, 3], [7, 4], [8, 3], [8, 4]]
+# goals: [[1, 1]]
+# goals: [[6, 9], [6, 10], [7, 9], [7, 10]]
+# goals: [[11, 0], [11, 1], [12, 0], [12, 1]]
+# goals: [[5, 0], [5, 1], [6, 0], [6, 1]]
+# goals: [[9, 9], [9, 10], [10, 9], [10, 10]] #北信越
+
+# goals: [[24, 23], [25, 23], [24, 22], [25, 22]] # 2010hef
+# goals: [[25, 29], [26, 29], [27, 29], [25, 28], [26, 28], [27, 28],[25, 27], [26, 27], [27, 27]] # 2011hef
+
+# goals: [[17, 15], [18, 15], [19, 15], [17, 14], [18, 14], [19, 14],[17, 13], [18, 13], [19, 13]] # 2019hef
+# goals: [[16,16],[16,17],[16,18],[17,16],[17,17],[17,18],[18,16],[18,17],[18,18]] # 2021hf
+# goals: [[14,14],[14,15],[14,16],[15,14],[14,15],[15,16],[16,14],[16,15],[14,16]] # 2022hf
+
+
+# goals: [[14, 14], [14, 15], [15, 14], [15, 15]] #東日本
+
+# goals: [ [4,4],[4,5],[5,4],[5,5]]
+# goals: [ [11, 10],[12, 10],[11, 11],[12, 11]] # 金沢草の根 2023
+# goals: [ [9, 9], [9, 10], [10, 9], [10, 10]] # 金沢草の根 2018
+# goals: [ [11, 10], [12, 10], [11, 11], [12, 11]] # 北信越2023
+# goals: [ [2, 11], [2, 12], [3, 11], [3, 12]] # 東北2023
+
+# goals: [[6, 9], [6, 10], [7, 9], [7, 10]] #東日本2023
+# goals: [ [16 ,16],[17, 16], [17,16],[17,17]] #クラシック迷路
+
+
+# goals: [[10, 3], [11, 3], [10, 4], [11, 4]] #東日本2023
+
+# 2023 all japan final
+# goals: [[8,8],[8,9],[8,10],[9,8],[9,9],[9,10],[10,8],[10,9],[10,10]] # 2023hf
+
+
+# goals: [[1, 0], [1, 1], [2, 0], [2, 1]]
+# goals: [[3, 0], [4, 0]]
+
+# goals: [[1, 0], [2, 0]]
+
+# goals: [[6, 9], [6, 10], [7, 9], [7, 10]] #東日本2023
+
+
+# goals: [[14, 14], [14, 15], [15, 14], [15, 15]] #東日本2023
+
+# goals: [[19, 8],[19, 9],[19, 10],[20, 8],[20, 9],[20, 10],[21, 8],[21, 9],[21, 10]]  #全日本2024 Final
+
+# goals: [[4, 4],[4, 5],[5, 4],[5, 5]] # 北信越2026
+
+#  27 *55
+maze_size: 32
+debug: 0 #
+circuit_mode: 0 # change kalman, sensor_exist, sensor_ctrl_th
+hf_cl: 0 # half(0) or classic(1)
+# mode: 0 # メイン
+# mode: 1 # 最短スローム
+# mode: 2 # 直進
+# mode: 3 # 超信地
+# mode: 5 # 探索スラローム: sla_wall_ref_l/r
+# mode: 7 # front ctrl
+# mode: 9 # wall off: search_mode(1)->search_wall_off, 0->fast_run_wall_off
+# mode: 11 # vacume: suction test
+# mode: 12 # silent_keep:
+# mode: 13 # keep_pos:
+mode: 14 # sensing:
+# mode: 15 # sensor calib:
+# mode: 16 # sysi(para)
+#mode: 17 # sysi(roll)
+# mode: 20 # pivot turn n
+# mode: 21 # pivot turn n2
+# mode: 22 # encoder_test
+# mode: 23 # search pivot turn
+# mode: 24 # AM32 param read
+# mode: 25 # AM32 param write
+# mode: 26 # AM32 restore
+# mode: 28 # sensor calib(sweep): 静止点の記録と前壁スイープ
+
+
+test: # テスト走行時に使用するパラメータ群
+  # 2026-08-30: sysid(duty5/10)実測の定常速度と同じ目標速度で定速直進させ、
+  # そのときのFF出力duty%が実測のduty5/10と一致するかを検証する用
+  # (v_inf@duty5=414mm/s, v_inf@duty10=997mm/s)。まずv_max=414から。
+  v_max: 7500
+  accl: 42500
+  # 速度→加速度LUT。要素数2未満なら無効(上のaccl固定値のまま)。
+  # 減速(decel)には効かない。
+  accl_v_x: [0,      2500, 5000, 7500, 8000]
+  # accl_v_y: [57000, 55000, 42000, 35000, 30000]
+  accl_v_y: [37500, 37500, 37500, 35000, 35000]
+
+  # v_max→decel絶対値LUT(2026-08-23追加)。mpc_tgt_calc側が残り距離から
+  # 実際の減速度を毎tick再計算するため、この`decel`入力は閾値にしか効かず
+  # 片輪スリップ対策としては効果が無いことが判明済み(20260823_155443.csv)。
+  # decel_v_max_enable: 0 がデフォルト。
+  decel_v_max_enable: 1
+  decel_v_max_x: [0, 3000, 4500, 6000, 7000]
+  decel_v_max_y: [47500, 42500, 46000, 45000, 42500]
+
+  decel: -47500
+  dia_accl: 45000
+  dia_decel: -47500
+  dist: 720 #直進
+  suction_active: 2
+  # 吸引ESC(ESCape32)の回転方向。0 = 正転(revdir=0)、1 = 逆転(revdir=1)。
+  # この値は起動時にはESCへ送られない。値を変えたら USBコマンド "DSHOTDIR"
+  # (send_file.py dshotdir) または テストモード27 を実行すると、DShotの
+  # SPIN_DIRECTION + SAVE_SETTINGS コマンドでESCのフラッシュへ永続化される。
+  suction_dshot_reverse: 1
+
+  end_v: 10
+  dia: 0
+  w_max: 12.5
+  alpha: 180
+  ang: 3600
+  search_mode: 0
+  
+  # [重要] AM32 ESC移行により、suction_duty系は0〜100%のduty%ではなく
+  # ESCへの目標パルス幅を「us(1000〜2000)」で直接指定する値になった
+  # (1000=停止/アーム, 2000=フル)。旧BldcActuator用の値(9.0等)は無効に
+  # なるため、us単位の値に置き換え済み(要実機再調整)。
+  # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
+  # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
+  # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
+  suction_duty: 1999
+  suction_duty_low: 1999
+  suction_duty_burst: 1999
+  suction_duty_burst_low: 1999 # suction_duty_burst -0.25
+
+  # suction_duty_burst: 4.0
+  # suction_duty_burst_low: 3.75
+
+  # 目標パルス幅へのランプ速度(us/sec)。suction_enable()直後、この速度で
+  # 最小パルス(1000us)から目標us値へ線形にランプする
+  # (ControlLaw::set_next_duty()参照)。AM32自体のソフトスタートと併用。
+  suction_esc_ramp_us_per_sec: 350  # 2000→1000。ランプ時間を約0.5秒→約1秒に延長
+                                      # (センサーレスBLDCの起動ハンドオフgbが軽負荷ファンだと
+                                      # 不安定になりやすいため、緩やかに立ち上げて安定性を見る)
+                                      # suction_ramp_rate_us_x/yを指定した場合はそちらが優先され、
+                                      # この値はテーブルが空の場合のフォールバックとしてのみ使われる。
+
+  # 現在のパルス幅(us、昇順)に応じてランプ速度(us/sec)を変える区分線形LUT。
+  # 脆弱なポイントが2箇所あることが実機検証で判明:
+  # (1) 1000付近(起動直後、オープンループ→クローズドループへのハンドオフ
+  #     そのもの)。ここを900まで速めたところゴリゴリが再発し、さらに
+  #     250まで落としたことで改善した。センサーレスBLDCの中で最もデリケート
+  #     な瞬間なので、他のどこよりゆっくり立ち上げる必要がある。
+  # (2) 1800〜1999(高域、電気角周波数が上がりBEMF追従が厳しくなる領域)。
+  #     ここも一律で遅くする(650→350)と改善した。
+  # 一方、1600付近の中間域は一度クローズドループでロックしてしまえば
+  # 慣性もついて最も頑丈なので、そこだけ速く(650)しても問題にならない。
+  # 結果、「遅い(起動直後)→速い(中間域)→やや遅い(高域)」の形が実機で
+  # 確定(ControlLaw::set_next_duty()参照)。
+  # 空にすれば従来通りsuction_esc_ramp_us_per_secの固定レートに戻る。
+  suction_ramp_rate_us_x: [1000, 1600, 1800, 1999]
+  suction_ramp_rate_us_y: [700, 1800, 1300,  1300]
+  # suction_ramp_rate_us_y: [600, 900, 1300, 1300]
+  # バッテリー電圧が低いほど始動失敗が顕著という実測傾向への対策。
+  # AM32 ESCは閉ループRPM制御ではなく、指令dutyをバッテリー電圧に対する
+  # 割合として印加するだけなので、同じduty指令でも電圧が下がれば実際の
+  # 印加電圧(≒RPM)が下がる。電圧(batt_kf, 昇順)→上乗せus値の区分線形LUTで
+  # 電圧低下分をduty指令(パルス幅)に加算して補う(ControlLaw::set_next_duty()
+  # 参照)。値は実機未検証の初期値(3S: 11.1V空〜12.6V満充電相当を目安に、
+  # 満充電付近で補正ゼロ・空に近いほど増やす形)。要実機調整。
+  suction_batt_boost_v_table:  [11.1, 12.0, 12.6]
+  suction_batt_boost_us_table: [150,  50,   0   ]
+
+  # ---- 以下、旧BldcActuator(自前6-step commutation)専用パラメータ ----
+  # AM32 ESC移行によりBldcActuator::tick()/enable()は呼ばれなくなったため
+  # 現在は未使用(コード・設定とも参照用に残置。planning_task.hppの
+  # bldc_メンバのコメント参照)。
+  suction_bldc_hz: 8200
+  # バッテリー電圧→{gain, max_amp} LUT(区分線形補間、可変長。3配列とも同じ
+  # 長さ・昇順で指定すること)。amp = AMP_BASE*(hz/AMP_BASE_HZ)*gain の
+  # V/Hz比例式に使うgainと、そのクランプ上限max_amp(0.48は未検証域で脱調
+  # した。実機検証済みの0.35が安全)を、バッテリー電圧ごとに個別調整する
+  # (点を増やしたい場合はここに追加すればよい)。
+  # [重要] max_ampはこの用途(duty振幅の安全上限)では内部で[0.10, 0.48]に
+  # クランプされて使われるが、下のsuction_batt_ramp_gain_table_*のgain係数
+  # としては同じ列をクランプ前の生値のまま使う(1.0=無減衰を指定できる)。
+  # 1.0を指定してもduty振幅側の安全上限は0.48のまま変わらない。
+  suction_batt_v_table:      [11.1,   12.0,   12.6   ]
+  suction_batt_gain_table:   [0.120,  0.120,  0.1175]
+  suction_batt_max_amp_table: [0.265,   0.270,   0.270   ]
+  # 起動ランプ速度(elec_hz/sec。ControlLawのdutyランプ速度にも兼用)は、
+  # 現在の回転数推定値(elec_hz)→ramp_gainのLUT(区分線形補間、可変長・
+  # 昇順)から求めたベース値に、上のsuction_batt_v_table/
+  # suction_batt_max_amp_table(クランプ前の生値、上記参照)から区分線形
+  # 補間で求めた値をgain係数として掛けた値を最終的なランプ速度とする。
+  # 回転数が上がるほど脱調しやすくなるためhzに応じてベース速度を徐々に
+  # 減衰させ、さらに満充電/使用後で変わる脱調マージンをbattery_v側の
+  # gain係数として反映する。以下のval列は「gain係数(1.0未満なら減衰)を
+  # 掛ける前提」で決め打つこと。
+  suction_batt_ramp_gain_table_hz:  [0, 1600,  3000, 4000, 5000 , 7000  , 8000  , 9000   ]
+  suction_batt_ramp_gain_table_val: [4500, 4500,  4500, 4000, 4000, 4000, 3750, 3000   ]
+  # suction_duty: 3.25
+  file_idx: 1
+  sla_dist: 90
+  # sla_type: 3
+  sla_type: 4
+  sla_type2: 6 # 復路ターン種類
+  sla_return: 0 # 往復フラグ
+  # sla_type: 1 normal
+  # sla_type: 2 #orval
+  # sla_type: 3 #large
+  # sla_type: 4 #dia45
+  # sla_type: 5 #dia135
+  # sla_type: 6 #dia90
+  # sla_type: 7 #Kojima
+  # sla_type: 8 #dia45_2
+  # sla_type: 9 #dia135_2
+  turn_times: 0
+  ignore_opp_sen: 1 #斜めターン後の直進テスト 0無効、1斜め制御なし、2斜め制御あり
+  # 2026-08-30: 従来コード上未使用だったフィールドを左右モーター個体差の
+  # 定量化用に転用(main_task_test_misc.cpp test_system_identification()
+  # 参照)。mode16(sys id para)実行時のみ効く。0=両輪(従来通り)、
+  # 1=左輪のみ駆動(右輪はduty0で自由回転)、2=右輪のみ駆動。
+  sysid_test_mode: 0 #システム同定のテスト(直進系): 0=両輪, 1=左輪のみ, 2=右輪のみ
+  sysid_duty: 20 #duty 
+
+  sysid_time: 1250 #duty
+  start_turn: 0  #開幕ターンテスト
+  # mode 28(センサー校正)の前壁スイープ。機体が自分で走って測る(走行はケーブルなし)
+  #   hardware.yaml の offset_start_dist_search + 90 * cells 走り、区画中央(前壁まで42mm)で止まる
+  #   cells: 2 なら 17 + 180 = 197mm 走る。スタート区画を含めて 3 区画の直線の突き当たりに前壁を置く
+  #   壁制御は走り出しから wall_ctrl_dist(100mm)だけ(決め打ち)。残りは壁制御なしで、ここで測る
+  #   速度・加減速・吸引は直進テストと同じ v_max / accl / decel / suction_active を使う
+  #   guard: 1 なら、前壁が近く見えるあいだは走らない(当たるのを防ぐ)
+  sensor_sweep_cells: 2
+  sensor_sweep_wall_ctrl_dist: 100
+  sensor_sweep_guard: 1
+  front_auto_tune: 0  #test_slaのfront offset自動調整(left45/right45基準フィードバック)有効化: 0無効, 1有効

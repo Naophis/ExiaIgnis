@@ -12,6 +12,7 @@ import { MazePathPanel } from "@/components/maze-path-panel";
 import { MazeSearchPanel, ROUTE_COLORS, ROUTE_PATTERNS } from "@/components/maze-search-panel";
 import type { MazeContent, MazeFileInfo, MazeGroup } from "@/lib/maze";
 import { buildPathGeometry, pathD, type Pt } from "@/lib/maze-path";
+import { apiFetch } from "@/lib/machine-client";
 import { usePathSim } from "@/lib/use-path-sim";
 import { useSearchSim } from "@/lib/use-search-sim";
 import {
@@ -190,7 +191,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
 
   const refreshFiles = useCallback(async () => {
     try {
-      const res = await fetch("/api/maze?action=list");
+      const res = await apiFetch("/api/maze?action=list");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "一覧の取得に失敗しました");
       setFiles(data.files as MazeFileInfo[]);
@@ -222,7 +223,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
   const openFile = useCallback(
     async (id: string) => {
       try {
-        const res = await fetch(`/api/maze?action=read&id=${encodeURIComponent(id)}`);
+        const res = await apiFetch(`/api/maze?action=read&id=${encodeURIComponent(id)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "読み込みに失敗しました");
         const content = data as MazeContent;
@@ -392,7 +393,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
     }
     setBusy("save");
     try {
-      const res = await fetch("/api/maze", {
+      const res = await apiFetch("/api/maze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "save", id: doc.id, walls }),
@@ -413,7 +414,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
     if (!doc || saveAsName === null) return;
     setBusy("save");
     try {
-      const res = await fetch("/api/maze", {
+      const res = await apiFetch("/api/maze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "saveAs", name: saveAsName, walls }),
@@ -441,7 +442,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
     if (!doc) return;
     setBusy("send");
     try {
-      const res = await fetch("/api/maze", {
+      const res = await apiFetch("/api/maze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "send", walls, label: doc.name }),
@@ -931,7 +932,7 @@ export function MazePanel({ active, autoOpen, onAutoOpenHandled, refreshNonce }:
                   </button>
                   {goalMode ? (
                     <>
-                      <span className="text-primary">区画をクリック / ドラッグでゴールを追加・削除</span>
+                      <span className="text-primary-bright">区画をクリック / ドラッグでゴールを追加・削除</span>
                       <Button size="xs" variant="ghost" onClick={() => setGoalOverride(null)} disabled={goalOverride === null}>
                         {defaultSource}に戻す
                       </Button>

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
@@ -6,7 +7,10 @@ import { SerialPort } from "serialport";
 import { ReadlineParser } from "@serialport/parser-readline";
 import { ByteLengthParser } from "@serialport/parser-byte-length";
 import { AM32_FILE } from "./am32-shared";
+import type { BoardInfo } from "./machine-shared";
+import { getMachine, getSentHashes, machineForSerial, profileDir, recordLogMachine, recordSent } from "./machines";
 import { parseMazeText } from "./maze-shared";
+import { LOGS_DIR, MAZE_LOGS_DIR } from "./paths";
 
 // This must stay a single, persistent connection: console.sh (rx_term.js)
 // and update_param.sh (tx_term.js -> send_file.py) used to each open their
@@ -23,15 +27,31 @@ const ACK_TIMEOUT_MS = 10_000;
 // the completion line legitimately takes far longer than a file-upload ack.
 const AM32_DONE_TIMEOUT_MS = 40_000;
 
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const LOGS_DIR = path.join(PARAM_TUNER_ROOT, "logs");
-const MAZE_LOGS_DIR = path.join(PARAM_TUNER_ROOT, "maze_logs");
-const PROFILE_DIR = path.join(PARAM_TUNER_ROOT, "profile");
-
 // Ported from tx_term.js: these three are always read from profile/ directly
 // (not profile/<mode>/), regardless of which mode is selected.
-const BASE_FILES = ["system.yaml", "hardware.yaml", AM32_FILE];
+// profile/ は機体ごと(machines/<id>/profile、lib/machines.ts の profileDir)。
+export const BASE_FILES = ["system.yaml", "hardware.yaml", AM32_FILE];
+
+// 試験用: 実機なしで接続・送信を試すための擬似基板。EXIA_SIM_BOARD_FILE に
+// {"path": "/dev/pts/N", "serialNumber": "..."} を書いたファイルを指定すると、
+// ttyACM* を探す代わりにそれを基板として開く(ファイルが無ければ「基板なし」)。
+const SIM_BOARD_FILE = process.env.EXIA_SIM_BOARD_FILE ?? null;
+
+// 送り先の基板が、送ろうとしている機体のものでないとき。API は 409 と code を返し、
+// 画面が確認を取ってから force 付きで送り直す。
+export class SendTargetError extends Error {
+  constructor(
+    message: string,
+    public readonly code: "unregistered" | "mismatch",
+    public readonly board: BoardInfo,
+  ) {
+    super(message);
+  }
+}
+
+function sha1(text: string): string {
+  return createHash("sha1").update(text).digest("hex");
+}
 
 export type Am32Command = "write" | "read";
 
@@ -89,7 +109,7 @@ export interface PortInfo {
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
-export interface StatusInfo {
+export interface StatusInfo extends BoardInfo {
   status: ConnectionStatus;
   path: string | null;
   autoConnect: boolean;
@@ -104,6 +124,9 @@ function isPicoPort(p: { path: string; serialNumber?: string }): boolean {
 export interface ProfileList {
   base: string[];
   mode: string[];
+  // 接続中の基板へ最後に送った中身と違うファイル。"base/hardware.yaml" の形。
+  // null = 分からない(未接続・基板が別の機体・その基板へこの Param Console から送ったことが無い)。
+  unsent: string[] | null;
 }
 
 export type SendScope = "base" | "mode";
@@ -170,6 +193,7 @@ class SerialManager extends EventEmitter {
   private pendingAck: PendingAck | null = null;
   private am32Wait: Am32Wait | null = null;
   private connectedPath: string | null = null;
+  private connectedSerial: string | null = null;
   private status: ConnectionStatus = "disconnected";
   private autoConnectEnabled = true;
   private searchTimer: NodeJS.Timeout | null = null;
@@ -180,10 +204,34 @@ class SerialManager extends EventEmitter {
   }
 
   getStatus(): StatusInfo {
-    return { status: this.status, path: this.connectedPath, autoConnect: this.autoConnectEnabled };
+    return {
+      status: this.status,
+      path: this.connectedPath,
+      autoConnect: this.autoConnectEnabled,
+      ...this.getBoard(),
+    };
+  }
+
+  // 接続中の基板と、その基板が登録されている機体(登録簿は毎回読むので、登録直後から効く)
+  getBoard(): BoardInfo {
+    const serial = this.status === "connected" ? this.connectedSerial : null;
+    return { serial, machine: machineForSerial(serial)?.id ?? null };
+  }
+
+  // 登録簿を書き換えたあと、画面の接続表示(どの機体か)を更新させる
+  refreshStatus(): void {
+    this.emit("status", this.getStatus());
   }
 
   async listPorts(): Promise<PortInfo[]> {
+    if (SIM_BOARD_FILE) {
+      try {
+        const sim = JSON.parse(fs.readFileSync(SIM_BOARD_FILE, "utf-8")) as PortInfo;
+        return sim?.path ? [{ path: sim.path, serialNumber: sim.serialNumber, manufacturer: "sim" }] : [];
+      } catch {
+        return [];
+      }
+    }
     const ports = await SerialPort.list();
     return ports
       .filter(isPicoPort)
@@ -205,6 +253,7 @@ class SerialManager extends EventEmitter {
     this.port?.close();
     this.port = null;
     this.connectedPath = null;
+    this.connectedSerial = null;
     this.setStatus("disconnected");
   }
 
@@ -226,74 +275,125 @@ class SerialManager extends EventEmitter {
     }
     const found = ports[0];
     if (found && this.autoConnectEnabled && this.status === "disconnected") {
-      this.openPort(found.path);
+      this.openPort(found.path, found.serialNumber ?? null);
     }
   }
 
-  listModes(): string[] {
-    if (!fs.existsSync(PROFILE_DIR)) return [];
+  listModes(machine: string): string[] {
+    const dir = profileDir(machine);
+    if (!fs.existsSync(dir)) return [];
     return fs
-      .readdirSync(PROFILE_DIR, { withFileTypes: true })
+      .readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name)
       .sort();
   }
 
-  listProfiles(mode: string): ProfileList {
-    const modeDir = path.join(PROFILE_DIR, mode);
+  listProfiles(machine: string, mode: string): ProfileList {
+    const modeDir = path.join(profileDir(machine), mode);
     const files = fs.existsSync(modeDir) ? fs.readdirSync(modeDir) : [];
     const modeFiles = files.filter((f) => /\.(yaml|maze)$/.test(f)).sort();
-    return { base: BASE_FILES, mode: modeFiles };
+    return { base: BASE_FILES, mode: modeFiles, unsent: this.listUnsent(machine, mode, modeFiles) };
+  }
+
+  // 機体へ送るときの名前と中身(yaml → JSON)。送信と「未送信」の判定で同じものを使う。
+  private payloadFor(machine: string, mode: string, scope: SendScope, file: string): { remoteName: string; content: string } {
+    const filePath = scope === "base" ? path.join(profileDir(machine), file) : path.join(profileDir(machine), mode, file);
+    const remoteName = file.replace("yaml", scope === "base" ? "txt" : mode);
+    return { remoteName, content: JSON.stringify(loadYaml(fs.readFileSync(filePath, "utf-8"))) };
+  }
+
+  // 接続中の基板に最後に送った中身と、今のファイルが違うもの。
+  // この Param Console から一度も送っていないファイルは、基板の中身が分からないので数えない
+  // (初めてつないだ基板で全ファイルに印が付くのを避ける。「全て送信」を 1 回すれば全部追える)。
+  private listUnsent(machine: string, mode: string, modeFiles: string[]): string[] | null {
+    const board = this.getBoard();
+    // 別の機体の基板(または未登録の基板)に対して「未送信」を出しても意味が無い
+    if (!board.serial || board.machine !== machine) return null;
+    const sent = getSentHashes(board.serial);
+    if (Object.keys(sent).length === 0) return null;
+    const unsent: string[] = [];
+    const check = (scope: SendScope, file: string) => {
+      try {
+        const { remoteName, content } = this.payloadFor(machine, mode, scope, file);
+        if (sent[remoteName] !== undefined && sent[remoteName] !== sha1(content)) unsent.push(`${scope}/${file}`);
+      } catch {
+        // 読めない・構文エラーのファイルは「未送信」に数えない(送信時にエラーが出る)
+      }
+    };
+    for (const f of BASE_FILES) check("base", f);
+    for (const f of modeFiles) if (f.endsWith(".yaml")) check("mode", f);
+    return unsent;
   }
 
   // Editing is limited to *.yaml (the *.maze files are plain int lists, not
-  // YAML). The filename charset excludes "/" so this can't escape PROFILE_DIR.
-  private resolveYamlPath(mode: string, scope: SendScope, file: string): string {
-    if (!/^[\w.-]+\.yaml$/.test(file)) {
+  // YAML). The filename charset excludes "/" so this can't escape the profile dir.
+  resolveYamlPath(machine: string, mode: string, scope: SendScope, file: string): string {
+    if (!/^[\w.-]+\.yaml$/.test(file) || !/^[\w-]+$/.test(mode)) {
       throw new Error("不正なファイル名です");
     }
     if (scope === "base") {
       if (!BASE_FILES.includes(file)) throw new Error("不明なファイルです");
-      return path.join(PROFILE_DIR, file);
+      return path.join(profileDir(machine), file);
     }
-    return path.join(PROFILE_DIR, mode, file);
+    return path.join(profileDir(machine), mode, file);
   }
 
-  readProfileFile(mode: string, scope: SendScope, file: string): string {
-    return fs.readFileSync(this.resolveYamlPath(mode, scope, file), "utf-8");
+  readProfileFile(machine: string, mode: string, scope: SendScope, file: string): string {
+    return fs.readFileSync(this.resolveYamlPath(machine, mode, scope, file), "utf-8");
   }
 
-  writeProfileFile(mode: string, scope: SendScope, file: string, content: string): void {
-    const filePath = this.resolveYamlPath(mode, scope, file);
+  writeProfileFile(machine: string, mode: string, scope: SendScope, file: string, content: string): void {
+    const filePath = this.resolveYamlPath(machine, mode, scope, file);
     try {
       loadYaml(content);
     } catch (err) {
       throw new Error(`YAML構文エラー: ${(err as Error).message}`);
     }
     fs.writeFileSync(filePath, content, "utf-8");
-    this.emit("log", `[edit] saved: ${file}`);
+    this.emit("log", `[edit] saved: ${machine}/${file}`);
+  }
+
+  // 送ろうとしている機体と、接続中の基板の機体が同じかを確かめる。
+  // 違う機体のパラメータを黙って書き込まないため。force = 画面で確認済み。
+  checkSendTarget(machine: string, force = false): void {
+    getMachine(machine);
+    if (force || this.status !== "connected") return; // 未接続は送信側のエラーに任せる
+    const board = this.getBoard();
+    if (!board.serial) return; // シリアル番号の取れない接続(見分けようがない)
+    if (!board.machine) {
+      throw new SendTargetError(
+        `接続中の基板 (${board.serial}) はどの機体にも登録されていません`,
+        "unregistered",
+        board,
+      );
+    }
+    if (board.machine !== machine) {
+      throw new SendTargetError(
+        `接続中の基板は「${board.machine}」です。「${machine}」のパラメータは送りません`,
+        "mismatch",
+        board,
+      );
+    }
   }
 
   // Ported from tx_term.js's per-index send branch.
-  async sendFile(mode: string, scope: SendScope, file: string): Promise<void> {
-    if (scope === "base") {
-      const content = fs.readFileSync(path.join(PROFILE_DIR, file), "utf-8");
-      const remoteName = file.replace("yaml", "txt");
-      await this.writeAndWaitAck(remoteName, JSON.stringify(loadYaml(content)));
-      this.emit("log", `[send] ${file} -> ${remoteName}: OK`);
-      return;
-    }
-
-    const filePath = path.join(PROFILE_DIR, mode, file);
-    if (/\.maze$/.test(file)) {
+  async sendFile(machine: string, mode: string, scope: SendScope, file: string, force = false): Promise<void> {
+    this.checkSendTarget(machine, force);
+    if (!/^[\w.-]+$/.test(file) || !/^[\w-]+$/.test(mode)) throw new Error("不正なファイル名です");
+    if (scope === "mode" && /\.maze$/.test(file)) {
+      const filePath = path.join(profileDir(machine), mode, file);
       await this.sendMaze(parseMazeText(fs.readFileSync(filePath, "utf-8")), file);
       return;
     }
+    if (scope === "base" && !BASE_FILES.includes(file)) throw new Error("不明なファイルです");
+    if (!/^[\w.-]+\.yaml$/.test(file)) throw new Error("不正なファイル名です");
 
-    const remoteName = file.replace("yaml", mode);
-    const content = fs.readFileSync(filePath, "utf-8");
-    await this.writeAndWaitAck(remoteName, JSON.stringify(loadYaml(content)));
-    this.emit("log", `[send] ${file} -> ${remoteName}: OK`);
+    const { remoteName, content } = this.payloadFor(machine, mode, scope, file);
+    const serial = this.connectedSerial;
+    await this.writeAndWaitAck(remoteName, content);
+    if (serial) recordSent(serial, remoteName, sha1(content));
+    this.emit("log", `[send] ${machine}/${file} -> ${remoteName}: OK`);
   }
 
   // .maze 形式(idx = x*size + y)の壁を /maze.txt として送る。全マスを踏破済み
@@ -307,17 +407,24 @@ class SerialManager extends EventEmitter {
 
   // Ported from tx_term.js's "all" branch: mode dir's *.yaml (not *.maze),
   // then the three base files, in that order.
-  async sendAll(mode: string): Promise<void> {
-    const modeDir = path.join(PROFILE_DIR, mode);
-    const files = fs.existsSync(modeDir) ? fs.readdirSync(modeDir) : [];
+  // onlyUnsent = 接続中の基板へ最後に送った中身と違うファイルだけ。
+  async sendAll(machine: string, mode: string, force = false, onlyUnsent = false): Promise<number> {
+    this.checkSendTarget(machine, force);
+    const modeDir = path.join(profileDir(machine), mode);
+    const files = (fs.existsSync(modeDir) ? fs.readdirSync(modeDir) : []).filter((f) => /\.yaml$/.test(f)).sort();
+    const unsent = onlyUnsent ? new Set(this.listUnsent(machine, mode, files) ?? []) : null;
+    let count = 0;
     for (const file of files) {
-      if (/\.yaml$/.test(file)) {
-        await this.sendFile(mode, "mode", file);
-      }
+      if (unsent && !unsent.has(`mode/${file}`)) continue;
+      await this.sendFile(machine, mode, "mode", file, true);
+      count++;
     }
     for (const file of BASE_FILES) {
-      await this.sendFile(mode, "base", file);
+      if (unsent && !unsent.has(`base/${file}`)) continue;
+      await this.sendFile(machine, mode, "base", file, true);
+      count++;
     }
+    return count;
   }
 
   private setStatus(status: ConnectionStatus) {
@@ -325,7 +432,7 @@ class SerialManager extends EventEmitter {
     this.emit("status", this.getStatus());
   }
 
-  private openPort(portPath: string) {
+  private openPort(portPath: string, serialNumber: string | null) {
     this.setStatus("connecting");
     const port = new SerialPort(
       { path: portPath, baudRate: BAUD_RATE, highWaterMark: 256 * 1024 },
@@ -342,8 +449,14 @@ class SerialManager extends EventEmitter {
 
     port.on("open", () => {
       this.connectedPath = portPath;
+      this.connectedSerial = serialNumber;
       this.setStatus("connected");
-      this.emit("log", `[serial] connected: ${portPath}`);
+      const machine = machineForSerial(serialNumber);
+      this.emit(
+        "log",
+        `[serial] connected: ${portPath}` +
+          (serialNumber ? ` (基板 ${serialNumber}: ${machine ? `機体 ${machine.id}` : "未登録"})` : ""),
+      );
       this.dump = freshDumpState();
       this.switchLineMode();
     });
@@ -352,6 +465,7 @@ class SerialManager extends EventEmitter {
     // "disconnected" is enough for it to pick up a reconnect.
     port.on("close", () => {
       this.connectedPath = null;
+      this.connectedSerial = null;
       this.setStatus("disconnected");
       this.emit("log", "[serial] disconnected");
       this.rejectPendingAck(new Error("port closed"));
@@ -613,6 +727,9 @@ class SerialManager extends EventEmitter {
     const filePath = path.join(LOGS_DIR, fileName);
     fs.writeFileSync(filePath, content, { flag: "w+" });
     fs.copyFileSync(filePath, path.join(LOGS_DIR, "latest.csv"));
+    // どの機体のログかを覚えておく(ログ一覧に出す)。未登録の基板なら何も残さない
+    const machine = machineForSerial(this.connectedSerial);
+    if (machine) recordLogMachine(fileName, machine.id);
   }
 
   // ===== AM32: ported from send_file.py's cmd_am32write/read/sync =====
@@ -641,8 +758,8 @@ class SerialManager extends EventEmitter {
   // send_file.py's am32sync: upload am32.yaml as /am32.txt, then have the
   // firmware push it into the ESC's flash. Uploading alone changes nothing on
   // the ESC, so this is the operation that actually matters when tuning.
-  async syncAm32(mode: string): Promise<void> {
-    await this.sendFile(mode, "base", AM32_FILE);
+  async syncAm32(machine: string, mode: string, force = false): Promise<void> {
+    await this.sendFile(machine, mode, "base", AM32_FILE, force);
     await this.runAm32Command("write");
   }
 

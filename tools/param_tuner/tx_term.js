@@ -3,6 +3,8 @@ const { spawnSync } = require("child_process");
 const path = require("path");
 const os = require("os");
 
+const { profileDir, resolveMachine } = require("./machines");
+
 const SEND_FILE_PY = path.join(__dirname, "../../send_file.py");
 
 function sendViaPython(localPath, remoteName) {
@@ -19,9 +21,10 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const callerFun = async (mode) => {
+// profile = その機体のパラメータの場所(machines/<機体>/profile)
+const callerFun = async (mode, profile) => {
   while (true) {
-    const files = fs.readdirSync(path.join(__dirname, `profile/${mode}/`));
+    const files = fs.readdirSync(path.join(profile, mode));
     const list = ["system.yaml", "hardware.yaml", "am32.yaml"].concat(
       files.filter((f) => f.match(/.yaml$/) || f.match(/.maze$/))
     );
@@ -45,14 +48,14 @@ const callerFun = async (mode) => {
       for (const file of files) {
         if (file.match(/.yaml$/)) {
           const remoteName = file.replace("yaml", mode);
-          sendViaPython(path.join(__dirname, `profile/${mode}/${file}`), remoteName);
+          sendViaPython(path.join(profile, mode, file), remoteName);
           await sleep(250);
           console.log(`${file}, ${remoteName}: finish!!`);
         }
       }
       for (const file of ["system.yaml", "hardware.yaml", "am32.yaml"]) {
         const remoteName = file.replace("yaml", "txt");
-        sendViaPython(path.join(__dirname, "profile", file), remoteName);
+        sendViaPython(path.join(profile, file), remoteName);
         await sleep(250);
         console.log(`${file}, ${remoteName}: finish!!`);
       }
@@ -69,12 +72,12 @@ const callerFun = async (mode) => {
       if (idx === 0 || idx === 1 || idx === 2) {
         const file = list[idx];
         const remoteName = file.replace("yaml", "txt");
-        sendViaPython(path.join(__dirname, "profile", file), remoteName);
+        sendViaPython(path.join(profile, file), remoteName);
         await sleep(250);
         console.log(`${file}, ${remoteName}: finish!!`);
       } else {
         const file = list[idx];
-        const filePath = path.join(__dirname, `profile/${mode}/${file}`);
+        const filePath = path.join(profile, mode, file);
 
         if (file.match(/.maze$/)) {
           const txt = fs.readFileSync(filePath, { encoding: "utf-8" });
@@ -108,9 +111,18 @@ const callerFun = async (mode) => {
   }
 };
 
-const main = (argv) => {
+// Usage: node tx_term.js [mode] [機体]
+// 機体を省くと、つないでいる基板の USB シリアル番号から決める(登録が無ければ
+// machines.yaml の default。機体が 2 つ以上あって基板が未登録なら止まる)。
+const main = async (argv) => {
   const mode = argv.length > 2 ? argv[2] : "hf";
-  callerFun(mode);
+  const machine = await resolveMachine(argv[3]);
+  const profile = profileDir(machine);
+  console.log(`機体: ${machine} (${path.relative(process.cwd(), profile)})`);
+  await callerFun(mode, profile);
 };
 
-main(process.argv);
+main(process.argv).catch((err) => {
+  console.error(`エラー: ${err.message}`);
+  process.exit(1);
+});

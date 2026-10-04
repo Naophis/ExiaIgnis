@@ -1,26 +1,28 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { getLogMachines } from "./machines";
+import { LOGS_DIR, TOOL_ROOT } from "./paths";
 
-// webapp/ is the Next.js server cwd; tools/param_tuner/ is one level up.
-const PARAM_TUNER_ROOT = path.join(process.cwd(), "..");
-const LOGS_DIR = path.join(PARAM_TUNER_ROOT, "logs");
-const PROFILE_XML_PATH = path.join(PARAM_TUNER_ROOT, "profile.xml");
+const PROFILE_XML_PATH = path.join(TOOL_ROOT, "profile.xml");
 
 export interface LogFileInfo {
   name: string;
   mtimeMs: number;
   size: number;
+  machine?: string; // このログを出した機体(受信時に基板のシリアル番号から決めたもの。古いログには無い)
 }
 
 export function listLogFiles(): LogFileInfo[] {
   if (!fs.existsSync(LOGS_DIR)) return [];
+  const machines = getLogMachines();
   return fs
     .readdirSync(LOGS_DIR)
     .filter((f) => f.endsWith(".csv"))
     .map((name) => {
       const stat = fs.statSync(path.join(LOGS_DIR, name));
-      return { name, mtimeMs: stat.mtimeMs, size: stat.size };
+      const machine = machines[name];
+      return { name, mtimeMs: stat.mtimeMs, size: stat.size, ...(machine ? { machine } : {}) };
     })
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
 }

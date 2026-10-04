@@ -1,0 +1,52 @@
+# AM32 ESC 出荷時デフォルト値プロファイル。
+#
+# profile/am32.yaml (実測でチューニング済みの本番値) とは別ファイル。実機ESCを
+# 一旦まっさらな状態に戻したい場合にのみ使う。通常のチューニング作業では
+# profile/am32.yaml の方を使うこと。
+#
+# 出典: am32-firmware/am32-configurator (AM32公式Webコンフィギュレーター)
+# リポジトリの public/eeprom-defaults/DEFAULT/v4.bin を取得し、
+# include/driver/am32_config.hpp の Am32EepromLayout オフセット定義に従って
+# バイト単位でデコードした値(2026-09-07取得。eeprom_version=4 は本ドライバが
+# 前提とするバージョンと一致)。ESC実機からの読み出し値ではなく、公式
+# コンフィギュレーターが新規/デフォルト状態のESCに書き込む値そのもの。
+#
+# 送信方法: このファイルは webapp の「ESC書込」ボタン(常に profile/am32.yaml
+# 固定で送る実装 = AM32_FILE 定数)では使えない。CLIからパスを直接指定すること:
+#   python3 send_file.py am32sync tools/param_tuner/profile/am32_factory_default.yaml
+# (デバイスが起動直後のボタン待ちループにいる必要がある。他のUSBコマンドと同様)
+#
+# 元のチューニング値に戻す場合は、改めて
+#   python3 send_file.py am32sync
+# を実行する(パス省略時は profile/am32.yaml がデフォルトのため、通常のチューニング値が
+# 再送される)。
+#
+# 各項目の意味・単位は include/driver/am32_config.hpp の AM32Settings 参照。
+
+max_ramp_raw: 160                # デフォルト生値そのまま(単位不明、出典未確認)
+motor_kv: 2220                   # 生値55 → (55*40+20)。AM32公式コンフィギュレーターの
+                                  # 初期値であり、実モーターのKVとは無関係
+motor_poles: 14                  # AM32公式デフォルト。実測極数(12、profile/am32.yaml参照)とは異なる
+timing: 16                       # スライダー値0〜32 (生値26-10)
+auto_advance: false
+pwm_frequency_khz: 24
+variable_pwm: true                # 生値1="Variable"
+startup_power_percent: 100
+sine_startup: false
+bidirectional: false
+complementary_pwm: true
+stuck_rotor_protection: true
+brake_on_stop: 0
+drag_brake_strength: 10
+driving_brake_strength: 10
+
+current_limit_disabled: false
+current_limit_amps: 204          # 生値102(202=無効センチネルより低いため有効扱いだが、
+                                  # このESCの実力を超える値のため事実上無制限として振る舞う)
+
+temp_limit_disabled: true        # 生値141 = 無効センチネル
+temp_limit_c: 100                # disabled=trueのため参照されない。有効域70〜140内の適当な値
+
+beep_volume: 5
+low_voltage_cutoff_raw: 0
+low_cell_volt_cutoff: 3.00       # V/cell (生値50 → (50+250)/100)
