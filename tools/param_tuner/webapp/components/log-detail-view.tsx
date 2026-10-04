@@ -45,6 +45,8 @@ interface LogFileInfo {
   name: string;
   mtimeMs: number;
   size: number;
+  machine?: string; // このログを出した機体(machines/<機体>/logs にあるもの)
+  common?: boolean; // 共通の logs/ にあるもの
 }
 
 interface ViewPrefs {
@@ -123,7 +125,9 @@ function ColumnPicker({
   );
 }
 
-export function LogDetailView({ initialFile }: { initialFile?: string }) {
+// machine: この機体のログ(+ 共通のログ)を一覧に出す。無ければ全機体のログ。
+export function LogDetailView({ initialFile, machine }: { initialFile?: string; machine?: string }) {
+  const machineQuery = machine ? `machine=${encodeURIComponent(machine)}` : "";
   const router = useRouter();
   const [files, setFiles] = useState<LogFileInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(initialFile ?? null);
@@ -203,23 +207,23 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/logs")
+    void fetch(`/api/logs${machineQuery ? `?${machineQuery}` : ""}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        const next = data.files as LogFileInfo[];
+        const next = (data.files ?? []) as LogFileInfo[];
         setFiles(next);
         setSelected((prev) => (prev && next.some((f) => f.name === prev) ? prev : (next[0]?.name ?? null)));
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [machineQuery]);
 
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;
-    void fetch(`/api/logs/content?name=${encodeURIComponent(selected)}`)
+    void fetch(`/api/logs/content?name=${encodeURIComponent(selected)}${machineQuery ? `&${machineQuery}` : ""}`)
       .then((res) => res.text())
       .then((text) => {
         if (cancelled) return;
@@ -232,7 +236,7 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+  }, [selected, machineQuery]);
 
   // 表示中の観点のグラフ構成。編集していない観点はプリセットをそのまま使う。
   const charts = useMemo(() => chartsByView[viewKey] ?? presetCharts(viewKey), [chartsByView, viewKey]);
@@ -390,6 +394,7 @@ export function LogDetailView({ initialFile }: { initialFile?: string }) {
           {files.map((f) => (
             <option key={f.name} value={f.name}>
               {f.name}
+              {f.common ? " (共通)" : f.machine && f.machine !== machine ? ` (${f.machine})` : ""}
             </option>
           ))}
         </select>

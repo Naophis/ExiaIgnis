@@ -10,7 +10,7 @@ import {
   type MachineRegistry,
   type SpecificMap,
 } from "./machine-shared";
-import { CONSOLE_STATE_FILE, LEGACY_PROFILE_DIR, MACHINES_DIR, MACHINES_YAML, REPO_ROOT } from "./paths";
+import { CONSOLE_STATE_FILE, LEGACY_PROFILE_DIR, LOGS_DIR, MACHINES_DIR, MACHINES_YAML, REPO_ROOT } from "./paths";
 
 // 機体(個体)の登録簿と、機体ごとのパラメータの置き場所。サーバー専用。
 //
@@ -108,6 +108,12 @@ export function getMachine(id: string): Machine {
 // 機体のパラメータの場所。登録簿にある id だけを通すので、外へは出られない。
 export function profileDir(machineId: string): string {
   return path.join(MACHINES_DIR, getMachine(machineId).id, "profile");
+}
+
+// ログ(csv)の保存先。機体ごとに machines/<id>/logs。null = 共通の logs/
+// (機体を分ける前のログと、未登録の基板から受信したログ)。迷路(maze_logs)は全機体で共通。
+export function logsDir(machineId: string | null): string {
+  return machineId === null ? LOGS_DIR : path.join(MACHINES_DIR, getMachine(machineId).id, "logs");
 }
 
 export function machineForSerial(serial: string | null | undefined): Machine | null {
@@ -312,7 +318,8 @@ export function setSpecific(file: string, paths: true | string[], on: boolean): 
 interface ConsoleState {
   // 基板(USB シリアル番号)ごとに、最後に送れたファイルの中身のハッシュ
   sent?: Record<string, Record<string, string>>;
-  // ログ(csv)を出した機体
+  // 共通の logs/ にあるログを出した機体。保存先を機体ごとに分ける前(2026-10-04 の 1 日だけ)の
+  // 印で、いまは保存先のフォルダがそのまま機体を表す。読むだけ(新しくは書かない)。
   logs?: Record<string, string>;
 }
 
@@ -346,11 +353,6 @@ export function recordSent(serial: string, remoteName: string, hash: string): vo
   const sent = { ...(state.sent ?? {}) };
   sent[serial] = { ...(sent[serial] ?? {}), [remoteName]: hash };
   writeState({ ...state, sent });
-}
-
-export function recordLogMachine(fileName: string, machineId: string): void {
-  const state = readState();
-  writeState({ ...state, logs: { ...(state.logs ?? {}), [fileName]: machineId } });
 }
 
 export function getLogMachines(): Record<string, string> {

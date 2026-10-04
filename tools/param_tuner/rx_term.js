@@ -6,8 +6,27 @@ const { ReadlineParser } = require("@serialport/parser-readline");
 const { ByteLengthParser } = require("@serialport/parser-byte-length");
 const path = require("path");
 
+const { logsDir, machineForSerial } = require("./machines");
+
 let comport;
 let port;
+// ログ(csv)の保存先。つないだ基板の機体のフォルダ(machines/<機体>/logs)。
+// 基板が未登録なら共通の logs/。迷路(maze_logs)は全機体で共通。
+let logDir = path.join(__dirname, "logs");
+
+// csv を保存し、そのフォルダと共通の logs/ の latest.csv を新しくする
+function saveLog(fileName, content) {
+  fs.mkdirSync(logDir, { recursive: true });
+  const filePath = path.join(logDir, fileName);
+  fs.writeFileSync(filePath, content, { flag: "w+" });
+  fs.copyFileSync(filePath, path.join(logDir, "latest.csv"));
+  const common = path.join(__dirname, "logs");
+  if (logDir !== common) {
+    fs.mkdirSync(common, { recursive: true });
+    fs.copyFileSync(filePath, path.join(common, "latest.csv"));
+  }
+  return path.relative(__dirname, filePath);
+}
 
 let parser;
 let binaryMode = false;
@@ -85,9 +104,7 @@ const switchLineMode = (obj) => {
     if (obj.dump_to_csv_text) {
       if (data.match(/^end___/)) {
         obj.dump_to_csv_text = false;
-        fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, obj.record, { flag: "w+" });
-        fs.copyFileSync(`${__dirname}/logs/${obj.file_name}`, `${__dirname}/logs/latest.csv`);
-        console.log(`[text CSV] saved: ${obj.file_name}`);
+        console.log(`[text CSV] saved: ${saveLog(obj.file_name, obj.record)}`);
       } else {
         obj.record += `${data}\n`;
       }
@@ -227,9 +244,7 @@ const switchToBinaryMode = (obj) => {
     }
 
     const content = rows.join('\n') + '\n';
-    fs.writeFileSync(`${__dirname}/logs/${obj.file_name}`, content, { flag: "w+" });
-    fs.copyFileSync(`${__dirname}/logs/${obj.file_name}`, `${__dirname}/logs/latest.csv`);
-    console.log(`[LoggingTask] dump done: ${recordNum} records -> ${obj.file_name}`);
+    console.log(`[LoggingTask] dump done: ${recordNum} records -> ${saveLog(obj.file_name, content)}`);
     switchLineMode({
       dump_to_csv_ready: false,
       dump_to_map: false,
@@ -256,7 +271,11 @@ function waitForPico() {
         );
         if (found) {
           comport = found.path;
-          console.log(`[${new Date().toLocaleTimeString()}] 接続: ${comport}`);
+          const machine = machineForSerial(found.serialNumber);
+          logDir = logsDir(machine);
+          console.log(
+            `[${new Date().toLocaleTimeString()}] 接続: ${comport} (基板 ${found.serialNumber}: ${machine ? `機体 ${machine}` : "未登録"}) ログ -> ${path.relative(__dirname, logDir)}/`
+          );
           ready();
         } else {
           setTimeout(poll, 200);

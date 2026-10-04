@@ -30,9 +30,9 @@
 使い方:
     # 同定してテーブルを書き出す(その機体の profile/hf/enc_lut.yaml -> 機体では /enc_lut.hf)
     # テーブルは個体ごと。ログを取った機体の profile へ書くこと(ログ一覧の機体の印で確かめる)
-    python3 tools/param_tuner/enc_lut_fit.py -o tools/param_tuner/machines/<機体>/profile/hf/enc_lut.yaml logs/2026..._*.csv
+    python3 tools/param_tuner/enc_lut_fit.py -o tools/param_tuner/machines/<機体>/profile/hf/enc_lut.yaml tools/param_tuner/machines/<機体>/logs/2026..._*.csv
     # 補正を有効にして走ったログで、ファームが同じテーブルを同じ向きで引いているか照合
-    python3 tools/param_tuner/enc_lut_fit.py --check tools/param_tuner/machines/<機体>/profile/hf/enc_lut.yaml logs/2026..._*.csv
+    python3 tools/param_tuner/enc_lut_fit.py --check tools/param_tuner/machines/<機体>/profile/hf/enc_lut.yaml tools/param_tuner/machines/<機体>/logs/2026..._*.csv
 """
 import argparse
 import datetime

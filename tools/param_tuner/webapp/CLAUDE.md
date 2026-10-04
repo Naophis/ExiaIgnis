@@ -34,7 +34,11 @@
 - **編集画面**(`components/yaml-editor.tsx`): 見出しに機体の色のチップ。編集先の機体は `EditTarget.machine` が自分で持つ(表示中の機体を切り替えても保存先は変わらない。違う機体のファイルを開いているときは帯で知らせる)。ほかの機体と値が違う行の左に帯(琥珀 = 未整理、紫 = 固有)、マウスを載せると相手の値(`lib/cm-machine-diff.ts`、`lib/use-machine-diff.ts` が下書きとほかの機体の値を 250ms 待って比べる)。「次の差 ↓」で次の印へ。
   - **保存したとき**(`/api/profile-file` の `propagate`、`suggestPropagation()`): 変えたキーのうち、ほかの機体も「変える前と同じ値」だったもの(= そろっていた値)を「〇〇 にも同じ変更を入れる」として出す。固有のキーと、元から違っていたキーは出さない(機体ごとの値とみなす)。自動では入れない(たまたま同じ値だっただけかもしれない)。
 - **機体の追加**(ヘッダーの「機体設定」、`components/machine-dialog.tsx` / `createMachine()`): 既存の機体をコピーするか、`tools/param_tuner/profile` を持つブランチ(機体を分ける前の置き場所。`git archive` で取り出す)から取り込む。消す操作は画面に無い(フォルダと `machines.yaml` の行を手で消す)。
-- **どの機体のログか**: 受信したとき(`writeLogFile`)に基板の機体を `.console_state.json` の `logs` に残し、`/api/logs` の `machine` → プロットタブの一覧に色の点と名前。古いログには無い。
+- **ログ(csv)の保存先も機体ごと**(2026-10-05、ユーザー指定。迷路は共通のままでよい、とのこと): 受信したとき(`writeLogFile`)、基板が登録されている機体の `machines/<機体>/logs/` に保存する(`lib/machines.ts` の `logsDir(機体)`)。未登録の基板のログは共通の `logs/` へ。**機体を分ける前のログ(約 2100 本)は共通の `logs/` に置いたまま動かしていない**(どの機体のものか記録が無い)。`latest.csv` はその機体のフォルダと、共通の `logs/`(= どの機体かを問わず、いちばん新しいログの写し。`plot.sh` など機体を指定しない道具用)の両方に写す。
+  - `lib/logs.ts` の `listLogFiles(機体)` = その機体のログ(`machine`)+ 共通のログ(`common: true`)。機体の指定が無ければ全機体 + 共通。同じ名前(`latest.csv`)は機体のものを優先。`resolveLogPath(名前, 機体)` は 機体 → 共通 → ほかの機体 の順に探す(名前は受信した日時なので重ならない)。ログの API(`/api/logs` / `content` / `plotjuggler` / `open-folder` / `turn-exit`)は機体が無くても動く(`optionalMachineOf`)。
+  - プロットタブの一覧は、**既定ではその機体のフォルダのログだけ**。見出しの「共通 N」で共通のログを出し入れする(`localStorage` の `exia-log-show-common-v1`)。旋回出口の集計(直近 N 本)は一覧に出しているものが対象 = 「共通」を出していなければ機体のログだけ(機体の違うログを 1 つの集計に混ぜないため)。詳細ログ解析ページは `/logs?file=…&machine=…`(機体 + 共通を出す。`machine` が無ければ全機体)。
+  - 2026-10-04 の 1 日だけ、共通の `logs/` に保存して `.console_state.json` の `logs` に機体の印を付けていた。その印があるログは、その機体のものとして一覧に出す(読むだけ。新しくは書かない)。
+  - CLI の `rx_term.js`(`console.sh`)も同じ保存先(`machines.js` の `logsDir` / `machineForSerial`)。`python3 tools/param_tuner/machine_paths.py --logs [機体]` でフォルダが出る。
 - **試験用の擬似基板**: 環境変数 `EXIA_SIM_BOARD_FILE` に `{"path": "/dev/pts/N", "serialNumber": "..."}` を書いたファイルを指定すると、ttyACM* を探す代わりにそれを基板として開く(ファイルが無ければ「基板なし」)。pty の向こうで `name@content` に `OK` を返すだけのスクリプトを動かせば、実機なしで自動判別・登録・送信の関門・未送信の印を試せる(`EXIA_PARAM_TUNER_ROOT` と合わせて、別ポートの `next dev` で)。
 
 ## テーマカラー — `lib/theme.ts` / `components/theme-picker.tsx` / `components/theme-sync.tsx`(2026-10-04〜)
@@ -54,7 +58,7 @@
 
 - 行モード(`ReadlineParser`, delimiter `\r\n`)がデフォルト。
 - `ready___:<byteSize>` → 以降の `name:type:size` 行を `data_struct` に蓄積。
-- `start___:<totalBytes>` → `ByteLengthParser` に切り替えてバイナリダンプを1回受信、float/int/short (LE) でパースして `logs/<timestamp>.csv` に保存(+`logs/latest.csv` へコピー)、行モードに戻る。
+- `start___:<totalBytes>` → `ByteLengthParser` に切り替えてバイナリダンプを1回受信、float/int/short (LE) でパースして、つないでいる基板の機体の `machines/<機体>/logs/<timestamp>.csv` に保存(未登録の基板なら共通の `logs/`。`latest.csv` へもコピー。上の「機体」の節)、行モードに戻る。
 - `csv___` 〜 `end___` はテキストCSVをそのまま蓄積して保存。
 - `map___` 〜 `end___` は迷路データ(カンマ区切り整数)を蓄積し、16x16/32x32 の上三角⇄下三角 swap 変換をして `maze_logs/` に保存。
 - `ESC[2J`(画面クリア、`main_task_test_misc.cpp` の `dump1()` 等が送出)を検知すると SSE の `clear` イベントを発火し、ANSI CSI シーケンス自体は表示前に除去する。マーカー判定もこの除去後の文字列に対して行う。
@@ -236,11 +240,11 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 | `/api/test-templates/quick-apply` | GET/POST | 現在値取得 / 単一キーの即時適用 |
 | `/api/test-templates/file-idx-options` | GET | profiles.yaml由来のfile_idx選択肢 |
 | `/api/test-templates/mode-options` | GET | system.yaml由来のmode選択肢 |
-| `/api/logs` | GET | ログCSV一覧 |
-| `/api/logs/content` | GET | ログCSVの内容 |
+| `/api/logs` | GET | ログCSV一覧(その機体のログ + 共通のログ。機体の指定が無ければ全機体) |
+| `/api/logs/content` | GET | ログCSVの内容(名前から 機体 → 共通 → ほかの機体 の順に探す) |
 | `/api/logs/plotjuggler` | POST | PlotJugglerの起動/終了 |
-| `/api/logs/turn-exit` | GET | 複数ログの旋回出口集計(`limit=N` 直近N本 / `names=a.csv,b.csv`)。`lib/turn-exit.ts` をサーバー側で回し (ファイル名, mtime) でキャッシュ |
-| `/api/logs/open-folder` | POST | logs/フォルダをファイルマネージャで開く |
+| `/api/logs/turn-exit` | GET | 複数ログの旋回出口集計(`limit=N` 直近N本 / `names=a.csv,b.csv`。その機体のログが対象、`common=1` で共通も)。`lib/turn-exit.ts` をサーバー側で回し (ファイル名, mtime) でキャッシュ |
+| `/api/logs/open-folder` | POST | その機体のログのフォルダ(`?common=1` で共通の logs/)をファイルマネージャで開く |
 | `/api/sensor-calib` | GET/POST | センサ校正: `gains`(現在値)/`dirs`/`load`、POST `save`(csv保存)/`apply`(sensor.yaml置換+任意で送信) |
 | `/api/maze/search` | POST | 探索: `{walls, goals}` で `tools/path_sim` の search_sim を実行(SearchController::exec の再現) |
 | `/api/maze/path` | GET/POST | 経路: GET はモードの選択肢(run_prf の exec_prof)、POST `{walls, goals, exec, direction}` で `tools/path_sim` を実行 |

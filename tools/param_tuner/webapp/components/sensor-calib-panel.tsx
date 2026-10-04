@@ -384,7 +384,8 @@ export function SensorCalibPanel({
   }, []);
 
   const refreshLogFiles = useCallback(async () => {
-    const res = await fetch("/api/logs");
+    // この機体のログ(+ 共通のログ)
+    const res = await apiFetch("/api/logs");
     const data = await res.json();
     if (res.ok) setLogFiles((data.files as { name: string }[]).map((f) => f.name).filter((n) => n !== "latest.csv"));
   }, []);
@@ -396,7 +397,7 @@ export function SensorCalibPanel({
       if (!quiet) toast.error(`${name}: 取り込み済みです`);
       return false;
     }
-    const res = await fetch(`/api/logs/content?name=${encodeURIComponent(name)}`);
+    const res = await apiFetch(`/api/logs/content?name=${encodeURIComponent(name)}`);
     if (!res.ok) {
       if (!quiet) toast.error(`${name}: 読めませんでした`);
       return false;

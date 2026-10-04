@@ -24,6 +24,25 @@ function profileDir(machine) {
   return path.join(__dirname, "machines", machine, "profile");
 }
 
+// ログ(csv)の保存先。機体ごとに machines/<機体>/logs。機体が分からなければ共通の logs/。
+// 迷路(maze_logs)は全機体で共通。
+function logsDir(machine) {
+  return machine ? path.join(__dirname, "machines", machine, "logs") : path.join(__dirname, "logs");
+}
+
+// USB シリアル番号 → 登録されている機体(無ければ null)
+function machineForSerial(serial) {
+  if (!serial) return null;
+  let reg;
+  try {
+    reg = readRegistry();
+  } catch (e) {
+    return null;
+  }
+  const m = reg.machines.find((x) => (x.serials || []).map(String).includes(serial));
+  return m ? String(m.id) : null;
+}
+
 // つないでいる Pico の USB シリアル番号から機体を決める(登録されていなければ null)
 async function connectedBoard() {
   const { SerialPort } = require("serialport");
@@ -58,4 +77,4 @@ async function resolveMachine(explicit) {
   return reg.default;
 }
 
-module.exports = { readRegistry, profileDir, connectedBoard, resolveMachine };
+module.exports = { readRegistry, profileDir, logsDir, machineForSerial, connectedBoard, resolveMachine };

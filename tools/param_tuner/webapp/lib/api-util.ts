@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MACHINE_HEADER } from "./machine-shared";
 import { getMachine, machineOfRequest } from "./machines";
 import { SendTargetError } from "./serial-manager";
 
@@ -7,6 +8,13 @@ import { SendTargetError } from "./serial-manager";
 export function machineOf(request: Request, bodyMachine?: unknown): string {
   if (typeof bodyMachine === "string" && bodyMachine) return getMachine(bodyMachine).id;
   return machineOfRequest(request);
+}
+
+// ログの API 用: 機体の指定が無くてもよい(null = 全機体 + 共通)。指定があれば登録済みか確かめる。
+export function optionalMachineOf(request: Request, bodyMachine?: unknown): string | null {
+  if (typeof bodyMachine === "string" && bodyMachine) return getMachine(bodyMachine).id;
+  const id = new URL(request.url).searchParams.get("machine") ?? request.headers.get(MACHINE_HEADER);
+  return id ? getMachine(id).id : null;
 }
 
 // 送信の失敗。送り先の基板が別の機体・未登録のときは 409 と code を返す

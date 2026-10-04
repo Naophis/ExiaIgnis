@@ -8,7 +8,7 @@ import { ReadlineParser } from "@serialport/parser-readline";
 import { ByteLengthParser } from "@serialport/parser-byte-length";
 import { AM32_FILE } from "./am32-shared";
 import type { BoardInfo } from "./machine-shared";
-import { getMachine, getSentHashes, machineForSerial, profileDir, recordLogMachine, recordSent } from "./machines";
+import { getMachine, getSentHashes, logsDir, machineForSerial, profileDir, recordSent } from "./machines";
 import { parseMazeText } from "./maze-shared";
 import { LOGS_DIR, MAZE_LOGS_DIR } from "./paths";
 
@@ -552,8 +552,8 @@ class SerialManager extends EventEmitter {
     if (dump.dumpToCsvText) {
       if (/^end___/.test(data)) {
         dump.dumpToCsvText = false;
-        this.writeLogFile(dump.fileName, dump.record);
-        this.emit("saved", { type: "csv", file: dump.fileName });
+        const saved = this.writeLogFile(dump.fileName, dump.record);
+        this.emit("saved", { type: "csv", file: dump.fileName, machine: saved.machine });
       } else {
         dump.record += `${data}\n`;
       }
@@ -713,23 +713,31 @@ class SerialManager extends EventEmitter {
           rows[j + 1] = record.join(",");
         }
         const content = rows.join("\n") + "\n";
-        this.writeLogFile(dump.fileName, content);
-        this.emit("log", `[LoggingTask] dump done: ${recordNum} records -> ${dump.fileName}`);
-        this.emit("saved", { type: "csv", file: dump.fileName });
+        const saved = this.writeLogFile(dump.fileName, content);
+        this.emit("log", `[LoggingTask] dump done: ${recordNum} records -> ${saved.where}`);
+        this.emit("saved", { type: "csv", file: dump.fileName, machine: saved.machine });
       }
       this.dump = freshDumpState();
       this.switchLineMode();
     });
   }
 
-  private writeLogFile(fileName: string, content: string) {
-    fs.mkdirSync(LOGS_DIR, { recursive: true });
-    const filePath = path.join(LOGS_DIR, fileName);
+  // ログの保存先は機体ごと(machines/<機体>/logs)。基板が未登録なら共通の logs/。
+  // 返すのは保存した機体(共通なら null)と、表示用の場所。
+  private writeLogFile(fileName: string, content: string): { machine: string | null; where: string } {
+    const machine = machineForSerial(this.connectedSerial)?.id ?? null;
+    const dir = logsDir(machine);
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, fileName);
     fs.writeFileSync(filePath, content, { flag: "w+" });
-    fs.copyFileSync(filePath, path.join(LOGS_DIR, "latest.csv"));
-    // どの機体のログかを覚えておく(ログ一覧に出す)。未登録の基板なら何も残さない
-    const machine = machineForSerial(this.connectedSerial);
-    if (machine) recordLogMachine(fileName, machine.id);
+    fs.copyFileSync(filePath, path.join(dir, "latest.csv"));
+    // 共通の logs/latest.csv も「どの機体かを問わず、いちばん新しいログ」にしておく
+    // (plot.sh など、機体を指定しない道具がそのまま使えるように)。
+    if (dir !== LOGS_DIR) {
+      fs.mkdirSync(LOGS_DIR, { recursive: true });
+      fs.copyFileSync(filePath, path.join(LOGS_DIR, "latest.csv"));
+    }
+    return { machine, where: machine ? `machines/${machine}/logs/${fileName}` : `logs/${fileName}` };
   }
 
   // ===== AM32: ported from send_file.py's cmd_am32write/read/sync =====

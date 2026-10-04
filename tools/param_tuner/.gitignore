@@ -1,3 +1,4 @@
 node_modules/
 logs/*.csv
 .console_state.json
+machines/*/logs/

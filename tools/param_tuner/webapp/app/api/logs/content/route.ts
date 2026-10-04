@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { optionalMachineOf } from "@/lib/api-util";
 import { readLogFile } from "@/lib/logs";
 
 export const runtime = "nodejs";
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
   try {
-    return new NextResponse(readLogFile(name), {
+    return new NextResponse(readLogFile(name, optionalMachineOf(request)), {
       headers: { "Content-Type": "text/csv; charset=utf-8" },
     });
   } catch (err) {

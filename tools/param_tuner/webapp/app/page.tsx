@@ -323,8 +323,11 @@ export default function Home() {
     });
 
     es.addEventListener("saved", (e) => {
-      const data = JSON.parse((e as MessageEvent).data) as { type: string; file: string };
+      const data = JSON.parse((e as MessageEvent).data) as { type: string; file: string; machine?: string | null };
       if (data.type === "csv") {
+        // 保存先: その基板の機体のフォルダ(未登録の基板なら共通の logs/)
+        const reg = registryRef.current;
+        const where = data.machine ? `${(reg && findMachine(reg, data.machine)?.label) ?? data.machine} のログ` : "共通のログ";
         toast.success(
           <button
             type="button"
@@ -334,7 +337,7 @@ export default function Home() {
               setPlotAutoOpen({ file: data.file, nonce: Date.now() });
             }}
           >
-            保存しました (csv): {data.file}
+            保存しました ({where}): {data.file}
             <span className="block text-xs text-muted-foreground">クリックでPlotJugglerを開く</span>
           </button>,
         );

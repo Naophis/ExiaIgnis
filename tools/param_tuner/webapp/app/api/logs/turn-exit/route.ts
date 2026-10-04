@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { optionalMachineOf } from "@/lib/api-util";
 import { listLogFiles, readLogFile } from "@/lib/logs";
 import { parseCsv } from "@/lib/trajectory";
 import { analyzeTurnExits, summarizeTurnExits, type TurnExitRow } from "@/lib/turn-exit";
@@ -9,13 +10,22 @@ export const runtime = "nodejs";
 // 何本もブラウザへ送るより、サーバー側で解析して行だけ返す方が軽い。
 //   GET /api/logs/turn-exit?limit=6          直近 N 本(latest.csv は複製なので除外)
 //   GET /api/logs/turn-exit?names=a.csv,b.csv 指定ファイル
+// 対象は、その機体(ヘッダー / ?machine=)のログ。?common=1 で共通の logs/ も含める
+// (機体の違うログを 1 つの集計に混ぜないため、既定では含めない)。
 // 解析結果は (ファイル名, mtime) でキャッシュする。dev の HMR で消えても再計算するだけ。
 const cache = new Map<string, { mtimeMs: number; rows: TurnExitRow[] }>();
 const MAX_FILES = 40;
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
-  const all = listLogFiles().filter((f) => f.name !== "latest.csv");
+  let machine: string | null;
+  try {
+    machine = optionalMachineOf(request);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+  }
+  const withCommon = params.get("common") === "1" || machine === null;
+  const all = listLogFiles(machine).filter((f) => f.name !== "latest.csv" && (withCommon || !f.common));
   let targets = all;
   const names = params.get("names");
   if (names) {
@@ -38,7 +48,7 @@ export async function GET(request: NextRequest) {
       continue;
     }
     try {
-      const parsed = parseCsv(readLogFile(f.name));
+      const parsed = parseCsv(readLogFile(f.name, f.machine ?? machine));
       const r = analyzeTurnExits(parsed, { log: f.name.replace(/\.csv$/, "") });
       cache.set(f.name, { mtimeMs: f.mtimeMs, rows: r });
       rows.push(...r);

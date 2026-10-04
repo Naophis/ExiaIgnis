@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { optionalMachineOf } from "@/lib/api-util";
 import { killPlotJuggler, openInPlotJuggler } from "@/lib/logs";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (action === "open") {
       const name = body?.name as string | undefined;
       if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
-      openInPlotJuggler(name);
+      openInPlotJuggler(name, optionalMachineOf(request, body?.machine));
       return NextResponse.json({ ok: true });
     }
     if (action === "kill") {

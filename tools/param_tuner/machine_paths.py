@@ -10,9 +10,14 @@
   3. (detect=True のとき)つないでいる基板の USB シリアル番号が登録されている機体
   4. machines.yaml の default
 
+ログ(csv)も機体ごとで、tools/param_tuner/machines/<機体>/logs/ に保存される(2026-10-05〜)。
+共通の tools/param_tuner/logs/ には、機体を分ける前のログと、未登録の基板から受信した
+ログがある。迷路(maze_logs)は全機体で共通。
+
 シェルから:
   python3 tools/param_tuner/machine_paths.py            # 既定の機体の profile の場所を出す
   python3 tools/param_tuner/machine_paths.py 1st        # 機体を指定
+  python3 tools/param_tuner/machine_paths.py --logs     # 既定の機体のログの場所(--logs 1st で指定)
   python3 tools/param_tuner/machine_paths.py --list     # 機体の一覧
   EXIA_MACHINE=1st python3 tools/path_sim/check_time_path.py
 """
@@ -91,9 +96,16 @@ def profile_dir(name: str | None = None, detect: bool = False, quiet: bool = Fal
     return path
 
 
+def logs_dir(name: str | None = None, detect: bool = False) -> str:
+    """その機体のログ(csv)のフォルダ。"""
+    return os.path.join(MACHINES_DIR, resolve_machine(name, detect), "logs")
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if args and args[0] == "--list":
+    if args and args[0] == "--logs":
+        print(logs_dir(args[1] if len(args) > 1 else None))
+    elif args and args[0] == "--list":
         reg = registry()
         for m in reg["machines"]:
             mark = "*" if m["id"] == reg["default"] else " "

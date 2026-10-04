@@ -29,15 +29,19 @@ import {
   type TurnExitSummaryData,
 } from "@/components/turn-exit-table";
 import { MachineDot } from "@/components/machine-chip";
-import { findMachine, useMachines } from "@/lib/machine-client";
+import { apiFetch, findMachine, useMachines } from "@/lib/machine-client";
 import { buildTrajectoryData, DEFAULT_X_OFFSET, parseCsv, type TrajectoryPoint } from "@/lib/trajectory";
 
 interface LogFileInfo {
   name: string;
   mtimeMs: number;
   size: number;
-  machine?: string; // このログを出した機体(受信時に基板から決めたもの)
+  machine?: string; // このログを出した機体(machines/<機体>/logs にあるもの)
+  common?: boolean; // 共通の logs/ にあるもの(機体を分ける前のログ・未登録の基板のログ)
 }
+
+// 共通の logs/ のログも一覧に出すか(このブラウザに覚える)
+const SHOW_COMMON_KEY = "exia-log-show-common-v1";
 
 function formatDate(mtimeMs: number): string {
   const d = new Date(mtimeMs);
@@ -71,7 +75,10 @@ function LogPlotPanelInner({
   autoOpen?: AutoOpenRequest | null;
   onAutoOpenHandled?: () => void;
 }) {
-  const [files, setFiles] = useState<LogFileInfo[]>([]);
+  // 表示中の機体のログ + 共通のログ(サーバーが返したもの全部)
+  const [allFiles, setAllFiles] = useState<LogFileInfo[]>([]);
+  // 既定では、その機体のフォルダのログだけを出す。共通のログは「共通」で出し入れする
+  const [showCommon, setShowCommon] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
   const [showLeft45, setShowLeft45] = useState(true);
@@ -95,35 +102,71 @@ function LogPlotPanelInner({
   // 旋回テーブルで選択中の行(プロット上で旋回区間と旋回後の窓を強調する)
   const [selectedTurnKey, setSelectedTurnKey] = useState<string | null>(null);
   const router = useRouter();
-  const { registry } = useMachines();
+  const { registry, current } = useMachines();
+  const currentMachine = findMachine(registry, current);
+
+  useEffect(() => {
+    // localStorage は描画後にしか読めない(SSR)。
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (localStorage.getItem(SHOW_COMMON_KEY) === "1") setShowCommon(true);
+    } catch {
+      // 読めなくても既定で動く
+    }
+  }, []);
+  const toggleCommon = () => {
+    setShowCommon((prev) => {
+      try {
+        localStorage.setItem(SHOW_COMMON_KEY, prev ? "0" : "1");
+      } catch {
+        // 覚えられなくても動く
+      }
+      return !prev;
+    });
+  };
+
+  const commonCount = useMemo(() => allFiles.filter((f) => f.common).length, [allFiles]);
+  const files = useMemo(() => (showCommon ? allFiles : allFiles.filter((f) => !f.common)), [allFiles, showCommon]);
+  const filesRef = useRef(files);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
   const { tip: turnTip, show: showTurnTip, hide: hideTurnTip } = useTip();
 
   const refreshFiles = useCallback(async () => {
-    const res = await fetch("/api/logs");
+    const res = await apiFetch("/api/logs");
     const data = await res.json();
+    if (!res.ok) return;
     const nextFiles = data.files as LogFileInfo[];
     // 3 秒ごとの取り直しで中身が同じなら入れ替えない(一覧の描き直しを起こさない)
-    setFiles((prev) =>
+    setAllFiles((prev) =>
       prev.length === nextFiles.length &&
       prev.every(
         (f, i) =>
           f.name === nextFiles[i].name &&
           f.mtimeMs === nextFiles[i].mtimeMs &&
           f.size === nextFiles[i].size &&
-          f.machine === nextFiles[i].machine,
+          f.machine === nextFiles[i].machine &&
+          f.common === nextFiles[i].common,
       )
         ? prev
         : nextFiles,
     );
-    setSelected((prev) => (prev && nextFiles.some((f) => f.name === prev) ? prev : (nextFiles[0]?.name ?? null)));
   }, []);
 
+  // 機体を切り替えたら、その機体のログを取り直す(current を依存に入れてある)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshFiles();
     const interval = setInterval(() => void refreshFiles(), 3000);
     return () => clearInterval(interval);
-  }, [refreshFiles]);
+  }, [refreshFiles, current]);
+
+  // 選んでいるログが一覧から外れたら(機体の切り替え・「共通」を外した)、先頭を選び直す
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelected((prev) => (prev && files.some((f) => f.name === prev) ? prev : (files[0]?.name ?? null)));
+  }, [files]);
 
   useEffect(() => {
     if (!selected) {
@@ -132,7 +175,7 @@ function LogPlotPanelInner({
       return;
     }
     let cancelled = false;
-    void fetch(`/api/logs/content?name=${encodeURIComponent(selected)}`)
+    void apiFetch(`/api/logs/content?name=${encodeURIComponent(selected)}`)
       .then((res) => res.text())
       .then((text) => {
         if (!cancelled) setCsvText(text);
@@ -191,7 +234,8 @@ function LogPlotPanelInner({
   const fetchTurnExitSummary = useCallback(async (limit: number) => {
     setTurnExitBusy(true);
     try {
-      const res = await fetch(`/api/logs/turn-exit?limit=${limit}`);
+      // 一覧に出しているログの直近 N 本(共通のログは「共通」を出しているときだけ含める)
+      const res = await apiFetch(`/api/logs/turn-exit?limit=${limit}&common=${showCommon ? 1 : 0}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "集計に失敗しました");
       setTurnExitSummary(data as TurnExitSummaryData);
@@ -200,7 +244,7 @@ function LogPlotPanelInner({
     } finally {
       setTurnExitBusy(false);
     }
-  }, []);
+  }, [showCommon]);
 
   // 有効中は新しいログが保存されるたびに集計し直す。files[0] は常に latest.csv
   // (複製、mtime が最新)なので、その次のファイル名の変化を新ログの合図にする。
@@ -237,7 +281,7 @@ function LogPlotPanelInner({
     if (!target) return;
     setPjBusy(true);
     try {
-      const res = await fetch("/api/logs/plotjuggler", {
+      const res = await apiFetch("/api/logs/plotjuggler", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "open", name: target }),
@@ -269,6 +313,8 @@ function LogPlotPanelInner({
     if (!autoOpen) return;
     if (handledNonceRef.current === autoOpen.nonce) return;
     handledNonceRef.current = autoOpen.nonce;
+    // 保存された直後だと一覧がまだ古い(3 秒ごとの取り直し)ので、先に取り直す
+    void refreshFiles();
     setSelected(autoOpen.file);
     void openPlotJuggler(autoOpen.file);
     onAutoOpenHandled?.();
@@ -286,7 +332,9 @@ function LogPlotPanelInner({
 
   const openLogsFolder = async () => {
     try {
-      const res = await fetch("/api/logs/open-folder", { method: "POST" });
+      // その機体のログのフォルダ。「共通」を出していて、機体のログがまだ無いときは共通のフォルダ
+      const common = showCommon && !filesRef.current.some((f) => !f.common);
+      const res = await apiFetch(`/api/logs/open-folder${common ? "?common=1" : ""}`, { method: "POST" });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error ?? "フォルダを開けませんでした");
@@ -316,10 +364,36 @@ function LogPlotPanelInner({
       <ResizablePanel defaultSize={22} minSize={12} maxSize={45} className="min-w-0">
       <div className="flex h-full flex-col overflow-hidden border-r border-border">
         <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-sm font-medium">ログファイル</span>
-          <div className="flex gap-1">
-            <Button size="sm" variant="ghost" onClick={() => void openLogsFolder()}>
-              フォルダを開く
+          <span
+            className="flex min-w-0 items-center gap-1.5 text-sm font-medium"
+            title={
+              currentMachine
+                ? `${currentMachine.label} の基板から受信したログ(tools/param_tuner/machines/${currentMachine.id}/logs)`
+                : undefined
+            }
+          >
+            {currentMachine && <MachineDot machine={currentMachine} />}
+            <span className="truncate">{currentMachine ? currentMachine.label : "ログ"}</span>
+          </span>
+          <div className="flex shrink-0 gap-1">
+            {commonCount > 0 && (
+              <Button
+                size="sm"
+                variant={showCommon ? "secondary" : "ghost"}
+                title={`共通のフォルダ(tools/param_tuner/logs)のログ ${commonCount} 本も一覧に出す。機体ごとの保存に分ける前のログと、未登録の基板から受信したログ`}
+                onClick={toggleCommon}
+                data-log-common-toggle
+              >
+                共通 {commonCount}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              title="このログのフォルダをファイルマネージャで開く"
+              onClick={() => void openLogsFolder()}
+            >
+              フォルダ
             </Button>
             <Button size="sm" variant="ghost" onClick={() => void refreshFiles()}>
               更新
@@ -332,6 +406,7 @@ function LogPlotPanelInner({
             {files.map((f) => (
               <div
                 key={f.name}
+                data-log-row={f.name}
                 role="button"
                 tabIndex={0}
                 onClick={() => setSelected(f.name)}
@@ -347,15 +422,26 @@ function LogPlotPanelInner({
                   <span className="truncate font-medium">{f.name}</span>
                   <span className={selected === f.name ? "text-primary-foreground/70" : "text-muted-foreground"}>
                     {formatDate(f.mtimeMs)}
-                    {f.machine && (
+                    {f.common ? (
                       <span
-                        className="ml-1.5 inline-flex items-center gap-1"
-                        title={`このログを出した機体: ${findMachine(registry, f.machine)?.label ?? f.machine}`}
-                        data-log-machine={f.machine}
+                        className="ml-1.5"
+                        title="共通のフォルダ(tools/param_tuner/logs)のログ。どの機体のものかは記録が無い"
+                        data-log-common
                       >
-                        <MachineDot machine={findMachine(registry, f.machine)} />
-                        {findMachine(registry, f.machine)?.label ?? f.machine}
+                        共通
                       </span>
+                    ) : (
+                      f.machine &&
+                      f.machine !== current && (
+                        <span
+                          className="ml-1.5 inline-flex items-center gap-1"
+                          title={`このログを出した機体: ${findMachine(registry, f.machine)?.label ?? f.machine}`}
+                          data-log-machine={f.machine}
+                        >
+                          <MachineDot machine={findMachine(registry, f.machine)} />
+                          {findMachine(registry, f.machine)?.label ?? f.machine}
+                        </span>
+                      )
                     )}
                   </span>
                 </span>
@@ -376,7 +462,15 @@ function LogPlotPanelInner({
               </div>
             ))}
             {files.length === 0 && (
-              <span className="px-1.5 py-0.5 text-xs text-muted-foreground">ログファイルがありません</span>
+              <span className="px-1.5 py-1 text-xs text-muted-foreground" data-log-empty>
+                {currentMachine ? `${currentMachine.label} のログはまだありません。` : "ログファイルがありません。"}
+                {commonCount > 0 && !showCommon && (
+                  <>
+                    {" "}
+                    機体ごとの保存に分ける前のログは、上の「共通 {commonCount}」で出せます。
+                  </>
+                )}
+              </span>
             )}
           </div>
         </ScrollArea>
@@ -436,7 +530,12 @@ function LogPlotPanelInner({
             variant="outline"
             disabled={!selected}
             title="このログを詳細ログ解析ページ(軌跡 + 連動カーソルの時系列グラフ)で開く"
-            onClick={() => selected && router.push(`/logs?file=${encodeURIComponent(selected)}`)}
+            onClick={() =>
+              selected &&
+              router.push(
+                `/logs?file=${encodeURIComponent(selected)}${current ? `&machine=${encodeURIComponent(current)}` : ""}`,
+              )
+            }
           >
             詳細解析
           </Button>
