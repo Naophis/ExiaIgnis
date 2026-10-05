@@ -3,8 +3,8 @@
 #   ./plot.sh        いちばん新しいログ(どの機体かは問わない)を PlotJuggler で開く
 #   ./plot.sh N      新しい方から N 番目(0 = いちばん新しい)のログを開く
 # ログは機体ごとに tools/param_tuner/machines/<機体>/logs/ に保存される。共通の
-# tools/param_tuner/logs/ には、機体を分ける前のログと未登録の基板のログがあり、
-# latest.csv だけは「どの機体かを問わず、いちばん新しいログ」の写しになっている。
+# tools/param_tuner/logs/ には未登録の基板のログが入り、latest.csv だけは
+# 「どの機体かを問わず、いちばん新しいログ」の写しになっている。
 if [ $# -ne 0 ];then
     idx=$1
     if expr "$idx" : "[0-9]*$" >&/dev/null; then

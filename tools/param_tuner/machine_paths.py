@@ -11,8 +11,8 @@
   4. machines.yaml の default
 
 ログ(csv)も機体ごとで、tools/param_tuner/machines/<機体>/logs/ に保存される(2026-10-05〜)。
-共通の tools/param_tuner/logs/ には、機体を分ける前のログと、未登録の基板から受信した
-ログがある。迷路(maze_logs)は全機体で共通。
+共通の tools/param_tuner/logs/ に入るのは、未登録の基板から受信したログ(2026-10-04
+以前のログは machines/calibur/logs/ へ移してある)。迷路(maze_logs)は全機体で共通。
 
 シェルから:
   python3 tools/param_tuner/machine_paths.py            # 既定の機体の profile の場所を出す

@@ -14,7 +14,7 @@ machines:
       - 5E17A6AC7E691763
   - id: 3rd
     label: 3rd
-    color: '#d6007d'
+    color: '#04d600'
     serials:
       - A2FEC5EA5F5821CB
 specific:

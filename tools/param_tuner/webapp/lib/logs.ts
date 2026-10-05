@@ -46,7 +46,15 @@ export function listLogFiles(machine: string | null): LogFileInfo[] {
   }
   // 共通の logs/。保存先を分ける前の 1 日だけ付けていた印があるログは、その機体のものとして扱う
   const tags = getLogMachines();
-  for (const f of listDir(LOGS_DIR)) {
+  const common = listDir(LOGS_DIR);
+  // 共通の latest.csv は「どの機体かを問わず、いちばん新しいログ」の写し(serial-manager の
+  // writeLogFile)。写し元が機体のログのときは共通のログではないので、一覧には出さない。
+  // 共通のいちばん新しいログと大きさ・時刻が合うときだけ、その写しとして出す。
+  const newestCommon = common.filter((f) => f.name !== "latest.csv").sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+  const latestIsCommon = (f: { size: number; mtimeMs: number }) =>
+    newestCommon !== undefined && f.size === newestCommon.size && Math.abs(f.mtimeMs - newestCommon.mtimeMs) < 60_000;
+  for (const f of common) {
+    if (f.name === "latest.csv" && !latestIsCommon(f)) continue;
     if (seen.has(f.name)) continue;
     const tag = tags[f.name];
     if (tag && machine && tag !== machine) continue; // 別の機体のログ
