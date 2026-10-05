@@ -8,13 +8,13 @@
 default: 3rd
 machines:
   - id: calibur
-    label: calibur
+    label: Calibur
     color: '#2b31d4'
     serials:
       - 5E17A6AC7E691763
   - id: 3rd
-    label: 3rd
-    color: '#04d600'
+    label: Calibur 3rd
+    color: '#15ba12'
     serials:
       - A2FEC5EA5F5821CB
 specific:
