@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ConnectionStatus, PortInfo } from "@/lib/serial-manager";
@@ -60,15 +60,22 @@ export function PortPanel({
   const variant = !autoConnect ? "destructive" : STATUS_VARIANT[status];
 
   return (
+    // 見た目は globals.css の .cb-header(左の帯 = 表示中の機体の色、六角形の網、下の縁の光)。
+    // テーマの窓がこの下へはみ出して出るので、overflow は切らない。
     <div
-      className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border-l-4 border-l-accent-gold bg-card px-2.5 py-1 text-sm ring-1 ring-primary-bright/20"
-      style={accentColor ? { borderLeftColor: accentColor } : undefined}
+      className="cb-header flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 py-1 pr-2.5 pl-3 text-sm"
+      style={accentColor ? ({ "--cb-machine": accentColor } as CSSProperties) : undefined}
     >
-      <span className="font-semibold tracking-wide text-accent-gold">Exia PARAM CONSOLE</span>
+      {/* 銘。2 行にして、ヘッダーの高さ(ボタン 1 行分)の中に収める */}
+      <div className="flex shrink-0 flex-col gap-[3px] pr-1 leading-none text-accent-gold">
+        <span className="font-display text-[7.5px] tracking-[0.34em] opacity-70">CELESTIAL BEING</span>
+        <span className="font-display text-[11.5px] tracking-[0.1em]">EXIA PARAM CONSOLE</span>
+      </div>
       <Badge variant={variant}>{label}</Badge>
-      <span className="text-muted-foreground">
-        {connectedPath ?? (ports[0]?.path ? `検出済み: ${ports[0].path}` : "デバイス未検出")}
-      </span>
+      {/* 未検出のときは左のバッジ(Searching for device...)が同じことを言っているので出さない */}
+      {(connectedPath ?? ports[0]?.path) && (
+        <span className="text-muted-foreground">{connectedPath ?? `検出済み: ${ports[0].path}`}</span>
+      )}
       {machines}
       {tabs && <div className="ml-2 flex gap-1">{tabs}</div>}
       <div className="flex-1" />

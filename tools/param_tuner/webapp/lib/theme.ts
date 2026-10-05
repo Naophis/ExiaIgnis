@@ -26,18 +26,19 @@ export const THEME_APPLIED_KEY = "exia-theme-applied-v2";
 // 同じページの中で色を変えたことを知らせるイベント(別のタブへは storage イベントで伝わる)
 export const THEME_EVENT = "exia-theme-change";
 
+// 色見本。ソレスタルビーイングの機体と装備の色から(名前は色見本のツールチップに出る)。
 export const THEME_PRESETS: { name: string; color: string | null }[] = [
-  { name: "GN グリーン(既定)", color: null },
-  { name: "シアン", color: "#22d3ee" },
-  { name: "ブルー", color: "#3b82f6" },
-  { name: "エクシア ブルー", color: "#2b31d4" },
-  { name: "バイオレット", color: "#a78bfa" },
-  { name: "ピンク", color: "#f472b6" },
-  { name: "レッド", color: "#ef4444" },
-  { name: "オレンジ", color: "#fb923c" },
-  { name: "ゴールド", color: "#fbbf24" },
-  { name: "ライム", color: "#a3e635" },
-  { name: "ホワイト", color: "#e5e7eb" },
+  { name: "GN 粒子(既定)", color: null },
+  { name: "エクシア(青)", color: "#2b31d4" },
+  { name: "ダブルオー(空色)", color: "#38bdf8" },
+  { name: "デュナメス(緑)", color: "#22a55b" },
+  { name: "キュリオス(橙)", color: "#fb923c" },
+  { name: "ヴァーチェ(紫)", color: "#a78bfa" },
+  { name: "トランザム(赤)", color: "#ff4d6d" },
+  { name: "ヴェーダ(水色)", color: "#22d3ee" },
+  { name: "ゴールド(金)", color: "#fbbf24" },
+  { name: "GN フィールド(若草)", color: "#a3e635" },
+  { name: "プトレマイオス(白)", color: "#e5e7eb" },
 ];
 
 interface Lch {

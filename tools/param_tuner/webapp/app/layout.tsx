@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Michroma } from "next/font/google";
 import { ThemeSync } from "@/components/theme-sync";
 import { Toaster } from "@/components/ui/sonner";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
@@ -15,6 +15,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// 見出し用(ヘッダーの銘など、英字だけ)。作中の表示に多い Eurostile 系の横に広い書体。
+// 日本語の文字は持たないので、本文には使わない。
+const michroma = Michroma({
+  variable: "--font-michroma",
+  weight: "400",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "Exia Console",
   description: "Pico param tuner: serial console + parameter sender",
@@ -26,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // 書き換えるので、サーバーの HTML と食い違う。
     <html
       lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${michroma.variable} dark h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

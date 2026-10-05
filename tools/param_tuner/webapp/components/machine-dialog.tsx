@@ -129,7 +129,7 @@ export function MachineDialog({ registry, board, onClose, onChanged }: Props) {
         role="dialog"
         aria-modal="true"
         data-machine-dialog
-        className="flex max-h-full w-full max-w-2xl flex-col gap-3 overflow-auto rounded-xl bg-card p-4 text-sm shadow-xl ring-1 ring-foreground/20"
+        className="cb-frame relative flex max-h-full w-full max-w-2xl flex-col gap-3 overflow-auto rounded-xl bg-card p-4 text-sm shadow-xl ring-1 ring-foreground/20"
       >
         <div className="flex items-center justify-between">
           <span className="text-base font-semibold">機体</span>

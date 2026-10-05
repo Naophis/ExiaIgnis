@@ -377,13 +377,16 @@ export function LogDetailView({ initialFile, machine }: { initialFile?: string; 
 
   return (
     <div className="flex h-screen flex-col gap-1.5 p-2">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-2 border-l-accent-gold bg-card px-3 py-1 text-xs ring-1 ring-primary-bright/20">
+      {/* 見た目はメインのヘッダーと同じ(globals.css の .cb-header) */}
+      <div className="cb-header flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 py-1 pr-3 pl-3.5 text-xs">
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="font-semibold tracking-wide text-accent-gold hover:underline"
+          title="Param Console へ戻る"
+          className="flex items-center gap-1.5 text-accent-gold hover:brightness-125"
         >
-          ← Exia PARAM CONSOLE
+          <span aria-hidden>←</span>
+          <span className="font-display text-[11px] tracking-[0.1em]">EXIA PARAM CONSOLE</span>
         </button>
         <span className="text-muted-foreground">詳細ログ解析</span>
         <select

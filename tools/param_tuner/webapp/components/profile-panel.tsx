@@ -72,7 +72,8 @@ export function ProfilePanel({
       data-profile-panel
     >
       <CardHeader className="gap-1">
-        <div className="flex items-center justify-between gap-1">
+        {/* CardHeader は grid なので、min-w-0 が無いと狭い幅で見出しが縮まず右のボタンが切れる */}
+        <div className="flex min-w-0 items-center justify-between gap-1">
           <CardTitle className="flex min-w-0 items-center gap-1.5">
             {machine && <MachineChip machine={machine} title={`machines/${machine.id}/profile`} />}
             <span className="truncate">パラメータ (hf)</span>

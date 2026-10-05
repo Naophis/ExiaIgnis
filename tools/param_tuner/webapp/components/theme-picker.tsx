@@ -66,7 +66,7 @@ export function ThemePicker({ prefs, onChange, machine, onMachineColor }: Props)
       </Button>
       {open && (
         <div
-          className="absolute top-full right-0 z-50 mt-1.5 flex w-80 flex-col gap-2 rounded-xl bg-popover p-3 text-sm shadow-xl ring-1 ring-foreground/20"
+          className="cb-frame absolute top-full right-0 z-50 mt-1.5 flex w-80 flex-col gap-2 rounded-xl bg-popover p-3 text-sm shadow-xl ring-1 ring-foreground/20"
           data-theme-popover
         >
           <div className="flex items-center gap-1.5 font-medium">

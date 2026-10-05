@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { yaml } from "@codemirror/lang-yaml";
 import { EditorView } from "@codemirror/view";
-import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import CodeMirror from "@uiw/react-codemirror";
 import { MachineChip } from "@/components/machine-chip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cbEditorTheme } from "@/lib/cm-cb-theme";
 import { machineDiffExtension, setLineMarks, type LineMark } from "@/lib/cm-machine-diff";
 import type { Machine } from "@/lib/machine-shared";
 
@@ -131,7 +131,7 @@ export function YamlEditor({
               viewRef.current = view;
               setViewReady(true);
             }}
-            theme={vscodeDark}
+            theme={cbEditorTheme}
             extensions={EXTENSIONS}
             basicSetup={{ foldGutter: true, highlightActiveLine: true }}
           />

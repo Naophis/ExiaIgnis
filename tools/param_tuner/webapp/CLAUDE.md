@@ -41,12 +41,27 @@
   - CLI の `rx_term.js`(`console.sh`)も同じ保存先(`machines.js` の `logsDir` / `machineForSerial`)。`python3 tools/param_tuner/machine_paths.py --logs [機体]` でフォルダが出る。
 - **試験用の擬似基板**: 環境変数 `EXIA_SIM_BOARD_FILE` に `{"path": "/dev/pts/N", "serialNumber": "..."}` を書いたファイルを指定すると、ttyACM* を探す代わりにそれを基板として開く(ファイルが無ければ「基板なし」)。pty の向こうで `name@content` に `OK` を返すだけのスクリプトを動かせば、実機なしで自動判別・登録・送信の関門・未送信の印を試せる(`EXIA_PARAM_TUNER_ROOT` と合わせて、別ポートの `next dev` で)。
 
+## 見た目(ソレスタルビーイング風)— `app/globals.css`(2026-10-06〜)
+
+ユーザーの依頼「テーマをソレスタルビーイングによせて」。作戦端末(プトレマイオスの艦橋 / ヴェーダ)を思わせる暗いテーマにしてある。飾りはすべて `app/globals.css` の「ソレスタルビーイング風の飾り」の節にあり、`.dark` のときだけ効く。
+
+- **地と角**: 宇宙の濃紺(`--background` / `--card`)、`--radius: 0.25rem` で角を立てる。余白(パネルの間)には主色の光がにじむ(`body` の放射グラデーション)。
+- **パネルの枠**: shadcn の `Card`(`[data-slot="card"]`)に、内側の発光線(`outline`、色は `--cb-line`)と左上・右下の鉤括弧(`::before` / `::after`)、上の縁から差す主色。**Card は `position: relative` になっている**(鉤括弧の基準)。Card でない窓(ダイアログ・テーマの窓)は `.cb-frame` を付けると同じ枠になる。見出し(`[data-slot="card-title"]`)の頭に斜めの発光する標。
+- **ヘッダー**: `.cb-header`(`components/port-panel.tsx` と、詳細ログ解析のヘッダー)。左の太い帯 = 表示中の機体の色(`--cb-machine`)、銘の後ろに六角形の網(`--cb-hex` を mask にして主色で塗る。右へ消える)、下の縁に GN 粒子の流れる線(9 秒で 1 回、`prefers-reduced-motion` で止まる)。**`z-index: 20`**: Card が `position: relative` になったので、これが無いとヘッダーから下へ出るテーマの窓がパネルの下に隠れる(実際に踏んだ)。
+- **銘**: 2 行「CELESTIAL BEING / EXIA PARAM CONSOLE」。書体は Michroma(Eurostile 系、`next/font/google`、`--font-display` → `font-display`)。英字だけの書体なので本文には使わない。ヘッダーの高さ(ボタン 1 行分 = 36px)は変えていない。なお `@theme` の `--font-sans: var(--font-sans)` は自己参照で無効になっており、本文はシステムの書体(Noto Sans CJK JP)で出ている(以前から。変えていない)。
+- **主色のボタン**(`[data-slot="button"].bg-primary`)に光の縁。選択範囲とスクロールバーも主色。
+- **yaml の編集画面**: `lib/cm-cb-theme.ts`(`@uiw/codemirror-themes` の `createTheme`)。地は `--cb-editor-bg`、選択・カーソル・今の行は主色に付いて変わる。文字の色(キー = 空色、値 = 薄緑、コメント = 青灰、括弧 = 金)は固定。
+- **色見本の名前**(`lib/theme.ts` の `THEME_PRESETS`)を機体と装備の色に(GN 粒子 / エクシア / ダブルオー / デュナメス / キュリオス / ヴァーチェ / トランザム / ヴェーダ / プトレマイオス)。
+- **やらないこと(ユーザーの指摘)**: **ロゴ(紋章)は「やりすぎ」**。最初の版でヘッダーに輪と翼の紋章、コンソールと機体比較の背景にその透かしを入れて、こう言われて外した。絵柄やマークは足さない。寄せ方は配色・枠・書体・文字までに留める。
+- **飾りを置いてよい場所**: 枠・見出し・ヘッダー・余白だけ。表・一覧・グラフ・ログの中身(読むところ)の上や後ろには載せない(プロット最優先・密なレイアウトの方針)。行は増やさない。
+- 主色は機体ごと / 全機体で 1 色のどちらでも変わる(下の「テーマカラー」)ので、飾りの色は固定の色ではなく `--primary-bright` / `--cb-line` / `--cb-glow` から取る。
+
 ## テーマカラー — `lib/theme.ts` / `components/theme-picker.tsx` / `components/theme-sync.tsx`(2026-10-04〜)
 
 ヘッダーの「テーマ」で、画面全体の主色(ボタン・バッジ・選択中のタブ・フォーカスの輪・枠線の色味)を変えられる。ユーザーが機体設定で calibur の色を濃い青(`#2b31d4`)に変えたあと「テーマカラーを変えられるように、全体で」と頼んだもの。
 
 - **2 つの持ち方**(`ThemePrefs.mode`、`localStorage` の `exia-theme-v1`): `machine`(既定)= 機体ごとの色。選んだ色は表示中の機体の色(`machines.yaml` の `color`、機体設定の色と同じもの)になり、機体を切り替えると画面全体の色も変わる = どの機体を見ているかが色で分かる。`fixed` = 全機体で 1 色(このブラウザに覚える)。
-- **色の作り方**: `app/globals.css` の `.dark` は、主色から作る色(primary / ring / accent / border / input / chart-1 / sidebar-*)を `--theme-*` の変数から計算している。`lib/theme.ts` の `themeVars(#rrggbb)` がその値を決めて `<html>` の style に書く(既定の色のときは何も書かない = もとの見た目と同じ値)。背景(濃紺のパネル)・警告色・グラフやマーカーの色・エディタの配色は変えない。
+- **色の作り方**: `app/globals.css` の `.dark` は、主色から作る色(primary / ring / accent / border / input / chart-1 / sidebar-*)を `--theme-*` の変数から計算している。`lib/theme.ts` の `themeVars(#rrggbb)` がその値を決めて `<html>` の style に書く(既定の色のときは何も書かない = もとの見た目と同じ値)。背景(濃紺のパネル)・警告色・グラフやマーカーの色・エディタの文字の色は変えない(枠の発光線・エディタの選択やカーソルは主色に付いて変わる)。
   - 塗り(`bg-primary`)は選んだ色そのもの(明るさが 0.42 未満のごく暗い色だけ持ち上げる)。その上の文字(`--primary-foreground`)は、塗りが暗ければ白、明るければ今までの濃紺。
   - **暗い背景の上で主色を文字・線・薄い塗りに使う所は `primary-bright`**(`text-primary-bright` / `border-primary-bright` / `ring-primary-bright` / `bg-primary-bright/20`)。濃い色を選んだときに `text-primary` だと背景に溶けて読めないため、明るさの下限(0.74)を持つ別の色にしてある。既定の色では `primary` と同じ。**主色を足すときは、ベタ塗りなら `bg-primary` + `text-primary-foreground`、文字・線なら `primary-bright`。** フォーカスの輪(`--ring`)も明るい方から作る。
 - **ちらつき防止**: `app/layout.tsx` の `<head>` の 1 行スクリプト(`THEME_INIT_SCRIPT`)が、覚えてある値(`exia-theme-applied-v2` = 当てる CSS 変数そのもの)を最初の描画の前に当てる(Next の「preventing flash before hydration」の手順。`<html>` に `suppressHydrationWarning`)。開発モードでは React が `<html>` の属性を JSX のものへ戻すので、`ThemeSync`(layout に常駐)が `useLayoutEffect` で当て直す。`ThemeSync` は別のタブでの変更(storage イベント)と同じページでの変更(`exia-theme-change`)も拾うので、`/logs` ページにも同じ色が当たる(機体ごとの色のときも、決まった値を残してあるので機体を知らないページで当てられる)。

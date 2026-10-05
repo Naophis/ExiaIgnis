@@ -40,7 +40,7 @@ export function ChoiceDialog({ request }: { request: ChoiceRequest | null }) {
         role="dialog"
         aria-modal="true"
         data-choice-dialog
-        className="flex w-full max-w-lg flex-col gap-3 rounded-xl bg-card p-4 text-sm shadow-xl ring-1 ring-foreground/20"
+        className="cb-frame relative flex w-full max-w-lg flex-col gap-3 rounded-xl bg-card p-4 text-sm shadow-xl ring-1 ring-foreground/20"
       >
         <div className="text-base font-semibold">{request.title}</div>
         <div className="flex flex-col gap-1.5 text-muted-foreground">{request.body}</div>
