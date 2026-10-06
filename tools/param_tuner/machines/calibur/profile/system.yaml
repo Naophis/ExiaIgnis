@@ -116,6 +116,32 @@ test: # テスト走行時に使用するパラメータ群
   # SPIN_DIRECTION + SAVE_SETTINGS コマンドでESCのフラッシュへ永続化される。
   suction_dshot_reverse: 1
 
+  # 吸引ESC本体(ESCape32、sample/ESCape32 のフォーク)の設定。USBコマンド "ESCCFG"
+  # (send_file.py esccfg)またはテストモード29で、-1 でない項目を ESCape32 標準の信号線 CLI
+  # (38400bps 半二重。AM32 時代の設定通信と同じ位置づけ)で `set` し、上の回転方向(revdir)も送って
+  # `save` し、最後に `show` で全設定を読み戻して表示する(ST-Link 不要、ESC のファームは標準のまま)。
+  # "ESCSHOW"(send_file.py escshow、テストモード30)は読み出すだけ。起動時には送らない。
+  # 値は ESC 側 checkcfg() の範囲に丸められる(応答に入った値が出る)。timing 1〜31(16 = 15°、
+  # 2 で約 1.9°)、sine_range 0 か 5〜25 [%]、sine_power 1〜15、freq_min 16〜48 / freq_max
+  # freq_min〜96 [kHz]、duty_min/max/spup 1〜100 [%]、duty_ramp 0〜100 [kERPM]、
+  # duty_rate 1〜100 [0.1%/ms]、volume/beacon 0〜100 [%](ビープは 25 未満でも 25 で鳴る)。
+  # calibur の ESC は 3S・ESCape32 の既定値のままで運用中なので全部 -1(送らない)。ESCCFG を
+  # 打つと回転方向の送信・保存・読み戻しだけになる。変えるときはここに値を入れる(ESC のファームは
+  # 標準のままで効く)。
+  suction_esc_cfg:
+    timing: -1        # 進角(ESC 既定 16 = 15°)
+    sine_range: -1    # 正弦波起動の範囲(ESC 既定 0 = 使わない)
+    sine_power: -1    # 正弦波の強さ(ESC 既定 8)
+    freq_min: -1      # PWM 周波数の下限 [kHz](ESC 既定 24)
+    freq_max: -1      # PWM 周波数の上限 [kHz](ESC 既定 48)
+    duty_min: -1      # (ESC 既定 1)
+    duty_max: -1      # (ESC 既定 100)
+    duty_spup: -1     # 同期が取れるまでの duty 上限(ESC 既定 15)
+    duty_ramp: -1     # (ESC 既定 0)
+    duty_rate: -1     # duty のスルーレート [0.1%/ms](ESC 既定 30)
+    volume: -1        # ビープ・起動音の音量(ESC 既定 25)
+    beacon: -1        # DShot ビーコン音の音量(ESC 既定 50)
+
   end_v: 10
   dia: 0
   w_max: 12.5

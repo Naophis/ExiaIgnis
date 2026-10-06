@@ -438,6 +438,8 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     dst["max_duty"]         = src.max_duty;
     dst["min_duty"]         = src.min_duty;
     dst["battery_gain"]     = src.battery_gain;
+    dst["low_battery_th"]   = src.low_battery_th;
+    dst["battery_absent_th"] = src.battery_absent_th;
     dst["Ke"]               = src.Ke;
     dst["Km"]               = src.Km;
     dst["Resist"]           = src.Resist;
@@ -749,6 +751,21 @@ inline void convertToJson(const input_param_t& src, JsonVariant dst) {
     }
 }
 
+inline void convertToJson(const suction_esc_cfg_t& src, JsonVariant dst) {
+    dst["timing"]     = src.timing;
+    dst["sine_range"] = src.sine_range;
+    dst["sine_power"] = src.sine_power;
+    dst["freq_min"]   = src.freq_min;
+    dst["freq_max"]   = src.freq_max;
+    dst["duty_min"]   = src.duty_min;
+    dst["duty_max"]   = src.duty_max;
+    dst["duty_spup"]  = src.duty_spup;
+    dst["duty_ramp"]  = src.duty_ramp;
+    dst["duty_rate"]  = src.duty_rate;
+    dst["volume"]     = src.volume;
+    dst["beacon"]     = src.beacon;
+}
+
 inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["v_max"]               = src.v_max;
     dst["end_v"]               = src.end_v;
@@ -780,6 +797,7 @@ inline void convertToJson(const test_mode_t& src, JsonVariant dst) {
     dst["ang"]                 = src.ang;
     dst["suction_active"]      = src.suction_active;
     dst["suction_dshot_reverse"] = src.suction_dshot_reverse;
+    dst["suction_esc_cfg"]       = src.suction_esc_cfg;
     dst["suction_duty"]        = src.suction_duty;
     dst["suction_duty_low"]    = src.suction_duty_low;
     dst["suction_duty_burst"]  = src.suction_duty_burst;

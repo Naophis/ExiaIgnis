@@ -9,6 +9,11 @@ tire: 13.99750 #30deg
 tire2: 13.99750 #30deg
 
 battery_gain: 4.057349148300616
+# 起動時のバッテリー確認(check_battery)。3S(12.6V)。battery_raw が low_battery_th 以下だと
+# ブザーで止まる(ボタン長押しで続行)。battery_absent_th 未満は電池なし(USB 給電だけ)として
+# 止めない。以前ファームに決め打ちだった値そのまま(2026-10-07 に yaml へ)。
+low_battery_th: 11.8     # 3.93 V/cell × 3
+battery_absent_th: 10.5  # 3.5 V/cell × 3
 # battery_gain: 5.736949470345313
 # battery_gain: 4.253592106693843
 # battery_gain: 4.567

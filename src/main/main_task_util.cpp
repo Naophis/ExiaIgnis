@@ -454,8 +454,13 @@ void MainTask::check_battery() {
   const auto se = get_sensing_entity();
   sleep_ms(100); // センサー値の更新待ち
 
-  printf("battery= %f\n", se->ego.battery_raw);
-  if (se->ego.battery_raw > LOW_BATTERY_TH || se->ego.battery_raw < 10.5)
+  // しきい値は機体の hardware.yaml(low_battery_th / battery_absent_th)。直列数で
+  // 違う(3S と 4S)ので決め打ちにしない。
+  const float low_th = param_->low_battery_th;
+  const float absent_th = param_->battery_absent_th;
+  printf("battery= %f (low_th %.2f, absent_th %.2f)\n", se->ego.battery_raw,
+         low_th, absent_th);
+  if (se->ego.battery_raw > low_th || se->ego.battery_raw < absent_th)
     return;
   while (1) {
     ui_->music_sync(MUSIC::G5_, 250);

@@ -234,6 +234,8 @@ USB シリアルコマンド `filename@json_content\n` で書き込み、起動�
 | `max_duty` | float | 99 | % | PWM 最大デューティ |
 | `min_duty` | float | 8 | % | PWM 最小デューティ |
 | `battery_gain` | float | 3.3 | — | バッテリー電圧換算ゲイン |
+| `low_battery_th` | float | 11.8 | V | 起動時のバッテリー確認でブザーを鳴らすしきい値（直列数で違う。3S 11.8 / 4S 15.7） |
+| `battery_absent_th` | float | 10.5 | V | これ未満は電池なし（USB 給電）とみなして確認を飛ばす（3S 10.5 / 4S 14.0） |
 | `cell` | float | 90 | mm | 1セル長さ |
 | `cell2` | float | 90 | mm | 1セル長さ（別用途） |
 | `Ke` | float | 0 | — | 逆起電力定数 |

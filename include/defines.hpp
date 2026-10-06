@@ -55,7 +55,7 @@ const int16_t ENC_RESOLUTION = 16384 - 1;
 // constexpr float BATTERY_GAIN = 3.503919806809492;
 
 // constexpr uint8_t LEDC_HIGH_SPEED_MODE = 0;
-constexpr float LOW_BATTERY_TH = 11.8;
+// LOW_BATTERY_TH は hardware.yaml の low_battery_th / battery_absent_th に移した(2026-10-07)
 
 // constexpr uint16_t RESET_GYRO_LOOP_CNT = 256;
 

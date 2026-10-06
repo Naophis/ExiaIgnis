@@ -405,6 +405,8 @@ purposes:
       - label: バッテリー
         keys:
           - hw:battery_gain
+          - hw:low_battery_th
+          - hw:battery_absent_th
           - hw:battery_param
       - label: カルマンフィルタ
         keys:

@@ -362,6 +362,17 @@ PlanningTask は以下のサブシステムを内包:
   永続化）。起動時には送りません（ESC 通電＋DShot ロック待ちで 1.5 秒以上かかるため）。
   ESCape32 はコマンドを「telemetry 要求 bit が立っている・モーター停止中・同一コマンドが
   6 フレーム連続」の条件でのみ受け付けます。
+- **ESC 本体の設定をマウスから書く・読む**(2026-10-07): ESCape32 標準の信号線 CLI(通電後に信号線が
+  約 1 秒 High でパルスが無いと入る。38400bps 8N1 の 1 線半二重、`set <key> <value>` / `get` / `show` /
+  `save` / `reset` / `info`、応答の末尾は `OK` か `ERROR`、エコー無し)を `include/driver/escape32_cli.hpp` が
+  話す。物理層は AM32 時代の `pio/am32_halfduplex.pio` を 38400 で使う。`MainTask::set_suction_esc_config()`
+  (USB `ESCCFG` / `send_file.py esccfg` / テストモード 29)が、吸引を止め、DShot からピンを奪って High に
+  保ち、ESC を通電し直して約 2.3 秒待ち、`info` で CLI を確かめてから `system.yaml` の `test.suction_esc_cfg`
+  (-1 = 送らない)を `set`、`suction_dshot_reverse` を `set revdir`、`save`、`show` で全設定を読み戻して表示、
+  断電してピンを DShot へ返す。`show_suction_esc_config()`(`ESCSHOW` / `escshow` / テストモード 30)は読む
+  だけ。ESC のファームは標準のまま(焼き直し不要)。同じ値は MOUSEG431 のビルド既定値(`sample/ESCape32/
+  CMakeLists.txt` の `add_target`)にも入れてあり、焼き直すとその設定で起動する。ESC 側の設定作業の記録と
+  swdcli.py(ST-Link 経由の読み書き・診断)の使い方は `sample/ESCape32/swdcli.py` の冒頭を参照。
 - **テレメトリ**: 未実装。双方向 DShot 用の `DshotBidir`（`pio/dshot_bidir.pio`）は未結線・未検証で、
   受信側のビット周期と GCR のトグル復号に既知の誤りがあります（ヘッダーのコメント参照）。
 
@@ -462,6 +473,7 @@ stdio は USB のみ（UART 無効）。起動後のボタン待ちループ中�
 | `READ:filename` | `size\n content OK\n` 形式で内容を出力 |
 | `AM32READ` / `AM32WRITE` | AM32 ESC 設定の読み出し/書き込み（AM32 ファームウェア搭載 ESC 用） |
 | `DSHOTDIR` | `system.yaml` の `test.suction_dshot_reverse` を吸引 ESC へ書き込み、ESC のフラッシュへ永続化 |
+| `ESCCFG` / `ESCSHOW` | `system.yaml` の `test.suction_esc_cfg`(-1 でない項目)と回転方向を吸引 ESC の信号線 CLI で書き込み・保存し、全設定を読み戻して表示 / 読み出しのみ |
 
 flash_range_erase/prog は USB CDC を ~100ms 切断するため、書き込み前に `OK\n` を送信してから 80ms 待機します。
 

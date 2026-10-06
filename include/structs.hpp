@@ -1263,6 +1263,12 @@ typedef struct {
   float max_duty = 99;
   float min_duty = 8;
   float battery_gain = 3.3;
+  // 起動時のバッテリー確認(MainTask::check_battery)。battery_raw が low_battery_th
+  // 以下ならブザーで止める。battery_absent_th 未満は電池なし(USB 給電だけ)とみなして
+  // 止めない。直列数で違う(3S: 11.8 / 10.5、4S: 15.7 / 14.0)ので機体の hardware.yaml へ。
+  // 以前は defines.hpp の LOW_BATTERY_TH(11.8)と 10.5 の決め打ちだった(2026-10-07)。
+  float low_battery_th = 11.8f;
+  float battery_absent_th = 10.5f;
   float Ke = 0;
   float Km = 0;
   float Resist = 0;
@@ -1995,6 +2001,31 @@ typedef struct {
   TurnDirection RorL = TurnDirection::None;
 } param_normal_slalom_t;
 
+// 吸引ESC(ESCape32、sample/ESCape32 のフォーク)本体の設定を、マウスから書くための値。
+// USBコマンド "ESCCFG"(send_file.py esccfg)またはテストモード29で、-1 でない項目を ESCape32 標準の
+// 信号線 CLI(38400bps 半二重、driver/escape32_cli.hpp)で `set <key> <value>` し、回転方向
+// (suction_dshot_reverse → revdir)も送って `save` し、最後に `show` で全設定を読み戻して表示する
+// (MainTask::set_suction_esc_config())。"ESCSHOW"(send_file.py escshow、テストモード30)は読むだけ。
+// ESC のファームは標準のまま(DShot の経路は使わない)。キー名は ESCape32 の cfg と同じ。
+// 範囲(ESCape32 checkcfg、外れた値は丸められる): timing 1〜31(16 = 15°、2 で約 1.9°)、
+// sine_range 0 か 5〜25 [%]、sine_power 1〜15、freq_min 16〜48 / freq_max freq_min〜96 [kHz]、
+// duty_min/max/spup 1〜100 [%]、duty_ramp 0〜100 [kERPM]、duty_rate 1〜100 [0.1%/ms]、
+// volume/beacon 0〜100 [%](ビープは 25 未満でも 25 で鳴る)。
+typedef struct {
+  int timing = -1;
+  int sine_range = -1;
+  int sine_power = -1;
+  int freq_min = -1;
+  int freq_max = -1;
+  int duty_min = -1;
+  int duty_max = -1;
+  int duty_spup = -1;
+  int duty_ramp = -1;
+  int duty_rate = -1;
+  int volume = -1;
+  int beacon = -1;
+} suction_esc_cfg_t;
+
 typedef struct {
   float v_max = 0;
   float end_v = 0;
@@ -2029,6 +2060,8 @@ typedef struct {
   // USBコマンド "DSHOTDIR" またはテストモード27で、この値をESCへ書き込んで
   // 永続化する(MainTask::set_suction_spin_direction()参照)。
   int suction_dshot_reverse = 0;
+  // 吸引ESC本体の設定(上の suction_esc_cfg_t)。"ESCCFG" / テストモード29 で送る。
+  suction_esc_cfg_t suction_esc_cfg;
   // AM32 ESC移行後、suction_duty/duty_low/duty_burst/duty_burst_lowは
   // 全てESCへの目標パルス幅を「us(1000〜2000)」で直接指定する値として
   // 扱う(0〜100%のduty%ではない。ControlLaw::set_next_duty()参照)。

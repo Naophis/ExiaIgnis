@@ -127,6 +127,7 @@ add_executable(ExiaIgnis
     src/driver/ads7042.cpp
     src/driver/am32_protocol.cpp
     src/driver/am32_config.cpp
+    src/driver/escape32_cli.cpp
     src/driver/dshot_gcr.cpp
     src/driver/dshot_tx.cpp
     src/driver/psram_check.cpp

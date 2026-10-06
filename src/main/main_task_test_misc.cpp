@@ -6,6 +6,7 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "driver/am32_config.hpp"
+#include "driver/escape32_cli.hpp"
 #include "config_loader.hpp"
 #include <cmath>
 #include <cstdlib>
@@ -123,6 +124,121 @@ void MainTask::set_suction_spin_direction() {
   // send_file.py dshotdir はこの "== DSHOT dir done" 行でログ表示を打ち切る
   // (成否どちらでも1行出すこと)。
   printf("== DSHOT dir done (%s) ==\n", ok ? "ok" : "FAILED");
+}
+
+namespace {
+// ESCape32 の信号線 CLI に入る: DShot からピンを奪って High に保ち、ESC を通電し直して、
+// ブートローダー(0.5 秒)とパルス入力待ち(約 1 秒)が過ぎるのを待ってから `info` で確かめる。
+// 戻り値 false なら CLI に入れていない(ピンと電源は呼び出し側が esc_cli_close() で返す)。
+bool esc_cli_open(Escape32Cli &cli, SuctionEsc &esc, char *reply, size_t reply_size) {
+  esc.power_off();
+  sleep_ms(500);
+  if (!cli.init(pio0, SUCTION_ESC_PWM)) { // DShot は pio1。AM32 の設定通信も pio0 を使っていた
+    printf("  ESC CLI: PIO init failed\n");
+    return false;
+  }
+  esc.power_on(); // 信号線は High のまま・パルス無し → ESC は約 1.6 秒後に CLI へ
+  sleep_ms(2300);
+  for (int attempt = 0; attempt < 3; attempt++) {
+    if (cli.command("info", reply, reply_size, 800) == 1) return true;
+    sleep_ms(500);
+  }
+  printf("  ESC did not answer on the CLI (no OK to `info`). Is the ESC powered and the\n"
+         "  signal line idle-high with no DShot frames? define.hpp SUCTION_ESC_USE_DSHOT=1 path only.\n");
+  return false;
+}
+
+void esc_cli_close(Escape32Cli &cli, SuctionEsc &esc) {
+  cli.deinit();
+  esc.power_off();
+  restore_suction_pwm_pin(esc); // GPIO を DShot の PIO へ戻す
+}
+
+// "key: value" の行の列を字下げして出す。
+void esc_cli_print_indented(const char *text) {
+  const char *p = text;
+  while (*p) {
+    const char *nl = strchr(p, '\n');
+    const int len = nl ? (int)(nl - p) : (int)strlen(p);
+    printf("    %.*s\n", len, p);
+    if (!nl) break;
+    p = nl + 1;
+  }
+}
+}  // namespace
+
+void MainTask::set_suction_esc_config() {
+  // 回っているモーターには設定も保存も効かない(ESCape32: ertm != 0 なら save を拒否)ので先に止める。
+  planning_->suction_disable();
+  while (planning_->is_suction_ramping()) {
+    sleep_ms(5);
+  }
+  static char reply[2048]; // `show` は 40 行ほど(music の文字列を含む)
+  static Escape32Cli cli;
+  printf("== ESC cfg start ==\n");
+  if (!esc_cli_open(cli, planning_->esc_, reply, sizeof reply)) {
+    esc_cli_close(cli, planning_->esc_);
+    printf("== ESC cfg done (FAILED: no CLI) ==\n");
+    return;
+  }
+  esc_cli_print_indented(reply); // info: ESCape32 rev / target / 温度など
+
+  // キー名は ESCape32 の cfg と同じ。freq_min を freq_max より先、duty_min を duty_max より先に
+  // 送る(ESC の checkcfg() が max を min 以上に丸めるため)。
+  const auto &c = sys_.test.suction_esc_cfg;
+  struct Item { const char *key; int value; };
+  const Item items[] = {
+      {"timing", c.timing},         {"sine_range", c.sine_range},
+      {"sine_power", c.sine_power}, {"freq_min", c.freq_min},
+      {"freq_max", c.freq_max},     {"duty_min", c.duty_min},
+      {"duty_max", c.duty_max},     {"duty_spup", c.duty_spup},
+      {"duty_ramp", c.duty_ramp},   {"duty_rate", c.duty_rate},
+      {"volume", c.volume},         {"beacon", c.beacon},
+      {"revdir", sys_.test.suction_dshot_reverse != 0 ? 1 : 0},
+  };
+  bool ok = true;
+  for (const auto &it : items) {
+    if (it.value < 0) continue; // -1 = 送らない
+    char line[48];
+    snprintf(line, sizeof line, "set %s %d", it.key, it.value);
+    const int r = cli.command(line, reply, sizeof reply, 800);
+    // 応答は "key: 入った値"(ESC が範囲に丸めた後の値)
+    printf("  %-22s -> %s%s", line, r == 1 ? "" : (r == 0 ? "ERROR " : "no reply "),
+           reply[0] ? reply : "\n");
+    if (r != 1) ok = false;
+  }
+  if (ok) {
+    const int r = cli.command("save", reply, sizeof reply, 3000);
+    printf("  save -> %s\n", r == 1 ? "OK" : (r == 0 ? "ERROR (motor running or busy)" : "no reply"));
+    ok = (r == 1);
+  } else {
+    printf("  not saved: a `set` failed (unknown key or ESC rejected it)\n");
+  }
+  if (cli.command("show", reply, sizeof reply, 1500) == 1) {
+    printf("  ESC settings now (read back):\n");
+    esc_cli_print_indented(reply);
+  }
+  esc_cli_close(cli, planning_->esc_);
+  // send_file.py esccfg はこの "== ESC cfg done" 行でログ表示を打ち切る。
+  printf("== ESC cfg done (%s) ==\n", ok ? "ok" : "FAILED");
+}
+
+void MainTask::show_suction_esc_config() {
+  planning_->suction_disable();
+  while (planning_->is_suction_ramping()) {
+    sleep_ms(5);
+  }
+  static char reply[2048];
+  static Escape32Cli cli;
+  printf("== ESC show start ==\n");
+  bool ok = esc_cli_open(cli, planning_->esc_, reply, sizeof reply);
+  if (ok) {
+    esc_cli_print_indented(reply);
+    ok = (cli.command("show", reply, sizeof reply, 1500) == 1);
+    if (ok) esc_cli_print_indented(reply);
+  }
+  esc_cli_close(cli, planning_->esc_);
+  printf("== ESC show done (%s) ==\n", ok ? "ok" : "FAILED");
 }
 
 void MainTask::read_am32_param() {

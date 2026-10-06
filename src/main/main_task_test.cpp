@@ -92,6 +92,12 @@ void MainTask::run_test_mode(int mode) {
     } else if (mode == 28) {
       printf("front_sensor_sweep\n");
       test_front_sensor_sweep();
+    } else if (mode == 29) {
+      printf("suction esc cfg\n");
+      set_suction_esc_config();
+    } else if (mode == 30) {
+      printf("suction esc show\n");
+      show_suction_esc_config();
     }
   }
 }

@@ -45,6 +45,8 @@ bool consume_am32_write_request();
 bool consume_am32_read_request();
 bool consume_dprobe_request();
 bool consume_dshot_dir_request();
+bool consume_esc_cfg_request();
+bool consume_esc_show_request();
 int consume_dither_request();
 
 void MainTask::load_param_after() {
@@ -220,6 +222,15 @@ void MainTask::run() {
         // 反転→試運転→戻すの反復がしやすい)。
         if (consume_dshot_dir_request()) {
           set_suction_spin_direction();
+        }
+        // "system.yaml@..." アップロード + "ESCCFG" で、吸引ESC本体の設定(timing / PWM 周波数 /
+        // 正弦波起動 / 音量 など test.suction_esc_cfg)を ESC の信号線 CLI 経由で書き換える
+        // (ST-Link 不要)。"ESCSHOW" は読み出して表示するだけ。
+        if (consume_esc_cfg_request()) {
+          set_suction_esc_config();
+        }
+        if (consume_esc_show_request()) {
+          show_suction_esc_config();
         }
         {
           const int dr = consume_dither_request();

@@ -59,6 +59,18 @@ Pico へ USB CDC 経由でファイルを操作するスクリプト。
       永続化される)。事前に system.yaml をアップロードしておくこと。
       実行ログを "== DSHOT dir done ==" まで表示する。
       例: python send_file.py dshotdir
+
+  esccfg
+      "ESCCFG" コマンドを送り、system.yaml の test.suction_esc_cfg(-1 でない項目)と
+      test.suction_dshot_reverse を吸引ESC(ESCape32)の信号線 CLI で書き込ませ、保存し、
+      全設定を読み戻して表示させる。事前に system.yaml をアップロードしておくこと。
+      実行ログを "== ESC cfg done ==" まで表示する。
+      例: python send_file.py esccfg
+
+  escshow
+      "ESCSHOW" コマンドを送り、吸引ESC(ESCape32)の全設定を信号線 CLI で読み出して
+      表示させる(書き込まない)。実行ログを "== ESC show done ==" まで表示する。
+      例: python send_file.py escshow
 """
 
 import json
@@ -78,7 +90,7 @@ except ImportError:
 TIMEOUT_SEC = 10
 PICO_VID    = 0x2E8A  # Raspberry Pi
 COMMANDS    = {"write", "read", "list", "delete", "deleteall", "show",
-               "am32read", "am32write", "am32sync", "dshotdir"}
+               "am32read", "am32write", "am32sync", "dshotdir", "esccfg", "escshow"}
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "tools", "param_tuner"))
 
@@ -292,6 +304,28 @@ def cmd_dshotdir(ser: serial.Serial, timeout_sec: float = 20.0) -> None:
     _stream_am32_log(ser, "== DSHOT dir done", timeout_sec)
 
 
+def cmd_esccfg(ser: serial.Serial, timeout_sec: float = 30.0) -> None:
+    ser.write(b"ESCCFG\n")
+    ser.flush()
+    ack = readline_skip_sensor(ser)
+    if ack != "OK":
+        print(f"失敗: {ack}", file=sys.stderr)
+        sys.exit(1)
+    print("set_suction_esc_config() 実行中... (ESC を通電し直して CLI へ、数秒かかります)")
+    _stream_am32_log(ser, "== ESC cfg done", timeout_sec)
+
+
+def cmd_escshow(ser: serial.Serial, timeout_sec: float = 30.0) -> None:
+    ser.write(b"ESCSHOW\n")
+    ser.flush()
+    ack = readline_skip_sensor(ser)
+    if ack != "OK":
+        print(f"失敗: {ack}", file=sys.stderr)
+        sys.exit(1)
+    print("show_suction_esc_config() 実行中... (ESC を通電し直して CLI へ、数秒かかります)")
+    _stream_am32_log(ser, "== ESC show done", timeout_sec)
+
+
 def cmd_am32sync(ser: serial.Serial, local_path: str) -> None:
     cmd_write(ser, local_path, "am32.txt")
     cmd_am32write(ser)
@@ -376,6 +410,12 @@ def main() -> None:
 
         elif command == "dshotdir":
             cmd_dshotdir(ser)
+
+        elif command == "esccfg":
+            cmd_esccfg(ser)
+
+        elif command == "escshow":
+            cmd_escshow(ser)
 
         else:
             print(f"不明なコマンド: {command}\n", file=sys.stderr)

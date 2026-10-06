@@ -709,6 +709,8 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
     from_json_field(src, "max_duty", dst.max_duty);
     from_json_field(src, "min_duty", dst.min_duty);
     from_json_field(src, "battery_gain", dst.battery_gain);
+    from_json_field(src, "low_battery_th", dst.low_battery_th);
+    from_json_field(src, "battery_absent_th", dst.battery_absent_th);
     from_json_field(src, "Ke", dst.Ke);
     from_json_field(src, "Km", dst.Km);
     from_json_field(src, "Resist", dst.Resist);
@@ -1029,6 +1031,21 @@ inline void convertFromJson(JsonVariantConst src, input_param_t& dst) {
  * system.txt
  * root → test
  */
+inline void convertFromJson(JsonVariantConst src, suction_esc_cfg_t& dst) {
+    from_json_field(src, "timing", dst.timing);
+    from_json_field(src, "sine_range", dst.sine_range);
+    from_json_field(src, "sine_power", dst.sine_power);
+    from_json_field(src, "freq_min", dst.freq_min);
+    from_json_field(src, "freq_max", dst.freq_max);
+    from_json_field(src, "duty_min", dst.duty_min);
+    from_json_field(src, "duty_max", dst.duty_max);
+    from_json_field(src, "duty_spup", dst.duty_spup);
+    from_json_field(src, "duty_ramp", dst.duty_ramp);
+    from_json_field(src, "duty_rate", dst.duty_rate);
+    from_json_field(src, "volume", dst.volume);
+    from_json_field(src, "beacon", dst.beacon);
+}
+
 inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "v_max", dst.v_max);
     from_json_field(src, "end_v", dst.end_v);
@@ -1048,6 +1065,7 @@ inline void convertFromJson(JsonVariantConst src, test_mode_t& dst) {
     from_json_field(src, "ang", dst.ang);
     from_json_field(src, "suction_active", dst.suction_active);
     from_json_field(src, "suction_dshot_reverse", dst.suction_dshot_reverse);
+    from_json_nested(src, "suction_esc_cfg", dst.suction_esc_cfg);
     from_json_field(src, "suction_duty", dst.suction_duty);
     from_json_field(src, "suction_duty_low", dst.suction_duty_low);
     from_json_field(src, "suction_duty_burst", dst.suction_duty_burst);

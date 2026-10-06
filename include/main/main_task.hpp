@@ -169,6 +169,13 @@ private:
   // USBコマンド "DSHOTDIR" とテストモード27から呼ぶ(実行中は吸引を停止し、
   // ESCへ通電したまま約2秒ブロックする)。
   void set_suction_spin_direction();
+  // system.yaml の test.suction_esc_cfg(-1 でない項目)と test.suction_dshot_reverse を
+  // 吸引ESC(ESCape32)の信号線 CLI(driver/escape32_cli.hpp)で `set` → `save` し、`show` で
+  // 全設定を読み戻して表示する。USBコマンド "ESCCFG" とテストモード29から呼ぶ(実行中は吸引を
+  // 停止し、ESC を通電し直して約 3〜5 秒ブロック)。show_suction_esc_config() は読むだけ
+  // ("ESCSHOW" / テストモード30)。
+  void set_suction_esc_config();
+  void show_suction_esc_config();
 
   void read_am32_param();
   void write_am32_param();
