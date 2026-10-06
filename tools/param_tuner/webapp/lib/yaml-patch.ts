@@ -361,6 +361,58 @@ export function copyPaths(srcText: string, dstText: string, paths: readonly Path
   return { text, applied, errors };
 }
 
+// segs の値の文字だけを valueText に差し替える(用途別パラメータの画面用)。
+// 行末のコメント・前後のコメント行・ほかのキーはそのまま残る。対象は葉だけ
+// (スカラーと `[a, b]` の形の配列)。差し替えたあと読み直して「そのキーだけが
+// その値になった」ことを確かめ、違えば例外にする(呼ぶ側はファイルへ書かない)。
+export function setValueText(text: string, segs: readonly PathSeg[], valueText: string): string {
+  const label = pathToString(segs);
+  const piece = valueText.trim();
+  if (piece === "") throw new Error(`${label}: 値が空です`);
+  if (/[\r\n]/.test(piece)) throw new Error(`${label}: 値に改行は入れられません`);
+  if (piece.includes("#")) throw new Error(`${label}: 値に # は入れられません(コメントは yaml の編集画面で)`);
+  let value: unknown;
+  try {
+    value = (loadYaml(`v: ${piece}`) as { v: unknown }).v ?? null;
+  } catch {
+    throw new Error(`${label}: 値として読めません: ${piece}`);
+  }
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    throw new Error(`${label}: この形の値は入れられません: ${piece}`);
+  }
+
+  const doc = parse(text, "yaml");
+  const loc = locate(doc, segs);
+  if (loc.depth !== segs.length || !loc.pair) throw new Error(`${label} がありません`);
+  if (isMap(loc.node) || (isSeq(loc.node) && !loc.node.flow)) {
+    throw new Error(`${label}: この形の値は yaml の編集画面で直してください`);
+  }
+  const span = valueSpan(text, loc.node);
+  let out: string;
+  if (span && span[1] > span[0]) {
+    if (text.slice(span[0], span[1]).includes("\n")) {
+      throw new Error(`${label}: 複数行の値は yaml の編集画面で直してください`);
+    }
+    out = text.slice(0, span[0]) + piece + text.slice(span[1]);
+  } else {
+    // 空の値(`key:`): `:` の直後へ入れる
+    const at = afterColon(text, loc.pair);
+    out = `${text.slice(0, at)} ${piece}${text.slice(at)}`;
+  }
+
+  const want = withValueAt(loadYaml(text), segs, value);
+  let after: unknown;
+  try {
+    after = loadYaml(out);
+  } catch (err) {
+    throw new Error(`${label}: 書き換えた結果が yaml として読めません (${(err as Error).message})`);
+  }
+  if (canonical(after) !== canonical(want)) {
+    throw new Error(`${label}: 書き換えた結果が想定と違うので中止しました(yaml の編集画面で直してください)`);
+  }
+  return out;
+}
+
 // キーごとの行番号(1 始まり)。編集画面で「他の機体と違う行」に印を付けるため。
 // 枝(マップ・配列の要素)も葉も入る。構文エラーの途中の下書きでは空を返す。
 export function pathLines(text: string): Map<string, number> {

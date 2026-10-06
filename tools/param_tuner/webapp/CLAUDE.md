@@ -114,6 +114,22 @@
 
 テンプレートは `profile/test_templates.json` に保存(初回アクセス時に3件シードされる)。クイック適用(`/api/test-templates/quick-apply`)は名前付きテンプレートを介さず直接 `applyTestTemplateToSystemYaml` を呼ぶ一時適用。
 
+## 用途別パラメータ — `components/param-purpose-panel.tsx` / `lib/param-purpose*.ts` / `lib/yaml-outline.ts`(2026-10-06〜)
+
+ユーザーの依頼「hardware.yaml や offset.yaml のパラメータが増えすぎた。用途ごとに UI を用意してほしい」。hardware.yaml(347 個)・`hf/offset.yaml`(206 個)・`hf/sensor.yaml`(76 個)の値を、「何を調整するときに触るか」(旋回 / 壁切れ(直交)/ 壁切れ(斜め)/ 旋回前後の距離 / 直進の壁制御 / 斜め制御 / 走り出し / ヨー制御 / 速度制御と FF / 探索 / センサーと推定 / 機体と駆動 / ログと安全)で並べ直して出し、その場で直す。左の一覧の見出しの「用途別」、hardware / offset / sensor の行の「用途別」、yaml の編集画面の「用途別」から開く(右ペイン。**yaml の編集画面はそのまま残してある**: コメントを書く・キーを足すのは yaml 側)。
+
+- **yaml の中身は変えない。** 分類は `tools/param_tuner/param_groups.yaml`(全機体で共通、機体のデータではないので `TOOL_ROOT`)。書き方はそのファイルの頭のコメント。開くたびに読むので、直したら画面の「読み直す」で反映される。**ファームにパラメータを足したら、このファイルにも足す**(足し忘れたキーは画面の「未分類」に出る。分類にあって yaml に無いキーは左の一覧の下に数が出る)。
+  - どこに入るかは「いちばん細かい指定」が勝つ(`a.b` > `a`、名前そのまま > `*` 付き、`*` 以外の文字が多い方。`resolveLayout()`)。名前そのままで書いたキーは書いた所すべてに出る(`sensor_deg_limitter_v` を直進と斜めの 2 つの表の横軸に使う)。`*` 付きは先に書いた 1 か所だけ。
+  - `{table: [横軸, 行, ...]}` は同じ長さの配列を列をそろえた表で出す(セルごとに直す、「+ 列 / − 列」は全部の行に効く、長さが違えば警告)。
+- **説明は yaml のコメントから取る**(`lib/yaml-outline.ts` の `outlineYaml()`、分類ファイルには書かない): 行末のコメント → キーの直前に続くコメント行の最初の文 → まとまり(コメントを持つキーから空行なしで続くキー)・親のマップのコメントの中の「`名前 : 説明`」の行(`shortDesc()`。`wall_off_pillar_depth_min` は `depth_min : …` の行に当たる)。行を選ぶと右の欄にコメント全文(調整の経緯)・まとまりと親のコメント・ほかの機体の値が出る。コメントは 80 桁前後で手で折り返してあるので、折り返しで切れただけの行はつなげて欄の幅で折り返し直す(`reflowComment()`。表・箇条書き・字下げの違う行はそのまま)。コメントアウトした以前の値(`isOldValueLine()`)は薄く出す。
+- **値は読んだ数ではなく、書かれている文字のまま持つ**(`0.0000067`・`0x0d` を書き直さない)。保存は `lib/yaml-patch.ts` の `setValueText()` が値の文字の範囲だけを差し替え、読み直して「そのキーだけがその値になった」ことを確かめる(parse → dump しない。コメント・並び・行末コメントは残る)。API(`applyPurposeEdits()`)は、画面が読んだときの値(`was`)といまの値が違えば書かない(別の所で変わった)、値の種類が変わる入力(数 → 文字)は断る、ファイルごとに「全部入るか、何も書かないか」。保存の返事の `propagate` は yaml の編集画面と同じ(ほかの機体も同じ値だったキー →「〇〇 にも同じ変更を入れる」)。
+- **画面の決まり**: 行は見出し(section)ごとの格子の 1 行(CSS の subgrid)で、列の幅はその見出しの中身に合わせる(値の欄を狭くして説明に幅を回す)。左右の組(`_l` / `_r`、`left` / `right`、`L45` / `R45`。`sidePartner()`)は 1 行に L / R の 2 つの欄(説明が左右で違えば両方出す)。`enable` / `*_enable` / `enable_*` の 0 / 1 は切り替え(マップの `enable` は見出しに出す)。↑↓ で最後の桁を 1 つ動かす(Shift で 10 倍、`nudgeNumber()`)。ほかの機体と違う値は行の右に相手の値(琥珀 = 未整理、紫 = 固有。そろえる・固有にするのは機体比較で)。検索は全用途をまたぎ、キー・説明・コメント・見出しの名前に当てる。「未保存」「機体差」も用途をまたいで出す。
+- **未保存の入力は、閉じて開き直しても残る**(モジュール変数 `draftStore`、機体ごと。ページの読み込み直しで消える)。「yaml で開く」はそのキーの行で編集画面を開き(`YamlEditor` の `initialLine`)、閉じると用途別へ戻る(`editorFromPurpose`)。開き直したとき yaml の値が変わっていた入力は捨てて知らせる。
+- 「保存+送信」は保存して、変えたファイルだけを `/api/send` で送る(`guardedSend`)。送信に失敗しても保存は済んでいる(左の「未送信を送信」で送り直せる)。
+- パネルは `memo`。page.tsx から渡すコールバックは固定してある(`openEditor` を `useCallback` にした)。
+- **変えたら回す**: `npx --yes tsx scripts/check-param-purpose.ts [-v]`(機体ごとに 未分類 0・yaml に無いキー 0、全部の葉で「同じ値を入れ直すと 1 文字も変わらない」「別の値を入れるとそのキーだけが変わり、コメント行が減らない」。2026-10-06 に 2 機体 × 629 個で OK)。`param_groups.yaml`・`yaml-outline.ts`・`setValueText()` を変えたとき。
+- 対象のファイルを増やすときは、分類ファイルの `files` と、page.tsx の `PURPOSE_FILES`・profile-panel.tsx の `PURPOSE_MODE_FILES`(「用途別」のボタンを出すファイル)。system.yaml は対象外(コメントアウトした行を切り替える書き方で、テンプレートの画面が担当)。
+
 ## ログプロット — `lib/trajectory.ts` / `components/trajectory-plot.tsx`
 
 廃止した `plot_gui.py`(Tkinter)の軌跡プロット計算をそのまま TypeScript に移植したもの。CSVのソート・`ang_kf_sum`/`ang_kf`+`ideal_ang` からの累積角度復元・タイムスタンプごとの状態グルーピング・45度壁センサーの投影・90mmグリッド線の生成ロジックは元のPython実装と1対1対応させてある(変更する場合は元の `_plot_wall_sensor`/`plot_file` のロジックとの対応を崩さないこと)。描画は Canvas(`components/trajectory-plot.tsx`)、等倍アスペクト比のワールド→キャンバス変換は `makeTransform`。データ点数が数万に及ぶため SVG ではなく Canvas を採用している。
@@ -233,7 +249,7 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 
 ## API 一覧
 
-機体のパラメータを読む・書く API(profiles / profile-file / send / am32 / test-templates / param-matrix / sensor-calib / maze / maze/path / maze/search)は、ヘッダー `x-exia-machine`(または `?machine=` / body の `machine`)で機体を受け取る。
+機体のパラメータを読む・書く API(profiles / profile-file / param-purpose / send / am32 / test-templates / param-matrix / sensor-calib / maze / maze/path / maze/search)は、ヘッダー `x-exia-machine`(または `?machine=` / body の `machine`)で機体を受け取る。
 
 | エンドポイント | メソッド | 役割 |
 |---|---|---|
@@ -250,6 +266,7 @@ PlotJuggler 連携(`lib/logs.ts`)は `bash -lc "source /opt/ros/jazzy/setup.bash
 | `/api/profile-file` | GET/POST | YAMLファイルの読み込み/保存(`machine` を明示。保存の返事に `propagate`) |
 | `/api/send` | POST | 個別ファイル送信 / 全送信(`all`)/ 未送信だけ(`unsent`)。基板が別の機体・未登録なら 409(`force` で送る) |
 | `/api/am32` | POST | `sync`(am32.yaml送信+AM32WRITE) / `write` / `read` |
+| `/api/param-purpose` | GET/POST | 用途別パラメータ: GET = 分類(`param_groups.yaml`)を当てはめた一覧 + 値・コメント・ほかの機体の値、POST `{edits: [{file, segs, text, was}]}` = 値の書き換え(コメントは残す) |
 | `/api/test-templates` | GET/POST/DELETE | テンプレート一覧/作成更新/削除 |
 | `/api/test-templates/apply` | POST | 保存済みテンプレートをsystem.yamlへ適用 |
 | `/api/test-templates/quick-apply` | GET/POST | 現在値取得 / 単一キーの即時適用 |

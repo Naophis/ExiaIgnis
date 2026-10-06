@@ -19,6 +19,8 @@ interface Props {
   // mounts this component with whenever this changes, since it's only read
   // at mount time - see initialDraft below.
   initialDraft?: string;
+  // 開いたときに見せる行(1 始まり。用途別の画面の「yaml で開く」から)。マウント時に 1 回だけ読む
+  initialLine?: number;
   saving: boolean;
   onSave: (content: string) => void;
   onClose: () => void;
@@ -49,6 +51,7 @@ export function YamlEditor({
   file,
   content,
   initialDraft,
+  initialLine,
   saving,
   onSave,
   onClose,
@@ -130,6 +133,11 @@ export function YamlEditor({
             onCreateEditor={(view) => {
               viewRef.current = view;
               setViewReady(true);
+              if (initialLine && initialLine >= 1) {
+                const line = view.state.doc.line(Math.min(initialLine, view.state.doc.lines));
+                view.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: "center" }) });
+                view.focus();
+              }
             }}
             theme={cbEditorTheme}
             extensions={EXTENSIONS}

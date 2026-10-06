@@ -1,0 +1,457 @@
+# 用途別パラメータの分類(Param Console の「用途別」)。全機体で共通。
+#
+# hardware.yaml / offset.yaml / sensor.yaml のキーを「何を調整するときに触るか」で
+# 並べ直して出すための表。yaml の中身(値・コメント・並び)は変えない。
+# Param Console は開くたびにこのファイルを読むので、直したら画面の「読み直す」で反映される。
+#
+# 書き方:
+#   files     短い名前 → 機体の profile からの相対パス。
+#   purposes  用途(画面の左の一覧)。sections がその中の見出し、keys が中身。
+#   keys の 1 つ 1 つは "短い名前:キー"。
+#     hw:turn_settle          マップを指すと、その下の値が全部出る。
+#     hw:gyro_pid.mpc_*       マップの中の一部だけを別の場所へ出す(* は任意の文字)。
+#     off:wall_off_pillar_*   名前が * に合う最上位のキー全部(yaml の並び順)。
+#     {table: [横軸, 行, ...], label: 見出し}
+#                             同じ長さの配列を、列をそろえた表で出す。
+#   どこに入るかは「いちばん細かい指定」が勝つ(a.b > a、名前そのまま > * 付き、
+#   * 以外の文字が多い方)。名前そのままで書いたキーは、書いた所すべてに出る
+#   (同じ横軸を 2 つの表で使うとき)。* 付きは先に書いた 1 か所だけ。
+#   左右の組(_l / _r、left / right、L45 / R45)は画面が自動で 1 行にまとめる。
+#   説明は yaml のコメント(行末と、キーの直前のコメント行)から取るので、ここには書かない。
+#
+# ファームにパラメータを足したら、ここにも足す。足し忘れたキーは画面の「未分類」に出る。
+# 確認: cd tools/param_tuner/webapp && npx --yes tsx scripts/check-param-purpose.ts
+
+files:
+  hw: hardware.yaml
+  off: hf/offset.yaml
+  sen: hf/sensor.yaml
+
+purposes:
+  - id: turn
+    label: 旋回
+    note: スラロームの追従、旋回後の角度の収束、旋回の始まりの位置
+    sections:
+      - label: 旋回後の角度の収束
+        note: 旋回の終わり〜次の直進で角度の残りを戻す
+        keys:
+          - hw:turn_settle
+          - hw:turn_end_w_i_restore
+          - hw:turn_end_brake
+      - label: 旋回中の角度フィードバック
+        keys:
+          - hw:turn_angle_fb
+          - {table: ["hw:turn_angle_fb.gain_v", "hw:turn_angle_fb.gain_tbl"], label: "turn_angle_fb の gain(速度 [mm/s] ごと)"}
+          - hw:turn_w_pid
+      - label: 旋回の FF と duty
+        keys:
+          - hw:sakiyomi_time
+          - hw:ff_roll_gain_entry
+          - hw:ff_roll_gain_after
+          - hw:ff_roll_gain_before
+          - hw:turn_duty_floor
+          - hw:turn_duty_slew
+      - label: 旋回の始まりの位置合わせ
+        keys:
+          - hw:sla_start_align
+      - label: 軌道追従(Kanayama)
+        keys:
+          - off:kanayama
+          - off:trj_length
+          - {table: ["off:trj_idx_v", "off:trj_idx_val"], label: "先読みの点の番号(速度 [mm/s] ごと)"}
+
+  - id: wall_off
+    label: 壁切れ(直交)
+    note: 最短走行の直交の壁切れ(WALL_OFF)。旋回の始まりの位置を決める
+    sections:
+      - label: 共通
+        note: 読み方、入るときの壁の有無、待つ距離
+        keys:
+          - off:wall_off_hf_mode
+          - off:wall_off_hf_s1_guard_us
+          - off:wall_off_exist_wall_th_l
+          - off:wall_off_exist_wall_th_r
+          - off:wall_off_wait_dist
+          - off:wall_off_front_move_dist_th
+      - label: 壁ありで始まる — 切れ目の形(edge)
+        keys:
+          - off:wall_off_edge_*
+      - label: 壁ありで始まる — 従来のしきい値
+        keys:
+          - off:wall_off_hold_exist_dist_l
+          - off:wall_off_hold_exist_dist_r
+          - off:wall_off_hold_noexist_th_l
+          - off:wall_off_hold_noexist_th_r
+          - off:wall_off_hold_exist_delta_l
+          - off:wall_off_hold_exist_delta_r
+          - off:wall_off_hold_dist_str_l_exist
+          - off:wall_off_hold_dist_str_r_exist
+      - label: 壁なしで始まる — 柱の谷(pillar)
+        keys:
+          - off:wall_off_pillar_*
+      - label: 壁なしで始まる — 従来のしきい値
+        keys:
+          - off:wall_off_hold_exist_dist_l2
+          - off:wall_off_hold_exist_dist_r2
+          - off:wall_off_hold_noexist_th_l2
+          - off:wall_off_hold_noexist_th_r2
+          - off:wall_off_hold_dist_str_l
+          - off:wall_off_hold_dist_str_r
+          - off:wall_off_hold_div_th_l
+          - off:wall_off_hold_div_th_r
+          - off:wall_off_hold_div_th_l2
+          - off:wall_off_hold_div_th_r2
+          - off:wall_off_hold_div_th_l3
+          - off:wall_off_hold_div_th_r3
+          - off:wall_off_noexist_diff_l
+          - off:wall_off_noexist_diff_r
+      - label: 通過の安全網(pass_through)
+        keys:
+          - off:wall_off_diff_check_dist
+          - off:diff_dist_th_l
+          - off:diff_dist_th_r
+          - off:wall_off_pass_through_offset_l
+          - off:wall_off_pass_through_offset_r
+          - off:wall_off_diff_ref_th
+          - off:wall_off_diff_ref_front_th
+      - label: 旋回前の再確認(recheck)
+        keys:
+          - off:wall_off_recheck_*
+      - label: 前壁での補正
+        keys:
+          - off:front_dist_offset2
+          - off:front_dist_offset3
+          - off:front_dist_offset4
+      - label: 以前の細かいサンプル(wall_off_hf_*)
+        keys:
+          - off:wall_off_hf_*
+
+  - id: wall_off_dia
+    label: 壁切れ(斜め)
+    note: 斜めの壁切れ(WALL_OFF_DIA)
+    sections:
+      - label: 共通
+        keys:
+          - off:wall_off_exist_dia_wall_th_l
+          - off:wall_off_exist_dia_wall_th_r
+          - off:wall_off_wait_dist_dia
+          - off:wall_off_front_move_dia_dist_th
+          - off:wall_off_diff_check_dist_dia
+          - off:diff_check_dist_dia_2
+          - off:wall_off_pass_dist
+      - label: 壁ありで始まる
+        keys:
+          - off:wall_off_hold_exist_dist_dia_l
+          - off:wall_off_hold_exist_dist_dia_r
+          - off:wall_off_hold_noexist_dia_th_l
+          - off:wall_off_hold_noexist_dia_th_r
+          - off:wall_off_hold_exist_delta_dia_l
+          - off:wall_off_hold_exist_delta_dia_r
+          - off:wall_off_hold_dist_dia_l
+          - off:wall_off_hold_dist_dia_r
+          - off:wall_off_hold_div_th_dia_l
+          - off:wall_off_hold_div_th_dia_r
+      - label: 壁なしで始まる
+        keys:
+          - off:wall_off_hold_exist_dist_dia_l2
+          - off:wall_off_hold_exist_dist_dia_r2
+          - off:wall_off_hold_noexist_dia_th_l2
+          - off:wall_off_hold_noexist_dia_th_r2
+          - off:wall_off_hold_dist_dia_l2
+          - off:wall_off_hold_dist_dia_r2
+          - off:wall_off_hold_dist_dia_l_oppo
+          - off:wall_off_hold_dist_dia_r_oppo
+      - label: 壁への寄りの補正
+        keys:
+          - off:dia_wall_off_ref_*
+          - off:dia_turn_th_l
+          - off:dia_turn_th_r
+          - off:dia_turn_ref_l
+          - off:dia_turn_ref_r
+          - off:dia_turn_max_dist_l
+          - off:dia_turn_max_dist_r
+      - label: 前壁での補正(斜め)
+        keys:
+          - off:front_dist_offset_dia_*
+
+  - id: turn_offset
+    label: 旋回前後の距離
+    note: 壁との距離で旋回の位置を直す補正と、旋回後の直線の差し引き
+    sections:
+      - label: 壁との距離での補正
+        keys:
+          - off:*_offset_enable
+          - off:*_offset_max_dist
+          - off:sla_wall_ref_l
+          - off:sla_wall_ref_r
+          - off:sla_wall_ref_l_orval
+          - off:sla_wall_ref_r_orval
+          - off:orval_rad_offset_l
+          - off:orval_rad_offset_r
+          - off:sla_max_offset_dist
+          - off:lim_angle
+          - off:dia_turn_offset_calc_th
+      - label: 旋回後の直線の差し引き
+        keys:
+          - off:offset_after_turn_*
+
+  - id: straight
+    label: 直進の壁制御
+    note: 最短走行の直交の直進。壁あり(45° の距離)と壁なし(柱)の横位置の制御
+    sections:
+      - label: 壁制御の PID
+        keys:
+          - hw:str_ang_pid_fast
+          - hw:str_ang_pid
+          - off:kanayama_straight
+          - sen:gain.F2
+      - label: 向きの上限と加速の絞り
+        keys:
+          - {table: ["hw:sensor_deg_limitter_v", "hw:sensor_deg_limitter_str", "hw:sensor_deg_limitter_piller"], label: "壁制御の向きの上限 [deg](速度 [mm/s] ごと)"}
+          - {table: ["hw:axel_degenerate_x", "hw:axel_degenerate_y"], label: "加速の倍率(壁制御の誤差 [mm] ごと)"}
+      - label: 壁の基準値と有無(sensor.yaml normal)
+        keys:
+          - sen:normal
+      - label: 壁の切れ目と再捕捉
+        keys:
+          - hw:kireme_diff_v_ref
+          - hw:kireme_diff_noise_th
+          - hw:left_keep_dist_th
+          - hw:right_keep_dist_th
+          - hw:keep_dist_th_start_skip
+          - off:wall_off_hold_dist
+      - label: 壁基準の角度の合わせ直し
+        keys:
+          - hw:ang_snap_enable
+          - off:clear_angle
+          - off:clear_dist_order
+          - off:clear_dist_ragne_from
+          - off:clear_dist_ragne_to
+          - hw:wall_fit
+      - label: 壁なし区間 — 柱の立ち下がり(str_post_ctrl)
+        keys:
+          - hw:str_post_ctrl
+      - label: 壁なし区間 — 従来の串制御(sensor.yaml normal2)
+        keys:
+          - sen:normal2
+
+  - id: dia
+    label: 斜め制御
+    note: 斜めの直進の横位置の制御
+    sections:
+      - label: 柱の立ち下がり(dia_post_ctrl)
+        keys:
+          - hw:dia_post_ctrl
+      - label: 向きの上限と加速の絞り
+        keys:
+          - {table: ["hw:sensor_deg_limitter_v", "hw:sensor_deg_limitter_dia"], label: "斜め制御の向きの上限 [deg](速度 [mm/s] ごと)"}
+          - {table: ["hw:axel_degenerate_dia_x", "hw:axel_degenerate_dia_y"], label: "加速の倍率(横位置の誤差 [mm] ごと)"}
+      - label: 従来の斜め制御(柱までの距離)
+        keys:
+          - hw:sensor_pid_dia
+          - hw:kanayama_dia
+          - sen:dia
+          - sen:gain.F3
+
+  - id: start
+    label: 走り出し
+    note: 吸引中の静止保持(hold)と、走り出しの姿勢合わせ
+    sections:
+      - label: 吸引中の静止保持(hold)
+        keys:
+          - hw:hold_ang_*
+          - hw:hold_settle
+      - label: 走り出しの姿勢合わせ(start_align)
+        keys:
+          - hw:start_align
+      - label: スタート位置と距離のオフセット
+        keys:
+          - hw:offset_start_dist
+          - hw:offset_start_dist_search
+          - hw:long_run_offset_dist
+
+  - id: yaw
+    label: ヨー制御
+    note: 角速度と角度のループ(全モーション共通)
+    sections:
+      - label: 角速度のループ(gyro_pid)
+        keys:
+          - hw:gyro_pid
+          - hw:gyro_pid_gain_limitter
+      - label: 角度のループ(angle_pid)
+        keys:
+          - hw:angle_pid
+      - label: 減速中のヨーと左右のトルク差
+        keys:
+          - hw:brake_yaw_gain
+          - hw:brake_yaw_ff
+          - hw:motor_torque_asym
+      - label: MPC
+        keys:
+          - hw:enable_mpc
+          - hw:gyro_pid.mpc_*
+
+  - id: speed
+    label: 速度制御と FF
+    note: 並進の速度ループ、モーターの定数から作る FF、加減速
+    sections:
+      - label: 速度のループ(motor_pid2)
+        keys:
+          - hw:motor_pid2
+      - label: モーターの定数(FF の元)
+        keys:
+          - hw:Ke
+          - hw:Km
+          - hw:Lm
+          - hw:Resist
+          - hw:Mass
+          - hw:coulomb_friction
+          - hw:viscous_friction
+          - hw:coulomb_friction_suction
+          - hw:viscous_friction_suction
+      - label: FF の切り替えとゲイン
+        keys:
+          - hw:FF_front
+          - hw:FF_roll
+          - hw:FF_keV
+          - hw:torque_mode
+          - hw:ff_v_th
+          - hw:ff_front_dury
+          - hw:ff_front_gain_14
+          - hw:ff_front_gain_decel
+      - label: 加減速の形とスリップ
+        keys:
+          - hw:decel_delay_cnt
+          - hw:decel_delay_n
+          - hw:slip_param_K
+          - hw:slip_param_k2
+
+  - id: search
+    label: 探索
+    note: 探索走行だけで使う補正と前壁制御
+    sections:
+      - label: 探索スラロームの位置
+        keys:
+          - off:th_offset_dist
+          - off:sla_front_ctrl_th
+          - off:front_dist_offset
+          - off:normal_sla_offset_front
+          - off:normal_sla_offset_back
+          - hw:normal_sla_*
+      - label: 探索の直進の壁切れ
+        keys:
+          - off:search_wall_off_*
+          - off:ctrl_exist_wall_th_l
+          - off:ctrl_exist_wall_th_r
+          - off:go_straight_wide_ctrl_th
+          - off:clear_dist_ragne_to2
+          - {table: ["off:clear_dist_ragne_dist_list", "off:clear_dist_ragne_th_list"], label: "壁ありとみなす距離 [mm](区画の中の位置 [mm] ごと)"}
+      - label: 超信地と後退
+        keys:
+          - off:pivot_angle_90
+          - off:pivot_angle_180
+          - off:judge_pivot
+          - off:pivot_back_*
+          - off:front_dist_offset0
+          - off:front_dist_offset_pivot
+          - off:front_dist_offset_pivot_th
+          - off:front_diff_th
+      - label: 前壁制御の PID
+        keys:
+          - hw:motor_pid
+          - hw:front_ctrl_dist_pid
+          - hw:front_ctrl_angle_pid
+          - hw:front_ctrl_keep_angle_pid
+          - hw:front_ctrl_roll_pid
+          - hw:front_ctrl_error_th
+          - sen:gain.front_ctrl_th
+      - label: 探索の壁制御(sensor.yaml search)
+        keys:
+          - hw:search_sen_ctrl_limitter
+          - sen:gain.F
+          - sen:search
+      - label: 探索の時間
+        keys:
+          - off:seach_timer
+
+  - id: sensing
+    label: センサーと推定
+    note: 壁センサー・ジャイロ・エンコーダーの読み方とフィルタ
+    sections:
+      - label: 壁センサーの点灯
+        keys:
+          - hw:led_light_delay_cnt
+          - hw:led_light_delay_cnt2
+          - hw:led_light_delay_us_per_cnt
+          - hw:led_blight
+          - hw:led_param
+      - label: 距離の換算(センサ校正タブで求める値)
+        keys:
+          - sen:gain
+      - label: ジャイロ
+        keys:
+          - hw:gyro_param
+          - hw:gyro_pos
+          - hw:enable_kalman_gyro
+      - label: 加速度
+        keys:
+          - hw:accel_x_param
+          - hw:accel_y_param
+          - hw:accel_z_param
+      - label: エンコーダーと速度
+        keys:
+          - hw:enc_v_lead
+          - hw:enable_kalman_encoder
+      - label: バッテリー
+        keys:
+          - hw:battery_gain
+          - hw:battery_param
+      - label: カルマンフィルタ
+        keys:
+          - hw:*_kalman_config
+
+  - id: body
+    label: 機体と駆動
+    note: 寸法、ギア、モーターの駆動の設定
+    sections:
+      - label: 寸法とギア
+        keys:
+          - hw:dt
+          - hw:tire
+          - hw:tire2
+          - hw:tire_tread
+          - hw:tread
+          - hw:gear_a
+          - hw:gear_b
+          - hw:cell
+          - hw:cell2
+          - off:cell
+          - off:cell2
+      - label: モーターの駆動
+        keys:
+          - hw:motor_driver_type
+          - hw:motor_r_cw_ccw_type
+          - hw:motor_l_cw_ccw_type
+          - hw:MotorHz
+          - hw:MotorResolution
+          - hw:SuctionHz
+          - hw:SuctionResolution
+          - hw:max_duty
+          - hw:min_duty
+      - label: モーターの動作確認
+        keys:
+          - hw:motor_debug_mode*
+
+  - id: log
+    label: ログと安全
+    note: ログの取り方とフェイルセーフ
+    sections:
+      - label: ログ
+        keys:
+          - hw:logging_time
+          - hw:*_log_enable
+          - hw:sen_log_size
+          - hw:log_size
+      - label: フェイルセーフ
+        keys:
+          - hw:fail_*

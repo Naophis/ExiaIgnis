@@ -28,6 +28,8 @@ interface Props {
   onEditFile: (scope: SendScope, file: string) => void;
   onOpenTemplates: () => void;
   onOpenMatrix: () => void;
+  // hardware / offset / sensor を用途ごとに並べ直した画面
+  onOpenPurpose: () => void;
   onAm32Sync: () => void;
   onAm32Read: () => void;
 }
@@ -44,6 +46,7 @@ export function ProfilePanel({
   onEditFile,
   onOpenTemplates,
   onOpenMatrix,
+  onOpenPurpose,
   onAm32Sync,
   onAm32Read,
 }: Props) {
@@ -78,9 +81,20 @@ export function ProfilePanel({
             {machine && <MachineChip machine={machine} title={`machines/${machine.id}/profile`} />}
             <span className="truncate">パラメータ (hf)</span>
           </CardTitle>
-          <Button size="sm" variant="ghost" onClick={onOpenMatrix}>
-            パラメータ表
-          </Button>
+          <div className="flex shrink-0 items-center">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onOpenPurpose}
+              title="hardware / offset / sensor の値を、用途(旋回・壁切れ・斜め制御…)ごとに並べ直して直す"
+              data-open-purpose
+            >
+              用途別
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onOpenMatrix}>
+              パラメータ表
+            </Button>
+          </div>
         </div>
         <span className="text-xs text-muted-foreground">
           {needle ? `${shown} / ${total} ファイル` : `${total} ファイル`}
@@ -142,6 +156,8 @@ export function ProfilePanel({
                     >
                       テンプレート
                     </Button>
+                  ) : file === "hardware.yaml" ? (
+                    <PurposeButton disabled={isBusy} onOpen={onOpenPurpose} />
                   ) : file === AM32_FILE ? (
                     // Plain "Send" only drops am32.yaml into the device's
                     // LittleFS; nothing reaches the ESC until write_am32_param()
@@ -187,12 +203,33 @@ export function ProfilePanel({
                 unsent={unsent.has(`mode/${file}`)}
                 onSend={() => onSendFile("mode", file)}
                 onEdit={() => onEditFile("mode", file)}
+                extra={PURPOSE_MODE_FILES.has(file) ? <PurposeButton disabled={isBusy} onOpen={onOpenPurpose} /> : undefined}
               />
             ))}
           </div>
         </ScrollArea>
       </CardContent>
     </Card>
+  );
+}
+
+// 用途別パラメータの画面で直せるファイル(分類 tools/param_tuner/param_groups.yaml の files と合わせる)
+const PURPOSE_MODE_FILES = new Set(["offset.yaml", "sensor.yaml"]);
+
+function PurposeButton({ disabled, onOpen }: { disabled: boolean; onOpen: () => void }) {
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={disabled}
+      title="このファイルの値を、用途ごとに並べ直した画面で直す(行をクリックすると yaml の編集画面)"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+    >
+      用途別
+    </Button>
   );
 }
 

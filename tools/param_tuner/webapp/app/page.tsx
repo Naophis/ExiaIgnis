@@ -13,6 +13,7 @@ import { MachineComparePanel } from "@/components/machine-compare-panel";
 import { MachineDialog } from "@/components/machine-dialog";
 import { MazePanel } from "@/components/maze-panel";
 import { ParamMatrixPanel } from "@/components/param-matrix-panel";
+import { ParamPurposePanel } from "@/components/param-purpose-panel";
 import { ALL_SENTINEL, ProfilePanel, UNSENT_SENTINEL } from "@/components/profile-panel";
 import { PortPanel } from "@/components/port-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -53,6 +54,8 @@ interface EditTarget {
 }
 
 const relFile = (t: { scope: SendScope; file: string }) => (t.scope === "base" ? t.file : `${MODE}/${t.file}`);
+// 用途別パラメータの画面で直せるファイル(分類 tools/param_tuner/param_groups.yaml の files と合わせる)
+const PURPOSE_FILES = new Set(["hardware.yaml", `${MODE}/offset.yaml`, `${MODE}/sensor.yaml`]);
 
 export default function Home() {
   const [ports, setPorts] = useState<PortInfo[]>([]);
@@ -115,6 +118,12 @@ export default function Home() {
   const [savingTemplate, setSavingTemplate] = useState(false);
 
   const [showMatrix, setShowMatrix] = useState(false);
+  // 用途別パラメータ(hardware / offset / sensor を用途ごとに並べ直した画面)
+  const [showPurpose, setShowPurpose] = useState(false);
+  // 編集画面を開いたときに見せる行(用途別の「yaml で開く」から)
+  const [editorLine, setEditorLine] = useState<number | null>(null);
+  // 用途別の画面から開いた編集画面は、閉じたら用途別へ戻る
+  const [editorFromPurpose, setEditorFromPurpose] = useState(false);
 
   // テーマカラー(lib/theme.ts)。null = まだ localStorage を読んでいない
   // (読む前に既定の設定で上書きしないため)
@@ -542,13 +551,22 @@ export default function Home() {
     }
   };
 
-  const openEditor = async (scope: SendScope, file: string, machineId: string | null = machineRef.current) => {
+  // ParamPurposePanel(memo)へ渡すので固定する
+  const openEditor = useCallback(async (
+    scope: SendScope,
+    file: string,
+    machineId: string | null = machineRef.current,
+    line: number | null = null,
+  ) => {
     if (!machineId) return;
     setShowTemplates(false);
     setShowCompare(false);
     setShowMatrix(false);
+    setShowPurpose(false);
     setEditing({ machine: machineId, scope, file });
     setEditorContent(null);
+    setEditorLine(line);
+    setEditorFromPurpose(false);
     setPropagate([]);
     try {
       const res = await fetch(
@@ -562,13 +580,15 @@ export default function Home() {
       toast.error(`${file}: ${(err as Error).message}`);
       setEditing(null);
     }
-  };
+  }, []);
 
   const closeEditor = () => {
     setEditing(null);
     setEditorContent(null);
     setLiveDraft(null);
     setPropagate([]);
+    if (editorFromPurpose) setShowPurpose(true);
+    setEditorFromPurpose(false);
   };
 
   // The slalom sim panel patched the draft (not the saved file) - just
@@ -694,6 +714,7 @@ export default function Home() {
     setEditorContent(null);
     setShowMatrix(false);
     setShowCompare(false);
+    setShowPurpose(false);
     setShowTemplates(true);
   };
 
@@ -702,16 +723,41 @@ export default function Home() {
     setEditorContent(null);
     setShowTemplates(false);
     setShowCompare(false);
+    setShowPurpose(false);
     setShowMatrix(true);
   };
 
   const toggleCompare = () => {
     setShowMatrix(false);
     setShowTemplates(false);
+    setShowPurpose(false);
     setEditing(null);
     setEditorContent(null);
     setShowCompare((v) => !v);
   };
+
+  const openPurpose = () => {
+    setEditing(null);
+    setEditorContent(null);
+    setShowTemplates(false);
+    setShowMatrix(false);
+    setShowCompare(false);
+    setShowPurpose(true);
+  };
+  const closePurpose = useCallback(() => setShowPurpose(false), []);
+  const purposeFilesChanged = useCallback(() => {
+    void refreshProfiles();
+    setDiffNonce((n) => n + 1);
+  }, [refreshProfiles]);
+  // 用途別の「yaml で開く」: そのキーの行を編集画面で開く(file は profile からの相対パス)
+  const openYamlAtLine = useCallback(
+    (file: string, line: number) => {
+      const slash = file.indexOf("/");
+      void openEditor(slash < 0 ? "base" : "mode", slash < 0 ? file : file.slice(slash + 1), machineRef.current, line);
+      setEditorFromPurpose(true);
+    },
+    [openEditor],
+  );
 
   const applyTemplate = async (id: string) => {
     setApplyingTemplate(id);
@@ -913,7 +959,7 @@ export default function Home() {
           ) : undefined
         }
         tabs={
-          !fullWidth && !showTemplates && !editing ? (
+          !fullWidth && !showTemplates && !showPurpose && !editing ? (
             <>
               <Button
                 size="sm"
@@ -1000,6 +1046,7 @@ export default function Home() {
             onEditFile={(scope, file) => void openEditor(scope, file)}
             onOpenTemplates={openTemplates}
             onOpenMatrix={openMatrix}
+            onOpenPurpose={openPurpose}
             am32Action={am32Action}
             onAm32Sync={() => void runAm32("sync")}
             onAm32Read={() => void runAm32("read")}
@@ -1020,6 +1067,7 @@ export default function Home() {
                     file={editing.file}
                     content={editorContent}
                     initialDraft={liveDraft ?? undefined}
+                    initialLine={editorLine ?? undefined}
                     saving={saving}
                     onSave={saveEditor}
                     onClose={closeEditor}
@@ -1042,13 +1090,23 @@ export default function Home() {
                 file={editing.file}
                 content={editorContent}
                 initialDraft={liveDraft ?? undefined}
+                initialLine={editorLine ?? undefined}
                 saving={saving}
                 onSave={saveEditor}
                 onClose={closeEditor}
                 onDraftChange={setLiveDraft}
                 {...editorMachineProps}
                 headerActions={
-                  editing.scope === "base" && editing.file === AM32_FILE && editing.machine === machine ? (
+                  PURPOSE_FILES.has(relFile(editing)) && editing.machine === machine ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="このファイルの値を、用途ごとに並べ直した画面で直す(未保存の編集は捨てます)"
+                      onClick={openPurpose}
+                    >
+                      用途別
+                    </Button>
+                  ) : editing.scope === "base" && editing.file === AM32_FILE && editing.machine === machine ? (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -1071,6 +1129,14 @@ export default function Home() {
               onSave={saveTemplate}
               onDelete={deleteTemplate}
               onClose={() => setShowTemplates(false)}
+            />
+          ) : showPurpose ? (
+            <ParamPurposePanel
+              key={machine}
+              mode={MODE}
+              onClose={closePurpose}
+              onFilesChanged={purposeFilesChanged}
+              onOpenYaml={openYamlAtLine}
             />
           ) : (
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
