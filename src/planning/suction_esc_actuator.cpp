@@ -91,8 +91,19 @@ void SuctionEscActuator::disable() {
   power_off();
 }
 
-void SuctionEscActuator::power_on()  { gpio_put(SUCTION_POWER_EN, true); }
-void SuctionEscActuator::power_off() { gpio_put(SUCTION_POWER_EN, false); }
+void SuctionEscActuator::power_on() {
+  if (!powered_) power_on_us_ = time_us_64();
+  powered_ = true;
+  gpio_put(SUCTION_POWER_EN, true);
+}
+void SuctionEscActuator::power_off() {
+  powered_ = false;
+  gpio_put(SUCTION_POWER_EN, false);
+}
+uint32_t SuctionEscActuator::ms_since_power_on() const {
+  if (!powered_) return 0;
+  return (uint32_t)((time_us_64() - power_on_us_) / 1000);
+}
 
 void SuctionEscActuator::reattach_pin() {
   gpio_set_function(SUCTION_ESC_PWM, GPIO_FUNC_PWM);

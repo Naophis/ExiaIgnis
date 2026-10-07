@@ -634,6 +634,16 @@ void PlanningTask::motor_disable() { // IDLE コマンドでモーター停止
   motor_stop_req_.store(false, std::memory_order_relaxed);
 }
 void PlanningTask::suction_enable(float duty, float duty_low) {
+  // ESCape32 は DShot を見つけてからゼロスロットルが 250ms 続くまでアームせず、その間に
+  // 非ゼロのスロットルが来ると数え直す。通電の直後に目標を入れると ESC が一度もアーム
+  // できずその回は回らない(「たまに起動しない」)ので、通電からの経過を見て足りない分だけ
+  // ここで待つ(SUCTION_ESC_ARM_WAIT_MS、define.hpp)。Core0 から呼ばれる。先に
+  // suction_power_on() を呼んで他の準備と重ねておけば、ここでの待ちは残りだけになる。
+  esc_.power_on();
+  const uint32_t since = esc_.ms_since_power_on();
+  if (since < SUCTION_ESC_ARM_WAIT_MS) {
+    sleep_ms(SUCTION_ESC_ARM_WAIT_MS - since);
+  }
   suction_en = true;
   ctl_.set_suction_target(duty, duty_low);
   esc_.enable();

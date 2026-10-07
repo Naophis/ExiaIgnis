@@ -57,6 +57,8 @@ public:
   // enable()より前に単独で呼べる(クラスコメント参照)。
   void power_on();
   void power_off();
+  // 通電(OFF → ON の遷移)からの経過 [ms](DShot版と同じ API。PlanningTask::suction_enable() 参照)。
+  uint32_t ms_since_power_on() const;
 
   // 他の機能(AM32設定通信など)がGPIOを奪った後に信号線を戻す。
   // PWMスライスは奪われている間も動き続けているため、GPIOのファンクションを
@@ -76,4 +78,6 @@ private:
   uint32_t wrap_    = 0;
   float    ticks_per_us_ = 0.0f;
   bool     enabled_ = false;
+  bool     powered_ = false;
+  uint64_t power_on_us_ = 0;
 };

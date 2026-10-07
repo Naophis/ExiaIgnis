@@ -120,8 +120,19 @@ void SuctionEscDshotActuator::disable() {
   power_off();
 }
 
-void SuctionEscDshotActuator::power_on()  { gpio_put(SUCTION_POWER_EN, true); }
-void SuctionEscDshotActuator::power_off() { gpio_put(SUCTION_POWER_EN, false); }
+void SuctionEscDshotActuator::power_on() {
+  if (!powered_) power_on_us_ = time_us_64();  // 二重に呼んでも起点は動かさない
+  powered_ = true;
+  gpio_put(SUCTION_POWER_EN, true);
+}
+void SuctionEscDshotActuator::power_off() {
+  powered_ = false;
+  gpio_put(SUCTION_POWER_EN, false);
+}
+uint32_t SuctionEscDshotActuator::ms_since_power_on() const {
+  if (!powered_) return 0;
+  return (uint32_t)((time_us_64() - power_on_us_) / 1000);
+}
 
 void SuctionEscDshotActuator::reattach_pin() { dshot_.attach_pin(); }
 

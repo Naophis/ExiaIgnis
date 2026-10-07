@@ -108,3 +108,11 @@
 // この周期なら十分なギャップが空く。Core0/Core1のどちらの負荷にも依存しない
 // (PIO + DMAが自律反復する。DshotTx参照)。
 #define SUCTION_ESC_DSHOT_FRAME_HZ   2500u
+// ESC 通電から、最初の非ゼロスロットルを送ってよくなるまでの時間 [ms]。ESCape32 は
+// DShot を見つけたあと「ゼロスロットルが 250ms 続く」までアームせず、その間に非ゼロの
+// スロットルが来ると 250ms を数え直す(ESCape32 src/main.c の arming loop)。通電の直後に
+// ランプを始めると ESC が一度もアームできず、その回は回らない(2026-10-07「たまに起動しない」:
+// reset_gyro_ref_with_check() は約 10ms しかかからないので、隠せているつもりの待ちが無かった)。
+// 実測の必要時間はブートローダー + DShot 判別 + 250ms + アーム音 250ms で約 0.6〜0.7 秒。
+// PlanningTask::suction_enable() が通電からの経過を見て足りない分だけ待つ。
+#define SUCTION_ESC_ARM_WAIT_MS      1000u

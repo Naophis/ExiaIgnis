@@ -45,6 +45,9 @@ public:
   // ESC起動レイテンシを隠すため、enable()より前に単独で呼べる。
   void power_on();
   void power_off();
+  // 通電(OFF → ON の遷移)からの経過 [ms]。通電していなければ 0。
+  // PlanningTask::suction_enable() が SUCTION_ESC_ARM_WAIT_MS に足りない分を待つのに使う。
+  uint32_t ms_since_power_on() const;
 
   // 他の機能(AM32設定通信など)がGPIOを奪った後に信号線を戻す。
   void reattach_pin();
@@ -75,6 +78,8 @@ private:
 
   DshotTx dshot_;
   bool    enabled_ = false;
+  bool    powered_ = false;
+  uint64_t power_on_us_ = 0;  // 直近の OFF → ON の時刻
   // 特殊コマンド送出中フラグ。ControlLaw(Core1の1kHz IRQ)が毎tick
   // apply_us()でフレームを上書きしてしまうと、6フレーム連続という
   // コマンド成立条件を満たせないため、その間だけapply_us()を無効化する。

@@ -132,15 +132,15 @@ test: # テスト走行時に使用するパラメータ群
     timing: 26        # 進角 24.4°。16.8V の高回転の脱調は検出の遅れで、進角で埋まった
     sine_range: 10    # 10% まで正弦波で回してから 6-step へ。16.8V の起動のガタつき対策
     sine_power: 8     # 正弦波の強さ(既定)
-    freq_min: 24      # PWM 24kHz 固定(freq_max も 24)。30 万 ERPM で 48kHz だと 1 転流に約 1.6 回スイッチ
-    freq_max: 48 
+    freq_min: 24      # PWM 周波数の下限 [kHz](低回転側)
+    freq_max: 48      # 上限 [kHz](3 万 ERPM 以上で 24 → 48 へ)。ベンチで通したのは 24 固定、焼き直し後に 48 で使うことにした(2026-10-07)
     duty_min: 1
     duty_max: 100
     duty_spup: 11     # 同期が取れるまでの duty 上限。16.8V で 12.6V の 15% と同じ電圧
     duty_ramp: 0      # 回転数で duty を抑える governor は使わない
     duty_rate: 30     # 3%/ms(既定)
-    volume: 75        # ビープ・起動音の音量。100 だと音が割れる(2026-10-07)
-    beacon: 50        # DShot ビーコン音の音量(既定)
+    volume: 40        # ビープ・起動音の音量。100 だと音が割れる(2026-10-07)
+    beacon: 25        # DShot ビーコン音の音量(既定)
 
   end_v: 10
   dia: 0
@@ -156,10 +156,10 @@ test: # テスト走行時に使用するパラメータ群
   # 1999(ほぼ100%)だと個体によって脱調(ESCの転流とローター位置がズレて
   # 空転し高速回転できない)、1600まで下げると完全無反応だったため、
   # 間を取って1800を試す(要実機再調整。実用域を二分探索中)。
-  suction_duty: 1950
-  suction_duty_low: 1950
-  suction_duty_burst: 1950
-  suction_duty_burst_low: 1950 # suction_duty_burst -0.25
+  suction_duty: 1750
+  suction_duty_low: 1750
+  suction_duty_burst: 1750
+  suction_duty_burst_low: 1750 # suction_duty_burst -0.25
 
   # suction_duty_burst: 4.0
   # suction_duty_burst_low: 3.75
